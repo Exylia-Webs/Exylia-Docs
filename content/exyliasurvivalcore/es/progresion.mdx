@@ -39,17 +39,54 @@ que se muestra en el menú en vez de una generada.
 | `placeholder` | `condition` | Una comparación de PlaceholderAPI |
 | `permission` | `node` | Un nodo de permiso que debe tener |
 
+La cantidad de un `money` crece con el prestigio: se multiplica por `prestige.cost-multiplier` una vez
+por cada nivel de prestigio del jugador, y el menú enseña la cantidad que de verdad necesita.
+
 <Callout type="danger" title="La cabecera de `ranks.yml` lista dos tipos que no existen">
 El comentario que viene menciona `kills` y `level`. Ninguno es real. Un requisito cuyo `type` no sea uno
 de los cuatro de arriba se **descarta en silencio** al leer el archivo, así que un rango cuyo único
 requisito fuese `kills` sale gratis.
 </Callout>
 
+<Callout type="warning" title="La escalera que viene cobra dos veces con `/rankup claim`, y nada en un ascenso automático">
+`/rankup claim` descuenta él mismo del saldo cada requisito `money`, ajustado al prestigio, antes de que
+se ejecute la recompensa. Los rangos que vienen llevan además `eco take %player% <cantidad>` en sus
+comandos de recompensa, así que quien sube a mano por la escalera por defecto paga cada rango dos veces.
+
+Un ascenso automático — `settings.auto-rankup` o el `auto-rankup` del propio rango — no cobra nada ni
+lanza `RankUpEvent`: solo se ejecutan los comandos de recompensa. En la escalera por defecto, una
+promoción automática paga una vez, por `eco take`, y la cantidad sin ajustar.
+
+Deja las líneas `eco take` en los rangos que ascienden solos y quítalas de los que se reclaman.
+</Callout>
+
 ### Prestigio
 
-`/rankupadmin prestige <jugador> <nivel>` pone un nivel de prestigio; `/rankupadmin set` y `reset`
-mueven a un jugador por la escalera, y `/rankupadmin info` dice dónde está. Un id de rango que no esté
-en el archivo se rechaza.
+Un jugador en lo alto de la escalera puede hacer prestigio con `/rankup prestige` o con la estrella de
+la esquina del menú de `/rankup`. Cobra el coste del prestigio, le quita el rango, sube su nivel de
+prestigio en uno y ejecuta las recompensas de prestigio. Después vuelve a subir la escalera desde el
+primer rango, con cada requisito `money` ajustado al nuevo nivel.
+
+La sección `prestige` de `modules/rankup/config.yml`:
+
+| Ajuste | Por defecto | Qué hace |
+|---|---|---|
+| `enabled` | `true` | Si se puede hacer prestigio |
+| `max-level` | 0 | Nivel de prestigio más alto. `0` es sin límite |
+| `cost` | 25000 | Dinero que cuesta el prestigio. `0` es gratis |
+| `cost-multiplier` | 1.5 | Se aplica a cada requisito `money` una vez por nivel: un rango de 1.000 $ cuesta 1.500 $ en el prestigio 1 y 2.250 $ en el 2. `1.0` deja la escalera igual |
+| `reward-commands` | `lp user %player% parent set member` | Comandos de consola. `%player%` es el jugador y `%level%` el nivel alcanzado |
+| `reward-broadcast` | `{highlight}✦ {letters}%player% {muted}reached prestige {highlight}%level%{muted}!` | Se envía a quien tenga activados los anuncios de rango. Vacío para ninguno |
+| `reward-sound` | `UI_TOAST_CHALLENGE_COMPLETE\|1.0\|1.0` | Suena para el jugador. Vacío para ninguno |
+
+El prestigio se rechaza si está desactivado, si el jugador no está en el último rango, si ya está en
+`max-level` y si no puede pagarlo, también cuando `cost` es mayor que 0 y no hay economía disponible.
+La estrella del menú enseña el nivel actual y el siguiente, el coste (`Free` si es 0) y cuál de esos
+casos aplica. `%exyliasurvivalcore_rankup_can_prestige%` responde `yes` o `no`.
+
+`/rankupadmin prestige <jugador> <nivel>` pone un nivel de prestigio directamente; `/rankupadmin set` y
+`reset` mueven a un jugador por la escalera, y `/rankupadmin info` dice dónde está. Un id de rango que
+no esté en el archivo se rechaza.
 
 `settings.notify-on-login` avisa al jugador al entrar cuando puede subir de rango.
 
@@ -90,14 +127,14 @@ categories:
     tracked: [WHEAT]
     require-max-growth: true
     count-above: false
-    reward-every: 64
-    reward:      { commands: [], message: "", actionbar: "", sound: "" }
+    reward-every: 50
+    reward:      { money: 2, commands: [], message: "", actionbar: "", sound: "" }
     milestones:
-      first: { display-name: "…", required-count: 1000, commands: [], … }
+      novice: { display-name: "…", required-count: 100, money: 10, … }
     infinite-milestone:
       enabled: true
-      interval: 10000
-      commands: []
+      interval: 1000
+      money: 50
 ```
 
 | Clave | Qué hace |
@@ -109,6 +146,12 @@ categories:
 | `reward-every` | Paga cada N. `0` apaga la recompensa por cada N |
 | `milestones` | Recompensas de una vez al llegar a un total |
 | `infinite-milestone` | Sigue pagando cada `interval` cuando se acaban los hitos con nombre |
+
+Cada bloque de recompensa — `reward`, cada hito e `infinite-milestone` — acepta `money`, `commands`,
+`message`, `actionbar` y `sound`. `money` se paga en la moneda por defecto y lo multiplican los
+potenciadores de dinero de `farming` (ver [Economía](/docs/exyliasurvivalcore/economia)); `%money%` es
+lo que se pagó, con potenciadores incluidos. Las categorías que vienen pagan con `money` en vez de con
+comandos `eco give`.
 
 `/farming` muestra el progreso. `/farmingadmin set`, `reset`, `resetall` e `info` necesitan
 `survivalcore.farming.admin`, y los tres que escriben necesitan `survivalcore.farming.admin.set`.
@@ -153,3 +196,17 @@ jugador junto a la escritura del propio reclamo, y cuando la copia vieja llegaba
 desaparecía y se podía volver a cobrar al siguiente login. Arreglado en 1.1.1; si estás en una build
 anterior, eso es lo que estabas viendo.
 </Callout>
+
+## Contadores
+
+Estos cuatro módulos suman a los contadores de estadísticas, que leen los rankings, las misiones y las
+temporadas — ver [Estadísticas](/docs/exyliasurvivalcore/combate#estadísticas).
+
+| Contador | Qué cuenta |
+|---|---|
+| `rankup.ranks` | Rangos subidos con `/rankup claim` o desde el menú. Un ascenso automático no cuenta |
+| `playtime.rewards` | Recompensas por tiempo jugado reclamadas |
+| `farming.harvested` | Cada bloque o mob que ha contado una categoría de farmeo |
+| `farming.<categoría>.harvested` | Lo mismo, para una categoría |
+| `reclaim.claimed` | Secciones de reclaim ejecutadas |
+| `reclaim.<sección>.claimed` | Lo mismo, para una sección |

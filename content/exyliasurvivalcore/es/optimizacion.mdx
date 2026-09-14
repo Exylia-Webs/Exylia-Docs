@@ -1,0 +1,235 @@
+---
+title: "Optimización"
+description: "Objetos en el suelo y mobs apilados en una sola entidad, spawners apilados en un solo bloque, límites por chunk y objetos desactualizados sustituidos por su versión corregida."
+---
+
+Dos módulos. `optimization` le da al servidor menos entidades que procesar: los objetos y los mobs se
+apilan en una sola entidad, los spawners se apilan en un solo bloque y cada chunk tiene límites.
+`item-updater` sustituye los objetos desactualizados de los inventarios de los jugadores por una versión
+corregida.
+
+## Optimización
+
+El módulo es `optimization` en `config.yml`. Sus ajustes están en `modules/optimization/config.yml`, y no
+tiene comandos.
+
+La cabecera del archivo remite primero a los ajustes del propio Paper: `merge-radius` y
+`entity-activation-range` en `spigot.yml`, y los límites de desaparición y de guardado por chunk en
+`paper-world-defaults.yml`.
+
+La cantidad que representa una pila se guarda en la propia entidad o el propio bloque, así que las pilas
+sobreviven a un reinicio. Nunca se apila un mob u objeto en el que otro plugin haya guardado datos, porque
+ese plugin lo está tratando como suyo.
+
+### Objetos en el suelo
+
+Los objetos tirados del mismo tipo se juntan en una sola entidad que puede contener más de una pila
+completa. Cuando cae un objeto nuevo, busca una pila igual a `items.radius` bloques o menos. Si al sumarlo
+no se pasa de `items.max-amount`, el objeto nuevo se une a esa pila en vez de aparecer. Los objetos se
+comparan en todo: tipo, nombre, lore, encantamientos y datos.
+
+La entidad lleva como mucho una pila completa del objeto, y su nombre muestra la cantidad real a partir de
+dos objetos:
+
+```yaml
+items:
+  name: "{highlight}%amount%x {letters}%item%"
+```
+
+Al recoger una pila se toma todo lo que cabe en el inventario, y el resto se queda en el suelo con una
+cantidad menor. Las tolvas recogen las pilas de la misma forma. Los objetos que ruedan unos contra otros
+después de caer los fusiona el plugin, no el servidor, así que la cantidad del nombre sigue siendo
+correcta.
+
+Solo se apilan objetos corrientes. Nunca se apilan: un objeto que nadie puede recoger, uno que no
+desaparece nunca, uno con nombre personalizado, uno que otro plugin ha marcado, ni nada que no se apile en
+un inventario, como herramientas o armaduras.
+
+`items.lifetime-seconds` acorta lo que dura un objeto tirado, hasta 300 segundos. El servidor quita un
+objeto cuando cumple cinco minutos, así que el plugin hace que un objeto nuevo aparezca con esa edad de
+más. `0` mantiene el tiempo de desaparición del propio servidor. Esto se aplica a cualquier objeto
+corriente, aunque `items.enabled` esté desactivado.
+
+| Ajuste | Por defecto | Qué hace |
+|---|---|---|
+| `items.enabled` | `true` | Apilar los objetos del suelo más allá de una pila completa |
+| `items.radius` | 3.0 | Hasta cuántos bloques busca un objeto tirado una pila a la que unirse |
+| `items.max-amount` | 2048 | Los objetos que caben como mucho en una pila del suelo |
+| `items.name` | `{highlight}%amount%x {letters}%item%` | El nombre que muestra una pila cuando tiene más de un objeto |
+| `items.lifetime-seconds` | 0 | Segundos que dura un objeto tirado, hasta 300. `0` es el tiempo de desaparición del servidor |
+
+### Mobs
+
+Los mobs de un tipo de la lista se apilan en una sola entidad que los representa a todos. Un mob se une a
+una pila de dos formas:
+
+- **Al aparecer.** Un mob nuevo se une a una pila igual a `mobs.radius` bloques o menos, siempre que el
+  total no pase de `mobs.max-amount`.
+- **Cada cinco segundos.** Se revisan los mobs a 32 bloques o menos de cada jugador, y los que están a
+  `mobs.radius` o menos unos de otros se fusionan. Así también acaban apilados los mobs que andan juntos.
+
+El nombre muestra la cantidad:
+
+```yaml
+mobs:
+  name: "{highlight}%amount%x {letters}%type%"
+```
+
+**Matar una pila mata a un mob.** La muerte suelta el botín de un mob y cuenta como una baja. En su lugar
+aparece una pila nueva con uno menos, así que una granja paga lo mismo de siempre con muchas menos
+entidades. Pasa lo mismo muera como muera la pila: la lava, el vacío o `/kill` también se llevan solo uno.
+El mob que sustituye a la pila es uno nuevo: solo se copian su edad, el tamaño de un slime y el color y el
+esquilado de una oveja.
+
+Los mobs solo se apilan con mobs que se les parecen. Una cría nunca se une a adultos, un slime pequeño
+nunca se une a uno grande, y las ovejas tienen que compartir color y esquilado.
+
+Un mob solo se apila si apareció por uno de los motivos de `mobs.reasons`. Los valores por defecto
+incluyen `SPAWNER_EGG` y `BREEDING`, así que se apilan los mobs de huevos de generación y los criados,
+además de los naturales y los de spawner. Un mob que ya es una pila sigue apilándose, le haya traído lo
+que le haya traído.
+
+Nunca se apilan: los mobs con nombre, los domesticados, los atados con correa, los que llevan jinete o van
+montados en algo, ni los mobs en los que otro plugin guarda datos.
+
+Con `mobs.disable-ai` activado, una pila se queda quieta y no ataca. Un mob que vuelve a quedarse en uno
+recupera su IA.
+
+| Ajuste | Por defecto | Qué hace |
+|---|---|---|
+| `mobs.enabled` | `true` | Apilar los mobs de un tipo de la lista |
+| `mobs.radius` | 5.0 | Hasta cuántos bloques busca un mob una pila a la que unirse, al aparecer y en la fusión cada cinco segundos |
+| `mobs.max-amount` | 50 | Los mobs que representa como mucho una pila |
+| `mobs.name` | `{highlight}%amount%x {letters}%type%` | El nombre que muestra una pila |
+| `mobs.types` | `ZOMBIE`, `SKELETON`, `SPIDER`, `CAVE_SPIDER`, `BLAZE`, `WITCH`, `ENDERMAN`, `ZOMBIFIED_PIGLIN`, `IRON_GOLEM`, `PIG`, `COW`, `SHEEP`, `CHICKEN` | Los tipos de mob que se apilan |
+| `mobs.reasons` | `NATURAL`, `SPAWNER`, `SPAWNER_EGG`, `BREEDING` | Los motivos de aparición por los que un mob puede apilarse |
+| `mobs.disable-ai` | `false` | Las pilas se quedan quietas y no atacan |
+
+Los nombres de tipos y motivos no distinguen mayúsculas.
+
+### Spawners
+
+Usar un spawner en la mano sobre un spawner colocado del mismo mob lo añade a ese bloque en vez de
+colocarlo. Hace falta `exyliasurvivalcore.optimization.spawners`. Fuera del modo creativo, se quita un
+spawner de la mano. Un bloque admite hasta `spawners.max-amount` spawners.
+
+**Un spawner apilado genera toda su pila.** Cada vez que genera un mob:
+
+- Si el apilado de mobs está activado y el tipo está en la lista, genera un solo mob que representa tantos
+  mobs como spawners tiene el bloque.
+- Si no, genera esa cantidad de mobs separados.
+
+Agacharse y hacer clic derecho en un spawner con la mano vacía muestra cuántos spawners contiene.
+
+Romper un spawner apilado le quita un spawner y deja el bloque. Con `spawners.silk-touch-returns` activado
+y una herramienta con Toque de seda, ese spawner se le da al jugador. Si no, se pierde. El último spawner
+se rompe como el servidor rompe cualquier spawner.
+
+| Ajuste | Por defecto | Qué hace |
+|---|---|---|
+| `spawners.enabled` | `true` | Usar un spawner sobre otro del mismo mob lo añade |
+| `spawners.max-amount` | 10 | Los spawners que representa como mucho un bloque |
+| `spawners.silk-touch-returns` | `true` | Romper un spawner apilado con Toque de seda devuelve un spawner |
+
+<Callout type="note" title="El mensaje de spawner roto siempre menciona el Toque de seda">
+`optimization.spawner-broken` termina con *"Silk Touch keeps it."*. También se envía cuando
+`spawners.silk-touch-returns` está desactivado, y entonces el Toque de seda no conserva nada.
+</Callout>
+
+### Límites por chunk
+
+```yaml
+limits:
+  entities-per-chunk:
+    CHICKEN: 50
+    COW: 50
+    PIG: 50
+    SHEEP: 50
+    ZOMBIE: 40
+    SKELETON: 40
+  blocks-per-chunk:
+    HOPPER: 64
+```
+
+**`entities-per-chunk`**, por tipo de entidad. Se rechaza una aparición que pasaría del límite. Las
+apariciones creadas por plugins o comandos no tienen límite. Las de huevos de generación, cría y spawners
+sí. Un mob apilado cuenta una vez, así que un chunk puede tener el límite por `mobs.max-amount` mobs. Los
+límites se comprueban antes que el apilado de mobs, así que en un chunk que está en su límite también se
+rechaza una aparición que se habría unido a una pila. Ningún permiso se salta este límite.
+
+**`blocks-per-chunk`**, por material. Colocar un bloque por encima del límite se cancela con
+`optimization.block-limit`. Solo cuentan los bloques con entidad de bloque, como tolvas, cofres, hornos y
+spawners. Un material sin ella, como la piedra, no cuenta nunca, así que su límite nunca se aplica. Los
+jugadores con `exyliasurvivalcore.optimization.bypass` no tienen límite.
+
+Los nombres no distinguen mayúsculas. Un mapa vacío desactiva ese límite. Ninguno de los dos límites tiene
+un interruptor propio: funcionan siempre que el módulo esté activado.
+
+### Permisos
+
+| Permiso | Descripción |
+|---|---|
+| `exyliasurvivalcore.optimization.spawners` | Añadir un spawner a otro del mismo mob |
+| `exyliasurvivalcore.optimization.bypass` | Colocar bloques por encima de `limits.blocks-per-chunk` |
+
+## Actualizador de objetos
+
+Cuando un objeto tiene que cambiar —una espada personalizada rehecha, una llave de caja con un lore
+nuevo—, el actualizador de objetos sustituye cada copia del objeto antiguo por el nuevo según la van
+encontrando los jugadores. El módulo es `item-updater` en `config.yml`. No tiene archivo de configuración.
+
+Una **actualización** es un par: el objeto desactualizado y el objeto corregido. Cada pila que coincide
+exactamente con el objeto desactualizado pasa a ser el objeto corregido y conserva su cantidad. La
+comparación abarca todo el objeto: tipo, nombre, lore, encantamientos, durabilidad y todos los componentes
+de datos. Un objeto que se diferencie en cualquiera de ellos se deja como está.
+
+Los objetos se comprueban en estos momentos:
+
+| Cuándo | Qué se comprueba |
+|---|---|
+| Al entrar | El inventario y el cofre de ender |
+| Al cambiar de ranura en la barra rápida | La ranura a la que se cambia |
+| Al cerrar cualquier inventario | El inventario propio del jugador, que es donde acaba un objeto sacado de un cofre, un baúl o un intercambio |
+
+Nada funciona con temporizador. Al jugador se le dice con `item-updater.updated` cuántos objetos han
+cambiado. Los objetos dentro de cofres, baúles o en el suelo no se tocan hasta que llegan al inventario del
+jugador. El cofre de ender solo se comprueba al entrar y con `/itemupdater run`.
+
+Las actualizaciones se guardan en la base de datos, así que todos los servidores de una red que la
+comparta aplican las mismas. Una actualización guardada en un servidor llega a los demás sin reiniciar. Un
+objeto que la versión de un servidor no puede leer espera a un servidor que sí pueda.
+
+### Comandos
+
+| Comando | Qué hace |
+|---|---|
+| `/itemupdater`, `/iu` | Abre la lista de actualizaciones |
+| `/itemupdater run` | Comprueba ahora el inventario y el cofre de ender de todos los jugadores conectados a este servidor, y dice cuántos objetos han cambiado |
+
+Los dos necesitan `exyliasurvivalcore.itemupdater.admin`, igual que todos los botones de las dos
+pantallas.
+
+### Las pantallas
+
+**`item_update_list`** lista cada actualización con su objeto desactualizado y su objeto corregido.
+**Update now** hace lo mismo que `/itemupdater run`. **New update** pide un nombre (64 caracteres como
+mucho), luego el objeto desactualizado y luego el corregido. No se guarda nada hasta tener los dos
+objetos, así que una creación abandonada no deja nada a medias.
+
+**`item_update_edit`** muestra una actualización:
+
+| Botón | Qué hace |
+|---|---|
+| Outdated item | Entregar un nuevo objeto desactualizado |
+| Fixed item | Entregar un nuevo objeto corregido |
+| Take copies | Te da uno de cada. La copia desactualizada se actualiza en cuanto la sostienes o cierras el inventario |
+| Delete | Pide confirmación. Los objetos dejan de actualizarse, y los ya actualizados se quedan como están |
+
+Se rechaza una actualización cuando los dos objetos son iguales, o cuando otra actualización ya sustituye
+ese objeto desactualizado.
+
+### Permisos
+
+| Permiso | Descripción |
+|---|---|
+| `exyliasurvivalcore.itemupdater.admin` | `/itemupdater`, `/itemupdater run` y todos los botones de las dos pantallas |

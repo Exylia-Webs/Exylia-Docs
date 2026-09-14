@@ -21,7 +21,7 @@ kits.
 | Usos máximos | `-1` para ilimitados |
 | Kit de primer login | Se da automáticamente la primera vez que entra un jugador |
 | Equipar armadura | La armadura se pone en vez de ir a la mochila |
-| Tirar si está lleno | Lo que sobra se tira en vez de rechazarse |
+| Tirar si está lleno | Activado, el reclamo sigue adelante y lo que no cabe se guarda para la próxima vez que entre el jugador. Desactivado, un reclamo que no cabría se rechaza antes de dar nada |
 | Orden | Dónde queda en la lista |
 
 La lista dibuja un kit en uno de cuatro estados — listo, en cooldown, agotado o bloqueado — cada uno con
@@ -38,7 +38,9 @@ es el lore que se añade a esos contenedores, con `%items%`.
 | `show-locked-kits` | `true` |
 
 `exyliasurvivalcore.kits.bypass` se salta cooldowns y límites de uso. `/kitadmin give`, `reset` y
-`resetall` manejan el registro de un jugador.
+`resetall` manejan el registro de un jugador; `give` le entrega el kit haya esperado o no. Otro plugin
+puede hacer lo mismo a través de la [API](/docs/exyliasurvivalcore/api), con o sin cooldown y límite de
+usos.
 
 ## Cajas
 
@@ -53,7 +55,8 @@ Todo se monta desde `/cratesadmin`.
 
 Las llaves son **objetos físicos** por defecto: un `TRIPWIRE_HOOK` con el nombre de la caja, dado con
 `/cratesadmin key give`. Las llaves virtuales — un contador en el jugador en vez de un objeto — se dan
-con `/cratesadmin key virtual`.
+con `/cratesadmin key virtual`. Las llaves que da otro plugin a través de la
+[API](/docs/exyliasurvivalcore/api) son virtuales.
 
 Esos cinco subcomandos `key` son los únicos que funcionan desde consola, que es lo que necesita una
 tienda web:
@@ -65,6 +68,10 @@ tienda web:
 /cratesadmin key take <jugador> <caja> <cantidad>
 /cratesadmin key set <jugador> <caja> <cantidad>
 ```
+
+Las llaves físicas que no caben se guardan para la próxima vez que entre el jugador en vez de tirarse
+a sus pies — ver [Objetos que no caben](#objetos-que-no-caben). Lo mismo pasa con las llaves que se
+devuelven cuando una apertura falla.
 
 ### Tiers
 
@@ -173,3 +180,38 @@ Tanto los spawners como las plantillas de cofre llevan en el código un flujo co
 cofre para importar su contenido como tabla de loot", y ningún botón de menú lo llama. Monta las tablas
 de loot en el editor de loot.
 </Callout>
+
+## En una red
+
+Cuando varios servidores comparten una base de datos, los bloques de caja, los cofres de loot colocados
+y los spawners de objetos pertenecen al servidor donde se colocaron, y cada servidor carga solo los
+suyos. Los cofres y spawners colocados antes de que se registrara el servidor cargan en todos los
+servidores que los leen.
+
+## Objetos que no caben
+
+Lo que entregan estos módulos ya no se tira a los pies del jugador cuando tiene el inventario lleno. Lo
+que no cabe va a la tabla de recompensas pendientes de ExyliaLib y se entrega la próxima vez que entra
+el jugador, con la línea `rewards.claimed` de `messages.yml`: "Delivered N rewards that were waiting
+for you." Eso cubre:
+
+- lo que sobra de un kit con **Tirar si está lleno** activado;
+- las llaves físicas de `/cratesadmin key give` y `giveall`;
+- las llaves que se devuelven cuando falla la apertura de una caja;
+- la varita de colocación de cajas.
+
+Mientras el jugador siga conectado no se entrega nada: la tabla se vacía al entrar.
+
+## Contadores
+
+Estos módulos suman a los contadores de estadísticas, que leen los rankings, las misiones y las
+temporadas — ver [Estadísticas](/docs/exyliasurvivalcore/combate#estadísticas).
+
+| Contador | Qué cuenta |
+|---|---|
+| `kits.claimed` | Kits reclamados |
+| `kits.<kit>.claimed` | Lo mismo, para un kit |
+| `crates.opened` | Cajas abiertas, una por llave gastada: abrir diez de golpe cuenta diez |
+| `crates.<caja>.opened` | Lo mismo, para una caja |
+| `lootchests.opened` | Cofres de loot abiertos estando listos |
+| `lootchests.<cofre>.opened` | Lo mismo, para un cofre colocado, por su id |

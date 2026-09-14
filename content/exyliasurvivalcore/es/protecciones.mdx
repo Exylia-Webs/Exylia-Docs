@@ -1,0 +1,601 @@
+---
+title: "Protecciones"
+description: "Terreno protegido con un bloque núcleo o una selección: tiers, los backends interno y WorldGuard, roles, flags, baneos, cierre, logs, parcelas, ventajas, warps, marcadores en mapas, hora y clima, y fusiones."
+---
+
+El módulo `protections` permite a los jugadores proteger terreno. Una protección es una caja de bloques
+con dueño, miembros, roles y flags, creada colocando un bloque **núcleo** o seleccionando dos esquinas. El
+propio módulo la hace cumplir, sea cual sea el backend.
+
+Cada protección de la red es una fila de la base de datos, y todos los servidores las tienen todas en
+memoria. La lista de un jugador y sus límites cuentan todos los servidores; solo el servidor al que
+pertenece una protección la hace cumplir, la dibuja y la refleja en WorldGuard. Un cambio hecho en un
+servidor se anuncia y los demás lo vuelven a leer.
+
+Los asaltos, las vidas y las ventanas de asedio están en
+[Asaltos a protecciones](/docs/exyliasurvivalcore/asaltos-a-protecciones). Los bancos, el mantenimiento,
+el mercado, el alquiler y las mejoras de nivel están en
+[Economía de protecciones](/docs/exyliasurvivalcore/economia-de-protecciones). El menú de administración,
+el editor de tiers, la importación de ProtectionStones y la limpieza de inactivas están en
+[Administrar protecciones](/docs/exyliasurvivalcore/administrar-protecciones).
+
+Los ajustes viven en `modules/protections/config.yml`, los mensajes en la sección `protections` de
+`messages.yml` y las pantallas en `modules/protections/menus/`.
+
+## Funciones
+
+`submodules` apaga funciones enteras. Una función apagada oculta sus botones, rechaza sus comandos y deja
+de actuar.
+
+| Clave | Por defecto | Función | Documentada en |
+|---|---|---|---|
+| `bans` | `true` | Los dueños banean jugadores | esta página |
+| `lock` | `true` | Los dueños cierran una protección a los miembros | esta página |
+| `enter-leave` | `true` | Títulos y sonidos al entrar y salir, saludos y despedidas | esta página |
+| `logs` | `true` | Registro de auditoría | esta página |
+| `visualization` | `true` | Dibujar bordes, marcadores en BlueMap y Dynmap | esta página |
+| `subregions` | `false` | Parcelas dentro de las protecciones | esta página |
+| `warps` | `false` | Protecciones publicadas como warps públicos | esta página |
+| `effects` | `false` | Ventajas para los miembros | esta página |
+| `environment` | `false` | Hora y clima dentro | esta página |
+| `merge` | `false` | Fusionar dos protecciones que se tocan | esta página |
+| `raids` | `false` | Vidas, salud del núcleo, ventanas de asedio | [Asaltos a protecciones](/docs/exyliasurvivalcore/asaltos-a-protecciones) |
+| `bank` | `false` | Un banco compartido por protección | [Economía de protecciones](/docs/exyliasurvivalcore/economia-de-protecciones) |
+| `upkeep` | `false` | Mantenimiento y abandono | [Economía de protecciones](/docs/exyliasurvivalcore/economia-de-protecciones) |
+| `market` | `false` | Vender y regalar protecciones | [Economía de protecciones](/docs/exyliasurvivalcore/economia-de-protecciones) |
+| `rent` | `false` | Alquilar parcelas y protecciones | [Economía de protecciones](/docs/exyliasurvivalcore/economia-de-protecciones) |
+| `upgrades` | `false` | Mejoras de nivel | [Economía de protecciones](/docs/exyliasurvivalcore/economia-de-protecciones) |
+
+## Tiers y el núcleo
+
+Un **tier** es un tipo de núcleo: su bloque, su objeto, el terreno que protege y los flags con los que
+empieza una protección nueva. `tiers` en la configuración los guarda, por id de tier. Vienen tres:
+
+| Tier | Bloque | Radio | Área | Precio en tienda |
+|---|---|---|---|---|
+| `small` | `AMETHYST_BLOCK` | 10 | 21x21 | 2500 |
+| `medium` | `PURPUR_BLOCK` | 20 | 41x41 | 10000 |
+| `large` | `CRYING_OBSIDIAN` | 35 | 71x71 | 40000 |
+
+El área es el radio a cada lado del núcleo, así que un lado mide `radio × 2 + 1` bloques.
+
+| Campo del tier | Por defecto | Qué hace |
+|---|---|---|
+| `material` | `AMETHYST_BLOCK` | El bloque núcleo. Lo que no sea un bloque colocable vuelve a `AMETHYST_BLOCK` |
+| `name`, `lore` | | Nombre y lore del objeto núcleo |
+| `radius` | 10 | Bloques protegidos alrededor del núcleo |
+| `height` | `FULL` | `FULL` protege la columna entera; `CUBOID` solo `y-radius` bloques por encima y por debajo del núcleo |
+| `y-radius` | 10 | Solo lo usa `CUBOID` |
+| `price` | | Precio en la tienda de protecciones; `0` lo deja fuera |
+| `currency` | vacío | Vacío es la moneda por defecto |
+| `permission` | vacío | Necesario para colocar el núcleo, y para comprarlo; vacío para ninguno |
+| `limit` | 0 | Cuántas de este tier puede tener un jugador; `0` sin límite propio |
+| `flags` | ver abajo | Los flags que una protección nueva de este tier empieza encendidos |
+
+Los tiers de serie empiezan con `mob-spawning`, `crop-growth`, `leaf-decay`, `liquid-flow` y
+`visitor-entry` encendidos, y `pvp`, `explosions` y `fire-spread` apagados.
+
+Los núcleos salen del botón **tienda de protecciones** de `/protections`, que lista cada tier con precio
+mayor que 0, o de `/protections admin give`. Los tiers se editan en el juego desde el
+[editor de tiers](/docs/exyliasurvivalcore/administrar-protecciones).
+
+<Callout type="note" title="Los roles y flags se copian al crear la protección">
+Una protección nueva copia `roles` y los `flags` de su tier en ese momento. Editar cualquiera de los dos
+después cambia las protecciones creadas a partir de entonces, nunca las que ya existen.
+</Callout>
+
+## Colocar un núcleo
+
+Colocar un objeto núcleo protege el terreno a su alrededor. La colocación se rechaza, y el bloque se
+queda en la mano, cuando falla cualquiera de estos puntos:
+
+1. El `permission` del tier, si tiene.
+2. El mundo no está en `settings.disabled-worlds` — `world_the_end` por defecto.
+3. El jugador tiene menos protecciones que su límite. El límite es el
+   `exyliasurvivalcore.protections.limit.<n>` más alto que tenga, o `settings.default-limit` (3) sin
+   ninguno. Cuenta todos los servidores.
+4. El jugador tiene menos de este tier que el `limit` del tier.
+5. El jugador tiene menos protecciones en este mundo, en este servidor, de las que
+   `settings.world-limits` fija para él. Un mundo que no aparece no tiene límite propio.
+6. El terreno no se solapa con ninguna otra protección, sea de quien sea.
+7. El terreno está al menos a `settings.min-distance` (8) bloques, en horizontal, de cualquier protección
+   de otro dueño. Las protecciones de un mismo jugador pueden tocarse.
+8. Con WorldGuard activo, el terreno no se solapa con ninguna región de WorldGuard salvo las de este
+   módulo, la región global y las de `settings.allowed-world-guard-regions`. Se comprueba en los dos
+   backends.
+
+Colocar un núcleo también es colocar un bloque, así que no se puede hacer dentro de la protección de otro
+sin `place` allí. El hogar de la protección empieza donde está el jugador, y su nombre es
+`%player%'s land #%number%` hasta que se renombre.
+
+## Proteger por selección
+
+Con `selection.enabled` y el permiso `exyliasurvivalcore.protections.select`, el botón **seleccionar
+terreno** de `/protections` le da al jugador un selector. Marca dos esquinas, confirma con mayúsculas +
+clic izquierdo y se le pide pagar.
+
+| Clave | Por defecto | Qué hace |
+|---|---|---|
+| `selection.enabled` | `true` | Si los jugadores pueden proteger por selección |
+| `selection.tier` | `medium` | El tier que cuenta una selección, para su límite, altura y flags |
+| `selection.price-per-block` | 5 | Precio por bloque de área |
+| `selection.currency` | vacío | Vacío es la moneda por defecto |
+| `selection.min-side` | 9 | El lado más corto que puede tener |
+| `selection.max-area` | 10000 | El área más grande que puede cubrir |
+
+Una selección de 20x20 cuesta 2000. Con un tier `FULL` se protege la columna entera; con uno `CUBOID`,
+solo las alturas seleccionadas. Se aplican las mismas comprobaciones de colocación, y se repiten después
+de confirmar. Una protección por selección **no tiene bloque núcleo**: no se puede recoger ni ocultar,
+solo mover o borrar.
+
+## Recoger, ocultar, mover, borrar
+
+**Recoger.** El dueño que rompe su propio núcleo tiene que confirmar, y recibe un objeto que reconstruye
+la misma protección allí donde se coloque: su nombre, roles, miembros, clanes, flags, baneos, parcelas,
+nivel, ventajas y la caja exacta que cubría. Lo que guardaba el banco se paga al dueño, el warp público se
+retira y una venta termina. Cualquier otro que rompa un núcleo es rechazado — o, con los asaltos activos y
+siendo enemigo, lo golpea.
+
+**Ocultar** quita el bloque núcleo y mantiene el terreno protegido. Necesita `manage-core`, estando en el
+servidor y el mundo de la protección. Con los asaltos activos, un núcleo solo se oculta con
+`raids.allow-hidden-core`.
+
+**Mover** pone el núcleo encima del bloque que mira el jugador, a cinco bloques como mucho, en el mismo
+mundo, y la protección entera se mueve con él, con la misma forma y tamaño. Necesita `manage-core`, pasa
+todas las comprobaciones de colocación salvo los límites, cuesta `settings.move-price` (1000) en
+`settings.move-currency` y lleva el hogar a donde está el jugador.
+
+**Borrar**, desde la pantalla de gestión, es solo cosa del dueño. Se quita el bloque núcleo y el banco se
+paga al dueño.
+
+Una protección bajo ataque, asaltable, abandonada o con inquilinos no se puede recoger, mover ni borrar.
+
+## Backends
+
+`settings.backend` decide cómo llegan las protecciones a otros plugins.
+
+| Backend | Qué pasa |
+|---|---|
+| `INTERNAL` | Por defecto. Este módulo lo hace cumplir todo y nadie más ve las protecciones |
+| `WORLDGUARD` | Cada protección de este servidor es también una región de WorldGuard, así que otros plugins la ven. Los roles, clanes y excepciones los sigue haciendo cumplir este módulo |
+
+Se cambia con `/protections admin migrate <INTERNAL|WORLDGUARD>`, que escribe la clave y traslada todas
+las regiones: `WORLDGUARD` crea las regiones, `INTERNAL` quita de todos los mundos cargados todas las
+regiones que creó este módulo. Una recarga aplica la clave tal como esté en el archivo. Pedir `WORLDGUARD`
+en un servidor sin WorldGuard funciona como `INTERNAL` y deja un aviso en la consola; los detalles están
+en [Administrar protecciones](/docs/exyliasurvivalcore/administrar-protecciones#worldguard).
+
+Qué contiene una región reflejada:
+
+| Región | Valor |
+|---|---|
+| Id | `sc_ps_` y el id de la protección sin guiones |
+| Prioridad | `settings.worldguard-priority` (10) |
+| Dueño | El dueño de la protección |
+| Miembros | Sus miembros, y todos los miembros de cada clan añadido |
+| `pvp`, `mob-spawning`, `fire-spread`, `crop-growth`, `leaf-decay` | `ALLOW` o `DENY` según el flag del mismo nombre |
+| `tnt`, `creeper-explosion`, `other-explosion` | Según `explosions` |
+| `water-flow`, `lava-flow` | Según `liquid-flow` |
+| `entry` | `DENY` a los no miembros mientras `visitor-entry` está apagado |
+| `build` | `ALLOW` mientras es asaltable |
+
+Con las parcelas activas, cada parcela es una región hija `<región>_<parcela>`, una prioridad por encima,
+con sus propios miembros y flags.
+
+<Callout type="note" title="Los miembros de un clan llegan tarde a WorldGuard">
+Los miembros de clan de una región son el clan tal como estaba la última vez que cambió la protección o
+arrancó el servidor. Quien entra al clan después construye a través de este módulo al momento, pero
+WorldGuard no se entera hasta el siguiente cambio.
+</Callout>
+
+## Roles y permisos de miembro
+
+Una protección tiene roles, cada uno un conjunto de permisos. Los derechos de un jugador se resuelven en
+este orden:
+
+1. El dueño puede hacerlo todo.
+2. Una **excepción** puesta solo para ese jugador, permitir o denegar, manda.
+3. Si no, el rol del propio jugador.
+4. Si no, el rol que se dio a su clan.
+5. Quien queda es **visitante**, y tiene lo que conceda el rol `visitor` — nada por defecto.
+
+Las protecciones nuevas empiezan con tres roles:
+
+```yaml
+roles:
+  member:
+    permissions: [break, place, containers, doors, redstone, buckets, animals, ride,
+                  decorations, trade, leash, bank-deposit]
+  trusted:
+    permissions: [break, place, containers, doors, redstone, buckets, animals, ride,
+                  decorations, trade, leash, manage-members, set-home, bank-deposit]
+  visitor:
+    permissions: []
+```
+
+| Permiso | Qué permite |
+|---|---|
+| `break` | Romper bloques, pisotear cultivos, dañar vagonetas y barcas |
+| `place` | Colocar bloques y carteles, usar huevos de spawn, polvo de hueso, mechero y cargas de fuego, colocar entidades, usar bloques clicables sin inventario |
+| `containers` | Abrir cofres, hornos, shulkers y cualquier otra cosa con inventario, atriles, tocadiscos y estanterías cinceladas |
+| `doors` | Puertas, trampillas y puertas de valla |
+| `redstone` | Botones, palancas, placas de presión, repetidores, comparadores, sensores de luz, bloques musicales |
+| `buckets` | Llenar y vaciar cubos |
+| `animals` | Herir, interactuar con y esquilar animales y otros mobs pasivos |
+| `ride` | Montar caballos, barcas y vagonetas |
+| `decorations` | Colocar, romper y usar marcos, soportes de armadura y cuadros |
+| `trade` | Comerciar con aldeanos |
+| `leash` | Atar y desatar mobs |
+| `manage-members` | Añadir y quitar miembros y clanes, elegir su rol, poner excepciones |
+| `manage-roles` | Crear, renombrar, borrar y editar roles |
+| `edit-flags` | Cambiar los flags |
+| `rename` | Renombrar la protección, editar su saludo y despedida |
+| `set-home` | Mover el hogar a donde están |
+| `manage-core` | Ocultar o mover el núcleo |
+| `manage-bans` | Banear y desbanear jugadores |
+| `toggle-lock` | Cerrar y abrir |
+| `view-logs` | Leer el registro de auditoría |
+| `bank-deposit`, `bank-withdraw` | Usar el banco |
+| `manage-subregions` | Crear, editar y borrar parcelas |
+| `manage-rent` | Ofrecer el terreno y sus parcelas en alquiler |
+| `manage-warp` | Publicar y editar el warp público |
+| `edit-environment` | Cambiar la hora y el clima dentro |
+
+Los mobs hostiles nunca están protegidos. Las pantallas de roles solo ofrecen los permisos cuya función
+está encendida.
+
+**Miembros.** La pantalla de miembros añade a un jugador que haya jugado en la red, o a un clan por su tag
+cuando hay un plugin de clanes, y pregunta qué rol recibe. Los nombres de rol usan hasta 16 caracteres de
+`a-z`, `0-9`, `-` y `_`, y no pueden ser `owner`. El rol `visitor` no se renombra ni se borra. Borrar un
+rol quita a todos los que lo tenían, en la protección y en sus parcelas.
+
+Hay cosas que ningún rol concede. Nadie salvo el dueño edita el rol que tiene él mismo, ni sus propias
+excepciones. Abrir la pantalla de gestión y teletransportarse al hogar requieren ser miembro; borrar,
+recoger el núcleo, vender, regalar, mejorar, fusionar y encender ventajas son solo del dueño.
+
+<Callout type="warning" title="Los operadores no construyen en terreno ajeno">
+`exyliasurvivalcore.protections.admin` — que tienen los operadores — abre todas las pantallas, entra en
+todas las protecciones y cuenta como dueño en los menús y comandos. No deja romper, colocar ni usar nada
+dentro. Solo lo hace `exyliasurvivalcore.protections.bypass`, **concedido explícitamente**; un operador
+sin él puesto es tratado como cualquiera.
+</Callout>
+
+## Flags
+
+Un flag es el interruptor del propio terreno. Se aplica a todos los que estén dentro, miembros o no.
+
+| Flag | Mientras está apagado |
+|---|---|
+| `pvp` | Los jugadores no se hacen daño si cualquiera de los dos está en terreno con él apagado |
+| `mob-spawning` | No hay apariciones naturales: naturales, jinetes, patrullas, refuerzos, invasiones, asaltos, trampas |
+| `explosions` | Las explosiones no rompen bloques ni decoraciones colgadas |
+| `fire-spread` | El fuego no se extiende ni quema bloques, y solo lo enciende el mechero de un jugador |
+| `liquid-flow` | El agua y la lava no fluyen |
+| `crop-growth` | Los cultivos y plantas no crecen |
+| `leaf-decay` | Las hojas no se descomponen |
+| `visitor-entry` | Los no miembros no pueden entrar: la protección está **cerrada** |
+
+Dos reglas valen digan lo que digan los flags: los líquidos nunca entran en una protección desde fuera, y
+los pistones nunca mueven un bloque hacia dentro, hacia fuera ni a través de una protección que no sea la
+suya. Un jugador que enciende fuego necesita `place`.
+
+`settings.deny-message-cooldown-millis` (1500) es lo que espera un jugador entre dos mensajes de "este
+terreno está protegido".
+
+## Baneos
+
+Con `submodules.bans`, `manage-bans` banea a un jugador de la protección: se le expulsa y no puede entrar
+andando ni teletransportándose — perlas de ender, frutas coral, comandos, plugins y el modo espectador
+quedan frenados. Entrar al servidor o reaparecer dentro lo empuja justo más allá del borde más cercano.
+
+`/protections ban <jugador> [duración] [motivo]` o la pantalla de baneos. La duración es `30m`, `2h`,
+`7d` o `permanent` (también `perm`, `forever`); sin nada es permanente. Un motivo necesita una duración
+delante. `bans.reason-max-length` es 64, y el motivo se guarda como texto plano. No se puede banear al
+dueño, a los miembros, a los inquilinos ni a los jugadores conectados con el permiso de admin o de bypass.
+
+Un baneo se aplica aunque la protección esté abierta a visitantes. Un asalto en curso, o un abandono, abre
+el terreno a todos digan lo que digan sus baneos o su cierre.
+
+## Cierre
+
+Con `submodules.lock`, `toggle-lock` cierra una protección para que solo entren el dueño, los miembros y
+los miembros de parcela. Cerrar es apagar `visitor-entry`; `/protections lock` lo alterna.
+
+<Callout type="note" title="Apagar la función de cierre no impide cerrar">
+`submodules.lock: false` oculta el botón de cierre y rechaza `/protections lock`, pero el flag
+`visitor-entry` sigue en la pantalla de flags. Cualquiera con `edit-flags` puede cerrar el terreno desde
+allí.
+</Callout>
+
+## Mensajes al entrar y salir
+
+Con `submodules.enter-leave`, entrar en una protección muestra un título y salir, una barra de acción.
+`rename` permite a un miembro escribir el saludo y la despedida de la protección, hasta
+`enter-leave.message-max-length` (64) caracteres de texto plano; borrarlos devuelve los de por defecto.
+
+| Clave | Por defecto |
+|---|---|
+| `enter-title` | `{primary}&l%name%` sobre `%message%` |
+| `enter-actionbar` | vacío |
+| `enter-sound` | `BLOCK_AMETHYST_BLOCK_CHIME\|0.6\|1.4` |
+| `leave-title` | vacío |
+| `leave-actionbar` | `%message%` |
+| `leave-sound` | vacío |
+| `cooldown-millis` | 1500 — cruzar otra vez dentro de ese tiempo no muestra nada |
+| `show-to-members` | `true` — apagado, solo los ven los visitantes |
+
+Placeholders: `%name%`, `%owner%` y `%message%`, que es el saludo o la despedida del dueño, o
+`protections.enter-default` / `protections.leave-default` de `messages.yml` ("Owned by %owner%",
+"« You left %name%"). Pasar directamente de una protección a otra solo saluda. Entrar en una parcela
+muestra su nombre en la barra de acción. Los jugadores pueden silenciarlo todo con el interruptor
+`protection-messages` de los [ajustes de jugador](/docs/exyliasurvivalcore/utilidades).
+
+## Registros de auditoría
+
+Con `submodules.logs`, cada protección guarda un historial. `view-logs` lo abre desde la pantalla de
+gestión o con `/protections logs`, filtrado por acción y por jugador.
+
+Acciones registradas: `break`, `place`, `container`, `member`, `role`, `flag`, `ban`, `lock`, `core`,
+`settings`, `raid`, `bank`, `upkeep`, `market`, `subregion`, `rent`, `upgrade`, `warp`, `merge`. Los
+bloques rotos y colocados y los contenedores abiertos (cofres, barriles, shulkers, hornos, altos hornos,
+ahumadores, tolvas, dispensadores, soltadores, soportes de pociones) son solo lo que ocurrió de verdad;
+todo lo demás es un cambio hecho desde una pantalla o un comando. Cada entrada guarda quién, qué, dónde,
+en qué servidor y cuándo.
+
+| Clave | Por defecto | Qué hace |
+|---|---|---|
+| `logs.retention-days` | 14 | Días que se guarda una entrada; `0` las guarda para siempre |
+| `logs.flush-seconds` | 10 | Segundos entre dos escrituras de las entradas en cola |
+| `logs.skip-actions` | `[]` | Acciones que **no** se registran; todo lo demás sí, incluidas las que se añadan más adelante |
+| `logs.owner-blocks` | `false` | Si se registran los bloques y contenedores del propio dueño |
+| `logs.menu-rows` | 500 | Las entradas más recientes que lee la pantalla de logs |
+
+<Callout type="note" title="`logs.actions` pasó a ser `logs.skip-actions`">
+La versión 1 del archivo listaba lo que se registraba. Al cargarlo, cada acción que conocía la versión 1 y
+que la lista antigua dejaba fuera se escribe en `logs.skip-actions`, y `logs.actions` desaparece.
+</Callout>
+
+<Callout type="note" title="El filtro de jugador solo busca en las últimas entradas">
+La pantalla de logs lee primero las `logs.menu-rows` entradas más nuevas y filtra esas. Una entrada más
+antigua de un jugador no aparece al filtrar por él.
+</Callout>
+
+## Parcelas
+
+Con `submodules.subregions`, `manage-subregions` divide una protección en **parcelas**: cajas dentro de
+ella con miembros, excepciones y flags propios. `/protections subregion create` o la pantalla de parcelas
+dan un selector, estando en el servidor y el mundo de la protección, y luego piden el nombre de la
+parcela — hasta 16 caracteres de `a-z`, `0-9`, `-` y `_`.
+
+| Clave | Por defecto | Qué hace |
+|---|---|---|
+| `subregions.max-per-protection` | 3 | Parcelas por protección mientras las mejoras están apagadas; `0` sin límite. Con las mejoras encendidas decide el nivel |
+| `subregions.min-side` | 3 | El lado más corto que puede tener una parcela |
+| `subregions.full-height` | `true` | Una parcela abarca toda la altura de la protección; apagado, solo las alturas seleccionadas |
+
+Una parcela tiene que quedar entera dentro de la protección y no solaparse con otra.
+
+- Los **miembros de parcela** tienen uno de los roles de la protección solo dentro de esa parcela, con sus
+  propias excepciones allí. Un miembro de parcela puede entrar en una protección cerrada.
+- Los **flags de parcela** siguen a la protección, o se encienden o apagan para la parcela. `visitor-entry`
+  es solo de la protección.
+- Una parcela **privada** solo deja actuar dentro a sus miembros y a quien tenga `manage-subregions`. Una
+  compartida deja a todos los demás con sus derechos en la protección.
+
+Las parcelas se guardan como desplazamientos desde el núcleo, así que se mueven y viajan con él. Una
+parcela alquilada no se puede borrar. `/protections subregion info` describe la parcela donde está el
+jugador, y `/protections subregion delete <nombre>` borra una.
+
+## Ventajas de miembro
+
+Con `submodules.effects`, los miembros que están en su protección reciben ventajas: `fly`, `no-hunger`,
+`keep-inventory` y los efectos de poción de `effects.potions`. Un tier desbloquea ventajas nivel a nivel,
+y cada nivel conserva las de los anteriores; el dueño enciende las desbloqueadas desde la pantalla
+**ventajas y ambiente**.
+
+```yaml
+effects:
+  potions:
+    night-vision: NIGHT_VISION 0
+    haste: HASTE 0
+    speed: SPEED 0
+    jump-boost: JUMP_BOOST 0
+  tiers:
+    small:
+      levels:
+        '0': { perks: [night-vision] }
+        '1': { perks: [haste, no-hunger] }
+        '2': { perks: [speed, fly] }
+    medium:
+      levels:
+        '0': { perks: [night-vision, haste] }
+        '1': { perks: [no-hunger, speed] }
+        '2': { perks: [fly, keep-inventory] }
+    large:
+      levels:
+        '0': { perks: [night-vision, haste, no-hunger] }
+        '1': { perks: [speed, fly] }
+        '2': { perks: [keep-inventory, jump-boost] }
+```
+
+Una poción es `EFECTO amplificador`, con el amplificador contando desde 0. Los niveles vienen de las
+[mejoras](/docs/exyliasurvivalcore/economia-de-protecciones); una protección nunca mejorada es nivel 0.
+
+| Clave | Por defecto | Qué hace |
+|---|---|---|
+| `effects.tenants` | `false` | Si los inquilinos reciben las ventajas de lo que alquilan |
+| `effects.fall-protection-seconds` | 5 | Segundos sin daño por caída al acabar el vuelo |
+| `effects.no-flight-during-siege` | `true` | Si el vuelo se corta mientras hay una ventana de asedio abierta |
+
+Quién las recibe: el dueño, los miembros y los miembros de clan — no mientras la protección es asaltable o
+está abandonada. Las ventajas se recalculan cuando un jugador cambia de protección y cada cinco segundos.
+El vuelo solo se da a quien no podía volar ya, y solo se retira ese vuelo. `keep-inventory` conserva el
+inventario y la experiencia de un miembro que muere en la protección que se la dio.
+
+<Callout type="note" title="Solo el dueño enciende ventajas">
+La pantalla de ventajas se abre para el dueño y para `edit-environment`, pero un interruptor de ventaja
+solo responde al dueño. Quien tiene `edit-environment` cambia allí la hora y el clima, nada más.
+</Callout>
+
+## Hora y clima
+
+Con `submodules.environment`, `edit-environment` fija lo que ven todos los que están dentro — miembros o
+no. Cada clic pasa al siguiente valor.
+
+| Ajuste | Valores |
+|---|---|
+| Hora | la del mundo → día → mediodía → atardecer → noche |
+| Clima | el del mundo → despejado → lluvia |
+
+La hora queda fija mientras siguen dentro; al salir vuelven a ver la del mundo.
+
+## Warps públicos
+
+Con `submodules.warps`, `manage-warp` publica una protección como warp que cualquiera puede visitar y
+valorar. Necesita un hogar, y aterriza allí; **aterrizar aquí** lo mueve a donde está el jugador, dentro.
+El warp tiene nombre, icono y descripción, guardados como texto plano.
+
+`/protections warps` los lista, ordenados por visitas, valoración o más nuevos. `/protections warp
+<nombre>` va a uno; si varios comparten nombre, gana el más visitado. La visita usa el calentamiento del
+hogar.
+
+| Clave | Por defecto | Qué hace |
+|---|---|---|
+| `warps.name-max-length` | 24 | El nombre más largo |
+| `warps.description-max-length` | 64 | La descripción más larga |
+| `warps.hide-unavailable` | `true` | Si se ocultan los warps en los que un jugador no puede entrar ahora — cerrados, baneado, asaltables, abandonados. Apagado: aparecen y la visita se rechaza |
+| `warps.default-icon` | `LODESTONE` | El icono con el que empieza un warp nuevo |
+
+Una visita cuenta una vez por jugador al día, llegue desde el servidor que llegue; las visitas de los
+miembros no cuentan. Las valoraciones son de una a cinco estrellas, una por jugador, y se cambian
+valorando otra vez; nadie valora su propio warp. Retirar un warp, o borrar su protección, borra sus
+visitas y valoraciones.
+
+## Bordes y mapas web
+
+Con `submodules.visualization`, los miembros ven el borde de una protección con el botón **mostrar
+borde** o `/protections show`: partículas por sus bordes y los de sus parcelas, en una franja a la altura
+de los ojos del jugador.
+
+| Clave | Por defecto | Qué hace |
+|---|---|---|
+| `visualization.seconds` | 10 | Segundos que se mantiene dibujado un borde |
+| `visualization.particle` | `END_ROD` | El borde de la protección |
+| `visualization.plot-particle` | `WAX_OFF` | El borde de una parcela |
+| `visualization.show-on-create` | `true` | Dibujar el borde a quien protege terreno nuevo |
+| `visualization.bluemap` | `true` | Dibujar las protecciones en BlueMap cuando está instalado |
+| `visualization.dynmap` | `true` | Dibujar las protecciones en Dynmap cuando está instalado |
+| `visualization.map-refresh-minutes` | 5 | Minutos entre dos redibujados de todos los marcadores |
+| `visualization.map-label` | `%name% (%owner%)` | La etiqueta de un marcador |
+| `visualization.map-colors` | ver abajo | Colores de marcador por estado, en hexadecimal |
+
+En los mapas web cada protección es una caja en un conjunto de marcadores llamado **Protections**, que se
+redibuja cada vez que cambia y todas cada pocos minutos, lo que recoge ventas, alquileres y asaltos. Cada
+servidor dibuja sus propias protecciones. El color es el estado más urgente:
+
+| Estado | Por defecto |
+|---|---|
+| `raidable` | `#a33b53` |
+| `abandoned` | `#6c757d` |
+| `for-sale` | `#8fffc1` |
+| `for-rent` | `#59a4ff` |
+| `normal` | `#8a51c4` |
+
+<Callout type="note" title="Los enganches a mapas se crean al activarse el módulo">
+Si se dibuja en BlueMap y Dynmap, y `map-refresh-minutes`, se leen al activarse el módulo, igual que
+`logs.flush-seconds`. Una recarga no aplica un cambio en ellos; un reinicio sí.
+</Callout>
+
+## Fusiones
+
+Con `submodules.merge`, el dueño une dos de sus protecciones que se tocan en una sola, desde el botón
+**fusionar** o `/protections merge`, estando en la que se queda. La pantalla lista las protecciones del
+dueño en este servidor que la tocan.
+
+La caja que contiene a las dos pasa a ser el terreno. La fusión se rechaza cuando esa caja alcanzaría
+cualquier otra protección, quedaría más cerca que `settings.min-distance` de la de otro dueño o se
+solaparía con una región ajena de WorldGuard, y mientras cualquiera de las dos esté en venta, en alquiler,
+bajo ataque, asaltable, abandonada o alquilada.
+
+Qué conserva la protección fusionada:
+
+- Su propio nombre, hogar, núcleo, tier, flags, saludo, despedida, ventajas, hora, clima y alquileres.
+- Los roles, miembros, clanes, excepciones y baneos de las dos; donde las dos dicen algo de la misma
+  clave, gana la que se queda.
+- Todas las parcelas de las dos; una parcela cuyo nombre ya está cogido recibe `-2`, `-3`…
+- El nivel más alto de las dos, y el estado de asalto de la que tenga menos vidas.
+- El banco de la otra, trasladado antes de unir el terreno.
+
+El núcleo de la otra protección se quita y no se devuelve, y su warp se retira.
+
+## Pantallas
+
+`/protections` abre la lista de todas las protecciones de las que el jugador es dueño o miembro, en
+cualquier servidor, con botones para seleccionar terreno, la tienda de protecciones, el mercado, el
+alquiler y los warps. Una protección abre su pantalla de gestión, donde cada botón aparece solo mientras
+su función está encendida: ir al hogar, fijar hogar, renombrar, logs, miembros, roles, flags, saludo y
+despedida, cierre, baneos, vidas, ocultar núcleo, mover, borrar, banco, mantenimiento, vender o regalar,
+parcelas, mejorar, alquilar, mostrar borde, warp público, ventajas y ambiente, y fusionar.
+
+Cada clic se vuelve a comprobar contra la protección tal como está cuando llega el clic.
+
+## Comandos
+
+Todos los comandos de abajo necesitan `exyliasurvivalcore.protections`. `/ps` y `/claims` son alias. Los
+comandos que actúan sobre "la protección de aquí" usan aquella donde está el jugador.
+
+| Comando | Quién puede | Qué hace |
+|---|---|---|
+| `/protections` | cualquiera | La lista de sus protecciones |
+| `/protections home [nombre]` | miembros, inquilinos | Ir al hogar, con `settings.home-warmup-seconds` (3) de calentamiento. Sin nombre y con más de una protección abre la lista |
+| `/protections info` | cualquiera | Nombre, dueño, su rol, tamaño y miembros de la protección de aquí |
+| `/protections ban <jugador> [duración] [motivo]` | `manage-bans` | Banear de la protección de aquí |
+| `/protections unban <jugador>` | `manage-bans` | Levantar un baneo |
+| `/protections lock` | `toggle-lock` | Cerrar o abrir |
+| `/protections logs` | `view-logs` | El registro de auditoría |
+| `/protections show` | miembros | Dibujar el borde |
+| `/protections merge` | dueño | Elegir una protección para fusionarla con esta |
+| `/protections warps` | cualquiera | Los warps públicos |
+| `/protections warp <nombre>` | cualquiera | Visitar un warp |
+| `/protections subregion create` | `manage-subregions` | Seleccionar una parcela nueva |
+| `/protections subregion delete <nombre>` | `manage-subregions` | Borrar una parcela |
+| `/protections subregion info` | cualquiera | La parcela de aquí |
+
+Los comandos de banco, mantenimiento, mercado, venta, traspaso, alquiler y mejora están en
+[Economía de protecciones](/docs/exyliasurvivalcore/economia-de-protecciones); los de administración, en
+[Administrar protecciones](/docs/exyliasurvivalcore/administrar-protecciones).
+
+## Placeholders
+
+| Placeholder | Valor |
+|---|---|
+| `%exyliasurvivalcore_protections_count%` | Protecciones de las que el jugador es dueño, en todos los servidores |
+| `%exyliasurvivalcore_protections_max%` | Cuántas puede tener: su permiso de límite, o `settings.default-limit` |
+| `%exyliasurvivalcore_protections_name%` | La protección donde está; vacío fuera de una |
+| `%exyliasurvivalcore_protections_owner%` | Su dueño |
+| `%exyliasurvivalcore_protections_role%` | Su rol en ella: `owner`, un nombre de rol o `visitor` |
+| `%exyliasurvivalcore_protections_subregion%` | La parcela donde está; vacío fuera de una o con las parcelas apagadas |
+| `%exyliasurvivalcore_protections_warp_rating%` | La media de estrellas del warp de la protección donde está, como `4.5` |
+| `%exyliasurvivalcore_protections_warp_visits%` | Las visitas de ese warp |
+| `%exyliasurvivalcore_protections_effects_active%` | Las ventajas activas sobre él, separadas por comas |
+
+Los placeholders de vidas, asaltos, banco, mantenimiento, venta, nivel y alquiler están en las páginas de
+asaltos y economía. Todos están en [Placeholders](/docs/exyliasurvivalcore/placeholders).
+
+## Ajustes
+
+Las claves de `settings` que no se han visto arriba:
+
+| Clave | Por defecto | Qué hace |
+|---|---|---|
+| `settings.backend` | `INTERNAL` | `INTERNAL` o `WORLDGUARD` |
+| `settings.worldguard-priority` | 10 | Prioridad de las regiones que crea este módulo |
+| `settings.default-limit` | 3 | Protecciones que puede tener un jugador sin permiso de límite |
+| `settings.world-limits` | `{}` | Nombre de mundo y cuántas puede tener un jugador allí |
+| `settings.min-distance` | 8 | Bloques entre protecciones de dueños distintos |
+| `settings.disabled-worlds` | `[world_the_end]` | Mundos donde no se puede proteger terreno |
+| `settings.allowed-world-guard-regions` | `[]` | Regiones de WorldGuard con las que una protección puede solaparse |
+| `settings.move-price` | 1000 | Lo que cuesta mover un núcleo |
+| `settings.move-currency` | vacío | Vacío es la moneda por defecto |
+| `settings.home-warmup-seconds` | 3 | Calentamiento antes de ir a un hogar o un warp; moverse o recibir daño lo cancela |
+| `settings.deny-message-cooldown-millis` | 1500 | Milisegundos entre dos mensajes de rechazo |

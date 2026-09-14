@@ -1,0 +1,272 @@
+---
+title: "Trade and vaults"
+description: "Face-to-face trades with a shared window, a countdown and money in any currency, and personal vaults kept in the database."
+---
+
+## Trade
+
+Two players, one window each, and nothing moves until both have accepted exactly what is on screen.
+
+### Asking
+
+| Command | What it does |
+|---|---|
+| `/trade <player>` | Sends a request |
+| `/trade accept [player]` | Accepts the request you have |
+| `/trade deny` | Turns it down, and tells whoever sent it |
+
+Sneaking and right-clicking a player sends the same request, with the main hand only. It needs
+`exyliasurvivalcore.trade`, like the command, and does nothing when another plugin has cancelled the click.
+
+The request arrives in chat with clickable **ACCEPT** and **DECLINE** buttons. A few rules decide what
+happens to it:
+
+- **Asking back is accepting.** If A has asked B, B running `/trade A` or sneak-clicking A opens the
+  window, so two players sneak-clicking each other start trading.
+- **Sending the same request again** reminds the sender and does not ping the target a second time.
+- **A player holds one incoming request.** A newer request from somebody else replaces the older one.
+- **`/trade accept <player>` with a name that does not match** answers "nobody is asking you" and throws
+  the pending request away.
+- A request lasts `request-expire-seconds`, 30 by default. At `0` or below it never expires.
+- `exyliasurvivalcore.trade` also covers `/trade accept`, so a player without it can receive a request
+  but cannot accept it.
+
+A request is refused when either player is already trading, when either one is in creative (unless
+`allow-creative`), when they are in different worlds (with `same-world` on), or when they are further
+apart than `max-distance`. The same checks run again when the request is accepted. A player who turned
+off **Trade requests** in `/settings` cannot be asked at all. See
+[Quality of life](/docs/exyliasurvivalcore/quality-of-life).
+
+### The window
+
+The window has six rows. Your offer is the four-by-four grid on the left, the partner's is the grid on the
+right, and a dark column separates the two.
+
+| Where | What it is |
+|---|---|
+| Left grid | Your offer. Real slots: what you put here has left your inventory |
+| Right grid | A copy of the partner's offer. Nothing can be taken out of it |
+| Bottom left | Your status. Click to accept, click again to take it back |
+| Bottom centre | The summary of both sides, which turns into the countdown |
+| Bottom right | The partner's status |
+| Bottom corners | The money buttons, yours on the left and theirs on the right |
+| Bottom middle | **CANCEL** |
+
+A few clicks are handled differently here than in an ordinary chest:
+
+- **Shift-clicking** an item from your inventory puts it into your grid, merging with stacks already
+  there, and never into the partner's grid.
+- **Double-clicking** to collect a stack onto the cursor is refused anywhere in the window.
+- **A drag** is allowed only when every slot it covers is in your own grid.
+
+`blocked-materials` lists materials that cannot go into a trade, by material name. The check covers
+placing an item, shift-clicking it in, swapping it in with a number key and dragging it. It looks at the
+item itself, not at what a shulker box holds.
+
+### Accepting and the countdown
+
+When both sides accept, a countdown of `confirm-delay-seconds` starts, 3 by default, and the swap happens
+at zero. `0` swaps the moment the second player accepts.
+
+These actions take back **both** acceptances:
+
+- A change to either grid.
+- A change to either side's money. Typing the same amount again is not a change.
+- Opening your money page.
+- Clicking your own status again. You cannot take back only your own acceptance.
+
+When a change stops a running countdown, both players are told that something changed.
+
+The countdown runs on a clock that ticks once a second from the moment the window opened, so its first
+second can be shorter than a full second.
+
+### Money
+
+Your money button opens a page with one entry per currency the trade can carry. Left-click an entry to
+type an amount, and right-click it to take that currency out of your offer. The question is asked in
+chat, or in a dialog window if ExyliaLib's `input.yml` prefers dialogs and the client supports them. Closing
+the page or pressing **BACK** returns you to the trade without cancelling it.
+
+- **Which currencies.** The `currencies` list, by id, in that order. When the list is empty, the trade can
+  carry every currency registered with the economy, with the default currency first. Currencies the
+  economy does not know are left out. The page shows up to 28. The list is fixed when the window opens, so
+  a currency added mid-trade does not appear.
+- **When you type an amount.** It is rounded down to what the currency can hold, and refused if you do not
+  have that much right now. An amount of zero takes the currency out of your offer.
+- **Nothing is held during the trade.** Your balance is checked again at the swap. If either player no
+  longer has what they offered, the trade falls through with the "somebody no longer had the money"
+  message.
+- **All or none.** At the swap, every amount on both sides is withdrawn first and only then deposited. If
+  any withdrawal or deposit fails, everything already moved is put back, the trade is called off and the
+  items go back to their owners. Items move only after all the money has.
+
+`allow-money: false`, or a server with no economy, turns the money buttons into plain frame panes.
+
+<Callout type="note" title="The config comments on currencies are out of date">
+The comment above `currencies` says item and experience currencies never qualify, and that the window has
+room for four. The code offers every currency the economy knows, item and experience currencies included,
+and the money page holds 28. See [Economy](/docs/exyliasurvivalcore/economy) for the kinds of currency.
+</Callout>
+
+### How a trade ends
+
+| What happens | Result |
+|---|---|
+| Both accept and the countdown reaches zero | The swap |
+| Either player clicks **CANCEL** or closes the window | Called off |
+| Either player dies | Called off |
+| Either player logs out | Called off |
+| They move further apart than `max-distance`, or into different worlds with `same-world` on | Called off, checked once a second |
+| An offered amount can no longer be paid at the swap | Called off |
+| The module or the server shuts down | Called off |
+
+Taking damage does not end a trade. Switching to creative after the window is open does not end it either,
+because creative is only checked when the trade starts.
+
+When a trade is called off, each grid goes back to the player who filled it. When a swap completes, each
+grid goes to the other player. In both cases the items go through the plugin's pending rewards: whatever
+does not fit in the inventory, and anything owed to a player who has left, is kept and handed over the next
+time they join. Nothing is dropped at their feet.
+
+Each completed trade adds one to the `trade.completed` counter. A stat in `modules/stats/stats.yml` with
+`type: COUNTER` and `counter: trade.completed` shows it. See [Combat](/docs/exyliasurvivalcore/combat).
+
+### Settings
+
+`modules/trade/config.yml`:
+
+| Setting | Default | What it does |
+|---|---|---|
+| `settings.request-expire-seconds` | 30 | How long a request lasts. `0` or below means it never expires |
+| `settings.request-on-shift-click` | `true` | Whether sneak + right-click on a player sends a request |
+| `settings.max-distance` | 10.0 | Blocks. `-1` means any distance |
+| `settings.same-world` | `true` | Whether both players must be in the same world |
+| `settings.confirm-delay-seconds` | 3 | The countdown after both accept |
+| `settings.allow-money` | `true` | Whether money can be offered |
+| `settings.currencies` | `[]` | Currency ids. Empty means all of them |
+| `settings.allow-creative` | `false` | Whether a player in creative may trade |
+| `settings.blocked-materials` | `[]` | Materials that cannot be traded |
+
+The `sounds` section has `request`, `opened`, `accepted`, `countdown`, `completed` and `cancelled`, each
+written as `SOUND|volume|pitch`.
+
+### `window.yml`
+
+`modules/trade/window.yml` is how the window looks: the title, the money page's title, the text shown for
+"no money" (`money-none`), and one item block for each part of the window. The blocks are `separator`,
+`frame`, `own-waiting`, `own-ready`, `partner-waiting`, `partner-ready`, `info`, `countdown`, `money-own`,
+`money-partner`, `money-entry`, `money-back` and `cancel`. The slots are not in the file and cannot be
+moved.
+
+| Values | Where |
+|---|---|
+| `%player%` `%partner%` `%money%` `%partner_money%` `%items%` `%partner_items%` `%seconds%` | Every block |
+| `%currency%` `%currency_icon%` `%amount%` `%partner_amount%` `%balance%` | `money-entry`, on top of the above |
+
+`%money%` and `%partner_money%` hold one currency per line: the lore line they are written on is drawn once
+per currency, so give them a line of their own. `money-entry` uses `material: "%currency_icon%"`, so each
+entry shows its currency's icon.
+
+The file is updated through ExyliaLib's `BundledFiles` on every start and every reload:
+
+- What you change is never overwritten.
+- A block that a new version adds is written into your file.
+- A default that a new version changes, on a value you left alone, waits in `/exylialib updates` until you
+  apply it or keep yours.
+
+The window reads the copy inside the jar first and lays your file over it. So a block missing from your
+file, whether deleted or not yet added, is drawn from the shipped defaults. Deleting a block does not
+remove that part of the window.
+
+## Vaults
+
+A vault is a personal chest a player can open from anywhere, stored in the database.
+
+| Command | Aliases | Node |
+|---|---|---|
+| `/vault` | `/pv`, `/vaults` | `exyliasurvivalcore.vaults` |
+| `/vault <number>` | `/pv`, `/vaults` | `exyliasurvivalcore.vaults` |
+| `/vaultadmin view <player> <number>` | `/pvadmin` | `exyliasurvivalcore.vaults.admin` |
+
+`/vault` with no number opens the list of vaults. `/vault <number>` opens that vault directly.
+
+### How many
+
+`exyliasurvivalcore.vaults.amount.<number>` sets how many vaults a player has. When a player holds several
+of these nodes, the highest number wins, even if it is lower than `default-vaults`. A player with none, or
+only `.amount.0`, gets `default-vaults`. The result is always capped at `max-vaults`.
+
+| Setting | Default | What it does |
+|---|---|---|
+| `settings.default-vaults` | 1 | Vaults for a player without an amount node |
+| `settings.max-vaults` | 9 | The most anyone can have, whatever their nodes say |
+| `settings.rows` | 6 | Rows per vault, clamped to 1–6 |
+| `settings.title` | `{primary}&lVAULT {letters_black}» {highlight}%number%` | The window title. `%number%` is the vault, `%player%` its owner |
+| `settings.blocked-materials` | `[]` | Materials that cannot be put in a vault |
+| `sounds.opened`, `sounds.closed` | `BLOCK_BARREL_OPEN\|1.0\|1.2`, `BLOCK_BARREL_CLOSE\|1.0\|1.2` | Played on open, and on close once the vault is written |
+
+`modules/vaults/config.yml`. The config comment on `title` mentions only `%number%`, but `%player%` is
+replaced as well. It is worth adding if admins open other players' vaults, because the default title does not
+say whose vault it is.
+
+`blocked-materials` is checked the same way as in trades: placing, shift-clicking, number keys and dragging,
+by the item's own material. It does not remove a blocked item that is already inside a vault.
+
+### One window per vault
+
+A vault is open in at most one window on the whole server. Anyone else who tries to open it, whether the
+owner in a second window or an admin, is told it is open somewhere else and to try again. A lock left by a
+player who is no longer online is cleared when someone next opens that vault.
+
+The contents are read when the window opens and written when it closes: on Escape, when a player logs out,
+and when the module shuts down. On shutdown the plugin waits up to ten seconds for those writes to finish.
+Nothing is kept in memory between openings.
+
+<Callout type="warning" title="One server per database">
+The lock lives in the server process. Two servers sharing one database could each open the same vault, and
+whichever closes last is what gets kept. Vaults are for a single server, or a network where a player only
+ever reaches one server with the module on.
+</Callout>
+
+### Storage
+
+Vaults are stored in the `sc_vaults` table, one row per player per vault number. A row is written the first
+time that vault is closed, so a vault that has never been opened has no row.
+
+**Shrinking `rows`** does not lose anything. The next time a vault is opened, whatever sits beyond the new
+size goes to the owner's pending rewards and is handed over the next time they join, even if they are
+online when it happens. **Losing an amount node** does not delete anything either: those vaults show as
+locked in the list and their contents stay in the table.
+
+### The list
+
+`modules/vaults/menus/vaults.yml` is a paginated menu with one entry for each number from 1 to
+`max-vaults`. Vaults the player has unlocked use `item_template`, and the rest use `locked_template`. It is
+one of the module menus that keep your edits across updates. See [Menus](/docs/exyliasurvivalcore/menus).
+
+| Value | What it is |
+|---|---|
+| `%vault_number%` | The vault |
+| `%vault_used%` | Stacks stored in it |
+| `%vault_size%` | Slots per vault, from the current `rows` |
+| `%vault_free%` | Size minus used |
+| `%player_name%` | The player |
+| `%vaults_unlocked%` | How many they have |
+| `%vaults_max%` | How many the list shows |
+
+The used and free counts come from the last write, so a vault that has never been closed reads as empty.
+
+| Action | What it does |
+|---|---|
+| `survivalcore:vault_open <number>` | Closes the menu and opens that vault, if the player has that many |
+| `survivalcore:vaults_open` | Opens the list |
+
+Neither action checks `exyliasurvivalcore.vaults`, so a button bound to one opens vaults for a player who
+could not run `/vault`.
+
+### Opening someone else's
+
+`/vaultadmin view <player> <number>` opens another player's vault in the same window the owner would get,
+under the same lock. It is for players only, not the console. The player can be offline, as long as the
+server knows them. The number is not checked against the owner's allowance or `max-vaults`, so an admin can
+open, and fill, a vault the owner cannot reach yet. `/vaultadmin` on its own prints the usage.

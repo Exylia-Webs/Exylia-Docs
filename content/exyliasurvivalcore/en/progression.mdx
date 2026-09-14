@@ -39,17 +39,54 @@ the menu instead of a generated one.
 | `placeholder` | `condition` | A PlaceholderAPI comparison |
 | `permission` | `node` | A permission node they must hold |
 
+A `money` amount grows with prestige: it is multiplied by `prestige.cost-multiplier` once per prestige
+level the player holds, and the menu shows the amount they actually need.
+
 <Callout type="danger" title="`ranks.yml`'s own header lists two types that do not exist">
 The shipped comment mentions `kills` and `level`. Neither is real. A requirement whose `type` is not
 one of the four above is **dropped silently** when the file is read — so a rank whose only requirement
 was `kills` costs nothing at all.
 </Callout>
 
+<Callout type="warning" title="The shipped ladder charges twice on `/rankup claim`, and nothing on an automatic one">
+`/rankup claim` takes every `money` requirement out of the balance itself, scaled for prestige, before
+the reward runs. The shipped ranks also carry `eco take %player% <amount>` in their reward commands, so
+a player climbing the default ladder by hand pays each rank twice.
+
+An automatic rank-up — `settings.auto-rankup` or a rank's own `auto-rankup` — charges nothing and fires
+no `RankUpEvent`: only the reward commands run. So on the default ladder an automatic promotion pays
+once, through `eco take`, at the unscaled amount.
+
+Keep the `eco take` lines on ranks that promote automatically, and remove them from ranks players claim.
+</Callout>
+
 ### Prestige
 
-`/rankupadmin prestige <player> <level>` sets a prestige level; `/rankupadmin set` and `reset` move a
-player around the ladder, and `/rankupadmin info` reports where they are. A rank id that is not in the
-file is refused.
+A player at the top of the ladder can prestige with `/rankup prestige`, or with the star in the corner
+of the `/rankup` menu. It charges the prestige cost, takes their rank away, raises their prestige level
+by one and runs the prestige rewards. They then climb the ladder again from the first rank, with every
+`money` requirement scaled to the new level.
+
+The `prestige` section of `modules/rankup/config.yml`:
+
+| Setting | Default | What it does |
+|---|---|---|
+| `enabled` | `true` | Whether anyone can prestige |
+| `max-level` | 0 | Highest prestige level. `0` means no limit |
+| `cost` | 25000 | Money charged to prestige. `0` is free |
+| `cost-multiplier` | 1.5 | Applied to every `money` requirement once per level: a $1,000 rank costs $1,500 on prestige 1 and $2,250 on prestige 2. `1.0` keeps the ladder the same |
+| `reward-commands` | `lp user %player% parent set member` | Console commands. `%player%` is the player, `%level%` the level just reached |
+| `reward-broadcast` | `{highlight}✦ {letters}%player% {muted}reached prestige {highlight}%level%{muted}!` | Sent to everyone with rank-up announcements on. Empty for none |
+| `reward-sound` | `UI_TOAST_CHALLENGE_COMPLETE\|1.0\|1.0` | Played to the player. Empty for none |
+
+A prestige is refused when it is disabled, when the player is not on the last rank, when they are
+already at `max-level`, and when they cannot pay — including when `cost` is above 0 and no economy is
+available. The menu's star shows the current and next level, the cost (`Free` at 0) and which of those
+applies. `%exyliasurvivalcore_rankup_can_prestige%` answers `yes` or `no`.
+
+`/rankupadmin prestige <player> <level>` sets a prestige level directly; `/rankupadmin set` and `reset`
+move a player around the ladder, and `/rankupadmin info` reports where they are. A rank id that is not
+in the file is refused.
 
 `settings.notify-on-login` tells a player on join when they can rank up.
 
@@ -90,14 +127,14 @@ categories:
     tracked: [WHEAT]
     require-max-growth: true
     count-above: false
-    reward-every: 64
-    reward:      { commands: [], message: "", actionbar: "", sound: "" }
+    reward-every: 50
+    reward:      { money: 2, commands: [], message: "", actionbar: "", sound: "" }
     milestones:
-      first: { display-name: "…", required-count: 1000, commands: [], … }
+      novice: { display-name: "…", required-count: 100, money: 10, … }
     infinite-milestone:
       enabled: true
-      interval: 10000
-      commands: []
+      interval: 1000
+      money: 50
 ```
 
 | Key | What it does |
@@ -109,6 +146,11 @@ categories:
 | `reward-every` | Pay every N. `0` turns the per-N reward off |
 | `milestones` | One-off rewards at a total count |
 | `infinite-milestone` | Keeps paying every `interval` after the named milestones run out |
+
+Every reward block — `reward`, each milestone and `infinite-milestone` — takes `money`, `commands`,
+`message`, `actionbar` and `sound`. `money` is paid in the default currency and multiplied by money
+boosters for `farming` (see [Economy](/docs/exyliasurvivalcore/economy)); `%money%` is what was paid,
+after boosters. The shipped categories pay through `money` rather than `eco give` commands.
 
 `/farming` shows progress. `/farmingadmin set`, `reset`, `resetall` and `info` need
 `survivalcore.farming.admin`, and the three that write need `survivalcore.farming.admin.set`.
@@ -152,3 +194,17 @@ Farming, playtime rewards, rankup and reclaim each saved a stale copy of the pla
 claim's own write, and when the stale save landed second the claim vanished and could be collected
 again on the next login. Fixed in 1.1.1; if you are on an older build, that is what you were seeing.
 </Callout>
+
+## Counters
+
+These four modules count into the stats counters, which leaderboards, missions and seasons read — see
+[Statistics](/docs/exyliasurvivalcore/combat#statistics).
+
+| Counter | What it counts |
+|---|---|
+| `rankup.ranks` | Ranks taken with `/rankup claim` or the menu. An automatic rank-up is not counted |
+| `playtime.rewards` | Playtime rewards claimed |
+| `farming.harvested` | Every block or mob a farming category counted |
+| `farming.<category>.harvested` | The same, for one category |
+| `reclaim.claimed` | Reclaim sections run |
+| `reclaim.<section>.claimed` | The same, for one section |

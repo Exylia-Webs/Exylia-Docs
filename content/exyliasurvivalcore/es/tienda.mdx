@@ -1,0 +1,363 @@
+---
+title: "Tienda"
+description: "La tienda del servidor: categorías y productos montados en el juego, compra y venta, una moneda por producto, stock, límites, precios que se mueven, rotaciones y descuentos."
+---
+
+La tienda es un conjunto de **categorías**, y cada una tiene **productos** que la tienda vende, recompra
+o las dos cosas. Todo se monta en el juego desde `/shopadmin`. No hay ningún archivo de catálogo: las
+categorías y los productos son filas de la base de datos. `modules/shop/config.yml` solo guarda los
+ajustes que valen para toda la tienda.
+
+El módulo se activa con el interruptor `shop` de `config.yml` y, como todos, necesita reiniciar. Hace
+falta una economía. Sin ella, el plugin avisa al arrancar y rechaza cada compra y cada venta con
+*"No economy is installed, so the shop is closed."* Las monedas, los saldos y Vault se explican en
+[Economía](/docs/exyliasurvivalcore/economia).
+
+## Comandos y permisos
+
+| Comando | Alias | Qué hace |
+|---|---|---|
+| `/shop [categoría]` | `/tienda` | Abre la tienda o entra directamente en una categoría por su id. Si el id no existe, lo dice y abre la tienda |
+| `/sell` | `/vender` | Abre la ventana de venta |
+| `/sell hand` | | Vende el producto que llevas en la mano |
+| `/sell all` | | Vende todo lo del inventario que la tienda recompra |
+| `/shopadmin` | `/shopa` | Abre el editor |
+| `/shopadmin log <jugador> [filas]` | `/shopa log` | Muestra las últimas compras y ventas de un jugador, de la más reciente a la más antigua. `filas` es 10 por defecto y como mucho 50. Funciona desde consola |
+
+| Permiso | Descripción |
+|---|---|
+| `exyliasurvivalcore.shop` | `/shop` |
+| `exyliasurvivalcore.shop.sell` | `/sell` y los botones de venta: la ventana de venta y *vender todo* |
+| `exyliasurvivalcore.shop.admin` | `/shopadmin` y todos los botones del editor. Además se salta el permiso de cualquier categoría o producto |
+| `exyliasurvivalcore.shop.sell.<multiplicador>` | Multiplica lo que la tienda paga a ese jugador, por ejemplo `exyliasurvivalcore.shop.sell.1.5`. Cuenta el nodo más alto que tenga, y un valor por debajo de 1 no hace nada |
+
+Para vender un producto suelto desde la pantalla de su categoría basta con `exyliasurvivalcore.shop`. El
+nodo `.sell` protege `/sell`, la ventana de venta y el botón de *vender todo*.
+
+<Callout type="note" title="`exyliasurvivalcore.shop.category.` no se comprueba en ningún sitio">
+El código declara ese prefijo, pero nada lo lee. Para restringir una categoría, escribe cualquier nodo
+en su campo **Permiso** del editor.
+</Callout>
+
+El módulo no añade placeholders de PlaceholderAPI. Los valores `%product_*%` y `%category_*%` de los
+archivos de menú solo funcionan dentro de esos menús, y cada archivo los lista en su cabecera.
+
+## Montar el catálogo
+
+`/shopadmin` abre la lista de categorías. La esmeralda crea una: escribes un id, que se pasa a minúsculas
+y puede tener hasta 64 caracteres, y se abre el editor de la categoría.
+
+### Una categoría
+
+| Campo | Por defecto | Qué hace |
+|---|---|---|
+| Estado | Activada | Una categoría desactivada desaparece para los jugadores, y no se puede comprar ni vender nada de ella |
+| Nombre | El id | El título del botón |
+| Descripción | — | El lore del botón |
+| Icono | `CHEST` | Cómo se ve el botón |
+| Posición | Auto | Dónde va el botón en la pantalla principal, de 0 a 20 |
+| Permiso | — | El nodo que necesita un jugador para abrir la categoría y comerciar en ella |
+| Moneda | La moneda por defecto | La moneda con la que empiezan los productos **nuevos** de la categoría. Los que ya hay mantienen la suya |
+| Descuento | — | Un porcentaje menos en todos los precios de compra de la categoría, durante el tiempo que elijas |
+| Rotación | Desactivada | Muestra una selección de productos que va cambiando en vez de mostrarlos todos |
+| Productos por rotación | 7 | De 1 a 45 |
+| Duración de la rotación | 24 horas | Como mínimo 1 |
+| Productos | | Abre la cuadrícula de colocación |
+| Vista previa | | Abre la categoría tal como la ve un jugador |
+| Borrar | | Elimina la categoría **y todos sus productos**, tras pedir confirmación |
+
+La posición se elige en un **selector en cuadrícula** que tiene la forma de la pantalla principal: 21
+botones en filas de siete. Las posiciones libres salen en verde. Las ocupadas salen en rojo con el
+nombre de lo que las ocupa. **Auto** coloca la categoría en el primer hueco. Una categoría sin posición,
+o con una posición que ya está ocupada, va a la primera posición libre de la pantalla, y los huecos entre
+categorías colocadas se quedan vacíos.
+
+En los textos de descripción o permiso, `clear` o `none` borran el valor.
+
+### La cuadrícula de colocación
+
+**Productos** abre una cuadrícula de 54 casillas. Las cinco filas de arriba son las 45 posiciones de la
+categoría, casilla por casilla tal como las ven los jugadores. La fila de abajo tiene las instrucciones,
+**Volver** y un bloque de comandos.
+
+- **Pon un objeto en una casilla libre** y esa casilla pasa a ser un producto. El producto es una copia
+  exacta del stack que llevas en el cursor, con su nombre, lore, encantamientos y cantidad. No se gasta
+  nada: el stack sigue en tu cursor.
+- **Haz clic en un producto** para abrir su editor.
+- **Haz shift-clic en un producto** y luego clic en una casilla libre para moverlo ahí. Si haces clic en
+  una casilla ocupada, el movimiento se cancela.
+- **El bloque de comandos** crea un producto que ejecuta comandos en vez de entregar un objeto, en la
+  primera posición libre. Si las 45 posiciones están ocupadas, no lo crea.
+
+**El stack es la unidad.** Si pones 16 flechas, el producto se vende y se recompra de 16 en 16, y su
+precio es el de esas 16. Cuando un jugador vende, sus objetos se comparan con el stack guardado en todo
+salvo la cantidad.
+
+Un producto nuevo tiene **los dos precios desactivados** y aparece como *no está a la venta* hasta que le
+pongas al menos uno.
+
+### Un producto
+
+| Campo | Por defecto | Qué hace |
+|---|---|---|
+| Objeto | El stack que pusiste | Haz clic para entregar otro stack en una ventana de una casilla. La cantidad del stack nuevo pasa a ser la unidad |
+| Estado | Activado | Un producto desactivado desaparece de la categoría |
+| Nombre | El nombre del objeto | `clear` vuelve al nombre del objeto |
+| Descripción | — | Una línea más en el lore |
+| Precio de compra | `-1` | Precio por unidad. `-1`, o cualquier número negativo, lo retira de la venta |
+| Precio de venta | `-1` | Lo que paga la tienda por unidad. `-1` significa que la tienda no lo recompra. Un producto de comandos nunca se recompra |
+| Moneda | La de la categoría al crearlo | Se elige entre todas las monedas de la economía, con la moneda por defecto la primera |
+| Precio | Fijo | Haz clic para pasar por **Fijo**, **Por demanda** y **Aleatorio** |
+| Descuento | — | Un porcentaje menos en el precio de compra, durante el tiempo que elijas |
+| Stock | `-1` | Unidades compartidas por todo el servidor. `-1` es ilimitado |
+| Reposición | Nunca | Cada cuánto se rellena el stock |
+| Límite de compra | `-1` | Unidades que un jugador puede comprar por periodo |
+| Límite de venta | `-1` | Unidades que un jugador puede vender por periodo |
+| Periodo del límite | 24 horas | Cuánto dura un periodo. Como mínimo 1 |
+| Permiso | — | El nodo que necesita un jugador para comerciar con el producto |
+| Posición | La de la cuadrícula | De 0 a 44, con el mismo tipo de selector en cuadrícula y **Auto** |
+| Comandos | — | Solo en productos de comandos. Se ejecutan al comprarlo, con `%player%` y `%player_name%` sustituidos por el comprador |
+| Borrar | | Tras pedir confirmación |
+
+Los botones de compra y venta muestran dos cifras: el precio **base** que pusiste y el precio **ahora**,
+después del tipo de precio, los descuentos y tu propia bonificación de venta.
+
+### El catálogo de ejemplo
+
+Cuando la tienda arranca y no encuentra ninguna categoría ni ningún producto, crea cinco categorías si
+`settings.example-catalogue` está activado, que es lo que viene por defecto:
+
+| Id | Icono | Posición | Productos |
+|---|---|---|---|
+| `blocks` | `BRICKS` | 8 | 15, desde tierra a 3 / 1 hasta obsidiana a 45 / 15 |
+| `armoury` | `DIAMOND_SWORD` | 9 | 16 flechas, arcos, escudos y equipo de hierro y diamante. Solo compra |
+| `farming` | `WHEAT` | 10 | 15 semillas, cultivos y un fardo de heno |
+| `mobs` | `ZOMBIE_HEAD` | 11 | 16, desde carne podrida a 3 / 1 hasta caparazones de shulker a 150 / 50 |
+| `miscellaneous` | `CHEST` | 12 | 15 objetos variados. Antorchas, botellas de experiencia, etiquetas, sillas de montar, cofres de ender y yunques son solo de compra |
+
+Todos los precios son números enteros en la moneda por defecto, y todos los productos tienen precio fijo,
+sin stock ni límites. Los precios siguen dos reglas. Un producto se recompra por más o menos un tercio de
+lo que cuesta. Cuando un producto se puede fabricar a partir de otro, el resultado nunca se vende por más
+que sus ingredientes. El equipo, y lo que se fabrica con materiales que la tienda no vende, es solo de
+compra. Estas categorías se editan o se borran como cualquier otra.
+
+<Callout type="warning" title="Si lo borras todo, vuelven los ejemplos">
+La comprobación se hace en cada arranque, no solo en el primero. Si borras todas las categorías y todos
+los productos y `example-catalogue` sigue en `true`, el siguiente arranque vuelve a crear las cinco
+categorías. Ponlo en `false` antes de vaciar la tienda.
+</Callout>
+
+## Comprar y vender
+
+`/shop` abre la pantalla principal: 21 botones de categoría y el saldo del jugador en cada moneda. Una
+categoría para la que el jugador no tiene permiso no aparece, o aparece tras unos barrotes de hierro si
+`hide-locked-categories` está en `false`.
+
+Dentro de una categoría, cada producto se muestra según lo que puede hacer con él quien lo mira: comprar y
+vender, solo comprar, solo vender, un comando, agotado, bloqueado (sin permiso) o no está a la venta. Si
+un producto se compra y se vende y está agotado, aparece como solo venta, porque la tienda lo sigue
+recomprando.
+
+| Clic | Hace |
+|---|---|
+| Izquierdo | Abre la pantalla de cantidad para comprar |
+| Derecho | Abre la pantalla de cantidad para vender |
+| Shift | Compra o vende `shift-click-amount` unidades al momento |
+
+En un producto de solo venta, los dos clics venden.
+
+La **pantalla de cantidad** tiene botones de −64, −16, −1, +1, +16 y +64, además de **ONE** y **MAX**. MAX es
+lo máximo que el jugador puede hacer en ese momento. Al comprar, es lo más bajo entre `max-amount`, el
+stock, lo que le queda de límite de compra, lo que le permite su saldo y las unidades que le caben en el
+inventario. Al vender, es lo más bajo entre `max-amount`, las unidades que lleva encima y lo que le queda de
+límite de venta. **CONFIRM** solo aparece mientras la cantidad elegida sea posible. Un producto de comandos
+siempre se compra de uno en uno, y sus botones de cantidad no aparecen.
+
+Una compra sigue un orden fijo. Primero se reservan el stock y el límite del jugador. Después se cobra el
+dinero. Lo último es entregar los objetos o ejecutar los comandos. Si falla algún paso, se deshacen los
+anteriores. Una compra que no cabe en el inventario se rechaza antes de cobrar nada. El espacio cuenta el
+inventario y la barra rápida.
+
+Una venta va al revés: primero salen los objetos del inventario y luego llega el dinero. Si el pago falla,
+los objetos vuelven.
+
+### Las tres formas de vender en bloque
+
+- **La ventana de venta**: el lingote de oro de cualquiera de las dos pantallas (clic izquierdo) o
+  `/sell`. Tiene 45 casillas. Metes los objetos y **al cerrarla se venden**. Lo que la tienda no compra
+  vuelve, y también lo que sobra sin llegar a formar una unidad entera. Si no hay sitio para ello, se
+  guarda y se entrega la próxima vez que el jugador entre. Si un reload cierra una ventana de venta
+  abierta, primero se completa la venta.
+- **Vender todo**: clic derecho en el lingote de oro o `/sell all`. Vende todos los productos que la tienda
+  recompra de las casillas que cubre `sell-all-scope`, y después muestra una línea por producto y un
+  total por moneda.
+- **`/sell hand`**: averigua qué producto es el objeto de la mano y vende tantas unidades como tenga ese
+  stack.
+
+Cuando un objeto coincide con más de un producto, las tres formas, y también las varitas de venta, usan el
+producto activado **más antiguo** de una categoría activada.
+
+<Callout type="warning" title="`sell-all-scope: STORAGE` también quita de la barra rápida">
+Con `STORAGE`, `/sell all` solo cuenta las 27 casillas del inventario. Los objetos que luego retira se
+quitan empezando por la primera casilla de la barra rápida. Si un producto está en los dos sitios, se va
+primero el stack de la barra rápida y la misma cantidad se queda en el inventario.
+</Callout>
+
+<Callout type="note" title="`/sell hand` no quita solo el stack de la mano">
+El stack de la mano decide qué producto se vende y cuántas unidades. Los objetos se quitan de cualquier
+parte del inventario, empezando por la primera casilla de la barra rápida.
+</Callout>
+
+## Precios
+
+El precio por unidad se calcula en este orden:
+
+1. El **precio base** que pusiste.
+2. El **tipo de precio** lo modifica: el fijo lo deja igual, el de demanda le suma la variación actual y el
+   aleatorio le aplica el sorteo actual. Este paso afecta igual al precio de compra y al de venta.
+3. **Compra**: se resta el mayor de los dos descuentos, el del producto o el de la categoría. No se suman.
+4. **Venta**: el resultado se multiplica por el mejor nodo `exyliasurvivalcore.shop.sell.<multiplicador>`
+   del jugador y por cualquier potenciador de dinero que se aplique a `shop-sell`.
+5. El precio se redondea a los decimales de la moneda del producto.
+
+El total de varias unidades se redondea una sola vez, al final.
+
+### Monedas
+
+Cada producto tiene su propia moneda, y se usa para el precio, para comprobar el saldo y para el pago.
+Productos de una misma categoría pueden usar monedas distintas, y *vender todo* da un total por moneda. Se
+puede elegir cualquier moneda de la economía, incluidas las de experiencia cuando están activadas. Consulta
+[Economía](/docs/exyliasurvivalcore/economia).
+
+### Por demanda
+
+Cada unidad comprada **sube** el precio un `step-percent` del precio base. Cada unidad recomprada lo
+**baja** lo mismo. La variación se mantiene entre `floor-percent` y `ceiling-percent` del precio base, y
+cuando nadie compra ni vende vuelve hacia el precio base `decay-percent-per-hour` puntos porcentuales cada
+hora.
+
+Con los valores por defecto, comprar 10 unidades de algo que cuesta 100 lo deja en 110. Tras dos horas sin
+movimiento vuelve a 100. Por mucho que se compre o se venda, se queda entre 50 y 200. Las ventas con
+varitas y la autoventa también mueven el precio. Cambiar el tipo de precio de un producto pone su variación
+a cero.
+
+El lore muestra la variación como **Tendencia**: *Estable* o un porcentaje con signo.
+
+### Aleatorio
+
+Cada producto recibe un precio aleatorio nuevo cada `reset-hours`, en cualquier punto hasta un
+`spread-percent` por encima o por debajo de su precio base. El sorteo solo depende del producto y del
+periodo, así que es el mismo en todos los servidores y se mantiene tras un reinicio. Los periodos se
+cuentan desde la medianoche UTC, así que con las 6 horas por defecto los precios cambian a las 00:00,
+06:00, 12:00 y 18:00 UTC. **Tendencia** muestra cuánto falta para el siguiente sorteo.
+
+### Descuentos
+
+Un descuento tiene un porcentaje de 0 a 100 y una duración de al menos un minuto (`2d`, `12h`, …). Si pones
+`0`, se quita. Un descuento solo baja los precios de compra, y se termina solo cuando se acaba el tiempo.
+Si el producto y su categoría tienen uno cada uno, se aplica el mayor.
+
+## Stock y límites
+
+El **stock** lo comparten todos los jugadores. Comprar quita unidades. Recomprar las devuelve, hasta el
+máximo. Al fijar el stock, se llena hasta esa cifra. Cuando llega a cero, el producto aparece como agotado
+con la cuenta atrás de la reposición, y la compra se rechaza diciendo cuánto falta.
+
+La **reposición** rellena el stock hasta el máximo. El intervalo se escribe como duración (`30m`, `6h`,
+`0s` para nunca) y se guarda en minutos enteros. La cuenta atrás empieza al fijarlo. El plugin lo comprueba
+una vez por minuto. Después de rellenar, la siguiente reposición toca un intervalo más tarde.
+
+<Callout type="note" title="Dos detalles de la reposición">
+Un intervalo de menos de un minuto, como `30s`, se guarda como cero minutos, lo que significa **nunca**.
+Una reposición que toca cuando el stock ya está lleno no empieza una cuenta atrás nueva, así que la primera
+compra que haya después se repone en el minuto siguiente.
+</Callout>
+
+Los **límites** van por jugador y por producto. El de compra y el de venta se cuentan por separado, pero
+comparten un periodo de `Periodo del límite` horas. El periodo empieza con la primera operación del jugador
+que cuenta. Cuando se acaba, las dos cuentas vuelven a cero en su siguiente operación. Un jugador que llega
+al límite ve cuál es y cuánto falta para que se reinicie. Una operación solo se cuenta mientras su límite
+está puesto, así que un límite añadido más tarde empieza con todos los jugadores a cero. Las cuentas de un
+jugador se cargan cuando entra.
+
+Para un límite que valga para todo el servidor, usa el stock.
+
+<Callout type="warning" title="Varios servidores con la misma base de datos">
+Cada servidor lee el catálogo una vez, al arrancar el módulo. Los cambios que haces en el editor de un
+servidor se guardan en la base de datos, pero los demás servidores no los ven hasta que reinician. El stock,
+los límites y la variación por demanda también los lleva cada servidor por su cuenta. Si dos servidores
+venden el mismo producto, cada uno trabaja con su propia copia y se queda lo último que se guarde.
+</Callout>
+
+## Rotaciones
+
+Una categoría con **Rotación** activada ignora las posiciones de sus productos. Muestra `Productos por
+rotación` de sus productos activados, sorteados de nuevo cada `Duración de la rotación` horas y colocados
+desde la primera casilla. Igual que con los precios aleatorios, el sorteo solo depende de la categoría y del
+periodo. Es el mismo en todos los servidores, los periodos se cuentan desde la medianoche UTC y no se guarda
+nada. En la pantalla principal, una categoría con rotación muestra cuánto falta para el siguiente sorteo.
+
+<Callout type="note" title="On offer cuenta toda la categoría">
+La línea *On offer* del botón de una categoría con rotación muestra todos los productos activados de la
+categoría, no los que enseña la rotación actual.
+</Callout>
+
+<Callout type="note" title="Una categoría desactivada no tiene vista previa">
+**Vista previa** abre la categoría como la vería un jugador. Si la categoría está desactivada, la rechaza con
+*"There is no shop category called …"*, también para un administrador.
+</Callout>
+
+## Ajustes
+
+`modules/shop/config.yml`:
+
+| Ajuste | Por defecto | Qué hace |
+|---|---|---|
+| `settings.hide-locked-categories` | `true` | Oculta en la pantalla principal las categorías que el jugador no puede abrir. `false` las muestra bloqueadas |
+| `settings.shift-click-amount` | 1 | Unidades que un shift-clic compra o vende sin abrir la pantalla de cantidad |
+| `settings.sell-all-scope` | `ALL` | `ALL` incluye la barra rápida en *vender todo*. `STORAGE` lo limita a las 27 casillas del inventario |
+| `settings.max-amount` | 2304 | Máximo de unidades que admite una compra o venta en la pantalla de cantidad |
+| `settings.example-catalogue` | `true` | Si una tienda vacía se llena con las cinco categorías de ejemplo al arrancar |
+| `demand.step-percent` | 1.0 | Porcentaje del precio base que suma cada unidad comprada y resta cada unidad vendida |
+| `demand.floor-percent` | 50.0 | Lo más bajo que puede llegar un precio por demanda, en porcentaje del precio base |
+| `demand.ceiling-percent` | 200.0 | Lo más alto que puede llegar |
+| `demand.decay-percent-per-hour` | 5.0 | Puntos porcentuales que recupera la variación cada hora |
+| `random.spread-percent` | 25.0 | Hasta dónde puede quedar un sorteo por encima o por debajo del precio base |
+| `random.reset-hours` | 6 | Cuánto dura un sorteo |
+| `sounds.bought` | `ENTITY_EXPERIENCE_ORB_PICKUP\|1.0\|1.4` | `SONIDO\|volumen\|tono` |
+| `sounds.sold` | `ENTITY_PLAYER_LEVELUP\|0.8\|1.6` | |
+| `sounds.failed` | `ENTITY_VILLAGER_NO\|1.0\|1.0` | |
+
+El tamaño y la duración de las rotaciones, el stock, la reposición, los límites y los descuentos se ajustan
+por categoría o por producto en el editor, no en este archivo.
+
+## Dónde se guarda
+
+| Qué | Dónde |
+|---|---|
+| Categorías | `sc_shop_categories` |
+| Productos, con su stock actual, su variación por demanda y su próxima reposición | `sc_shop_products` |
+| Las cuentas de límites de cada jugador | `sc_shop_limits` |
+| Cada compra y cada venta: jugador, producto, acción, unidades, precio por unidad, total y moneda | `sc_shop_log`, que es lo que lee `/shopadmin log`. Nunca se limpia |
+| Ajustes | `modules/shop/config.yml` |
+| Pantallas de los jugadores | `modules/shop/menus/shop.yml`, `category.yml`, `amount.yml`. Puedes editarlas |
+| Pantallas del editor | `menus/admin/shop_categories.yml`, `shop_category.yml`, `shop_product.yml`. Se sobrescriben en cada arranque y en cada reload |
+| Textos, incluidos los títulos de la ventana de venta y de la cuadrícula | La sección `shop` de `messages.yml` |
+
+La ventana de venta y la cuadrícula de colocación son inventarios normales y no archivos de menú, así que su
+diseño no se puede editar. Consulta [Base de datos](/docs/exyliasurvivalcore/base-de-datos) y
+[Menús](/docs/exyliasurvivalcore/menus).
+
+## Otros módulos que usan los precios de la tienda
+
+- **Las varitas de venta y la autoventa** solo venden lo que la tienda recompra, al precio que la tienda le
+  pagaría a ese jugador, con el multiplicador de la varita encima. Cuentan para los límites de venta y mueven
+  los precios por demanda. El módulo `sell-wands` necesita la tienda activada.
+- **Los potenciadores de dinero** con la fuente `shop-sell` suben todas las ventas a la tienda, también las
+  que se hacen con varitas.
+- **El mercado** añade *Shop pays … each* a los anuncios de objetos que la tienda recompra. Esa cifra es el
+  precio después del tipo de precio y antes de la bonificación de cualquier jugador, dividida entre las
+  unidades del stack para dar el precio de un solo objeto.
+
+Las varitas de venta y los potenciadores están en [Economía](/docs/exyliasurvivalcore/economia), y el mercado
+en [Mercado](/docs/exyliasurvivalcore/mercado).

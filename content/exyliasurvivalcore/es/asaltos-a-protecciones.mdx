@@ -1,0 +1,226 @@
+---
+title: "Asaltos a protecciones"
+description: "Vidas, la salud del núcleo, lo que abre un asalto, las ventanas de asedio y el escudo sin conexión."
+---
+
+Los asaltos dan a cada protección un número de **vidas**. Los enemigos se las quitan golpeando el
+núcleo y matando a miembros dentro. Una protección sin vidas queda **asaltable** durante un tiempo: los
+enemigos pueden romper, colocar y abrir cofres, y cualquiera puede entrar. Cuando el asalto termina, la
+protección recupera una vida y empieza un enfriamiento en el que no puede perder ninguna.
+
+Los asaltos vienen desactivados. Se activan con `submodules.raids` en `modules/protections/config.yml`;
+todos los ajustes de esta página están bajo `raids` en ese archivo. Para las protecciones en sí
+(niveles de núcleo, roles, flags, backends) consulta [Protecciones](/docs/exyliasurvivalcore/protecciones).
+
+## Quién es enemigo
+
+Un jugador es **enemigo** de una protección salvo que sea:
+
+- el dueño,
+- un miembro, también a través de un clan añadido o como inquilino de la protección entera,
+- un aliado de clan del dueño, mientras `allies-are-friends` esté en `true` (por defecto) y haya un
+  plugin de clanes instalado.
+
+Solo los enemigos dañan un núcleo, quitan vidas con muertes y reciben los permisos del asalto. Cualquier
+otro que rompa el núcleo recibe la negativa de siempre. Si lo rompe el dueño, recoge el núcleo, como
+siempre.
+
+## Vidas
+
+| Ajuste | Por defecto | Qué hace |
+|---|---|---|
+| `tier-lives` | `small: 3`, `medium: 4`, `large: 5` | Vidas por tipo de núcleo |
+| `default-lives` | `3` | Vidas de un tipo que no aparece en `tier-lives` |
+| `regen-minutes` | `60` | Minutos que tarda en volver una vida. `0` lo desactiva |
+| `restore-price` | `5000` | Lo que cuesta recomprar una vida. `0` lo desactiva |
+| `restore-currency` | vacío | Moneda de ese precio. Vacío es la moneda por defecto |
+
+El máximo de vidas de una protección son las de su tipo más las `bonus-lives` de su nivel, mientras las
+mejoras estén activas (ver [Economía de protecciones](/docs/exyliasurvivalcore/economia-de-protecciones#mejoras-de-nivel)).
+Nunca baja de 1. Si bajas las vidas de un tipo en la configuración, las protecciones que ya tenían más
+quedan recortadas.
+
+**Recuperación.** Vuelve una vida cada `regen-minutes`, hasta el máximo. El reloj arranca cuando se
+pierde la primera vida, no cuando se creó la protección. El progreso a medias se conserva: con 60
+minutos por vida, una protección que perdió dos recupera una a los 60 minutos y las dos a los 120.
+Durante un asalto no vuelve nada.
+
+**Recompra.** Cualquier miembro pulsa el botón de vidas del menú de la protección para comprar una vida
+por `restore-price`, en `restore-currency` (ver [Economía](/docs/exyliasurvivalcore/economia)). Se
+rechaza si la protección está asaltable o ya tiene todas. Durante el enfriamiento sí se permite.
+
+Las vidas se guardan con la protección, así que son las mismas en todos los servidores de una red.
+
+## La salud del núcleo
+
+Un enemigo que rompe el núcleo no lo rompe: el núcleo recibe daño, y pierde una vida cuando se le acaba
+la salud.
+
+| Ajuste | Por defecto | Qué hace |
+|---|---|---|
+| `core-health` | `150` | Salud por vida |
+| `tool-damage` | `NETHERITE_PICKAXE: 4`, `DIAMOND_PICKAXE: 3`, `IRON_PICKAXE: 2` | Daño por golpe según el objeto de la mano principal |
+| `default-damage` | `1` | Daño de un golpe con cualquier otra cosa |
+| `hit-cooldown-millis` | `500` | Los golpes de un jugador más seguidos que esto se ignoran |
+| `core-heal-seconds` | `30` | Segundos sin golpes para que un núcleo dañado vuelva a tener toda la salud |
+| `hit-actionbar` | ver abajo | Lo que ve el atacante tras cada golpe |
+| `hit-sound` | `BLOCK_ANVIL_LAND\|0.4\|1.6` | El sonido del golpe |
+
+Cada golpe hace como mínimo 1. Con los valores por defecto, una vida cuesta 150 golpes a mano o 38 con
+un pico de netherita, y cuenta como mucho un golpe cada medio segundo. Cuando la salud llega a 0 la
+protección pierde una vida y el núcleo vuelve a empezar con toda la salud.
+
+La barra de acción dice `⚔ Core » %health%/%max_health% ┃ Lives » %lives%/%max_lives%`. También acepta
+`%name%` y `%owner%`.
+
+La salud del núcleo solo se guarda en la memoria del servidor de la protección. Un reinicio la cura, lo
+que cambia poco, porque un núcleo sin golpes se cura a los 30 segundos de todas formas.
+
+<Callout type="note" title="Una protección sin núcleo solo pierde vidas por muertes">
+La tierra protegida marcando dos esquinas no tiene núcleo, y un núcleo oculto tampoco se puede golpear.
+Sin nada que golpear, esas protecciones solo pierden vidas cuando matan a sus miembros. Con
+`allow-hidden-core: false` (por defecto), no se puede ocultar un núcleo mientras los asaltos estén
+activos. Los núcleos que ya estaban ocultos antes de activarlos siguen ocultos.
+</Callout>
+
+## Muertes
+
+| Ajuste | Por defecto | Qué hace |
+|---|---|---|
+| `lives-per-kill` | `1` | Vidas que quita un enemigo al matar a un miembro dentro. `0` lo desactiva |
+| `kill-cooldown-minutes` | `10` | Minutos antes de que matar al mismo miembro en la misma protección vuelva a quitar una vida |
+
+La víctima debe ser el dueño o un miembro, muerto dentro de esa protección por un jugador enemigo. El
+escudo sin conexión nunca protege de una muerte, porque la víctima estaba conectada. Las ventanas de
+asedio, un asalto en curso y el enfriamiento sí cuentan.
+
+## Cuándo no se pueden quitar vidas
+
+Un golpe o una muerte no quitan nada, y al atacante se le dice por qué, cuando:
+
+1. los asaltos están desactivados,
+2. la protección ya está asaltable,
+3. está en el enfriamiento tras un asalto,
+4. las ventanas de asedio están activas y no hay ninguna abierta,
+5. solo para golpes: el escudo sin conexión está levantado.
+
+El atacante ve estos mensajes como mucho una vez cada dos segundos.
+
+## El asalto
+
+Quitar la última vida empieza el asalto.
+
+| Ajuste | Por defecto | Qué hace |
+|---|---|---|
+| `raidable-minutes` | `30` | Cuánto dura el asalto |
+| `raidable-permissions` | `break`, `place`, `containers`, `doors`, `redstone`, `buckets` | Lo que pueden hacer los enemigos dentro |
+| `explosions-while-raidable` | `false` | Si las explosiones rompen bloques aunque el flag `explosions` esté apagado |
+| `lives-after-raid` | `1` | Vidas que tiene al acabar el asalto. Se mantiene entre 1 y el máximo |
+| `cooldown-minutes` | `120` | Minutos tras el asalto en los que no puede perder vidas |
+| `raidable-bar` | ver abajo | La barra de jefe que se ve dentro |
+
+Mientras dura:
+
+- Todos los jugadores con los **anuncios de asaltos** activados reciben que `%raider%` asaltó `%name%` y
+  cuánto tiempo queda abierta. Cada jugador lo cambia en sus [preferencias](/docs/exyliasurvivalcore/utilidades),
+  el ajuste `raid-announcements`.
+- Los enemigos tienen los `raidable-permissions` dentro, digan lo que digan los roles.
+- Cualquiera puede entrar, digan lo que digan el candado o los baneos.
+- Todos los que están dentro ven una barra de jefe roja, `⚔ %name% is raidable » %time_left% ⌚`, que se
+  vacía según pasa el tiempo. También acepta `%owner%` y `%raider%`.
+- La protección no se puede recoger, mover, borrar, vender, regalar, ofrecer en alquiler ni mejorar. Una
+  venta ya publicada se cancela. Lo mismo se rechaza mientras el núcleo esté dañado y aún sin curar.
+- Las ventajas de los miembros se detienen y su warp público se oculta o se rechaza.
+
+Cuando se acaba el tiempo, la protección tiene `lives-after-raid` vidas y empieza el enfriamiento. El
+servidor da por terminados los asaltos una vez por segundo. Mientras no sea la última, cada vida perdida
+se comunica al atacante y a todos los defensores conectados en ese servidor.
+
+<Callout type="note" title="Con el backend de WorldGuard">
+Mientras una protección está asaltable, su región espejo de WorldGuard deja construir a todo el mundo y
+quita la denegación de entrada. Eso es más amplio que `raidable-permissions`, que este módulo aplica por
+su cuenta. La región vuelve a la normalidad cuando acaba el asalto.
+</Callout>
+
+## Ventanas de asedio
+
+Con las ventanas activas, las vidas solo se pueden perder en los horarios que elijas.
+
+| Ajuste | Por defecto | Qué hace |
+|---|---|---|
+| `siege-windows.enabled` | `false` | Si las vidas solo se pueden perder dentro de una ventana |
+| `siege-windows.timezone` | vacío | Zona horaria en la que se leen, como `Europe/Madrid`. Vacía o desconocida es la del servidor |
+| `siege-windows.windows` | `SATURDAY 18:00-22:00`, `SUNDAY 18:00-22:00` | Las ventanas |
+
+```yaml
+raids:
+  siege-windows:
+    enabled: true
+    timezone: "Europe/Madrid"
+    windows:
+      - "SATURDAY 18:00-22:00"
+      - "FRIDAY 23:00-02:00"
+      - "DAILY 12:00-12:30"
+```
+
+Una ventana es un día en inglés (de `MONDAY` a `SUNDAY`), o `DAILY` para todos los días, seguido de
+`HH:MM-HH:MM`. El inicio está dentro de la ventana y el final no. Una ventana que acaba antes de empezar
+pasa la medianoche hacia el día siguiente: `FRIDAY 23:00-02:00` está abierta el sábado a la 01:30. Las
+líneas que no se pueden leer se saltan.
+
+Cuando una ventana se abre o se cierra, se avisa a todos los jugadores con los anuncios de asaltos
+activados. Un asalto que empezó dentro de una ventana dura sus `raidable-minutes` completos, aunque la
+ventana se cierre antes. Con `effects.no-flight-during-siege` activado, el vuelo de los miembros se
+detiene mientras haya una ventana abierta.
+
+## El escudo sin conexión
+
+El escudo impide golpear un núcleo mientras no haya nadie conectado que defienda la protección.
+
+| Ajuste | Por defecto | Qué hace |
+|---|---|---|
+| `offline-shield.enabled` | `true` | Si se usa el escudo |
+| `offline-shield.grace-minutes` | `10` | Minutos desde que el último defensor sale de este servidor hasta que se levanta |
+| `offline-shield.clan-members-count` | `false` | Si los miembros de un clan añadido cuentan como defensores |
+
+Los defensores son el dueño y los miembros, más los miembros de los clanes añadidos si
+`clan-members-count` está activo. Un defensor conectado en el servidor de la protección, o uno que salió
+de él hace menos de `grace-minutes`, mantiene el escudo bajado.
+
+En una red, después se pregunta a los demás servidores por los primeros 32 defensores. Si ninguno está
+conectado en ningún sitio, el escudo se levanta. Si la respuesta no llega, el escudo se queda levantado
+y la tierra sigue protegida. El margen solo cuenta a los jugadores que salieron de este servidor.
+
+El escudo solo bloquea los golpes al núcleo, no las muertes.
+
+## Estados del asalto
+
+El botón de vidas del menú de la protección y `%exyliasurvivalcore_protections_raid_state%` muestran uno
+de cinco estados, comprobados en este orden:
+
+| Estado | Cuándo |
+|---|---|
+| Asaltable | Hay un asalto en curso |
+| Enfriándose | En el enfriamiento tras un asalto |
+| Protegida por escudo | Todos los defensores están desconectados, hasta donde sabe este servidor |
+| Bajo asedio | Ventanas activas y una abierta. Sin ventanas, mientras el núcleo esté dañado |
+| A salvo | Cualquier otro caso |
+
+Los textos que ven los jugadores vienen de `messages.yml` y por defecto están en inglés: `Raidable`,
+`Cooling down`, `Shielded`, `Under siege` y `Safe`. El mismo botón muestra la salud del núcleo, el tiempo
+que le queda a un asalto o enfriamiento, y el precio de recompra.
+
+## Placeholders
+
+Leen la protección en la que está el jugador, y quedan vacíos fuera de una o con los asaltos
+desactivados.
+
+| Placeholder | Qué devuelve |
+|---|---|
+| `%exyliasurvivalcore_protections_lives%` | Vidas que quedan |
+| `%exyliasurvivalcore_protections_max_lives%` | Vidas como máximo |
+| `%exyliasurvivalcore_protections_raid_state%` | El texto del estado de arriba |
+
+Los administradores fijan las vidas de una protección, o terminan su asalto, desde el menú de
+administración. El editor de tipos de núcleo dentro del juego escribe las vidas de un tipo. Ver
+[Administrar protecciones](/docs/exyliasurvivalcore/administrar-protecciones).

@@ -1,0 +1,507 @@
+---
+title: "Economía"
+description: "Monedas guardadas en la base de datos y editadas en el juego, el puente con Vault, el historial, /balance, /pay, /baltop, /wallet y /economyadmin, boosters de dinero y experiencia, y varitas de venta."
+---
+
+ExyliaLib habla con economías — Vault, PlayerPoints, cualquier cosa que registre un plugin — y no guarda
+ninguna propia. El módulo `economy` es donde viven las monedas del servidor: sus saldos, su historial,
+sus clasificaciones, la moneda que se entrega a Vault y todos los comandos que un jugador escribe sobre
+dinero. Apagarlo deja al servidor con la otra economía que tenga.
+
+## Monedas
+
+Una moneda es una fila en `sc_currencies`, creada y editada en el juego con `/economyadmin`. No hay
+ningún archivo de monedas que editar.
+
+Hay tres tipos:
+
+| Tipo | Qué es |
+|---|---|
+| **Guardada** | Un saldo en la base de datos. Funciona con jugadores desconectados y los sigue entre servidores que comparten la base de datos. El único tipo con reglas, historial y clasificación. |
+| **Objeto** | Un objeto exacto en el inventario del jugador. El saldo es cuántos lleva; pagar se los quita, cobrar se los mete y tira al suelo lo que no cabe. |
+| **Solo apariencia** | Sin saldo propio: el nombre, símbolo y formato con que se muestra la moneda de otro plugin, como `vault` o `points`. |
+
+La experiencia es una cuarta fuente, que se activa en los ajustes de economía en vez de crearse:
+`xp_levels` y `xp_points` pasan a ser ids de moneda en los que una tienda puede poner precios.
+
+Una moneda de objeto o de experiencia solo tiene saldo mientras el jugador está en este servidor. Pagar
+a un jugador ausente deja el pago en cola para el próximo servidor que lo tenga; quitarle a un jugador
+ausente falla.
+
+Una moneda de objeto es el objeto entero — nombre, lore, modelo y encantamientos — y solo cuenta un
+stack idéntico.
+
+### Qué tiene una moneda
+
+| Campo | Tipos | Moneda nueva | Qué hace |
+|---|---|---|---|
+| Id | todos | se escribe al crearla | `a-z`, `0-9` y `_`, hasta 32. La clave con la que se guardan los saldos, así que nunca cambia |
+| Icono | todos | `GOLD_INGOT`; una moneda de objeto usa su objeto | Lo que dibujan las carteras y las listas |
+| Nombre, plural | todos | vacío | Una unidad y varias. Admiten colores |
+| Símbolo | todos | vacío | En blanco para ninguno |
+| Decimales | todos | `0`; solo apariencia `-1` | De `0` a `8`. `-1` en una moneda de solo apariencia conserva lo que diga el proveedor |
+| Formato | todos | `%amount% %name%` | `%amount%`, `%symbol%` y `%name%` |
+| Formato compacto | todos | vacío | Lo mismo para scoreboards, donde `%amount%` se lee `1.2k` |
+| Nombres de comando | guardada, objeto | el id | El primero es el comando, el resto alias |
+| Orden | todos | después de la última | Dónde queda en la lista |
+| Objeto | objeto | se pide al crearla | El objeto exacto |
+| Saldo inicial | guardada | `0` | Con lo que empieza un jugador nuevo |
+| Tope de saldo | guardada | `-1` | `-1` (o cualquier cosa que no pase de cero) para ninguno |
+| Permiso | guardada | vacío | Necesario para usarla. En blanco: nadie lo necesita |
+| Mínimo que se puede enviar | guardada | `1` | El mínimo de `/pay` |
+| Impuesto de transferencia | guardada | `0` | Un porcentaje, de `0` a `100`, que se cobra al que envía además de la cantidad |
+| Tipos de cambio | guardada | ninguno | `otro_id=tasa`: `shards=0.01` significa que 1 de esta vale 0,01 shards |
+| Transferencias | guardada | sí | Si los jugadores pueden pagarse entre ellos |
+| Cambio | guardada | no | Si se puede intercambiar a sus tasas |
+| Clasificación | guardada | sí | Si funcionan su top y sus placeholders |
+| En red | guardada | sí | Ver la nota de abajo |
+| Comandos activados | guardada | sí | Si sus nombres de comando existen |
+| Economía de Vault | guardada | no | Si es la moneda publicada en Vault |
+
+Una moneda con permiso desaparece de la cartera, de las líneas de saldo de las pantallas de tienda y de
+las sugerencias de comandos para quien no lo tenga, y sus comandos lo rechazan.
+
+<Callout type="warning" title="Dos campos que no cambian nada">
+**En red** se guarda, se muestra y se alterna, y nada lo lee. Un saldo guardado es una fila por jugador
+y moneda, así que todos los servidores de la misma base de datos lo comparten, esté como esté el
+interruptor.
+
+**Los nombres de comando de una moneda de objeto** se guardan y nunca se instalan. Solo las monedas
+guardadas tienen comando propio.
+</Callout>
+
+### Con qué empieza un servidor nuevo
+
+La primera vez que las tablas están vacías, el módulo importa `modules/economy/currencies.yml` y lo
+renombra a `currencies.yml.imported`. Un servidor sin ese archivo pero con el que guardaba ExyliaLib
+antes de la 1.159.0, `plugins/ExyliaLib/currencies.yml`, copia ese primero, con sus cambios. Un servidor
+sin ninguno de los dos importa los valores por defecto:
+
+| Id | Tipo | Aspecto | Notas |
+|---|---|---|---|
+| `dollars` | guardada | Dollar, `$`, 2 decimales, `%symbol%%amount%` | Comandos `/dollars`, `/dollar`. Publicada en Vault |
+| `shards` | guardada | Shard, `✦`, 0 decimales, `%amount% %symbol%` | Comandos `/shards`, `/shard` |
+| `netherite_ingots` | objeto | `NETHERITE_INGOT`, `%amount% %name%` | |
+| `vault` | solo apariencia | Dollar, `$`, 2 decimales, `%symbol%%amount%` | Cómo se escribe la economía de Vault |
+| `points` | solo apariencia | Point, 0 decimales, `%amount% %name%` | Cómo se escribe PlayerPoints |
+
+Las dos monedas guardadas empiezan en `0`, no tienen tope, permiten transferencias desde `1` sin
+impuesto y tienen el cambio apagado. Los puntos de experiencia son moneda, los niveles no, y el
+historial está activado.
+
+Después de importarlo, el archivo no se vuelve a leer. Si en un arranque posterior sigue habiendo un
+`currencies.yml`, la consola lo avisa y lo ignora.
+
+### La moneda por defecto
+
+Un comando que no nombra moneda — `/balance`, `/pay`, `/baltop` — usa la moneda por defecto de
+ExyliaLib, `default-currency` en `plugins/ExyliaLib/economy.yml`. Viene como `vault`: lo que sirva Vault,
+que en un servidor sin otro plugin de economía es `dollars` a través del puente de más abajo.
+
+<Callout type="warning" title="`vault` no es una moneda guardada">
+Con la moneda por defecto en `vault`, todo lo que solo puede hacer una moneda guardada sale vacío cuando
+no se nombra moneda: `/baltop`, `/economy top`, `/economy history` y los placeholders de top sin id de
+moneda. `/pay` sin moneda también se salta las reglas de la moneda guardada — su permiso, el
+interruptor de transferencias, el mínimo y el impuesto — y su línea del historial dice `vault` en vez de
+`pay`.
+
+Poner `default-currency: dollars` (o la moneda guardada con la que funcione el servidor) hace que todos
+lean esa moneda directamente.
+</Callout>
+
+## El puente con Vault
+
+Una moneda guardada se puede publicar como la economía de Vault del servidor, así que todos los plugins
+que solo hablan Vault funcionan con ella. Se elige con **Economía de Vault** en la pantalla de esa
+moneda; elegir otra la sustituye, y borrar la moneda publicada la despublica.
+
+Se registra **por debajo** de cualquier plugin de economía que haya instalado el dueño — EssentialsX,
+CMI — y solo sirve mientras no haya ninguno. **Vault por encima** en los ajustes de economía la registra
+por encima de ellos. La consola dice cuál de las dos pasó.
+
+El puente no tiene cuentas de banco: toda llamada de banco responde *no implementado*. Un jugador
+nombrado por texto en vez de por UUID se busca entre los jugadores que ExyliaLib ha visto, y un nombre
+desconocido se rechaza. Sin Vault instalado no se publica nada y la consola avisa.
+
+## Saldos, jugadores desconectados y otros servidores
+
+Los saldos guardados de un jugador se cargan al entrar, y el servidor en el que está es el único que los
+escribe. Cualquier otro servidor — o el mismo, para alguien que no está — deja el cambio en una cola y
+avisa a la red. El dueño lo aplica en el momento; si no, espera a su próxima entrada. Un repaso cada
+minuto recoge lo que se haya perdido un mensaje.
+
+| Cambio a un jugador ausente | Cuándo se aplica |
+|---|---|
+| Ingreso | Siempre, entero, hasta el tope |
+| Retirada | Sin bajar de cero: no puede dejar en negativo a alguien que no ve |
+| Fijar | Sustituye el saldo |
+
+Los comandos de administración dicen *"Queued … They are away; it lands when they are next seen"* en vez
+de enseñar un saldo que no tienen.
+
+Un ingreso que pasaría el tope solo paga hasta él, y uno con el tope ya alcanzado falla.
+
+Los cambios de monedas hechos en un servidor se registran ahí al momento y los leen todos los demás de la
+red, que reinstalan también los comandos de moneda.
+
+## El historial
+
+Con el historial activado (por defecto), cada operación sobre una moneda guardada escribe una línea en
+`exylia_ledger`: qué se movió, cómo quedó el saldo, el motivo, quién lo causó y qué servidor lo aplicó —
+incluidos los cambios que llegaron de otro servidor. Nada lo purga.
+
+| Motivo | De dónde viene |
+|---|---|
+| `pay` | `/pay` y cualquier otra forma de escribirlo |
+| `pay:tax` | El impuesto de un pago |
+| `pay:tax-refund` | El impuesto devuelto cuando el pago falló |
+| `admin:give`, `admin:take`, `admin:set`, `admin:reset` | `/economyadmin` |
+| `import:<moneda>` | `/economyadmin import` |
+| `exchange:<origen>><destino>` | Los dos lados de un cambio |
+| `exchange:refund` | El origen devuelto cuando falló el otro lado |
+| `vault` | Un plugin que paga a través de Vault |
+
+Otros plugins escriben sus propios motivos.
+
+## Comandos de jugador
+
+| Comando | Alias | Permiso | Qué hace |
+|---|---|---|---|
+| `/balance [jugador]` | `/bal`, `/money` | `exyliasurvivalcore.economy` | La moneda por defecto. Siempre esa: las demás son `/wallet` o su propio comando |
+| `/pay <jugador> <cantidad> [moneda]` | | `exyliasurvivalcore.economy.pay` | Envía dinero, en la moneda por defecto salvo que una tercera palabra nombre otra |
+| `/baltop [página]` | `/balancetop`, `/moneytop` | `exyliasurvivalcore.economy` | La clasificación de la moneda por defecto. La página es para la consola; un jugador ve la pantalla |
+| `/wallet [jugador]` | `/balances` | `exyliasurvivalcore.economy` | Todas las monedas en una pantalla; la consola recibe una línea por moneda |
+| `/economy` | `/eco` | `exyliasurvivalcore.economy` | Tu cartera |
+| `/economy balance [moneda] [jugador]` | | `exyliasurvivalcore.economy` | Una palabra que no es una moneda se lee como jugador |
+| `/economy wallet [jugador]` | | `exyliasurvivalcore.economy` | |
+| `/economy currencies` | | `exyliasurvivalcore.economy` | Todas las monedas con su id y su tipo |
+| `/economy pay <jugador> <cantidad> [moneda]` | | `exyliasurvivalcore.economy.pay` | |
+| `/economy top [moneda] [página]` | | `exyliasurvivalcore.economy` | |
+| `/economy history [moneda] [jugador]` | | `exyliasurvivalcore.economy` | Las últimas 15 líneas en consola, una pantalla para un jugador |
+| `/economy exchange <cantidad> <origen> <destino>` | | `exyliasurvivalcore.economy` | Intercambia a la tasa de la moneda de origen |
+
+Todo lo que es sobre otro jugador — un saldo, una cartera, un historial — necesita además
+`exyliasurvivalcore.economy.others`. Todos funcionan con un jugador desconectado o en otro servidor. Las
+cantidades se escriben como `100`, `2.5k` o `1m`.
+
+Un pago comprueba el interruptor de transferencias y el mínimo de la moneda, no deja pagarse a uno mismo,
+cobra el impuesto al que envía además de la cantidad y luego mueve la cantidad. Al que recibe se le avisa
+si está conectado.
+
+Un cambio necesita **Cambio** activado en la moneda de origen y una tasa hacia la de destino, que puede
+ser cualquier moneda que exista. Primero se cobra el origen; si el ingreso falla, se devuelve.
+
+<Callout type="note" title="No se concede nada por defecto">
+Ninguno de estos permisos está declarado en `plugin.yml`, así que un jugador sin
+`exyliasurvivalcore.economy` no puede usar `/balance`. Dáselo, junto con `exyliasurvivalcore.economy.pay`,
+al grupo por defecto.
+</Callout>
+
+### Un comando por moneda
+
+Cada moneda guardada con **Comandos activados** y al menos un nombre de comando tiene su propio comando,
+instalado en cuanto se guarda:
+
+```text
+/shards                         tu saldo
+/shards <jugador>               el de otro (necesita .others)
+/shards pay <jugador> <cantidad>
+/shards top [página]
+/shards history [jugador]
+/shards exchange <cantidad> <destino>
+/shards give|take|set <jugador> <cantidad>   administradores
+/shards reset <jugador>                      administradores
+```
+
+Necesita `exyliasurvivalcore.economy`. Un nombre que ya tiene otro plugin responde igualmente como
+`/exyliasurvivalcore:<nombre>`, y la consola lo avisa.
+
+<Callout type="note" title="Rechazos en silencio">
+`/shards pay` sin `exyliasurvivalcore.economy.pay`, y `give`, `take`, `set` o `reset` sin
+`exyliasurvivalcore.economy.admin`, no hacen nada y no dicen nada.
+</Callout>
+
+### Las pantallas
+
+Tres pantallas en `modules/economy/menus/`, escritas una vez y tuyas para editar:
+
+| Archivo | Se abre con | Valores |
+|---|---|---|
+| `wallet.yml` | `/wallet`, `/economy` | `%wallet_owner%`, `%wallet_currencies%`; cada moneda `%currency%`, `%currency_icon%`, `%currency_balance%`, `%currency_kind%` |
+| `history.yml` | Clic izquierdo en una moneda de la cartera | `%currency%`, `%history_owner%`, `%history_size%`; cada línea `%entry_when%`, `%entry_delta%`, `%entry_reason%`, `%entry_balance%`, `%entry_server%` |
+| `top.yml` | Clic derecho en una moneda de la cartera, `/baltop` | `%currency%`, `%top_size%`; cada puesto `%top_position%`, `%top_player%`, `%top_amount%` |
+
+El historial y la clasificación llegan a 90 entradas. La clasificación se lee de la base de datos como
+mucho una vez por minuto, así que el primer vistazo tras un arranque puede salir vacío hasta que llega
+esa lectura. Solo se clasifican las monedas guardadas con la clasificación activada, y solo ellas tienen
+historial; cualquier otra moneda abre una pantalla vacía.
+
+Las acciones que hay detrás — `survivalcore:economy_wallet [uuid]`,
+`survivalcore:economy_history <moneda> [uuid]` y `survivalcore:economy_top <moneda>` — se pueden poner en
+cualquier menú.
+
+## /economyadmin
+
+`/economyadmin` — `/ecoadmin`, `/eadmin` — necesita `exyliasurvivalcore.economy.admin`.
+
+| Comando | Qué hace |
+|---|---|
+| `/economyadmin` | Abre la lista de monedas |
+| `/economyadmin give <jugador> <cantidad> [moneda]` | Ingresa |
+| `/economyadmin take <jugador> <cantidad> [moneda]` | Retira; se rechaza si tiene menos |
+| `/economyadmin set <jugador> <cantidad> [moneda]` | Fija el saldo |
+| `/economyadmin reset <jugador> [moneda]` | Lo devuelve al saldo inicial |
+| `/economyadmin import <origen> <destino>` | Copia cada saldo positivo de una moneda a una guardada |
+| `/economyadmin currencies` | Todas las monedas, con su id y su tipo |
+
+`import` recorre todos los jugadores que el servidor ha visto alguna vez y **suma** su saldo de `origen`
+a `destino`. Ejecútalo una sola vez.
+
+Las formas antiguas — `/eco give`, `/eco take`, `/eco set`, `/eco reset`, `/eco import` — siguen
+funcionando con el mismo permiso, porque los archivos de recompensas y cajas de servidores en marcha
+están escritos con ellas.
+
+### Las pantallas de administración
+
+| Pantalla | Archivo | Qué tiene |
+|---|---|---|
+| Monedas | `menus/admin/currency_admin_list.yml` | Todas las monedas — clic izquierdo para editar, derecho para borrar — más **Crear moneda** y **Ajustes de economía** |
+| Una moneda | `menus/admin/currency_admin_edit.yml` | Icono, apariencia, nombres de comando, reglas u objeto, tipos de cambio, orden, los interruptores, borrar |
+| Ajustes de economía | `menus/admin/currency_admin_settings.yml` | Niveles de experiencia, puntos de experiencia, historial, Vault por encima, y qué moneda está publicada |
+
+**Crear** pide un id, luego el tipo y — para una moneda de objeto — el objeto en sí. Los botones que
+enseña una moneda dependen de su tipo: una guardada tiene reglas e interruptores, una de objeto su
+objeto, una de solo apariencia solo su aspecto.
+
+**Borrar** pregunta antes. Los saldos de una moneda guardada se quedan en la base de datos, sin uso
+hasta que vuelva a existir una moneda con ese id.
+
+Cada cambio se escribe, se registra en este servidor al momento y se anuncia a los demás. Estos tres
+archivos se regeneran desde el plugin en cada arranque, así que los cambios en ellos no sobreviven.
+
+| Ajuste de economía | Servidor nuevo | Qué hace |
+|---|---|---|
+| Niveles de experiencia | no | Convierte `xp_levels` en moneda |
+| Puntos de experiencia | sí | Convierte `xp_points` en moneda |
+| Historial | sí | Apunta cada operación sobre monedas guardadas |
+| Vault por encima | no | Sirve Vault aunque haya otro plugin de economía instalado |
+
+## El selector de moneda
+
+`menus/currency_select.yml` es la única pantalla que usan todos los flujos para preguntar *qué moneda*:
+publicar en el mercado, empezar una subasta, poner una orden de compra y elegir la moneda en la que se
+pone el precio de un producto de la tienda. Cada moneda enseña su icono y lo que el jugador tiene de
+ella. Un servidor con una sola moneda nunca la ve: el flujo sigue con la única que hay.
+
+`%purpose%` es la línea que escribe la pantalla que pregunta; cada moneda se dibuja con `%currency%`,
+`%currency_icon%` y `%currency_balance%`. El archivo se escribe una vez y es tuyo para editar.
+
+Las líneas de saldo de las pantallas de tienda, mercado y subastas siguen la misma regla: todas las
+monedas que el jugador puede usar, una por línea.
+
+## Placeholders
+
+Las clasificaciones son de este módulo; los saldos son de ExyliaLib, porque funcionan con cualquier
+moneda.
+
+| Placeholder | Qué devuelve |
+|---|---|
+| `%exyliasurvivalcore_economy_top_name_<puesto>_<moneda>%` | Quién ocupa ese puesto, o `—` |
+| `%exyliasurvivalcore_economy_top_amount_<puesto>_<moneda>%` | Lo que tiene, con formato |
+| `%exylialib_economy_balance_<moneda>%` | El saldo del jugador, con formato |
+| `%exylialib_economy_compact_<moneda>%` | Lo mismo, corto |
+| `%exylialib_economy_raw_<moneda>%` | Solo el número |
+| `%exylialib_economy_name_<moneda>%` | El nombre en plural de la moneda |
+| `%exylialib_economy_symbol_<moneda>%` | Su símbolo |
+
+Sin moneda se lee la moneda por defecto, que, dejada en `vault`, no tiene clasificación.
+
+## Valores por defecto de economía baja
+
+Los precios y pagos que vienen de serie están pensados para una economía baja, donde un bloque barato
+vale una unidad y nada cuesta miles. Una instalación nueva escribe estos; un servidor que ya tiene los
+archivos conserva sus números.
+
+| Dónde | Por defecto |
+|---|---|
+| Catálogo de la tienda | Números enteros. Tierra, adoquín, piedra, arena: compra 3, venta 1. Obsidiana 45 / 15. Bloque de heno 36 / 9 |
+| Requisitos de rango, `ranks.yml` | 250, 1.000, 4.000, 15.000 |
+| Coste de prestigio | 25.000 |
+| Reparar | 75 el objeto en la mano, 200 todo |
+| Recompensas por cabeza | 25 mínimo, 100.000 máximo |
+| Precio del RTP | 25 |
+| `money` por muerte | 3 |
+| `money` de misiones | 30–75 diarias, 500–750 semanales |
+| Recompensas por tiempo jugado | 25, 50, 150, 600, 2.500 |
+| Reclamar, anuncio programado | `eco give … 50` |
+
+El catálogo de la tienda sigue dos reglas para no fabricar dinero: un producto se vende por más o menos
+un tercio de lo que cuesta, y cuando un producto se fabrica a partir de otro — troncos en tablones, trigo
+en heno — el resultado nunca se vende por más que sus ingredientes. El equipo se vende pero nunca se
+recompra.
+
+## Boosters
+
+Un booster multiplica **dinero** o **experiencia**, para un jugador o para todos, durante un tiempo.
+
+| Fuente | Qué multiplica |
+|---|---|
+| `shop-sell` | Cada venta a la tienda, varitas de venta y autoventa incluidas, en la moneda en la que esté el precio del producto |
+| `missions` | El `money` que paga una misión |
+| `kill-rewards` | El `money` de `modules/kill-rewards/rewards.yml` |
+| `farming` | El `money` de `modules/farming/categories.yml` |
+| `votes` | El `money` de `modules/votes/votes.yml` |
+| `*` | Todas |
+
+Misiones, recompensas por muerte, cultivo y votos pagan su `money` en la moneda por defecto, redondeado
+hacia abajo a sus decimales. El dinero que se da con un comando — `eco give` — no se multiplica.
+
+Un booster de **experiencia** se aplica a toda la experiencia que el juego registra como ganada, orbes
+incluidos, venga de donde venga.
+
+La fuente es texto libre: un booster dado para una fuente que no existe no multiplica nada.
+
+### Personales y globales
+
+| | Se da con | Empieza |
+|---|---|---|
+| Personal | `/boostersadmin give <jugador> <money\|xp> <multiplicador> <duración> [fuente]` | Cuando el jugador hace clic en él en `/boosters` |
+| Global | `/boostersadmin global <money\|xp> <multiplicador> <duración> [fuente]` | Al momento, en todos los servidores |
+
+Un booster personal espera en `/boosters` hasta que su dueño lo empieza, así que se le puede dar a alguien
+desconectado o en otro servidor, que es lo que necesita una tienda web. Al jugador se le avisa cuando le
+llega uno.
+
+Un booster global se anuncia en todos los servidores al empezar y al terminar, a todos los que tengan
+activados los anuncios de boosters en `/settings`. `/boostersadmin clear` termina todos los boosters
+globales en marcha sin anunciarlo.
+
+El multiplicador tiene que pasar de `1` y no superar `100`. La duración se escribe `30m`, `2h`, `1d`; un
+número solo son segundos, y también valen `s` y `h`. Sin fuente es `*`.
+
+### Cómo se suman
+
+Cuentan todos los boosters en marcha de un tipo que se apliquen a un pago: los del jugador y los
+globales juntos.
+
+```yaml
+settings:
+  stacking: ADD
+  max-multiplier: 5.0
+  one-per-type: true
+bossbar:
+  config:
+    text: "{highlight}⚡ {primary}&lBOOSTERS {letters_black}» {success}Money x%money% {letters_black}· {info}XP x%xp% {letters_black}» {letters}%left%"
+    colour: PURPLE
+    overlay: PROGRESS
+```
+
+| `stacking` | x2 y x1,5 dan |
+|---|---|
+| `ADD` | x2,5 |
+| `MULTIPLY` | x3 |
+| `HIGHEST` | x2 |
+
+Cualquier otro valor se lee como `ADD`. El resultado nunca baja de x1 ni pasa de `max-multiplier`; `0`
+quita el tope.
+
+`one-per-type` impide que un jugador empiece un segundo booster personal de un tipo mientras otro está en
+marcha. Los globales no cuentan.
+
+La barra de jefe se muestra mientras algún booster se aplique al jugador, llenándose con el tiempo que le
+queda al que termina más tarde. En su texto funcionan `%money%`, `%xp%`, `%left%` y `%count%`; un texto
+vacío la oculta.
+
+### Comandos, permisos y placeholders
+
+| Comando | Permiso |
+|---|---|
+| `/boosters` | `exyliasurvivalcore.boosters` |
+| `/boostersadmin give`, `global`, `clear` (`/boostersa`) | `exyliasurvivalcore.boosters.admin` |
+
+`/boosters` lista los boosters globales en marcha y luego los del jugador: primero los que están en
+marcha, después los que esperan. Su pantalla es `modules/boosters/menus/boosters.yml`.
+
+| Placeholder | Qué devuelve |
+|---|---|
+| `%exyliasurvivalcore_boosters_money%` | El multiplicador de dinero del jugador, suyo y global juntos |
+| `%exyliasurvivalcore_boosters_xp%` | Lo mismo para experiencia |
+| `%exyliasurvivalcore_boosters_active%` | Boosters personales en marcha |
+| `%exyliasurvivalcore_boosters_stored%` | Boosters personales esperando a empezar |
+| `%exyliasurvivalcore_boosters_global_money%` | El multiplicador global de dinero |
+| `%exyliasurvivalcore_boosters_global_xp%` | El multiplicador global de experiencia |
+| `%exyliasurvivalcore_boosters_global_left%` | Tiempo que le queda al booster global que termina más tarde, o `—` |
+
+## Varitas de venta
+
+El módulo `sell-wands` necesita la tienda: sus dos funciones venden a precios de tienda, así que se
+aplican la bonificación `exyliasurvivalcore.shop.sell.<multiplicador>` del jugador, los boosters de dinero
+de `shop-sell`, los permisos de producto y categoría, y los límites de venta de la tienda. Ver
+[Tienda](/docs/exyliasurvivalcore/tienda).
+
+### La varita
+
+Una varita lleva en el objeto un multiplicador y un número de usos, y un id propio para que dos varitas
+nunca se apilen.
+
+```text
+/sellwandadmin give <jugador> <multiplicador> <usos>
+```
+
+`/sellwanda` para abreviar, con `exyliasurvivalcore.sellwands.admin`. El jugador tiene que estar
+conectado. El multiplicador va de `0.1` a `10`; los usos son `-1` para ilimitados o cualquier número
+mayor que `0`.
+
+Hacer clic derecho en un contenedor con una varita en la mano principal vende lo que la tienda compra de
+dentro, al precio de tienda por el multiplicador de la varita. Todo lo demás, y el resto de una unidad, se
+queda donde está. Necesita `exyliasurvivalcore.sellwands.use`, y un clic que un plugin de protección ya
+ha rechazado se deja en paz, así que una varita nunca mete la mano en un cofre que su dueño no podría
+abrir.
+
+Solo se gasta un uso cuando se ha vendido algo; el último rompe la varita.
+
+<Callout type="note" title="Cualquier contenedor, no solo tres">
+El lore de la varita habla de cofre, barril o caja de shulker. El código acepta cualquier bloque con
+inventario: una tolva, un horno o un dispensador venden igual.
+
+El cooldown es por jugador, no por varita, y empieza con cada clic, también con uno que no vendió nada.
+</Callout>
+
+### Autoventa
+
+Con `exyliasurvivalcore.sellwands.autosell`, lo que rompe un jugador se vende por él: los bloques rotos a
+mano, y tanto lo que sueltan los bloques como el loot de las [minas](/docs/exyliasurvivalcore/zonas). Solo
+se cogen los drops que compra la tienda; lo demás cae como siempre.
+
+Los drops esperan unos segundos y se venden juntos, al precio de tienda sin más. Lo que la tienda rechace
+para entonces — un límite de venta alcanzado — vuelve al jugador. Salir del servidor vende antes lo que
+está esperando. Cada cierto tiempo se le dice al jugador cuánto ha sacado.
+
+`/autosell` la activa y desactiva, el mismo interruptor que en `/settings`. Viene **activada** para todo
+el que tenga el permiso.
+
+<Callout type="warning" title="`/autosell` sin ajustes de jugador">
+Con el módulo `player-settings` apagado, `/autosell` responde *"Autosell is now on"* y no cambia nada, y la
+autoventa queda activada para todos los que tengan el permiso.
+</Callout>
+
+### Configuración
+
+`modules/sell-wands/config.yml`:
+
+| Ajuste | Por defecto | Qué hace |
+|---|---|---|
+| `wand.material` | `BLAZE_ROD` | Qué objeto es una varita |
+| `wand.name`, `wand.lore` | | `%multiplier%` y `%uses%` funcionan en los dos |
+| `wand.cooldown-seconds` | 1.0 | Segundos entre dos usos |
+| `autosell.flush-seconds` | 5 | Cuánto esperan los drops antes de venderse |
+| `autosell.report-seconds` | 60 | Cada cuánto se le dice al jugador qué se vendió. `0` nunca |
+
+Los dos temporizadores de autoventa se programan una sola vez, al arrancar el plugin: cambiarlos necesita
+reiniciar.
+
+| Permiso | Qué permite |
+|---|---|
+| `exyliasurvivalcore.sellwands.use` | Usar una varita |
+| `exyliasurvivalcore.sellwands.autosell` | La autoventa, y `/autosell` |
+| `exyliasurvivalcore.sellwands.admin` | `/sellwandadmin` |

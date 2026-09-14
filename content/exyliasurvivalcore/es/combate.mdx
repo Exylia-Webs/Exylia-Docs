@@ -1,6 +1,6 @@
 ---
 title: "Combate"
-description: "Recompensas por baja y rachas, recompensas por cabeza, estadísticas con rankings y qué pasa al morir."
+description: "Recompensas por baja y rachas, recompensas por cabeza, estadísticas y contadores de módulos con rankings, qué pasa al morir, y tumbas."
 ---
 
 ## Recompensas por baja
@@ -10,6 +10,7 @@ Cada baja puede pagar, y las bajas seguidas montan una racha. Las dos se escribe
 
 ```yaml
 on-kill:
+  money: 3
   commands: []
   killer:   { chat: "", actionbar: "", title: "", sound: "" }
   victim:   { chat: "", actionbar: "", title: "", sound: "" }
@@ -29,8 +30,18 @@ streak-end:
 `%killer%`, `%victim%`, `%streak%` y `%victim_streak%` están disponibles en todo el archivo. Los
 comandos aceptan un prefijo `console:` o `player:`.
 
+`money` le paga al asesino en la moneda por defecto, multiplicado por los potenciadores de dinero de
+`kill-rewards` (ver [Economía](/docs/exyliasurvivalcore/economia)), y `%money%` es lo que se pagó, con
+potenciadores incluidos. Funciona en `on-kill`, en cada hito de racha y en `streak-end`. El `on-kill`
+que viene paga 3 así, donde antes ejecutaba `eco give %killer% 50`.
+
 `settings.worlds` es una lista blanca: vacía significa todos los mundos.
 `settings.streak-reset-on-logout` decide si una racha sobrevive a una desconexión.
+
+`/killrewardsadmin reset <jugador>` y `/killrewardsadmin resetbest <jugador>` (alias `/kra`, nodo
+`exyliasurvivalcore.killrewards.admin`) borran la racha actual o la mejor de un jugador, esté conectado
+o no. Las dos rachas viven en memoria, así que un reinicio también las borra. El `best_kill_streak` del
+módulo de estadísticas es un valor aparte, guardado, y no se toca.
 
 ## Recompensas por cabeza
 
@@ -39,8 +50,8 @@ Varios jugadores pueden aportar a la misma cabeza, y `/bounty` lista las abierta
 
 | Ajuste | Por defecto | Qué hace |
 |---|---|---|
-| `min-amount` | 100 | Aportación mínima |
-| `max-amount` | 1000000 | Máxima, `-1` para ilimitada |
+| `min-amount` | 25 | Aportación mínima |
+| `max-amount` | 100000 | Máxima, `-1` para ilimitada |
 | `max-bounties-per-placer` | 5 | Cuántas cabezas puede financiar un jugador |
 | `max-target-pool` | `-1` | Techo del total de una cabeza |
 | `allow-self-bounty` | `false` | Si un jugador puede financiar su propia cabeza |
@@ -51,6 +62,10 @@ Varios jugadores pueden aportar a la misma cabeza, y `/bounty` lista las abierta
 | `target-bossbar-duration-seconds` | 10 | Cuánto se le muestra la barra de jefe |
 
 Los administradores tienen `/bountyadmin add`, `remove` y `clear`.
+
+Otro plugin puede rechazar un cobro con `BountyClaimEvent`, que se consulta antes de mover dinero: un
+cobro rechazado deja todas las recompensas sobre la víctima para la siguiente baja. Ver
+[API](/docs/exyliasurvivalcore/api).
 
 <Callout type="warning" title="Dos cosas de este módulo no funcionan como se leen">
 `/bounty cancel` abre la misma lista que `/bounty` y no cancela nada: cancela una aportación desde el
@@ -63,23 +78,43 @@ que viene le pasa `false` igualmente, así que toda recompensa puesta así lleva
 
 ## Estadísticas
 
-Bajas, muertes, mejor racha y racha actual se registran por jugador, y `modules/stats/stats.yml` decide
-cuáles se muestran y se clasifican.
+A la pantalla de estadísticas llegan dos tipos de número. El módulo de estadísticas lleva cuatro
+valores de PvP propios — bajas, muertes, mejor racha y racha actual — y cada módulo lleva **contadores**
+de lo que hacen sus jugadores: bloques minados, cajas abiertas, warps usados. `modules/stats/stats.yml`
+decide cuáles se muestran y se clasifican.
+
+El archivo que viene es corto a propósito, con las stats por las que compiten los jugadores:
 
 ```yaml
 stats:
-  kills:            { enabled: true, type: INTERNAL, format: NUMBER, leaderboard: true,  … }
-  deaths:           { enabled: true, type: INTERNAL, format: NUMBER, leaderboard: true,  … }
-  best_kill_streak: { enabled: true, type: INTERNAL, format: NUMBER, leaderboard: true,  … }
-  current_streak:   { enabled: true, type: INTERNAL, format: NUMBER, leaderboard: false, … }
-  playtime:         { enabled: true, type: PAPI,     format: TIME,   placeholder: "%exyliasurvivalcore_playtime_millis%" }
-  kdr:              { enabled: true, type: COMPUTED, format: DECIMAL, formula: KILLS_PER_DEATH }
+  kills:              { type: INTERNAL, format: NUMBER,  leaderboard: true, … }
+  deaths:             { type: INTERNAL, format: NUMBER,  leaderboard: true, … }
+  kdr:                { type: COMPUTED, format: DECIMAL, formula: KILLS_PER_DEATH }
+  best_kill_streak:   { type: INTERNAL, format: NUMBER,  leaderboard: true, … }
+  current_streak:     { type: INTERNAL, format: NUMBER,  leaderboard: false, … }
+  duels_won:          { type: COUNTER,  counter: 'duels.wins',         format: NUMBER }
+  balance:            { type: VAULT,    format: MONEY }
+  bounties_claimed:   { type: COUNTER,  counter: 'bounties.claimed',   format: NUMBER }
+  bounties_earned:    { type: COUNTER,  counter: 'bounties.earned',    format: MONEY }
+  votes_total:        { type: COUNTER,  counter: 'votes.total',        format: NUMBER }
+  votes_best_streak:  { type: COUNTER,  counter: 'votes.best_streak',  format: NUMBER }
+  market_sold:        { type: COUNTER,  counter: 'market.sold',        format: NUMBER }
+  market_earned:      { type: COUNTER,  counter: 'market.earned',      format: MONEY }
+  blocks_mined:       { type: COUNTER,  counter: 'mines.blocks',       format: NUMBER }
+  farming_harvested:  { type: COUNTER,  counter: 'farming.harvested',  format: NUMBER }
+  crates_opened:      { type: COUNTER,  counter: 'crates.opened',      format: NUMBER }
+  missions_completed: { type: COUNTER,  counter: 'missions.completed', format: NUMBER }
+  mobs_killed:        { type: COUNTER,  counter: 'kills.mobs',         format: NUMBER }
+  playtime:           { type: PAPI,     format: TIME, placeholder: "%exyliasurvivalcore_playtime_millis%" }
 ```
+
+Todas vienen con `enabled: true`, y todas menos `current_streak` tienen ranking.
 
 | `type` | De dónde sale el número |
 |---|---|
-| `INTERNAL` | Uno de los cuatro contadores que lleva el plugin |
-| `COMPUTED` | Una fórmula sobre otras stats |
+| `INTERNAL` | Uno de los cuatro valores de PvP que lleva el módulo: `kills`, `deaths`, `best_kill_streak`, `current_streak` |
+| `COUNTER` | Un contador de módulo, nombrado en `counter`. Si falta, se usa el id de la propia stat como clave |
+| `COMPUTED` | Una fórmula sobre los valores de PvP |
 | `PAPI` | Cualquier nombre de PlaceholderAPI |
 | `VAULT` | El saldo del jugador |
 
@@ -93,18 +128,59 @@ rankings pero visible en el perfil.
 | Ajuste | Por defecto | Qué hace |
 |---|---|---|
 | `leaderboard-refresh-interval` | 300 | Segundos entre reconstrucciones del ranking |
-| `papi-sample-interval` | 60 | Segundos entre muestras de una stat `PAPI` |
+| `papi-sample-interval` | 60 | Segundos entre muestras de una stat `PAPI` o `VAULT` |
 | `leaderboard-size` | 100 | Hasta dónde llega un ranking |
+| `counter-flush-interval` | 60 | Segundos entre escrituras de los contadores que han cambiado. Menos de 5 cuenta como 5 |
 
-Una recarga reprograma los dos temporizadores con los valores nuevos.
+Una recarga reprograma los tres temporizadores con los valores nuevos.
 
-<Callout type="danger" title="`/stats` no existe en ejecución">
-La clase del comando se registra, pero a su método le falta la anotación que lo convierte en comando,
-así que no se añade nada al servidor. `exyliasurvivalcore.stats` y `exyliasurvivalcore.stats.others`
-quedan por tanto inalcanzables.
+### Contadores
+
+Un contador existe en cuanto un módulo cuenta algo; no hay que declarar nada.
+`%exyliasurvivalcore_stats_counter_<clave>%` lee cualquier contador por su clave, como número sin
+formato, lo liste `stats.yml` o no: por ejemplo `%exyliasurvivalcore_stats_counter_mines.blocks%`. Un
+bloque `COUNTER` solo sirve para ponerlo en la pantalla de estadísticas y darle ranking. Las misiones y
+las temporadas leen los mismos contadores: ver
+[Misiones y temporadas](/docs/exyliasurvivalcore/misiones-y-temporadas).
+
+| Módulo | Contadores |
+|---|---|
+| Estadísticas (PvP) | `kills.players`, `kills.mobs`, `kills.mob.<tipo>`, `deaths.total` |
+| Recompensas por cabeza | `bounties.claimed`, `bounties.earned`, `bounties.lost` |
+| Salas de duelo | `duels.played`, `duels.wins`, `duels.<sala>.played` |
+| Tumbas | `graves.created`, `graves.collected`, `graves.looted` |
+| Rankup, tiempo jugado, farmeo, reclaim | `rankup.ranks`, `playtime.rewards`, `farming.harvested`, `farming.<categoría>.harvested`, `reclaim.claimed`, `reclaim.<sección>.claimed` |
+| Kits, cajas, cofres de loot | `kits.claimed`, `kits.<kit>.claimed`, `crates.opened`, `crates.<caja>.opened`, `lootchests.opened`, `lootchests.<cofre>.opened` |
+| Minas | `mines.blocks`, `mines.<mina>.blocks` |
+| Warps, homes, spawn, back, tpa, rtp | `warps.used`, `warps.<warp>.used`, `homes.teleports`, `homes.created`, `homes.deleted`, `spawn.teleports`, `back.used`, `tpa.teleports`, `rtp.used`, `rtp.<id>.used` |
+| Portales, jumpads, power-ups, zonas AFK | `portals.used`, `portals.<portal>.used`, `jumpads.used`, `jumpads.<jumpad>.used`, `powerups.picked`, `powerups.<powerup>.picked`, `afkzones.rewards`, `afkzones.<zona>.rewards` |
+| Reparación | `repair.items` |
+| Misiones | `missions.completed`, `missions.<grupo>.completed`, `missions.earned` |
+| Recompensas, votos | `rewards.claimed`, `votes.total`, `votes.<servicio>`, `votes.best_streak` |
+| Mercado, subastas, pedidos, intercambio | `market.listed`, `market.sold`, `market.bought`, `market.earned`, `market.spent`, `auctions.listed`, `auctions.bids`, `auctions.won`, `auctions.spent`, `auctions.sold`, `auctions.earned`, `orders.placed`, `orders.filled`, `orders.received`, `orders.earned`, `trade.completed` |
+| Varitas de venta | `sellwands.uses`, `sellwands.items`, `autosell.items` |
+| Protecciones | `protections.created`, `protections.upgrades`, `protections.raids`, `protections.lives_lost`, `protections.bans`, `protections.bought`, `protections.sold`, `protections.rented`, `protections.warp_visits` |
+
+Las claves se pasan a minúsculas, y una de más de 100 caracteres se ignora en vez de recortarse. Los
+contadores de dinero — `.earned`, `.spent` — suman unidades enteras. `votes.best_streak` es un récord,
+no una suma: guarda la racha más alta vista. La lista de la cabecera del `stats.yml` que viene recoge la
+mayoría de estos, pero no todos; esta tabla sigue el código.
+
+Se cuenta en memoria. Los contadores que cambian se escriben cada `counter-flush-interval` segundos,
+cuando un jugador sale y al apagar el servidor, así que una caída puede perder como mucho ese intervalo.
+Con el módulo de estadísticas apagado no se cuenta nada, y lo que se habría contado no se guarda para
+después.
+
+<Callout type="danger" title="`/stats` sigue sin existir en ejecución">
+El comando se reescribió para abrir las estadísticas de cualquiera, también de un jugador desconectado
+— sus valores de PvP, sus contadores y la última muestra de sus stats `PAPI` y `VAULT` —, pero a su
+método le sigue faltando cualquiera de las anotaciones con las que Lamp registra un comando, así que no
+se añade nada al servidor. `exyliasurvivalcore.stats` y `exyliasurvivalcore.stats.others` quedan por
+tanto inalcanzables, y con ellos ver las estadísticas de otro jugador.
 
 Las pantallas sí funcionan: enlaza `survivalcore:stats_open` a un botón de cualquier menú, a un NPC o a
-un objeto de hotbar y el perfil y sus rankings abren con normalidad.
+un objeto de hotbar y el perfil de quien lo pulsa y sus rankings abren con normalidad. Los rankings
+incluyen a los jugadores desconectados.
 </Callout>
 
 ## Muerte
@@ -118,3 +194,75 @@ El módulo de muerte son tres ajustes.
 | `custom-messages` | `true` | La línea de muerte sale de `messages.yml` y no de vanilla |
 
 El anuncio de muerte es uno de los siete que respetan las preferencias de `/settings` de cada jugador.
+
+Cuando el módulo de tumbas crea una tumba, los drops van primero a ella y el módulo de muerte ya no
+encuentra nada que dispersar.
+
+## Tumbas
+
+Un jugador que muere deja una tumba donde cayó: una cabeza con su cara, un texto flotante con cuenta
+atrás y dentro todo lo que soltó. Un clic en la cabeza — izquierdo o derecho, con la mano principal — lo
+recoge todo. Una tumba no tiene ventana.
+
+El módulo viene activado. Sus ajustes están en `modules/graves/config.yml`.
+
+| Ajuste | Por defecto | Qué hace |
+|---|---|---|
+| `settings.expire-minutes` | 60 | Cuánto dura una tumba. `-1` — o `0` — la mantiene hasta que se recoja |
+| `settings.on-expire` | `DROP` | Qué hace una tumba caducada con sus objetos: `DROP` los tira donde estaba y `DELETE` los borra. Cualquier cosa que no sea `DELETE` los tira |
+| `settings.protect-minutes` | 15 | Cuánto tiempo solo la puede abrir el dueño. `0` la abre a todos desde el principio y `-1` la deja del dueño para siempre |
+| `settings.killer-can-loot` | `true` | Si quien hizo la baja puede abrirla durante la protección |
+| `settings.keep-experience` | `true` | Si la experiencia que se habría soltado va a la tumba y se le da a quien la recoja |
+| `settings.max-graves-per-player` | 5 | Tumbas que puede tener en pie un jugador. Morir con ese número tira los objetos de la más antigua donde está. `-1` es sin límite |
+| `settings.blacklisted-worlds` | `[]` | Mundos, por nombre, donde nadie tiene tumba |
+| `settings.allow-teleport` | `false` | Si `/graves` deja teletransportarse a una tumba propia |
+| `settings.teleport-cost` | 0.0 | Lo que cuesta ese teletransporte. `0` es gratis |
+| `hologram.enabled` | `true` | Texto flotante sobre la tumba |
+| `hologram.offset` | 1.4 | A qué altura sobre el bloque |
+| `hologram.lines` | tres líneas | `%player%` de quién es, `%items%` cuántas pilas, `%time_left%` lo que le queda, `%protection%` quién la puede abrir |
+| `sounds.created` | `BLOCK_BELL_RESONATE\|0.8\|0.6` | Suena para el dueño al crearse la tumba |
+| `sounds.collected` | `BLOCK_CHEST_OPEN\|1.0\|1.2` | Suena para quien la recoge |
+
+`%protection%` dice "Anybody can open it", "Only the owner can open it" o "Protected » " seguido del
+tiempo que queda; las tres líneas son `hologram-open`, `hologram-protected` y `hologram-protected-for`
+en la sección `graves` de `messages.yml`. Las cuentas atrás avanzan cada segundo, y las tumbas
+caducadas se retiran con el mismo temporizador.
+
+### Cuándo se crea una tumba
+
+- No se crea si el mundo conserva el inventario, en un mundo de la lista negra ni cuando no hay nada
+  que guardar: ni objetos ni experiencia.
+- La cabeza va en el bloque donde murió el jugador si es aire, agua, lava, hierba, helecho, nieve o
+  algas; si no, en el primero de esos que encuentre hasta seis bloques por encima. Si no hay sitio no
+  hay tumba y los drops caen como habrían caído.
+- El bloque que ocupó la cabeza se devuelve a su sitio cuando la tumba desaparece.
+- Si la tumba no se puede guardar, sus objetos y su experiencia caen allí mismo.
+
+Una tumba no se puede romper, y ni las explosiones ni los pistones la mueven.
+
+### Recoger
+
+El dueño siempre puede abrir su tumba. Durante la protección también puede el asesino si
+`killer-can-loot` está activado; a cualquier otro se le dice de quién es y cuánto falta para que se
+abra. Pasada la protección, cualquiera se la puede llevar: al dueño se le dice "Grave collected" y a
+los demás que la han saqueado.
+
+Los objetos van al inventario de quien la recoge. Lo que no cabe se guarda en la tabla de recompensas
+pendientes de ExyliaLib y se entrega la próxima vez que entre. La experiencia se da junto con los
+objetos.
+
+Si dos jugadores hacen clic en la misma tumba en el mismo tick, o una tumba caduca mientras alguien la
+abre, gana exactamente uno: llevarse una tumba es borrar su fila, y solo quien la borró recibe los
+objetos.
+
+### `/graves`
+
+`/graves` (alias `/grave`, nodo `exyliasurvivalcore.graves`) lista las tumbas propias de un jugador en
+`modules/graves/menus/graves.yml`: dónde está cada una, qué hay dentro, hace cuánto murió, cuánto le
+queda y quién la puede abrir. A quien no tiene ninguna se le dice y no se abre menú. Con
+`allow-teleport` activado, hacer clic en una tumba cobra `teleport-cost` y lleva al jugador hasta ella;
+si el coste es mayor que 0 y no hay economía disponible, el teletransporte se rechaza. El menú también
+se abre con la acción `survivalcore:graves_open`.
+
+Cuando varios servidores comparten una base de datos, una tumba solo se carga en el servidor donde se
+creó.

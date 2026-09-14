@@ -1,0 +1,228 @@
+---
+title: "Administering protections"
+description: "The protection admin menu, the in-game tier editor, importing ProtectionStones, removing inactive land, running with or without WorldGuard, and the permission nodes."
+---
+
+What only server staff do with [protections](/docs/exyliasurvivalcore/protections): find any protection
+on the network and put it right, edit tiers without touching the file, bring ProtectionStones regions
+over, and clear out land nobody plays in. Every menu and command here needs
+`exyliasurvivalcore.protections.admin`.
+
+## Permission nodes
+
+Nothing is declared in `plugin.yml`, so no node has a default: grant them. Operators pass every check,
+with the exception written below.
+
+| Node | What it grants |
+|---|---|
+| `exyliasurvivalcore.protections` | `/protections` and every player subcommand |
+| `exyliasurvivalcore.protections.select` | Protecting land by selection, while `selection.enabled` is on |
+| `exyliasurvivalcore.protections.limit.<n>` | Owning up to `n` protections. The highest one held counts; without one, `settings.default-limit` (3) |
+| `exyliasurvivalcore.protections.bypass` | Breaking, placing and using anything in every protection, and entering every one. Only when explicitly set |
+| `exyliasurvivalcore.protections.admin` | The admin commands and menus; entering every protection; counting as the owner of every protection in the menus and commands |
+
+Two more are written by you: a tier's `permission`, needed to place and buy its core, and an upgrade
+level's `permission`, needed to reach it.
+
+<Callout type="warning" title="Admin is not bypass">
+`exyliasurvivalcore.protections.admin` counts as the owner, so an admin breaking somebody's core is
+offered to pick it up, and gets the item. It does not let them break or place a single block inside.
+`exyliasurvivalcore.protections.bypass` does that, and only when the node is **set** on the player: an
+operator passes the admin check and still builds nowhere they are not a member.
+</Callout>
+
+## Commands
+
+| Command | What it does |
+|---|---|
+| `/protections admin` | The admin menu |
+| `/protections admin give <player> <tier> [amount]` | Give cores of a tier, 1 to 64 |
+| `/protections admin migrate <INTERNAL\|WORLDGUARD>` | Switch the backend, write it to the config and move every region of this server over |
+| `/protections admin import protectionstones [--dry-run]` | Turn ProtectionStones regions into protections |
+| `/protections admin cleanup <days> [preview\|confirm] [--include-unknown]` | Remove protections nobody played in for that many days |
+
+`give` and `migrate`, `import` and `cleanup` also run from the console.
+
+## The admin menu
+
+`/protections admin` lists every protection on the network, sorted by owner then name. Five filters
+narrow it:
+
+| Filter | How it is set |
+|---|---|
+| Owner | Typed; any owner whose name contains it |
+| Name | Typed; a protection whose name contains it, or whose id starts with it |
+| World | Each click moves to the next world a protection is in, then back to any |
+| Server | Each click moves to the next server, then back to any |
+| State | Any → normal → raidable → abandoned → for sale → for rent |
+
+A protection's state is the most urgent thing about it, in that order: raidable, abandoned, for sale, for
+rent, normal. Each admin's filters are their own and kept until the server restarts.
+
+The **tier editor** and **inactive cleanup** buttons open the sections below. A protection opens its
+admin screen:
+
+| Button | What it does |
+|---|---|
+| Open as owner | The protection's own manage screen; an admin passes every owner and role check there |
+| Teleport | To its home, or on top of its core without one, on any server, with the home warmup |
+| Logs | Its audit log |
+| Set level | From 0 to the tier's highest level. Going up grows the land the way an upgrade does; going down keeps the land |
+| Transfer | Hands it to a player, whatever their limits say. Members stay or go as `market.keep-members` says |
+| Lives | With raids on: set its lives, ending any raid and cooldown, or clear the raid for every life back |
+| Upkeep | With upkeep on: forgive an abandonment; nothing is owed and the next period starts now |
+| Force delete | Deletes it whatever it is doing; its bank is paid to the owner |
+
+Every admin action is written to the protection's log as done by an admin.
+
+<Callout type="note" title="Set level checks less than an upgrade">
+Raising the level from the admin screen only refuses when the grown land would overlap another
+protection. Unlike a player's upgrade it does not check `settings.min-distance`, foreign WorldGuard
+regions or the world border.
+</Callout>
+
+## The tier editor
+
+The **tier editor** button lists every tier with its size, height, shop price, limit and how many
+protections on the network use it. **New tier** asks for an id — up to 32 of `a-z`, `0-9`, `-` and `_` —
+and opens it with the default fields.
+
+| Button | Writes | Input |
+|---|---|---|
+| Core block | `material` | Hold out an item; it must be a placeable block |
+| Name | `name` | Text, colour tokens and `&l` allowed |
+| Lore | `lore` | Text, lines split with `\|` |
+| Radius | `radius` | 0 to 512 |
+| Height | `height` | Click to switch between `FULL` and `CUBOID` |
+| Cuboid height | `y-radius` | 0 to 512 |
+| Shop price | `price` | 0 or more; 0 keeps it out of the shop |
+| Currency | `currency` | Click to move to the next currency of the economy, then back to the default |
+| Permission | `permission` | Text; `-` for none |
+| Limit | `limit` | 0 to 1000; 0 for no limit |
+| Lives | `raids.tier-lives.<tier>` | 1 to 100 |
+| Upkeep | `upkeep.tier-costs.<tier>` | 0 or more |
+| Flags | `flags` | One switch per flag, for the flags a new protection starts with |
+
+Each change rewrites `modules/protections/config.yml`, so every server reading that file picks it up.
+A tier's lives and upkeep cost are kept in their own sections, and leaving them unedited leaves the tier
+to `raids.default-lives` and `upkeep.default-cost`.
+
+**Delete tier** is refused while any protection on the network uses the tier, and for the tier
+`selection.tier` names. A deleted tier's core items stop working: placing one is refused.
+
+<Callout type="warning" title="A tier change does not reach existing protections">
+Protections keep the box they were given; a new radius or height only applies to cores placed afterwards.
+Changing the core block is the one to be careful with: a core is only removed from the world while it is
+still the tier's block, so deleting, picking up or hiding a protection placed with the old block leaves
+that block standing.
+</Callout>
+
+## ProtectionStones import
+
+`/protections admin import protectionstones` turns ProtectionStones regions into protections. It needs
+WorldGuard enabled; ProtectionStones itself may already be removed, because WorldGuard keeps the regions
+and their flags. Run it with `--dry-run` first: that reports what would happen and changes nothing.
+
+It walks every loaded world of this server and takes each region named `ps<x>x<y>y<z>z`. The core is the
+block that name points at, and the region's box becomes the land.
+
+| Region | Becomes |
+|---|---|
+| `ps-block-material` | The tier: `import.tier-map` first — the block as written, like `PLAYER_HEAD:Notch`, then without the suffix — then the tier placed with the same block, then `import.default-tier` |
+| First owner | The owner |
+| Other owners | Members with `import.owner-role` |
+| Members | Members with `import.member-role` |
+| `ps-name` | The name, as plain text up to 32 characters; without one, the default name |
+| `ps-home` | The home; without one, on top of the core |
+| `pvp`, `mob-spawning`, `fire-spread`, `crop-growth`, `leaf-decay` | The flag of the same name |
+| `tnt`, `creeper-explosion`, `other-explosion` | `explosions` |
+| `water-flow`, `lava-flow` | `liquid-flow` |
+| `entry` | `visitor-entry` |
+
+A flag the region never set keeps the tier's default. When several WorldGuard flags feed one flag, any of
+them denying turns it off. A role the protection does not have falls back to its first role other than
+`visitor`.
+
+| Key | Default | What it does |
+|---|---|---|
+| `import.tier-map` | `{}` | ProtectionStones block to tier id |
+| `import.default-tier` | `small` | The tier for blocks nothing matches; blank skips those regions |
+| `import.owner-role` | `trusted` | The role owners other than the first get |
+| `import.member-role` | `member` | The role members get |
+| `import.remove-source-regions` | `false` | Whether each imported region is removed from WorldGuard |
+
+A region is left out, and listed with the reason, when it is not a cuboid (merged ProtectionStones
+regions are polygons), has no owner, has no tier, or overlaps a protection that already exists or one the
+same run already took. The report counts imported, already imported, overlapping and skipped, and lists
+the first ten problems.
+
+An imported protection's id comes from its server, world and region, so running the import again skips
+what it already brought over. Limits are not checked, and each protection belongs to the server that ran
+the import.
+
+<Callout type="warning" title="Kept regions still act in WorldGuard">
+With `import.remove-source-regions` off, the default, the ProtectionStones regions stay in WorldGuard and
+keep enforcing their old owners and members beside the new protection. They also count as foreign
+regions: upgrading an imported protection, merging it, or moving it over its old region is refused with
+the WorldGuard overlap message until the region is removed or listed in
+`settings.allowed-world-guard-regions`. Turn the key on to remove each region as it is imported; a dry run
+warns when it is on.
+</Callout>
+
+## Inactive cleanup
+
+Removes protections whose owner and members all stopped playing. From the menu, the **inactive cleanup**
+button asks how many days — 1 to 3650, `cleanup.default-days` (30) offered first — and lists what would go.
+From the command, `/protections admin cleanup <days>` prints the count and the first ten, and adds
+`confirm` to run it.
+
+A protection is removed when:
+
+1. Its owner and every member were last seen more than that many days ago. Clan members do not count: a
+   clan is added whole.
+2. Nobody in it is **unknown** — never seen — unless `--include-unknown`, or the menu's **never seen
+   players** switch, is on.
+3. Nobody rents it right now, with `cleanup.skip-with-tenants`.
+4. Its bank holds nothing, with `cleanup.skip-with-bank`.
+
+"Last seen" is a player's last join or quit on any server of the network, and now while they are online.
+
+| Key | Default | What it does |
+|---|---|---|
+| `cleanup.default-days` | 30 | Days the menu asks about first |
+| `cleanup.skip-with-tenants` | `true` | Keep protections rented right now |
+| `cleanup.skip-with-bank` | `false` | Keep protections whose bank holds money. Off: the money is paid to the owner |
+| `cleanup.batch-size` | 20 | Protections removed per tick |
+
+Removal runs `batch-size` protections a tick, and judges each one again first, so an owner who came back
+since the preview keeps their land. Each one is logged as removed by the inactivity cleanup.
+
+<Callout type="note" title="Nobody is inactive before the module has watched them">
+When protections load, every owner and member with no last-seen moment yet is recorded as seen at that
+moment. On a server that just started using the module, nothing is removed until that many days have
+passed since, and "unknown" only covers players added since the last start who have not joined.
+</Callout>
+
+## WorldGuard
+
+WorldGuard is a soft dependency. The module asks whether a plugin called WorldGuard is enabled without
+loading any WorldGuard class, so a server without it enables protections normally and runs the
+`INTERNAL` backend.
+
+| Without WorldGuard | What happens |
+|---|---|
+| `settings.backend: WORLDGUARD` | The module runs `INTERNAL` and logs `Protections are set to the WORLDGUARD backend, but WorldGuard is not enabled. Falling back to INTERNAL.` |
+| `/protections admin migrate WORLDGUARD` | Refused: WorldGuard is not enabled on this server |
+| `/protections admin import protectionstones` | Refused the same way |
+| Placing, moving, upgrading, merging | No foreign-region check; there are no regions to check |
+
+With WorldGuard enabled, placing land checks for foreign regions in either backend, and the `WORLDGUARD`
+backend mirrors every protection of this server as a region, as
+[Protections](/docs/exyliasurvivalcore/protections#backends) describes.
+
+Whether WorldGuard is there is decided when the module enables. Installing it later needs a restart.
+
+**Migrating.** `/protections admin migrate WORLDGUARD` writes `settings.backend`, then creates a region
+for every protection of this server; `migrate INTERNAL` removes every region whose id starts with
+`sc_ps_` from every loaded world. The answer says how many protections of this server were synced. Each
+server of a network migrates its own.

@@ -1,0 +1,370 @@
+---
+title: "Mercado, subastas y pedidos"
+description: "Anuncios de jugadores a precio fijo, una casa de subastas con pujas retenidas y anti-snipe, y pedidos de compra pagados por adelantado que cualquiera puede llenar."
+---
+
+Tres módulos permiten que los jugadores comercien sin tener que coincidir. El **mercado** vende al
+precio que pone el vendedor, la **casa de subastas** vende a quien más puja y los **pedidos** le dan la
+vuelta: el comprador paga primero y los vendedores le van entregando.
+
+Cada uno tiene su propio interruptor en `modules` de `config.yml` (`market`, `auctions`, `orders`) y
+los tres vienen activados. Todos necesitan una economía. Sin ella el módulo carga igual, deja un aviso
+en el log y rechaza cualquier venta, puja o pedido.
+
+## Lo que tienen en común
+
+**Cualquier moneda.** Un precio puede ir en cualquier moneda registrada en el servidor, con la moneda
+por defecto la primera. Si el jugador no indica la moneda en el comando y hay más de una, se abre un
+selector (`menus/currency_select.yml`). Con una sola moneda no se pregunta nada. Las monedas se
+explican en [Economía](/docs/exyliasurvivalcore/economia).
+
+**El objeto sale de la mano.** Anunciar o subastar se lleva de golpe todo el stack de la mano
+principal. Si falla la escritura en la base de datos, el stack y la comisión vuelven.
+
+**La entrega nunca tira nada al suelo.** Lo que entregan estos módulos (una compra, una subasta ganada,
+un anuncio caducado, un pedido servido) pasa por el almacén de recompensas del plugin. Lo que no cabe
+en el inventario, y lo que se le debe a un jugador desconectado, se guarda y se le entrega en su
+próxima conexión.
+
+**Los límites salen de permisos.** Se aplica el límite por jugador configurado, salvo que el jugador
+tenga un permiso numerado: entonces manda el número más alto que tenga. Un límite configurado de `0`
+o menos significa sin límite, y los menús muestran `∞`.
+
+| Límite | Permiso |
+|---|---|
+| Anuncios en el mercado | `exyliasurvivalcore.market.listings.<número>` |
+| Subastas activas | `exyliasurvivalcore.auctions.limit.<número>` |
+| Pedidos abiertos | `exyliasurvivalcore.orders.limit.<número>` |
+
+**Comisiones e impuestos son porcentajes.** Se redondean a dos decimales y después a la precisión
+propia de la moneda. Los precios de los ajustes (`min-price`, `max-price`, `broadcast-above`) son
+números sin moneda y se comparan con el precio en la moneda en que se puso.
+
+**Los anuncios globales solo cuentan en la moneda por defecto.** Una venta del mercado o una subasta
+ganada a partir de `broadcast-above` se anuncia al servidor solo si el precio estaba en la moneda por
+defecto, porque 100 gemas y 100 monedas no son la misma cantidad. Cada jugador puede desactivar los
+anuncios del mercado y de las subastas en `/settings`. Ver
+[Utilidades](/docs/exyliasurvivalcore/utilidades).
+
+## Mercado
+
+| Comando | Qué hace |
+|---|---|
+| `/market`, `/ah` | Abre el tablón |
+| `/market sell <precio> [moneda]` | Anuncia el stack de tu mano |
+| `/market mine`, `/market listings` | Tus anuncios |
+| `/marketadmin remove <id>`, `/ahadmin` | Retira un anuncio y lo devuelve a su vendedor |
+| `/marketadmin clear <jugador>` | Retira todo lo que tiene puesto un jugador |
+
+`exyliasurvivalcore.market` abre el mercado, `exyliasurvivalcore.market.sell` hace falta para anunciar
+y `exyliasurvivalcore.market.admin` cubre `/marketadmin`. Los comandos de administración solo los puede
+usar un jugador, no la consola.
+
+### Anunciar
+
+Sujeta el objeto y usa `/market sell`, o pulsa **Sell what you hold** en el tablón o en tus
+anuncios. El botón pregunta la moneda y después el precio por el chat.
+
+Un anuncio se rechaza si el material está en `blocked-materials`, si el objeto está dañado y
+`allow-damaged-items` está desactivado, si el precio queda fuera de `min-price` y `max-price`, o si el
+jugador ya está en su límite. Después se cobra la **comisión de anuncio**, un porcentaje del precio
+pedido. No se devuelve ni cuando el anuncio caduca ni cuando se retira, y eso es lo que impide usar el
+mercado como almacén gratis.
+
+### Comprar
+
+Al hacer clic en un anuncio se abre una confirmación con el total, el precio por unidad, la moneda y
+el saldo del comprador antes y después. Al confirmar se cobra primero y luego se reclama el anuncio. Si
+otro jugador llegó antes, el dinero vuelve en el acto.
+
+El vendedor cobra el precio menos `sales-tax-percent`, esté conectado o no, y el stack se entrega al
+comprador. `allow-self-purchase` viene desactivado: para recuperar un anuncio propio está retirarlo.
+
+### Caducidad y retirada
+
+Un anuncio dura `listing-hours`. Con `0` o menos no caduca nunca. Los anuncios caducados desaparecen
+del tablón y ya no se pueden comprar. Una comprobación cada minuto los devuelve al vendedor, que recibe
+un aviso si está conectado. Los que caducaron con el servidor apagado vuelven igual cuando arranca.
+
+Hacer clic en un anuncio dentro de **My listings** lo retira.
+
+### Mirar dentro
+
+Una caja de shulker o un bundle con algo dentro se dibuja con su propia plantilla. Haz **shift-clic**
+sobre él en el tablón o en tus anuncios, o usa **Look inside** en la confirmación, para abrirlo. Una
+caja dentro de la caja se abre igual, y **Back** sube un nivel cada vez. La pantalla muestra una
+copia: no se puede sacar nada y mirar no compra nada. `preview.container-hint` es el lore que se añade
+a un contenedor dibujado dentro de la vista, con `%items%`.
+
+El lore de cada anuncio describe además el stack: su tamaño, cuántos objetos lleva dentro, sus
+encantamientos (también los guardados en un libro encantado) y, si el módulo de tienda compra ese
+objeto, lo que la tienda paga por unidad.
+
+### El tablón
+
+**Search** filtra por material, nombre del vendedor o nombre del objeto, hasta 32 caracteres. Clic
+derecho lo borra. **Order** alterna entre más nuevos, más baratos y más caros. La búsqueda y el orden
+se olvidan cuando el jugador sale.
+
+| Ajuste | Por defecto | Qué hace |
+|---|---|---|
+| `max-listings-per-player` | 5 | Anuncios que puede tener un jugador a la vez |
+| `min-price` | 1.0 | Precio mínimo |
+| `max-price` | -1.0 | Precio máximo. `-1` es sin techo |
+| `listing-hours` | 48 | Cuánto dura un anuncio |
+| `listing-fee-percent` | 2.0 | Se cobra al anunciar y nunca se devuelve |
+| `sales-tax-percent` | 5.0 | Se descuenta de lo que cobra el vendedor |
+| `allow-self-purchase` | `false` | Si un jugador puede comprar su propio anuncio |
+| `broadcast-above` | 100000.0 | Anuncia al servidor una venta a partir de esta cifra. `-1` nunca |
+| `blocked-materials` | `BEDROCK`, `COMMAND_BLOCK`, `BARRIER`, `STRUCTURE_BLOCK` | No se pueden anunciar |
+| `allow-damaged-items` | `true` | Si se pueden anunciar herramientas y armaduras dañadas |
+
+Van en `settings` dentro de `modules/market/config.yml`. `sounds` define `listed`, `bought`, `sold` y
+`cancelled`.
+
+| Placeholder | Valor |
+|---|---|
+| `%exyliasurvivalcore_market_listings%` | Anuncios activos en el servidor |
+| `%exyliasurvivalcore_market_value%` | La suma de los precios de todos los anuncios |
+| `%exyliasurvivalcore_market_mine%` | Anuncios activos del lector |
+
+<Callout type="note" title="Los totales mezclan monedas">
+`%exyliasurvivalcore_market_value%` y la línea **Worth** de My listings suman todos los precios sea
+cual sea su moneda y muestran el total como dinero de la moneda por defecto. En un servidor con una
+sola moneda la cifra es exacta.
+</Callout>
+
+## Subastas
+
+| Comando | Qué hace |
+|---|---|
+| `/auction`, `/auctions` | Abre la casa de subastas |
+| `/auction sell <salida> [horas] [compra-ya] [moneda]` | Subasta el stack de tu mano |
+| `/auction mine`, `/auction selling` | Tus subastas |
+| `/auctionadmin remove <id>`, `/auctionsadmin` | Retira una subasta |
+| `/auctionadmin clear <jugador>` | Retira todo lo que tiene en marcha un jugador |
+
+`exyliasurvivalcore.auctions` abre la casa de subastas, `exyliasurvivalcore.auctions.sell` hace falta
+para subastar y `exyliasurvivalcore.auctions.admin` cubre `/auctionadmin`, que solo puede usar un
+jugador.
+
+### Abrir una subasta
+
+En el comando, las horas van antes del precio de compra inmediata. Sin horas se usa `default-hours`, y
+un precio de compra inmediata de `0` significa que no hay. **Auction what you hold** pregunta la
+moneda y luego abre un formulario con el precio de salida, un precio de compra inmediata opcional y
+las horas.
+
+Una subasta se rechaza si el material está bloqueado, si el objeto está dañado y
+`allow-damaged-items` está desactivado, si la salida está por debajo de `min-start-price`, si la
+compra inmediata no supera la salida, si las horas quedan fuera de `min-hours` y `max-hours`, o si el
+jugador está en su límite. La comisión es un porcentaje del precio de **salida** y no se devuelve,
+aunque nadie puje.
+
+### Pujar
+
+La primera puja tiene que llegar al menos al precio de salida. A partir de ahí, cada puja tiene que
+superar la más alta en `min-bid-increment-percent` de ella o en `min-bid-increment`, lo que sea mayor.
+
+Al hacer clic en una subasta se abre la pantalla de puja:
+
+- **Bid** hace exactamente la siguiente puja válida.
+- **Bid another amount** acepta una cantidad escrita, desde la siguiente puja válida hasta la compra
+  inmediata.
+- **Buy it now** solo aparece si la subasta tiene precio de compra inmediata.
+
+Una puja queda **retenida**. El dinero sale del pujador al pujar y se queda en la subasta. Si alguien
+le supera, le vuelve al momento, esté conectado o no. Subir tu propia puja funciona igual: recuperas
+la cantidad anterior y queda retenida la nueva. Nadie puede pujar en su propia subasta.
+
+Una puja que alcanza el precio de compra inmediata cuenta como compra inmediata, y el comprador paga
+ese precio.
+
+### Anti-snipe
+
+Una puja hecha con menos de `anti-snipe-seconds` restantes retrasa el final hasta esos segundos
+contados desde la puja, para que la última palabra no sea de quien hizo clic el último. `0` lo
+desactiva.
+
+### Cómo termina una subasta
+
+Las subastas se comprueban cada segundo.
+
+| Final | Objeto | Dinero |
+|---|---|---|
+| Se acaba el tiempo con pujas | Para el mejor pujador | La puja más alta para el vendedor, menos `sales-tax-percent` |
+| Se acaba el tiempo sin pujas | Vuelve al vendedor | Nada, y la comisión no se recupera |
+| Compra inmediata | Para el comprador | El precio de compra inmediata para el vendedor, menos impuesto; la puja más alta vuelve a su pujador |
+| El vendedor la retira | Vuelve al vendedor | Solo se puede mientras nadie haya pujado |
+| La retira el staff | Vuelve al vendedor | La puja más alta vuelve a su pujador |
+
+Los objetos llegan al ganador por el almacén de recompensas, así que un ganador desconectado los recibe
+en su próxima conexión.
+
+### El tablón
+
+Cada subasta se dibuja con una de tres plantillas de `modules/auctions/menus/auctions.yml`: `item` para
+una en la que puedes pujar, `leading` para una que vas ganando y `mine` para las tuyas, que al hacer
+clic abre My auctions. **Sort** alterna entre las que terminan antes (por defecto), más nuevas, más
+baratas y más caras, según el precio actual. **Search** funciona igual que en el mercado. El lore
+indica lo que hay dentro de una caja de shulker o un bundle, pero las subastas no tienen pantalla para
+mirar dentro.
+
+| Ajuste | Por defecto | Qué hace |
+|---|---|---|
+| `max-auctions-per-player` | 3 | Subastas que puede tener en marcha un jugador |
+| `min-start-price` | 1.0 | Precio de salida mínimo |
+| `min-bid-increment-percent` | 5.0 | Una puja nueva tiene que superar la más alta en este porcentaje… |
+| `min-bid-increment` | 1.0 | …o en esta cantidad, lo que sea mayor |
+| `min-hours` | 1 | Duración mínima |
+| `max-hours` | 72 | Duración máxima |
+| `default-hours` | 24 | La que se usa si el vendedor no la indica |
+| `anti-snipe-seconds` | 30 | Ver arriba. `0` lo desactiva |
+| `listing-fee-percent` | 2.0 | Del precio de salida, nunca se devuelve |
+| `sales-tax-percent` | 5.0 | De la puja ganadora |
+| `broadcast-above` | 100000.0 | Anuncia al servidor una subasta ganada a partir de esta cifra. `-1` nunca |
+| `blocked-materials` | `BEDROCK`, `COMMAND_BLOCK`, `BARRIER`, `STRUCTURE_BLOCK` | No se pueden subastar |
+| `allow-damaged-items` | `true` | Si se pueden subastar objetos dañados |
+
+Van en `settings` dentro de `modules/auctions/config.yml`. `sounds` define `listed`, `bid`, `outbid`,
+`won`, `sold` y `cancelled`.
+
+| Placeholder | Valor |
+|---|---|
+| `%exyliasurvivalcore_auctions_running%` | Subastas en marcha en el servidor |
+| `%exyliasurvivalcore_auctions_mine%` | Subastas que tiene en marcha el lector |
+| `%exyliasurvivalcore_auctions_leading%` | Subastas que va ganando el lector |
+
+## Pedidos
+
+| Comando | Qué hace |
+|---|---|
+| `/orders`, `/order` | Abre el tablón de pedidos abiertos |
+| `/orders create <cantidad> <precio> [moneda]` | Pide más de lo que sujetas |
+| `/orders mine` | Tus pedidos y lo que ha llegado para ellos |
+| `/ordersadmin cancel <id>`, `/ordersa` | Cierra el pedido de alguien y le devuelve el dinero |
+
+`exyliasurvivalcore.orders` abre los pedidos, `exyliasurvivalcore.orders.create` hace falta para crear
+uno y `exyliasurvivalcore.orders.admin` cubre `/ordersadmin`.
+
+### Crear un pedido
+
+Sujeta **una unidad** del objeto que quieres. Pasa a ser la plantilla del pedido: los vendedores tienen
+que entregar objetos idénticos, con el mismo nombre, encantamientos y demás datos. La cantidad es
+cuántas unidades quieres, de 1 a `max-amount`, y **el precio es por todas ellas**. **Order what
+you hold** pregunta la cantidad, la moneda y luego el precio.
+
+El precio completo más `creation-fee-percent` se cobra **por adelantado**. La comisión nunca se
+devuelve. No se pueden pedir materiales bloqueados ni objetos dañados; los pedidos no tienen ajuste
+para permitirlos. Solo cuentan para el límite los pedidos que aún aceptan objetos, así que uno
+terminado a la espera de recoger no cuenta.
+
+### Llenar un pedido
+
+Cualquiera puede vender a un pedido abierto, y el comprador no tiene que estar conectado. El tablón
+muestra primero los pedidos que mejor pagan por unidad. Al hacer clic en uno se ve cuántos objetos
+iguales llevas, cuántos se van a vender y cuánto vas a ganar. Al confirmar se sacan de tu inventario y
+tu barra rápida (no de la mano secundaria, la armadura ni los contenedores), hasta lo que aún necesita
+el pedido, y se te paga al momento menos `sales-tax-percent`.
+
+A un vendedor se le paga por las unidades que entrega, como esa parte del total redondeada hacia
+abajo. La última unidad liquida el resto, así que los pagos parciales siempre suman exactamente el
+precio del pedido. Si el pedido se llenó o se cerró mientras confirmabas, lo que ya no necesita vuelve
+a ti.
+
+`allow-self-fill` viene desactivado.
+
+### Recoger, cerrar y caducar
+
+Los objetos entregados esperan en el pedido. En **My orders**, clic izquierdo recoge todo lo que
+quepa en el inventario y el resto sigue listo para más tarde. Clic derecho cierra el pedido: no admite
+más objetos, se devuelve la parte del precio que aún no se ha pagado a vendedores y lo ya entregado se
+puede seguir recogiendo.
+
+Un pedido dura `order-hours`. Con `0` o menos no caduca nunca. Cada minuto, los pedidos caducados se
+cierran y se reembolsan igual, y el comprador recibe un aviso si está conectado. Un pedido se borra en
+cuanto está cerrado o completo y ya no queda nada por recoger.
+
+| Estado | Significado |
+|---|---|
+| Taking items | Abierto |
+| Complete | Ha llegado todo lo pedido |
+| Ran out | Se acabó el tiempo y la comprobación de cada minuto aún no lo ha cerrado |
+| Closed | Cancelado o caducado, y reembolsado |
+
+| Ajuste | Por defecto | Qué hace |
+|---|---|---|
+| `max-orders-per-player` | 5 | Pedidos abiertos que puede tener un jugador |
+| `max-amount` | 2304 | Unidades máximas que puede pedir un pedido |
+| `min-price` | 1.0 | Precio total mínimo |
+| `max-price` | -1.0 | Precio total máximo. `-1` es sin techo |
+| `order-hours` | 72 | Cuánto tiempo acepta objetos un pedido |
+| `creation-fee-percent` | 1.0 | Se cobra además del precio y nunca se devuelve |
+| `sales-tax-percent` | 5.0 | Se descuenta de lo que cobra un vendedor |
+| `allow-self-fill` | `false` | Si un jugador puede vender a su propio pedido |
+| `blocked-materials` | `BEDROCK`, `COMMAND_BLOCK`, `BARRIER`, `STRUCTURE_BLOCK`, `SPAWNER` | No se pueden pedir |
+
+Van en `settings` dentro de `modules/orders/config.yml`.
+
+| Placeholder | Valor |
+|---|---|
+| `%exyliasurvivalcore_orders_mine%` | Pedidos del lector que aún aceptan objetos |
+| `%exyliasurvivalcore_orders_ready%` | Objetos entregados al lector y aún sin recoger |
+| `%exyliasurvivalcore_orders_open_total%` | Pedidos que aceptan objetos en el servidor |
+
+## Entre servidores
+
+Los pedidos están hechos para varios servidores con una misma base de datos. Cada cambio en un pedido
+toma una fila de bloqueo que solo un servidor puede tener a la vez, y lee el pedido recién sacado de la
+base de datos. Los demás servidores actualizan su copia cuando un pedido cambia. Un jugador que toca un
+pedido que otro servidor está modificando ve *"Somebody else is using that order right now"* tras unos
+dos segundos de reintentos.
+
+<Callout type="warning" title="Usa el mercado y la casa de subastas en un solo servidor">
+El mercado y la casa de subastas leen sus filas una vez, al arrancar el módulo, y no se enteran de los
+cambios hechos en otro servidor. Un anuncio o una subasta solo pueden terminar una vez, porque
+terminarlos borra su fila y solo el servidor cuyo borrado tiene éxito lo liquida. Lo que falla es todo
+lo demás: un anuncio puesto en un servidor no aparece en otro hasta que ese otro reinicia, y dos pujas
+a la misma subasta desde dos servidores reescriben cada una la fila entera, así que una pisa a la otra
+y la puja pisada no se devuelve nunca.
+</Callout>
+
+## Menús
+
+| Archivo | Pantalla |
+|---|---|
+| `modules/market/menus/market.yml` | El tablón |
+| `modules/market/menus/my_listings.yml` | Tus anuncios |
+| `modules/market/menus/confirm.yml` | Confirmación de compra |
+| `modules/market/menus/preview.yml` | Dentro de una caja de shulker o un bundle |
+| `modules/auctions/menus/auctions.yml` | La casa de subastas |
+| `modules/auctions/menus/my_auctions.yml` | Tus subastas |
+| `modules/auctions/menus/bid.yml` | Pujar, pujar otra cantidad y comprar ya |
+| `modules/orders/menus/orders.yml` | Pedidos abiertos |
+| `modules/orders/menus/my_orders.yml` | Tus pedidos |
+| `modules/orders/menus/fill.yml` | Vender a un pedido |
+
+<Callout type="note" title="Los comandos de administración piden un id que no se enseña">
+`/marketadmin remove`, `/auctionadmin remove` y `/ordersadmin cancel` reciben el id de la fila, un
+UUID. Ningún menú, mensaje ni autocompletado lo muestra, así que hay que sacarlo de la base de datos:
+`sc_market_listings`, `sc_auctions` o `sc_orders`. `clear <jugador>` no necesita id.
+</Callout>
+
+## En el registro y en los contadores
+
+Cada movimiento de dinero lleva un motivo en el registro de la economía:
+
+| Módulo | Motivos |
+|---|---|
+| Mercado | `market:fee`, `market:fee-refund`, `market:buy`, `market:refund`, `market:sale` |
+| Subastas | `auctions:fee`, `auctions:fee-refund`, `auctions:bid`, `auctions:bid-refund`, `auctions:outbid`, `auctions:buyout`, `auctions:buyout-refund`, `auctions:sale`, `auctions:cancel-refund` |
+| Pedidos | `orders:place`, `orders:place-refund`, `orders:fill`, `orders:refund` |
+
+También alimentan los contadores que miden las
+[misiones y temporadas](/docs/exyliasurvivalcore/misiones-y-temporadas):
+
+| Módulo | Contadores |
+|---|---|
+| Mercado | `market.listed`, `market.bought`, `market.spent`, `market.<moneda>.spent`, `market.sold`, `market.earned`, `market.<moneda>.earned` |
+| Subastas | `auctions.listed`, `auctions.bids`, `auctions.won`, `auctions.spent`, `auctions.sold`, `auctions.earned` |
+| Pedidos | `orders.placed`, `orders.filled`, `orders.earned`, `orders.received` |

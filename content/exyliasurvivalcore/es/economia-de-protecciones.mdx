@@ -1,0 +1,354 @@
+---
+title: "Economía de protecciones"
+description: "Bancos de protección, mantenimiento y abandono, vender y regalar protecciones, alquiler y mejoras de nivel."
+---
+
+Cinco funciones meten dinero en las protecciones. Todas vienen desactivadas y cada una se activa con su
+interruptor bajo `submodules` en `modules/protections/config.yml`: `bank`, `upkeep`, `market`, `rent` y
+`upgrades`. Todo el dinero pasa por la economía del servidor y sus monedas (ver
+[Economía](/docs/exyliasurvivalcore/economia)); un ajuste de moneda vacío es la moneda por defecto.
+
+Para las parcelas, sobre las que se apoya el alquiler, consulta [Protecciones](/docs/exyliasurvivalcore/protecciones).
+
+## Bancos
+
+Cada protección tiene un banco compartido. Los miembros meten dinero, y con él se paga el mantenimiento,
+y también el alquiler y las mejoras si lo configuras así.
+
+| Ajuste | Por defecto | Qué hace |
+|---|---|---|
+| `bank.currency` | vacío | La moneda de los bancos y del mantenimiento |
+| `bank.max-balance` | `0` | Lo máximo que puede guardar un banco. `0` es sin límite |
+
+| Comando | Quién |
+|---|---|
+| `/protections bank` | Muestra el saldo. Necesita `bank-deposit` |
+| `/protections bank deposit <cantidad>` | Permiso de rol `bank-deposit` |
+| `/protections bank withdraw <cantidad>` | Permiso de rol `bank-withdraw` |
+
+Los tres actúan sobre la protección en la que está el jugador. En el menú de la protección, clic
+izquierdo en el botón **Bank** deposita y clic derecho retira; los dos piden una cantidad. Los roles por
+defecto `member` y `trusted` tienen `bank-deposit`. Ningún rol por defecto tiene `bank-withdraw`, así que
+solo retira el dueño hasta que se le dé a un rol.
+
+Un depósito sale primero del jugador. Si el banco pasaría de `max-balance`, o está ocupado, el dinero
+vuelve. Una retirada que el jugador no puede recibir vuelve al banco. Un banco está **ocupado** cuando
+otro servidor lo está cambiando en ese mismo instante y no pudo esperar su turno; no se mueve nada y se
+le pide al jugador que lo intente de nuevo.
+
+Cuando se borra una protección, por el motivo que sea, su banco se paga al dueño, aunque esté
+desconectado. Fusionar dos protecciones pasa el segundo banco al primero.
+
+## Mantenimiento
+
+Con el mantenimiento activo, las protecciones pagan cada periodo. La que deja de pagar, o cuyos jugadores
+dejan de jugar, queda **abandonada**: abierta a todos durante unos días y después borrada.
+
+| Ajuste | Por defecto | Qué hace |
+|---|---|---|
+| `upkeep.period-hours` | `24` | Horas entre dos pagos |
+| `upkeep.tier-costs` | `small: 15`, `medium: 40`, `large: 100` | Coste de un periodo por tipo de núcleo |
+| `upkeep.default-cost` | `15` | Coste de un tipo que no aparece en `tier-costs` |
+| `upkeep.cost-per-block` | `0` | Se suma por cada bloque de superficie protegida |
+| `upkeep.charge-owner` | `true` | Si un dueño conectado paga lo que el banco no cubre |
+| `upkeep.grace-periods` | `3` | Periodos sin pagar que abandonan una protección |
+| `upkeep.inactive-days` | `30` | Días sin que juegue el dueño ni un miembro para abandonarla. `0` lo desactiva |
+| `upkeep.abandoned-days` | `3` | Días que una protección abandonada sigue abierta antes de borrarse |
+| `upkeep.warn-hours` | `12` | Horas antes de un pago que el banco no cubre en las que se avisa a los miembros |
+| `upkeep.check-minutes` | `10` | Minutos entre dos comprobaciones. Se lee al arrancar el servidor |
+| `upkeep.announce` | `false` | Si un abandono se anuncia a todos los que tienen activados los anuncios de asaltos |
+
+### Las cuentas
+
+Un periodo cuesta lo de su tipo más `cost-per-block` × la superficie protegida (ancho × largo, en
+bloques). Una protección por selección paga como el tipo que indica `selection.tier`. El mantenimiento
+se paga en `bank.currency`.
+
+El primer periodo es gratis. Una protección creada con el mantenimiento activo debe su primer pago un
+periodo después de crearse. Una que ya existía lo debe un periodo después de la primera comprobación.
+
+Cada `check-minutes`, el servidor en el que está la protección calcula cuántos periodos se deben:
+
+1. **Paga el banco** todos los periodos debidos que pueda cubrir enteros. Con 50 en el banco, un coste de
+   20 y dos periodos debidos, paga los dos y se queda con 10. Con solo 30, paga uno y el otro sigue
+   debiéndose.
+2. **El dueño paga el resto** si `charge-owner` está activo y está conectado en ese servidor. Lo que no
+   pueda pagar sigue debiéndose. Se le avisa de lo que pagó su saldo.
+3. **Abandono.** La protección queda abandonada cuando debe `grace-periods` periodos, o cuando han pasado
+   `inactive-days` desde la última vez que el dueño o algún miembro entró o salió de un servidor. Deja de
+   estarlo en cuanto no se cumple ninguna de las dos.
+
+Un periodo se debe desde el momento en que vence. Con periodos de 24 horas y 3 de gracia, una protección
+con el banco vacío queda abandonada 48 horas después de vencer su pago, que es cuando vence el tercer
+periodo.
+
+Para la actividad solo cuentan el dueño y los jugadores añadidos como miembros, no los miembros de un
+clan. Un jugador al que el mantenimiento nunca ha visto no vuelve inactiva una protección; cuando el
+mantenimiento arranca, cada dueño y miembro sin registro cuenta como visto en ese momento.
+
+### Avisos y pagos
+
+- Dentro de las `warn-hours` previas a un pago que el banco no cubre, se avisa una vez por pago a los
+  defensores conectados. Las comprobaciones son cada `check-minutes`, así que el aviso llega en la primera
+  comprobación dentro de ese margen.
+- A un miembro que entra se le dice, a los dos segundos, cuáles de sus protecciones deben mantenimiento o
+  están abandonadas.
+- Cualquier miembro paga lo debido con `/protections upkeep pay`, o pulsando el botón **Upkeep** del menú
+  de la protección. La deuda entera sale de su propio saldo, en `bank.currency`.
+- `/protections upkeep` muestra el estado, el coste por periodo, lo que falta para el próximo pago y lo
+  que se debe.
+
+### Abandonada
+
+Mientras una protección está abandonada:
+
+- Cualquier jugador que no sea el dueño ni un miembro puede hacer allí lo que permitan los
+  `raidable-permissions` de los asaltos, estén activos los asaltos o no. Ver
+  [Asaltos a protecciones](/docs/exyliasurvivalcore/asaltos-a-protecciones#el-asalto).
+- Cualquiera puede entrar, digan lo que digan el candado o los baneos. Con el backend de WorldGuard, su
+  región espejo deja construir a todo el mundo, como durante un asalto.
+- No se puede recoger, mover, borrar, vender, regalar, ofrecer en alquiler ni mejorar, y una venta
+  publicada se cancela.
+- Se avisa a los defensores conectados y, con `announce` activo, a todos los jugadores con los anuncios de
+  asaltos activados.
+- El botón de mantenimiento y `%exyliasurvivalcore_protections_upkeep_due%` muestran cuánto falta para
+  que se borre.
+
+Se recupera cuando se paga su deuda, o, si el motivo era la inactividad, cuando vuelve el dueño o un
+miembro: al entrar recibe el aviso y la protección se comprueba de nuevo en el acto, siempre que ese
+jugador esté en el servidor de la protección. Un abandono sin nada que pagar se quita con
+`/protections upkeep pay` sin cobrar nada.
+
+Pasados los `abandoned-days`, la siguiente comprobación la borra. Se avisa a sus defensores conectados y
+su banco va al dueño.
+
+<Callout type="warning" title="abandoned-days: 0 borra en la siguiente comprobación">
+El borrado vence en cuanto la protección queda abandonada. La siguiente comprobación, dentro de
+`check-minutes`, la elimina.
+</Callout>
+
+Desactivar `submodules.upkeep` deja de cobrar y anula el efecto de todos los abandonos. Lo que se debía y
+cuándo se abandonó cada protección siguen guardados, y vuelven a aplicarse si se reactiva.
+
+Los textos del estado vienen de `messages.yml` y por defecto están en inglés:
+
+| Estado | Texto | Cuándo |
+|---|---|---|
+| Pagada | `Paid` | No se debe nada |
+| Pendiente | `Due` | Se debe al menos un periodo |
+| Abandonada | `Abandoned` | Abandonada |
+
+Los administradores perdonan un abandono desde el menú de administración, y el editor de tipos de núcleo
+dentro del juego escribe el coste de mantenimiento de un tipo. Ver
+[Administrar protecciones](/docs/exyliasurvivalcore/administrar-protecciones).
+
+## Vender y regalar protecciones
+
+| Ajuste | Por defecto | Qué hace |
+|---|---|---|
+| `market.currency` | vacío | Moneda en la que se venden las protecciones |
+| `market.tax-percent` | `5` | Porcentaje del precio que se queda como impuesto; el vendedor recibe el resto |
+| `market.max-price` | `500000` | El precio más alto. `0` es sin límite |
+| `market.keep-members` | `false` | Si miembros, clanes y excepciones se quedan con la tierra al cambiar de dueño |
+
+| Comando | Qué hace |
+|---|---|
+| `/protections market` | Abre todas las protecciones en venta, de cualquier servidor, las más nuevas primero |
+| `/protections sell <precio>` | Pone en venta la protección en la que estás. Solo el dueño |
+| `/protections unsell` | La retira de la venta |
+| `/protections transfer <jugador>` | La regala. Solo el dueño |
+
+El menú de la protección tiene un botón **Sell or give away**: clic izquierdo la pone en venta o cancela
+la venta, y clic derecho la regala. La lista de protecciones tiene un botón **Protections for sale**.
+
+**Poner en venta.** El precio debe ser mayor que 0 y como mucho `max-price`. Se rechaza mientras la
+protección esté asaltable, dañada, abandonada o tenga inquilinos. La venta guarda la moneda que indica
+`market.currency` en ese momento. Se cancela sola, avisando al vendedor, cuando la protección pasa a estar
+asaltable o abandonada, o cambia de dueño.
+
+**Comprar.** En el menú de ventas, clic izquierdo compra y clic derecho teletransporta a la protección
+para verla antes. El comprador no puede ser el dueño y debe pasar las mismas comprobaciones que para
+colocar ese tipo: su permiso, su límite de protecciones, el límite del tipo y el del mundo. Tras una
+confirmación, el precio sale del comprador. Si otro la compró antes, o dejó de estar en venta, el dinero
+vuelve.
+
+El vendedor recibe el precio menos `tax-percent`: una protección vendida por 10.000 con un 5 % le paga
+9.500. El impuesto se mantiene entre 0 y 100. Al vendedor se le paga aunque esté desconectado.
+
+**Regalar.** El jugador debe estar conectado en el mismo servidor, porque los límites se leen de sus
+permisos. El permiso del tipo y los límites se comprueban sobre él. Tras una confirmación marcada como
+peligrosa, la protección pasa a ser suya, gratis.
+
+**Qué cambia de manos.** Una venta o un regalo conservan la tierra, su banco, su mantenimiento, sus
+vidas, sus roles, flags, baneos, saludo, parcelas y nivel. Con `keep-members: false` se quitan los
+jugadores y clanes añadidos y sus excepciones. Las parcelas conservan sus propios miembros. El nuevo dueño
+nunca queda baneado de su propia tierra ni como miembro de ella.
+
+## Alquiler
+
+Un dueño alquila una parcela, o con `rent.whole-protection` la protección entera, por un precio por
+periodo. El inquilino pasa a ser miembro de lo que alquila hasta que termina.
+
+| Ajuste | Por defecto | Qué hace |
+|---|---|---|
+| `rent.whole-protection` | `false` | Si se pueden alquilar protecciones enteras, no solo parcelas |
+| `rent.currency` | vacío | Moneda en la que se paga el alquiler |
+| `rent.max-price` | `50000` | El alquiler más alto por periodo. `0` es sin límite |
+| `rent.min-period-minutes` | `60` | El periodo más corto que puede tener una oferta |
+| `rent.max-periods` | `4` | Los periodos que se pueden pagar como mucho en un alquiler, el primero incluido |
+| `rent.tenant-role` | `tenant` | El rol de los inquilinos. Una protección que no lo tiene lo recibe |
+| `rent.tenant-permissions` | `break`, `place`, `containers`, `doors`, `redstone`, `buckets`, `animals`, `ride`, `decorations`, `trade`, `leash` | Con qué empieza ese rol cuando se crea |
+| `rent.pay-to-bank` | `true` | Si el alquiler va al banco de la protección |
+| `rent.owner-can-evict` | `false` | Si se puede desahuciar a un inquilino antes de que acabe el alquiler |
+| `rent.relist` | `true` | Si algo se vuelve a ofrecer, con las mismas condiciones, cuando acaba su alquiler |
+
+### Ofrecer
+
+`/protections rent offer <precio> <periodo>` ofrece la parcela en la que estás, o la protección entera si
+estás fuera de todas las parcelas o las parcelas están desactivadas. El periodo es una duración como
+`12h`, `1d` o `7d`. `/protections rent cancel` la retira. Los dos necesitan el permiso de rol
+`manage-rent`.
+
+En los menús, el botón **Rent out** de una parcela, y el de la protección cuando `whole-protection` está
+activo, pide el precio y después el periodo; pulsarlo otra vez cancela la oferta.
+
+Una oferta se rechaza cuando:
+
+- es de la protección entera y `whole-protection` está desactivado,
+- alguien lo está alquilando ahora mismo,
+- el precio no es mayor que 0 o pasa de `max-price`,
+- el periodo es más corto que `min-period-minutes`,
+- la protección está asaltable, dañada o abandonada.
+
+La oferta toma `rent.currency` y `rent.max-periods` tal y como están al hacerla.
+
+### Alquilar
+
+`/protections rent`, o el botón **Land for rent** de la lista de protecciones, abre primero los alquileres
+del propio jugador y después todas las ofertas de cualquier servidor. Clic izquierdo alquila; clic
+derecho teletransporta allí para verlo.
+
+No puede alquilar el dueño, ni quien ya es miembro de esa parcela o protección, ni un jugador baneado de
+ella, ni se puede mientras la protección está asaltable o abandonada. Tras una confirmación, el inquilino
+paga un periodo. Si otro lo alquiló antes, el dinero vuelve.
+
+El inquilino recibe entonces `tenant-role` en la parcela, o en la protección entera. El rol se crea con
+`tenant-permissions` en una protección que no lo tenga. Un inquilino puede entrar en una protección con
+candado y teletransportarse a su casa.
+
+**Adónde va el dinero.** Al banco de la protección si `pay-to-bank` está activo, los bancos están activos
+y `rent.currency` es la misma que `bank.currency`. Si el banco está lleno u ocupado, y en cualquier otro
+caso, va al dueño.
+
+### Renovar y terminar
+
+El inquilino renueva con clic izquierdo sobre su alquiler en el menú de alquiler. Cada renovación paga un
+periodo más y alarga el final en un periodo. Un alquiler se puede pagar durante `max-periods` periodos en
+total, el primero incluido: con los 4 por defecto, un inquilino alquila una vez y renueva tres. Después,
+termina cuando se le acaba el tiempo. Un alquiler que ya terminó no se puede renovar.
+
+Cuando se acaba el tiempo, el inquilino pierde en el acto los permisos de la parcela. En la siguiente
+comprobación, cada `upkeep.check-minutes` esté o no activo el mantenimiento, se le quita y se le avisa, y
+con `relist` activo se vuelve a ofrecer con las mismas condiciones.
+
+Mientras una protección tiene un inquilino no se puede recoger, mover, borrar, vender ni regalar, y una
+parcela alquilada no se puede borrar.
+
+### Desahucio
+
+Quitar a un inquilino de los miembros de lo que alquila se rechaza mientras `owner-can-evict` sea
+`false`. Si está activo, se pide confirmación a quien lo quita, este le devuelve al inquilino el tiempo
+que le quedaba y el alquiler termina.
+
+La devolución es el precio × el tiempo que queda ÷ un periodo, redondeada hacia abajo a céntimos. Cuenta
+todos los periodos pagados: un alquiler de 100 al día, renovado una vez y desahuciado a las 12 horas,
+devuelve 150.00. Se paga en la moneda del alquiler, del saldo de quien desahucia, y no se desahucia si no
+le llega.
+
+## Mejoras de nivel
+
+Cada tipo de núcleo se puede mejorar por niveles que amplían la tierra y suben sus límites.
+
+| Ajuste | Por defecto | Qué hace |
+|---|---|---|
+| `upgrades.pay-from-bank` | `false` | Si el banco de la protección paga las mejoras |
+| `upgrades.currency` | vacío | Moneda de las mejoras |
+| `upgrades.base-max-members` | `8` | Miembros, jugadores y clanes juntos, antes de mejorar. `0` es sin límite |
+| `upgrades.base-max-subregions` | `2` | Parcelas antes de mejorar. `0` es sin límite |
+| `upgrades.tiers` | ver abajo | Los niveles de cada tipo |
+
+```yaml
+upgrades:
+  tiers:
+    small:
+      levels:
+        '1': { cost: 3000, radius-bonus: 5, max-members: 12, max-subregions: 3, bonus-lives: 1, permission: "" }
+        '2': { cost: 6000, radius-bonus: 10, max-members: 16, max-subregions: 4, bonus-lives: 2, permission: "" }
+```
+
+| Tipo | Nivel | Coste | Radio extra | Miembros | Parcelas | Vidas extra |
+|---|---|---|---|---|---|---|
+| `small` | 1 | 3.000 | 5 | 12 | 3 | 1 |
+| `small` | 2 | 6.000 | 10 | 16 | 4 | 2 |
+| `medium` | 1 | 8.000 | 5 | 12 | 4 | 1 |
+| `medium` | 2 | 16.000 | 10 | 16 | 6 | 2 |
+| `large` | 1 | 20.000 | 5 | 16 | 6 | 1 |
+| `large` | 2 | 40.000 | 10 | 24 | 8 | 2 |
+
+Los niveles se numeran desde 1. `radius-bonus` y `bonus-lives` son el total en ese nivel, no lo que se
+suma al anterior. `max-members` y `max-subregions` son los límites en ese nivel, `0` para ninguno.
+`permission` se necesita para llegar al nivel; vacío no pide nada.
+
+### Mejorar
+
+`/protections upgrade`, o el botón **Upgrade** del menú de la protección, lleva la protección al
+siguiente nivel. Solo puede hacerlo el dueño, estando en el servidor y el mundo de la protección. El botón
+muestra lo que trae el siguiente nivel y cuánto cuesta.
+
+La mejora se rechaza mientras la protección está asaltable, dañada o abandonada, cuando no hay siguiente
+nivel o sin el `permission` del nivel. La tierra ampliada debe quedar dentro del borde del mundo y pasar
+las mismas comprobaciones que una tierra nueva: sin solaparse, a la distancia mínima de otros dueños, en
+mundos permitidos y respetando las regiones de WorldGuard.
+
+La tierra crece la diferencia de `radius-bonus` por los cuatro lados, alrededor de donde ya está. Una
+protección `small` de radio 10 cubre 21 × 21 bloques; el nivel 1 la deja en 31 × 31 y el nivel 2 en
+41 × 41. La altura no cambia.
+
+Tras una confirmación, paga el banco si `pay-from-bank` está activo, los bancos están activos y
+`upgrades.currency` es la misma que `bank.currency`. Si no, paga el dueño. Si la tierra cambió mientras
+la confirmación estaba abierta, el pago vuelve.
+
+### Qué da un nivel
+
+- **Tierra:** el radio extra, siempre, estén o no activas las mejoras. Desactivarlas nunca encoge la
+  tierra, y un núcleo recogido conserva su nivel.
+- **Miembros:** con las mejoras activas, se rechaza añadir un jugador o un clan por encima de
+  `max-members`.
+- **Parcelas:** con las mejoras activas, el `max-subregions` del nivel. Con las mejoras desactivadas se
+  aplica `subregions.max-per-protection`.
+- **Vidas:** con las mejoras activas, `bonus-lives` se suma a las vidas del tipo. Ver
+  [Asaltos a protecciones](/docs/exyliasurvivalcore/asaltos-a-protecciones#vidas).
+
+Una protección cuyo nivel ya no existe en la configuración cuenta como el nivel más alto que le quede a
+su tipo.
+
+## Marcadores del mapa y administración
+
+En BlueMap y Dynmap, las protecciones en venta, en alquiler y abandonadas se dibujan con su propio color
+(ver [Protecciones](/docs/exyliasurvivalcore/protecciones)). El menú de administración filtra las
+protecciones por estos estados, perdona abandonos, fija niveles y transfiere la propiedad. Ver
+[Administrar protecciones](/docs/exyliasurvivalcore/administrar-protecciones).
+
+## Placeholders
+
+Leen la protección en la que está el jugador, y quedan vacíos fuera de una.
+
+| Placeholder | Qué devuelve |
+|---|---|
+| `%exyliasurvivalcore_protections_bank%` | El saldo de su banco. Vacío con los bancos desactivados |
+| `%exyliasurvivalcore_protections_upkeep_cost%` | Lo que cuesta un periodo. Vacío con el mantenimiento desactivado |
+| `%exyliasurvivalcore_protections_upkeep_due%` | Lo que falta para el próximo pago, lo que falta para borrarse si está abandonada, o `Overdue`. Vacío con el mantenimiento desactivado |
+| `%exyliasurvivalcore_protections_sale_price%` | Su precio si está en venta |
+| `%exyliasurvivalcore_protections_level%` | Su nivel |
+| `%exyliasurvivalcore_protections_rent_tenant%` | Quién alquila la parcela en la que está el jugador, o la protección entera fuera de todas las parcelas |
+| `%exyliasurvivalcore_protections_rent_expiry%` | Cuánto le queda a ese alquiler |

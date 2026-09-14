@@ -1,0 +1,590 @@
+---
+title: "Protections"
+description: "Land protected by a core block or a selection: tiers, the internal and WorldGuard backends, roles, flags, bans, lock, logs, plots, perks, warps, map markers, time and weather, and merging."
+---
+
+The `protections` module lets players protect land. A protection is a box of blocks with an owner,
+members, roles and flags, made by placing a **core** block or by selecting two corners. The module
+enforces it itself, whichever backend is chosen.
+
+Every protection on the network is one database row, and every server keeps all of them in memory. A
+player's list and their limits count every server; only the server a protection belongs to enforces it,
+draws it and mirrors it to WorldGuard. A change made on one server is announced and re-read by the others.
+
+Raids, lives and siege windows are on [Protection raids](/docs/exyliasurvivalcore/protection-raids).
+Banks, upkeep, the market, rent and level upgrades are on
+[Protection economy](/docs/exyliasurvivalcore/protection-economy). The admin menu, the tier editor, the
+ProtectionStones import and the inactive cleanup are on
+[Administering protections](/docs/exyliasurvivalcore/protection-admin).
+
+Settings live in `modules/protections/config.yml`, messages in the `protections` section of
+`messages.yml`, and the screens in `modules/protections/menus/`.
+
+## Features
+
+`submodules` turns whole features off. A feature that is off hides its buttons, refuses its commands and
+stops acting.
+
+| Key | Default | Feature | Documented on |
+|---|---|---|---|
+| `bans` | `true` | Owners ban players | this page |
+| `lock` | `true` | Owners lock a protection to members | this page |
+| `enter-leave` | `true` | Titles and sounds walking in and out, greetings and farewells | this page |
+| `logs` | `true` | Audit log | this page |
+| `visualization` | `true` | Drawing borders, BlueMap and Dynmap markers | this page |
+| `subregions` | `false` | Plots inside protections | this page |
+| `warps` | `false` | Protections published as public warps | this page |
+| `effects` | `false` | Member perks | this page |
+| `environment` | `false` | Time and weather inside | this page |
+| `merge` | `false` | Merging two protections that touch | this page |
+| `raids` | `false` | Lives, core health, siege windows | [Protection raids](/docs/exyliasurvivalcore/protection-raids) |
+| `bank` | `false` | A shared bank per protection | [Protection economy](/docs/exyliasurvivalcore/protection-economy) |
+| `upkeep` | `false` | Upkeep and abandonment | [Protection economy](/docs/exyliasurvivalcore/protection-economy) |
+| `market` | `false` | Selling and giving protections away | [Protection economy](/docs/exyliasurvivalcore/protection-economy) |
+| `rent` | `false` | Renting plots and protections | [Protection economy](/docs/exyliasurvivalcore/protection-economy) |
+| `upgrades` | `false` | Level upgrades | [Protection economy](/docs/exyliasurvivalcore/protection-economy) |
+
+## Tiers and the core
+
+A **tier** is a kind of core: its block, its item, the land it protects and the flags a new protection
+starts with. `tiers` in the config holds them, keyed by tier id. Three ship:
+
+| Tier | Block | Radius | Area | Shop price |
+|---|---|---|---|---|
+| `small` | `AMETHYST_BLOCK` | 10 | 21x21 | 2500 |
+| `medium` | `PURPUR_BLOCK` | 20 | 41x41 | 10000 |
+| `large` | `CRYING_OBSIDIAN` | 35 | 71x71 | 40000 |
+
+The area is the radius on every side of the core, so a side is `radius × 2 + 1` blocks.
+
+| Tier field | Default | What it does |
+|---|---|---|
+| `material` | `AMETHYST_BLOCK` | The core block. Anything that is not a placeable block falls back to `AMETHYST_BLOCK` |
+| `name`, `lore` | | The core item's name and lore |
+| `radius` | 10 | Blocks protected around the core |
+| `height` | `FULL` | `FULL` protects the whole column; `CUBOID` only `y-radius` blocks above and below the core |
+| `y-radius` | 10 | Used by `CUBOID` only |
+| `price` | | Price in the protection shop; `0` keeps the tier out of it |
+| `currency` | blank | Blank is the default currency |
+| `permission` | blank | Needed to place the core, and to buy it; blank for none |
+| `limit` | 0 | How many of this tier one player may own; `0` for no limit of its own |
+| `flags` | see below | The flags a new protection of this tier starts with on |
+
+The shipped tiers start with `mob-spawning`, `crop-growth`, `leaf-decay`, `liquid-flow` and
+`visitor-entry` on, and `pvp`, `explosions` and `fire-spread` off.
+
+Cores come from the **protection shop** button of `/protections`, which lists every tier with a price
+above 0, or from `/protections admin give`. Tiers can be edited in game from the
+[tier editor](/docs/exyliasurvivalcore/protection-admin).
+
+<Callout type="note" title="Roles and flags are copied when a protection is made">
+A new protection copies `roles` and its tier's `flags` at that moment. Editing either later changes the
+protections made afterwards, never the ones that already exist.
+</Callout>
+
+## Placing a core
+
+Placing a core item protects the land around it. The placement is refused, and the block stays in the
+hand, when any of these fails:
+
+1. The tier's `permission`, if it has one.
+2. The world is not in `settings.disabled-worlds` — `world_the_end` by default.
+3. The player owns fewer protections than their limit. The limit is the highest
+   `exyliasurvivalcore.protections.limit.<n>` they hold, or `settings.default-limit` (3) without one. It
+   counts every server.
+4. The player owns fewer of this tier than the tier's `limit`.
+5. The player owns fewer protections in this world, on this server, than `settings.world-limits` sets for
+   it. A world left out has no limit of its own.
+6. The land overlaps no other protection, whoever owns it.
+7. The land is at least `settings.min-distance` (8) blocks, horizontally, from any protection of another
+   owner. A player's own protections may touch.
+8. With WorldGuard enabled, the land overlaps no WorldGuard region other than this module's own, the
+   global region, and the ones listed in `settings.allowed-world-guard-regions`. This is checked in both
+   backends.
+
+Placing a core is also placing a block, so it cannot be done inside somebody else's protection without
+`place` there. The protection's home starts where the player stands, and its name is
+`%player%'s land #%number%` until renamed.
+
+## Protecting by selection
+
+With `selection.enabled` and the node `exyliasurvivalcore.protections.select`, the **select land** button
+of `/protections` hands the player a selector. They mark two corners, confirm with shift + left-click,
+and are asked to pay.
+
+| Key | Default | What it does |
+|---|---|---|
+| `selection.enabled` | `true` | Whether players may protect land by selection |
+| `selection.tier` | `medium` | The tier a selection counts as, for its limit, height and flags |
+| `selection.price-per-block` | 5 | Price per block of area |
+| `selection.currency` | blank | Blank is the default currency |
+| `selection.min-side` | 9 | The shortest side a selection may have |
+| `selection.max-area` | 10000 | The largest area it may cover |
+
+A 20x20 selection costs 2000. With a `FULL` tier the whole column is protected; with a `CUBOID` tier only
+the heights selected. The same placement checks apply, and are asked again after the player confirms. A
+selected protection has **no core block**: it cannot be picked up or hidden, only moved or deleted.
+
+## Picking up, hiding, moving, deleting
+
+**Picking up.** The owner breaking their own core is asked to confirm, and gets an item back that
+rebuilds the same protection wherever it is placed: its name, roles, members, clans, flags, bans, plots,
+level, perks and the exact box it covered. What the bank held is paid to the owner, a public warp is
+taken down, and a sale ends. Anybody else breaking a core is refused — or, with raids on and the player
+an enemy, hits it.
+
+**Hiding** removes the core block and keeps the land protected. It needs `manage-core`, standing on the
+protection's server and world. While raids are on, a core can only be hidden with
+`raids.allow-hidden-core`.
+
+**Moving** puts the core on top of the block the player looks at, within five blocks, in the same world,
+and the whole protection moves with it, same shape and size. It needs `manage-core`, passes every
+placement check except the limits, costs `settings.move-price` (1000) in `settings.move-currency`, and
+moves the home to where the player stands.
+
+**Deleting**, from the manage screen, is the owner's alone. The core block is removed and the bank paid
+to the owner.
+
+A protection under attack, raidable, abandoned or with tenants cannot be picked up, moved or deleted by
+its owner.
+
+## Backends
+
+`settings.backend` picks how protections reach other plugins.
+
+| Backend | What happens |
+|---|---|
+| `INTERNAL` | Default. This module enforces everything and nothing else sees the protections |
+| `WORLDGUARD` | Every protection of this server is also a WorldGuard region, so other plugins see it. Roles, clans and overrides are still enforced by this module |
+
+Change it with `/protections admin migrate <INTERNAL|WORLDGUARD>`, which writes the key and moves every
+region over: `WORLDGUARD` creates the regions, `INTERNAL` removes every region this module made from every
+loaded world. A reload applies the key as the file holds it. Asking for `WORLDGUARD` on a server without
+WorldGuard runs `INTERNAL` and logs a warning; the details are on
+[Administering protections](/docs/exyliasurvivalcore/protection-admin#worldguard).
+
+What a mirrored region holds:
+
+| Region | Value |
+|---|---|
+| Id | `sc_ps_` and the protection's id without dashes |
+| Priority | `settings.worldguard-priority` (10) |
+| Owner | The protection's owner |
+| Members | Its members, and every member of each clan added |
+| `pvp`, `mob-spawning`, `fire-spread`, `crop-growth`, `leaf-decay` | `ALLOW` or `DENY` from the flag of the same name |
+| `tnt`, `creeper-explosion`, `other-explosion` | From `explosions` |
+| `water-flow`, `lava-flow` | From `liquid-flow` |
+| `entry` | `DENY` to non-members while `visitor-entry` is off |
+| `build` | `ALLOW` while it is raidable |
+
+With plots on, each plot is a child region `<region>_<plot>`, one priority above, with its own members and
+flags.
+
+<Callout type="note" title="Clan members reach WorldGuard late">
+A region's clan members are the clan as it was when the protection last changed or the server started.
+Somebody who joins the clan afterwards builds through this module at once, but WorldGuard only learns of
+them at the next change.
+</Callout>
+
+## Roles and member permissions
+
+A protection has roles, each a set of permissions. A player's rights resolve in this order:
+
+1. The owner may do everything.
+2. An **override** set for that player alone, allow or deny, wins.
+3. Otherwise the player's own role.
+4. Otherwise the role given to their clan.
+5. Anybody left is a **visitor**, and has what the `visitor` role grants — nothing by default.
+
+New protections start with three roles:
+
+```yaml
+roles:
+  member:
+    permissions: [break, place, containers, doors, redstone, buckets, animals, ride,
+                  decorations, trade, leash, bank-deposit]
+  trusted:
+    permissions: [break, place, containers, doors, redstone, buckets, animals, ride,
+                  decorations, trade, leash, manage-members, set-home, bank-deposit]
+  visitor:
+    permissions: []
+```
+
+| Permission | What it allows |
+|---|---|
+| `break` | Break blocks, trample farmland, damage minecarts and boats |
+| `place` | Place blocks and signs, use spawn eggs, bone meal, flint and steel and fire charges, place entities, use clickable blocks that hold no inventory |
+| `containers` | Open chests, furnaces, shulkers and anything else with an inventory, lecterns, jukeboxes and chiseled bookshelves |
+| `doors` | Doors, trapdoors and fence gates |
+| `redstone` | Buttons, levers, pressure plates, repeaters, comparators, daylight detectors, note blocks |
+| `buckets` | Fill and empty buckets |
+| `animals` | Hurt, interact with and shear animals and other passive mobs |
+| `ride` | Mount horses, boats and minecarts |
+| `decorations` | Place, break and use item frames, armor stands and paintings |
+| `trade` | Trade with villagers |
+| `leash` | Leash and unleash mobs |
+| `manage-members` | Add and remove members and clans, choose their role, set overrides |
+| `manage-roles` | Create, rename, delete and edit roles |
+| `edit-flags` | Change the flags |
+| `rename` | Rename the protection, edit its greeting and farewell |
+| `set-home` | Move the home to where they stand |
+| `manage-core` | Hide or move the core |
+| `manage-bans` | Ban and unban players |
+| `toggle-lock` | Lock and unlock |
+| `view-logs` | Read the audit log |
+| `bank-deposit`, `bank-withdraw` | Use the bank |
+| `manage-subregions` | Create, edit and delete plots |
+| `manage-rent` | Offer the land and its plots for rent |
+| `manage-warp` | Publish and edit the public warp |
+| `edit-environment` | Change the time and weather inside |
+
+Hostile mobs are never protected. The role screens only offer permissions whose feature is on.
+
+**Members.** The members screen adds a player who has played on the network, or a clan by its tag when a
+clan plugin is present, and asks which role they get. Role names use up to 16 of `a-z`, `0-9`, `-` and
+`_`, and cannot be `owner`. The `visitor` role cannot be renamed or deleted. Deleting a role removes
+everybody who held it, in the protection and in its plots.
+
+Some things no role grants. Nobody but the owner edits the role they hold themselves, or their own
+overrides. Opening the manage screen and teleporting home need membership; deleting, picking up the core,
+selling, giving away, upgrading, merging and turning perks on are the owner's alone.
+
+<Callout type="warning" title="Operators do not build in other players' land">
+`exyliasurvivalcore.protections.admin` — which operators hold — opens every screen, enters every
+protection and counts as the owner in the menus and commands. It does not let anybody break, place or use
+anything inside. Only `exyliasurvivalcore.protections.bypass`, **explicitly granted**, does; an operator
+without it set is treated like anyone else.
+</Callout>
+
+## Flags
+
+A flag is the land's own switch. It applies to everybody inside, members or not.
+
+| Flag | While it is off |
+|---|---|
+| `pvp` | Players cannot hurt each other when either stands in land with it off |
+| `mob-spawning` | No natural spawns: natural, jockeys, patrols, reinforcements, invasions, raids, traps |
+| `explosions` | Explosions break no blocks and no hanging decorations |
+| `fire-spread` | Fire does not spread or burn blocks, and nothing but a player's flint and steel lights it |
+| `liquid-flow` | Water and lava do not flow |
+| `crop-growth` | Crops and plants do not grow |
+| `leaf-decay` | Leaves do not decay |
+| `visitor-entry` | Non-members cannot walk in: the protection is **locked** |
+
+Two rules hold whatever the flags say: liquids never flow into a protection from outside it, and pistons
+never move a block into, out of or across a protection other than their own. A player lighting a fire
+needs `place`.
+
+`settings.deny-message-cooldown-millis` (1500) is how long a player waits between two "this land is
+protected" messages.
+
+## Bans
+
+With `submodules.bans`, `manage-bans` bans a player from the protection: they are pushed out and cannot
+walk or teleport in — ender pearls, chorus fruit, commands, plugins and spectating are all stopped.
+Logging in or respawning inside pushes them just past the nearest border.
+
+`/protections ban <player> [duration] [reason]` or the bans screen. The duration is `30m`, `2h`, `7d` or
+`permanent` (also `perm`, `forever`); nothing at all is permanent. A reason needs a duration before it.
+`bans.reason-max-length` is 64, and a reason is stored as plain text. The owner, members, tenants, and
+online players with the admin or bypass node cannot be banned.
+
+A ban applies even while the protection is open to visitors. A raid running, or an abandonment, opens the
+land to everybody whatever its bans or lock say.
+
+## Lock
+
+With `submodules.lock`, `toggle-lock` locks a protection so only the owner, members and plot members may
+enter. Locking is turning `visitor-entry` off; `/protections lock` toggles it.
+
+<Callout type="note" title="Turning the lock feature off does not stop locking">
+`submodules.lock: false` hides the lock button and refuses `/protections lock`, but the `visitor-entry`
+flag stays on the flags screen. Anybody with `edit-flags` can still lock the land from there.
+</Callout>
+
+## Enter and leave messages
+
+With `submodules.enter-leave`, walking into a protection shows a title and walking out an action bar.
+`rename` lets a member write the protection's own greeting and farewell, up to
+`enter-leave.message-max-length` (64) characters of plain text; clearing them brings back the defaults.
+
+| Key | Default |
+|---|---|
+| `enter-title` | `{primary}&l%name%` over `%message%` |
+| `enter-actionbar` | empty |
+| `enter-sound` | `BLOCK_AMETHYST_BLOCK_CHIME\|0.6\|1.4` |
+| `leave-title` | empty |
+| `leave-actionbar` | `%message%` |
+| `leave-sound` | empty |
+| `cooldown-millis` | 1500 — crossing again within it shows nothing |
+| `show-to-members` | `true` — off shows them to visitors only |
+
+Placeholders: `%name%`, `%owner%` and `%message%`, which is the owner's greeting or farewell, or
+`protections.enter-default` / `protections.leave-default` from `messages.yml` ("Owned by %owner%",
+"« You left %name%"). Stepping straight from one protection into another only greets. Stepping into a plot
+shows the plot's name in the action bar. Players can mute all of it with the `protection-messages` switch
+of [player settings](/docs/exyliasurvivalcore/quality-of-life).
+
+## Audit logs
+
+With `submodules.logs`, every protection keeps a history. `view-logs` opens it from the manage screen or
+`/protections logs`, filtered by action and by player.
+
+Logged actions: `break`, `place`, `container`, `member`, `role`, `flag`, `ban`, `lock`, `core`,
+`settings`, `raid`, `bank`, `upkeep`, `market`, `subregion`, `rent`, `upgrade`, `warp`, `merge`. Blocks
+broken and placed and containers opened (chests, barrels, shulkers, furnaces, blast furnaces, smokers,
+hoppers, dispensers, droppers, brewing stands) are only what actually happened; everything else is a
+change made through a screen or a command. Each entry keeps who, what, where, which server and when.
+
+| Key | Default | What it does |
+|---|---|---|
+| `logs.retention-days` | 14 | Days an entry is kept; `0` keeps them forever |
+| `logs.flush-seconds` | 10 | Seconds between two writes of the queued entries |
+| `logs.skip-actions` | `[]` | Actions **not** logged; everything else is, including actions added later |
+| `logs.owner-blocks` | `false` | Whether the owner's own blocks and containers are logged |
+| `logs.menu-rows` | 500 | The most recent entries the logs screen reads |
+
+<Callout type="note" title="`logs.actions` became `logs.skip-actions`">
+Version 1 of the file listed what was logged. When it is loaded, every action version 1 knew and the old
+list left out is written to `logs.skip-actions`, and `logs.actions` is removed.
+</Callout>
+
+<Callout type="note" title="The player filter searches the latest entries only">
+The logs screen reads the newest `logs.menu-rows` entries first and filters those. An older entry of a
+player is not found by filtering for them.
+</Callout>
+
+## Plots
+
+With `submodules.subregions`, `manage-subregions` splits a protection into **plots**: boxes inside it with
+members, overrides and flags of their own. `/protections subregion create` or the plots screen hands out
+a selector, standing on the protection's server and world, then asks the plot's name — up to 16 of
+`a-z`, `0-9`, `-` and `_`.
+
+| Key | Default | What it does |
+|---|---|---|
+| `subregions.max-per-protection` | 3 | Plots one protection holds while upgrades are off; `0` for no limit. With upgrades on the level decides |
+| `subregions.min-side` | 3 | The shortest side a plot may have |
+| `subregions.full-height` | `true` | A plot spans the protection's whole height; off, only the heights selected |
+
+A plot must lie fully inside the protection and overlap no other plot.
+
+- **Plot members** hold one of the protection's roles inside that plot only, with overrides of their own
+  there. A plot member may walk into a locked protection.
+- **Plot flags** follow the protection, or are set on or off for the plot. `visitor-entry` is the
+  protection's alone.
+- A **private** plot lets only its members, and those with `manage-subregions`, act inside it. A shared
+  plot lets everybody else fall back to their rights in the protection.
+
+Plots are kept as offsets from the core, so they move and travel with it. A rented plot cannot be
+deleted. `/protections subregion info` describes the plot a player stands in, and
+`/protections subregion delete <name>` removes one.
+
+## Member perks
+
+With `submodules.effects`, members standing in their protection get perks: `fly`, `no-hunger`,
+`keep-inventory`, and the potion effects of `effects.potions`. A tier unlocks perks level by level, each
+level keeping every perk of the ones below; the owner turns on the unlocked ones from the
+**perks & atmosphere** screen.
+
+```yaml
+effects:
+  potions:
+    night-vision: NIGHT_VISION 0
+    haste: HASTE 0
+    speed: SPEED 0
+    jump-boost: JUMP_BOOST 0
+  tiers:
+    small:
+      levels:
+        '0': { perks: [night-vision] }
+        '1': { perks: [haste, no-hunger] }
+        '2': { perks: [speed, fly] }
+    medium:
+      levels:
+        '0': { perks: [night-vision, haste] }
+        '1': { perks: [no-hunger, speed] }
+        '2': { perks: [fly, keep-inventory] }
+    large:
+      levels:
+        '0': { perks: [night-vision, haste, no-hunger] }
+        '1': { perks: [speed, fly] }
+        '2': { perks: [keep-inventory, jump-boost] }
+```
+
+A potion is `EFFECT amplifier`, the amplifier counting from 0. Levels come from
+[upgrades](/docs/exyliasurvivalcore/protection-economy); a protection never upgraded is level 0.
+
+| Key | Default | What it does |
+|---|---|---|
+| `effects.tenants` | `false` | Whether tenants get the perks of what they rent |
+| `effects.fall-protection-seconds` | 5 | Seconds without fall damage after flight stops |
+| `effects.no-flight-during-siege` | `true` | Whether flight stops while a siege window is open |
+
+Who gets them: the owner, members and clan members — not while the protection is raidable or abandoned.
+Perks are worked out again when a player changes protection and every five seconds. Flight is only given
+to a player who could not already fly, and only that flight is taken back. `keep-inventory` keeps the
+inventory and the experience of a member dying in the protection that gave it.
+
+<Callout type="note" title="Only the owner turns perks on">
+The perks screen opens for the owner and for `edit-environment`, but a perk switch answers only the owner.
+`edit-environment` holders change the time and weather there, nothing else.
+</Callout>
+
+## Time and weather
+
+With `submodules.environment`, `edit-environment` sets what everybody standing inside sees — members or
+not. Each click moves to the next value.
+
+| Setting | Values |
+|---|---|
+| Time | the world's own → day → noon → sunset → night |
+| Weather | the world's own → clear → rain |
+
+The time is fixed while they stay; walking out gives them the world's back.
+
+## Public warps
+
+With `submodules.warps`, `manage-warp` publishes a protection as a warp anybody may visit and rate. It
+needs a home, and lands there; **land here** moves it to where the player stands inside. The warp has a
+name, an icon and a description, stored as plain text.
+
+`/protections warps` lists them, sorted by visits, rating or newest. `/protections warp <name>` goes to
+one; when names clash, the most visited wins. Visiting uses the home warmup.
+
+| Key | Default | What it does |
+|---|---|---|
+| `warps.name-max-length` | 24 | The longest name |
+| `warps.description-max-length` | 64 | The longest description |
+| `warps.hide-unavailable` | `true` | Whether warps a player cannot enter right now — locked, banned, raidable, abandoned — are hidden from them. Off: listed, and the visit refused |
+| `warps.default-icon` | `LODESTONE` | The icon a new warp starts with |
+
+A visit counts once per player per day, whichever server they arrive from; members' visits do not count.
+Ratings are one to five stars, one per player, rated again to change; nobody rates their own warp.
+Unpublishing a warp, or deleting its protection, deletes its visits and ratings.
+
+## Borders and web maps
+
+With `submodules.visualization`, members see a protection's border with the **show border** button or
+`/protections show`: particles along its edges and its plots', in a band around the player's eyes.
+
+| Key | Default | What it does |
+|---|---|---|
+| `visualization.seconds` | 10 | Seconds a border stays drawn |
+| `visualization.particle` | `END_ROD` | The protection's border |
+| `visualization.plot-particle` | `WAX_OFF` | A plot's border |
+| `visualization.show-on-create` | `true` | Draw the border to whoever protects new land |
+| `visualization.bluemap` | `true` | Draw protections on BlueMap when it is installed |
+| `visualization.dynmap` | `true` | Draw protections on Dynmap when it is installed |
+| `visualization.map-refresh-minutes` | 5 | Minutes between two redraws of every marker |
+| `visualization.map-label` | `%name% (%owner%)` | A marker's label |
+| `visualization.map-colors` | see below | Marker colours by state, in hex |
+
+On the web maps every protection is a box in a marker set called **Protections**, redrawn whenever it
+changes and all of them every few minutes, which picks up sales, rents and raids. Each server draws its
+own protections. The colour is the most urgent state:
+
+| State | Default |
+|---|---|
+| `raidable` | `#a33b53` |
+| `abandoned` | `#6c757d` |
+| `for-sale` | `#8fffc1` |
+| `for-rent` | `#59a4ff` |
+| `normal` | `#8a51c4` |
+
+<Callout type="note" title="The map hooks are made when the module enables">
+Whether BlueMap and Dynmap are drawn on, and `map-refresh-minutes`, are read when the module enables, as
+is `logs.flush-seconds`. A reload does not apply a change to them; a restart does.
+</Callout>
+
+## Merging
+
+With `submodules.merge`, the owner joins two of their protections that touch into one, from the
+**merge** button or `/protections merge`, standing in the one that stays. The screen lists the owner's
+protections on this server that touch it.
+
+The box holding both becomes the land. The merge is refused when that box would reach any other
+protection, come closer than `settings.min-distance` to another owner's, or overlap a foreign WorldGuard
+region, and while either protection is for sale, for rent, under attack, raidable, abandoned or rented.
+
+What the merged protection keeps:
+
+- Its own name, home, core, tier, flags, greeting, farewell, perks, time, weather and rents.
+- The roles, members, clans, overrides and bans of both; where both say something about the same key,
+  the one kept wins.
+- Every plot of both; a plot whose name is taken gets `-2`, `-3`… added.
+- The higher level of the two, and the raid state of whichever has fewer lives left.
+- The other one's bank, moved over before the land is joined.
+
+The other protection's core is removed and not given back, and its warp is taken down.
+
+## Screens
+
+`/protections` opens the list of every protection the player owns or belongs to, on any server, with
+buttons for selecting land, the protection shop, the market, rent and warps. A protection opens its
+manage screen, where each button appears only while its feature is on: teleport home, set home, rename,
+logs, members, roles, flags, greeting & farewell, lock, bans, lives, hide core, move, delete, bank, upkeep,
+sell or give away, plots, upgrade, rent out, show border, public warp, perks & atmosphere, and merge.
+
+Every click is checked again against the protection as it is when the click arrives.
+
+## Commands
+
+Every command below needs `exyliasurvivalcore.protections`. `/ps` and `/claims` are aliases. Commands
+that act on "the protection here" use the one the player stands in.
+
+| Command | Who may | What it does |
+|---|---|---|
+| `/protections` | anyone | The list of their protections |
+| `/protections home [name]` | members, tenants | Teleport home, with `settings.home-warmup-seconds` (3) of warmup. No name with more than one protection opens the list |
+| `/protections info` | anyone | Name, owner, their role, size and members of the protection here |
+| `/protections ban <player> [duration] [reason]` | `manage-bans` | Ban from the protection here |
+| `/protections unban <player>` | `manage-bans` | Lift a ban |
+| `/protections lock` | `toggle-lock` | Lock or unlock |
+| `/protections logs` | `view-logs` | The audit log |
+| `/protections show` | members | Draw the border |
+| `/protections merge` | owner | Pick a protection to merge into this one |
+| `/protections warps` | anyone | The public warps |
+| `/protections warp <name>` | anyone | Visit a warp |
+| `/protections subregion create` | `manage-subregions` | Select a new plot |
+| `/protections subregion delete <name>` | `manage-subregions` | Delete a plot |
+| `/protections subregion info` | anyone | The plot here |
+
+The bank, upkeep, market, sell, transfer, rent and upgrade commands are on
+[Protection economy](/docs/exyliasurvivalcore/protection-economy); the admin commands on
+[Administering protections](/docs/exyliasurvivalcore/protection-admin).
+
+## Placeholders
+
+| Placeholder | Value |
+|---|---|
+| `%exyliasurvivalcore_protections_count%` | Protections the player owns, on every server |
+| `%exyliasurvivalcore_protections_max%` | How many they may own: their limit node, or `settings.default-limit` |
+| `%exyliasurvivalcore_protections_name%` | The protection they stand in; blank outside one |
+| `%exyliasurvivalcore_protections_owner%` | Its owner |
+| `%exyliasurvivalcore_protections_role%` | Their role in it: `owner`, a role name, or `visitor` |
+| `%exyliasurvivalcore_protections_subregion%` | The plot they stand in; blank outside one or with plots off |
+| `%exyliasurvivalcore_protections_warp_rating%` | The average stars of the warp of the protection they stand in, like `4.5` |
+| `%exyliasurvivalcore_protections_warp_visits%` | That warp's visits |
+| `%exyliasurvivalcore_protections_effects_active%` | The perks active on them, comma-separated |
+
+The lives, raid, bank, upkeep, sale, level and rent placeholders are on the raids and economy pages. All
+of them are on [Placeholders](/docs/exyliasurvivalcore/placeholders).
+
+## Settings
+
+The keys of `settings` not already covered above:
+
+| Key | Default | What it does |
+|---|---|---|
+| `settings.backend` | `INTERNAL` | `INTERNAL` or `WORLDGUARD` |
+| `settings.worldguard-priority` | 10 | Priority of the regions this module creates |
+| `settings.default-limit` | 3 | Protections a player may own without a limit node |
+| `settings.world-limits` | `{}` | World name to how many a player may own there |
+| `settings.min-distance` | 8 | Blocks between protections of different owners |
+| `settings.disabled-worlds` | `[world_the_end]` | Worlds where land cannot be protected |
+| `settings.allowed-world-guard-regions` | `[]` | WorldGuard regions a protection may overlap |
+| `settings.move-price` | 1000 | What moving a core costs |
+| `settings.move-currency` | blank | Blank is the default currency |
+| `settings.home-warmup-seconds` | 3 | Warmup before teleporting to a home or a warp; moving or taking damage cancels it |
+| `settings.deny-message-cooldown-millis` | 1500 | Milliseconds between two refusal messages |

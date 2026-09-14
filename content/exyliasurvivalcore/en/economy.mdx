@@ -1,0 +1,493 @@
+---
+title: "Economy"
+description: "Currencies kept in the database and edited in game, the Vault bridge, the ledger, /balance, /pay, /baltop, /wallet and /economyadmin, money and experience boosters, and sell wands."
+---
+
+ExyliaLib talks to economies — Vault, PlayerPoints, anything a plugin registers — and keeps none of its
+own. The `economy` module is where the server's own currencies live: their balances, their history,
+their leaderboards, the currency handed to Vault, and every command a player types about money.
+Turning it off leaves the server with whatever other economy it runs.
+
+## Currencies
+
+A currency is a row in `sc_currencies`, created and edited in game with `/economyadmin`. There is no
+currency file to edit.
+
+There are three kinds:
+
+| Kind | What it is |
+|---|---|
+| **Stored** | A balance kept in the database. Works for players who are offline and follows them across servers that share the database. The only kind with rules, a ledger and a leaderboard. |
+| **Item** | An exact item in the player's inventory. The balance is how many they carry; paying takes them out, being paid puts them in and drops what does not fit. |
+| **Display only** | No balance of its own: the name, symbol and format another plugin's currency is shown with, such as `vault` or `points`. |
+
+Experience is a fourth source, switched on in the economy settings rather than created: `xp_levels`
+and `xp_points` become currency ids a shop can price in.
+
+An item or experience currency only has a balance while the player is on this server. Paying an
+absent player queues the payment for the next server that holds them; taking from an absent player
+fails.
+
+An item currency is the whole item — name, lore, model and enchantments — and only a stack exactly
+like it counts.
+
+### What a currency has
+
+| Field | Kinds | New currency | What it does |
+|---|---|---|---|
+| Id | all | typed on creation | `a-z`, `0-9` and `_`, up to 32. The key balances are stored under, so it never changes |
+| Icon | all | `GOLD_INGOT`; an item currency uses its item | What wallets and lists draw |
+| Name, plural | all | empty | One unit and many. Colours work |
+| Symbol | all | empty | Blank for none |
+| Decimals | all | `0`; display only `-1` | `0` to `8`. `-1` on a display-only currency keeps what the provider says |
+| Format | all | `%amount% %name%` | `%amount%`, `%symbol%` and `%name%` |
+| Compact format | all | empty | The same for scoreboards, where `%amount%` reads `1.2k` |
+| Command names | stored, item | the id | The first is the command, the rest aliases |
+| Sort order | all | after the last one | Where it sits in the list |
+| Item | item | asked for on creation | The exact item |
+| Starting balance | stored | `0` | What a new player begins with |
+| Balance ceiling | stored | `-1` | `-1` (or anything not above zero) for none |
+| Permission | stored | empty | Needed to use it at all. Blank: nobody needs one |
+| Least a player may send | stored | `1` | The minimum for `/pay` |
+| Transfer tax | stored | `0` | A percentage, `0` to `100`, charged to the sender on top of the amount |
+| Exchange rates | stored | none | `other_id=rate`: `shards=0.01` means 1 of this is 0.01 shards |
+| Transfers | stored | on | Whether players can pay each other |
+| Exchange | stored | off | Whether it can be swapped at its rates |
+| Leaderboard | stored | on | Whether its top list and placeholders work |
+| Networked | stored | on | See the note below |
+| Commands enabled | stored | on | Whether its command names exist at all |
+| Vault economy | stored | off | Whether it is the currency published to Vault |
+
+A currency behind a permission is left out of the wallet, the balance lines on shop screens, and
+command suggestions for anyone without it, and its commands refuse them.
+
+<Callout type="warning" title="Two fields that change nothing">
+**Networked** is stored, shown and toggled, and nothing reads it. A stored balance is one row per
+player and currency, so every server on the same database shares it whichever way the switch is set.
+
+**Command names on an item currency** are saved and never installed. Only stored currencies get a
+command of their own.
+</Callout>
+
+### What a fresh server starts with
+
+The first time the tables are empty, the module imports `modules/economy/currencies.yml` and renames it
+`currencies.yml.imported`. A server without that file but with the one ExyliaLib kept before 1.159.0,
+`plugins/ExyliaLib/currencies.yml`, has that one copied over first, edits and all. A server with
+neither imports the defaults:
+
+| Id | Kind | Look | Notes |
+|---|---|---|---|
+| `dollars` | stored | Dollar, `$`, 2 decimals, `%symbol%%amount%` | Commands `/dollars`, `/dollar`. Published to Vault |
+| `shards` | stored | Shard, `✦`, 0 decimals, `%amount% %symbol%` | Commands `/shards`, `/shard` |
+| `netherite_ingots` | item | `NETHERITE_INGOT`, `%amount% %name%` | |
+| `vault` | display only | Dollar, `$`, 2 decimals, `%symbol%%amount%` | How the Vault economy is written |
+| `points` | display only | Point, 0 decimals, `%amount% %name%` | How PlayerPoints is written |
+
+Both stored currencies start at `0`, have no ceiling, allow transfers from `1` with no tax, and have
+exchange off. Experience points are a currency, experience levels are not, and the ledger is on.
+
+After the import the file is never read again. If a `currencies.yml` is still there on a later start,
+the console says so and ignores it.
+
+### The default currency
+
+A command that names no currency — `/balance`, `/pay`, `/baltop` — uses ExyliaLib's default, set as
+`default-currency` in `plugins/ExyliaLib/economy.yml`. It ships as `vault`: whatever Vault serves,
+which on a server with no other economy plugin is `dollars` through the bridge below.
+
+<Callout type="warning" title="`vault` is not a stored currency">
+With the default left at `vault`, everything that only a stored currency can do comes back empty
+when no currency is named: `/baltop`, `/economy top`, `/economy history`, and the top placeholders
+without a currency id. `/pay` without a currency also skips the stored currency's rules — its
+permission, the transfers switch, the minimum and the tax — and its ledger line reads `vault` rather
+than `pay`.
+
+Setting `default-currency: dollars` (or whichever stored currency the server runs on) makes all of
+them read that currency directly.
+</Callout>
+
+## The Vault bridge
+
+One stored currency can be published as the server's Vault economy, so every plugin that only speaks
+Vault runs on it. Pick it with **Vault economy** on that currency's screen; choosing another replaces
+it, and deleting the published currency unpublishes it.
+
+It is registered **beneath** any economy plugin the owner installed — EssentialsX, CMI — and serves
+only while none does. **Vault on top** in the economy settings registers it above them instead. The
+console says which of the two happened.
+
+The bridge has no bank accounts: every bank call answers *not implemented*. A player named by text
+rather than by UUID is looked up among the players ExyliaLib has seen, and an unknown name is refused.
+Without Vault installed nothing is published and the console warns.
+
+## Balances, offline players and other servers
+
+A player's stored balances are loaded when they join, and the server they are on is the only one that
+writes them. Every other server — or the same server, for somebody who is away — leaves the change in a
+queue and tells the network. The owner folds it in at once; otherwise it waits for their next join. A
+sweep every minute picks up anything a lost message missed.
+
+| Change to an absent player | When it lands |
+|---|---|
+| Deposit | Always, in full, up to the ceiling |
+| Withdrawal | Floored at zero: it cannot overdraw somebody it cannot see |
+| Set | Replaces the balance |
+
+The admin commands say *"Queued … They are away; it lands when they are next seen"* instead of showing
+a balance they do not hold.
+
+A deposit that would pass the ceiling pays only up to it, and one at the ceiling already fails.
+
+Currency edits made on one server are registered there at once and read by every other server on the
+network, which reinstalls the currency commands too.
+
+## The ledger
+
+With the ledger on (the default), every operation on a stored currency writes a line to
+`exylia_ledger`: what moved, what the balance read after, the reason, who caused it and which server
+applied it — including changes that arrived from another server. Nothing prunes it.
+
+| Reason | Where it came from |
+|---|---|
+| `pay` | `/pay` and every other spelling of it |
+| `pay:tax` | The tax on a payment |
+| `pay:tax-refund` | The tax returned when the payment failed |
+| `admin:give`, `admin:take`, `admin:set`, `admin:reset` | `/economyadmin` |
+| `import:<currency>` | `/economyadmin import` |
+| `exchange:<from>><to>` | Both sides of an exchange |
+| `exchange:refund` | The source returned when the other side failed |
+| `vault` | A plugin paying through Vault |
+
+Other plugins write their own reasons.
+
+## Player commands
+
+| Command | Aliases | Permission | What it does |
+|---|---|---|---|
+| `/balance [player]` | `/bal`, `/money` | `exyliasurvivalcore.economy` | The default currency. Always the default: other currencies are `/wallet` or their own command |
+| `/pay <player> <amount> [currency]` | | `exyliasurvivalcore.economy.pay` | Sends money, in the default currency unless a third word names another |
+| `/baltop [page]` | `/balancetop`, `/moneytop` | `exyliasurvivalcore.economy` | The leaderboard of the default currency. The page is for the console; a player gets the screen |
+| `/wallet [player]` | `/balances` | `exyliasurvivalcore.economy` | Every currency on one screen; the console gets one line each |
+| `/economy` | `/eco` | `exyliasurvivalcore.economy` | Your wallet |
+| `/economy balance [currency] [player]` | | `exyliasurvivalcore.economy` | A word that is not a currency is read as a player |
+| `/economy wallet [player]` | | `exyliasurvivalcore.economy` | |
+| `/economy currencies` | | `exyliasurvivalcore.economy` | Every currency with its id and kind |
+| `/economy pay <player> <amount> [currency]` | | `exyliasurvivalcore.economy.pay` | |
+| `/economy top [currency] [page]` | | `exyliasurvivalcore.economy` | |
+| `/economy history [currency] [player]` | | `exyliasurvivalcore.economy` | The last 15 lines in the console, a screen for a player |
+| `/economy exchange <amount> <from> <to>` | | `exyliasurvivalcore.economy` | Swaps at the source currency's rate |
+
+Anything about another player — a balance, a wallet, a history — also needs
+`exyliasurvivalcore.economy.others`. Every one of these works on a player who is offline or on another
+server. Amounts are typed as `100`, `2.5k` or `1m`.
+
+A payment checks the currency's transfer switch and minimum, refuses paying yourself, takes the tax
+from the sender on top of the amount, then moves the amount. The receiver is told if they are online.
+
+An exchange needs **Exchange** on the source currency and a rate from it to the target, which may be
+any currency that exists. The source is taken first; a failed deposit gives it back.
+
+<Callout type="note" title="Nothing is granted by default">
+None of these nodes is declared in `plugin.yml`, so a player without `exyliasurvivalcore.economy`
+cannot run `/balance`. Grant it, and `exyliasurvivalcore.economy.pay`, to the default group.
+</Callout>
+
+### A command per currency
+
+Every stored currency with **Commands enabled** and at least one command name gets its own command,
+installed the moment it is saved:
+
+```text
+/shards                       your balance
+/shards <player>              somebody else's (needs .others)
+/shards pay <player> <amount>
+/shards top [page]
+/shards history [player]
+/shards exchange <amount> <to>
+/shards give|take|set <player> <amount>   administrators
+/shards reset <player>                    administrators
+```
+
+It needs `exyliasurvivalcore.economy`. A name another plugin already holds still answers as
+`/exyliasurvivalcore:<name>`, and the console says so.
+
+<Callout type="note" title="Silent refusals">
+`/shards pay` without `exyliasurvivalcore.economy.pay`, and `give`, `take`, `set` or `reset` without
+`exyliasurvivalcore.economy.admin`, do nothing and say nothing.
+</Callout>
+
+### The screens
+
+Three screens under `modules/economy/menus/`, written once and yours to edit:
+
+| File | Opened by | Values |
+|---|---|---|
+| `wallet.yml` | `/wallet`, `/economy` | `%wallet_owner%`, `%wallet_currencies%`; each currency `%currency%`, `%currency_icon%`, `%currency_balance%`, `%currency_kind%` |
+| `history.yml` | Left-click a currency in the wallet | `%currency%`, `%history_owner%`, `%history_size%`; each line `%entry_when%`, `%entry_delta%`, `%entry_reason%`, `%entry_balance%`, `%entry_server%` |
+| `top.yml` | Right-click a currency in the wallet, `/baltop` | `%currency%`, `%top_size%`; each place `%top_position%`, `%top_player%`, `%top_amount%` |
+
+The history and the board both go 90 deep. The board is read from the database at most once a minute,
+so the first look after a start can be empty until that read lands. Only stored currencies with the
+leaderboard on are ranked, and only they keep a history; any other currency opens an empty screen.
+
+The actions behind them — `survivalcore:economy_wallet [uuid]`, `survivalcore:economy_history <currency> [uuid]`
+and `survivalcore:economy_top <currency>` — can be bound to any menu.
+
+## /economyadmin
+
+`/economyadmin` — `/ecoadmin`, `/eadmin` — needs `exyliasurvivalcore.economy.admin`.
+
+| Command | What it does |
+|---|---|
+| `/economyadmin` | Opens the currency list |
+| `/economyadmin give <player> <amount> [currency]` | Deposits |
+| `/economyadmin take <player> <amount> [currency]` | Withdraws; refused when they hold less |
+| `/economyadmin set <player> <amount> [currency]` | Sets the balance |
+| `/economyadmin reset <player> [currency]` | Back to the starting balance |
+| `/economyadmin import <from> <into>` | Copies every positive balance from one currency into a stored one |
+| `/economyadmin currencies` | Every currency, with its id and kind |
+
+`import` walks every player the server has ever seen and **adds** their balance in `from` to `into`.
+Run it once.
+
+The old spellings — `/eco give`, `/eco take`, `/eco set`, `/eco reset`, `/eco import` — still work with the
+same permission, because reward and crate files on live servers are written with them.
+
+### The admin screens
+
+| Screen | File | What is on it |
+|---|---|---|
+| Currencies | `menus/admin/currency_admin_list.yml` | Every currency — left-click to edit, right-click to delete — plus **Create currency** and **Economy settings** |
+| One currency | `menus/admin/currency_admin_edit.yml` | Icon, appearance, command names, rules or item, exchange rates, sort order, the switches, delete |
+| Economy settings | `menus/admin/currency_admin_settings.yml` | Experience levels, experience points, ledger, Vault on top, and which currency is published |
+
+**Create** asks for an id, then the kind, then — for an item currency — the item itself. The buttons a
+currency shows depend on its kind: a stored currency has rules and switches, an item currency its item,
+a display-only one only its look.
+
+**Delete** asks first. A stored currency's balances stay in the database, unused until a currency with
+that id exists again.
+
+Every change is written, registered on this server at once and announced to the others. These three
+files are regenerated from the plugin on every start, so edits to them do not survive.
+
+| Economy setting | Fresh server | What it does |
+|---|---|---|
+| Experience levels | off | Makes `xp_levels` a currency |
+| Experience points | on | Makes `xp_points` a currency |
+| Ledger | on | Writes down every stored operation |
+| Vault on top | off | Serves Vault even when another economy plugin is installed |
+
+## The currency picker
+
+`menus/currency_select.yml` is the one screen every flow uses to ask *which currency*: listing on the
+market, starting an auction, placing a buy order, and choosing the currency a shop product is priced in.
+Each currency shows its icon and what the player holds of it. A server with a single currency never
+sees it — the flow carries on with the only one there is.
+
+`%purpose%` is the line the asking screen writes; each currency draws with `%currency%`,
+`%currency_icon%` and `%currency_balance%`. The file is written once and yours to edit.
+
+The balance lines on the shop, market and auction screens follow the same rule: every currency the
+viewer may use, one per line.
+
+## Placeholders
+
+The leaderboards are this module's; the balances are ExyliaLib's, because they work for any currency.
+
+| Placeholder | What it returns |
+|---|---|
+| `%exyliasurvivalcore_economy_top_name_<position>_<currency>%` | Who is at that place, or `—` |
+| `%exyliasurvivalcore_economy_top_amount_<position>_<currency>%` | What they hold, formatted |
+| `%exylialib_economy_balance_<currency>%` | The viewer's balance, formatted |
+| `%exylialib_economy_compact_<currency>%` | The same, short |
+| `%exylialib_economy_raw_<currency>%` | The number alone |
+| `%exylialib_economy_name_<currency>%` | The currency's plural name |
+| `%exylialib_economy_symbol_<currency>%` | Its symbol |
+
+Leaving the currency off reads the default currency — which, left at `vault`, has no leaderboard.
+
+## Low-economy defaults
+
+The shipped prices and payouts are scaled for a low economy, where a cheap block is worth one unit and
+nothing is priced in the thousands. A fresh install writes these; a server that already has the files
+keeps its own numbers.
+
+| Where | Default |
+|---|---|
+| Shop catalogue | Whole numbers. Dirt, cobblestone, stone, sand: buy 3, sell 1. Obsidian 45 / 15. Hay block 36 / 9 |
+| Rank requirements, `ranks.yml` | 250, 1,000, 4,000, 15,000 |
+| Prestige cost | 25,000 |
+| Repair | 75 for the held item, 200 for everything |
+| Bounties | 25 minimum, 100,000 maximum |
+| RTP price | 25 |
+| Kill reward `money` | 3 |
+| Missions `money` | 30–75 daily, 500–750 weekly |
+| Playtime rewards | 25, 50, 150, 600, 2,500 |
+| Reclaim, scheduled broadcast | `eco give … 50` |
+
+The shop catalogue follows two rules that keep it from printing money: a product sells back for about a
+third of what it costs, and where one product crafts into another — logs into planks, wheat into hay —
+the output never sells for more than its inputs. Gear is sold but never bought back.
+
+## Boosters
+
+A booster multiplies **money** or **experience**, for one player or for everybody, for a time.
+
+| Source | What it multiplies |
+|---|---|
+| `shop-sell` | Every sale to the shop, sell wands and autosell included, in whatever currency the product is priced in |
+| `missions` | The `money` a mission pays |
+| `kill-rewards` | The `money` of `modules/kill-rewards/rewards.yml` |
+| `farming` | The `money` of `modules/farming/categories.yml` |
+| `votes` | The `money` of `modules/votes/votes.yml` |
+| `*` | All of them |
+
+Missions, kill rewards, farming and votes pay their `money` in the default currency, rounded down to its
+decimals. Money handed out by a command — `eco give` — is not boosted.
+
+An **experience** booster applies to every experience gain the game reports, orbs included, whatever
+its source.
+
+The source is free text: a booster given for a source that does not exist multiplies nothing.
+
+### Personal and global
+
+| | Given with | Starts |
+|---|---|---|
+| Personal | `/boostersadmin give <player> <money\|xp> <multiplier> <duration> [source]` | When the player clicks it in `/boosters` |
+| Global | `/boostersadmin global <money\|xp> <multiplier> <duration> [source]` | At once, on every server |
+
+A personal booster waits in `/boosters` until its owner starts it, so it can be given to somebody who
+is offline or on another server — which is what a web store needs. The player is told when one arrives.
+
+A global booster is announced on every server when it starts and when it ends, to everyone who has
+booster announcements on in `/settings`. `/boostersadmin clear` ends every running global booster
+without announcing it.
+
+The multiplier must be above `1` and at most `100`. The duration is `30m`, `2h`, `1d`; a bare number
+is seconds, and `s` and `h` work too. No source means `*`.
+
+### Stacking
+
+Every running booster of a type that applies to a payout counts — the player's own and the global ones
+together.
+
+```yaml
+settings:
+  stacking: ADD
+  max-multiplier: 5.0
+  one-per-type: true
+bossbar:
+  config:
+    text: "{highlight}⚡ {primary}&lBOOSTERS {letters_black}» {success}Money x%money% {letters_black}· {info}XP x%xp% {letters_black}» {letters}%left%"
+    colour: PURPLE
+    overlay: PROGRESS
+```
+
+| `stacking` | x2 and x1.5 make |
+|---|---|
+| `ADD` | x2.5 |
+| `MULTIPLY` | x3 |
+| `HIGHEST` | x2 |
+
+Anything else reads as `ADD`. The result is never below x1, and never above `max-multiplier`; `0`
+removes the cap.
+
+`one-per-type` stops a player starting a second personal booster of a type while one is running.
+Global boosters do not count against it.
+
+The boss bar shows while any booster applies to the player, filling with the time left on the one that
+ends last. `%money%`, `%xp%`, `%left%` and `%count%` work in its text; an empty text hides it.
+
+### Commands, permissions and placeholders
+
+| Command | Permission |
+|---|---|
+| `/boosters` | `exyliasurvivalcore.boosters` |
+| `/boostersadmin give`, `global`, `clear` (`/boostersa`) | `exyliasurvivalcore.boosters.admin` |
+
+`/boosters` lists the global boosters running, then the player's own — running first, then waiting.
+Its screen is `modules/boosters/menus/boosters.yml`.
+
+| Placeholder | What it returns |
+|---|---|
+| `%exyliasurvivalcore_boosters_money%` | The viewer's money multiplier, theirs and global together |
+| `%exyliasurvivalcore_boosters_xp%` | The same for experience |
+| `%exyliasurvivalcore_boosters_active%` | Personal boosters running |
+| `%exyliasurvivalcore_boosters_stored%` | Personal boosters waiting to be started |
+| `%exyliasurvivalcore_boosters_global_money%` | The global money multiplier |
+| `%exyliasurvivalcore_boosters_global_xp%` | The global experience multiplier |
+| `%exyliasurvivalcore_boosters_global_left%` | Time left on the global booster that ends last, or `—` |
+
+## Sell wands
+
+The `sell-wands` module needs the shop: both of its features sell at shop prices, so the player's
+`exyliasurvivalcore.shop.sell.<multiplier>` bonus, `shop-sell` money boosters, product and category
+permissions, and the shop's sell limits all apply. See [Shop](/docs/exyliasurvivalcore/shop).
+
+### The wand
+
+A wand carries a multiplier and a number of uses on the item, and an id of its own so two wands never
+stack.
+
+```text
+/sellwandadmin give <player> <multiplier> <uses>
+```
+
+`/sellwanda` for short, needing `exyliasurvivalcore.sellwands.admin`. The player must be online. The
+multiplier goes from `0.1` to `10`; uses are `-1` for unlimited or anything above `0`.
+
+Right-clicking a container with a wand in the main hand sells what the shop buys out of it, at the shop
+price times the wand's multiplier. Everything else, and the remainder of a unit, stays where it is. It
+needs `exyliasurvivalcore.sellwands.use`, and a click a protection plugin has already refused is left
+alone, so a wand never reaches into a chest its holder could not open.
+
+A use is spent only when something sold; the last one breaks the wand.
+
+<Callout type="note" title="Any container, not just three">
+The wand's lore says a chest, barrel or shulker box. The code takes any block with an inventory — a
+hopper, a furnace or a dispenser sells the same way.
+
+The cooldown is per player rather than per wand, and it starts on every click, including one that sold
+nothing.
+</Callout>
+
+### Autosell
+
+With `exyliasurvivalcore.sellwands.autosell`, what a player breaks is sold for them: blocks broken by
+hand, and both the block drops and the loot of [mines](/docs/exyliasurvivalcore/zones). Only drops the
+shop buys are taken; everything else drops as usual.
+
+Drops wait a few seconds and are sold together, at the plain shop price. Whatever the shop refuses by
+then — a sell limit reached — goes back to the player. Leaving the server sells what is waiting first.
+Every so often the player is told what it came to.
+
+`/autosell` switches it, the same switch as in `/settings`. It is **on** by default for everyone holding
+the permission.
+
+<Callout type="warning" title="`/autosell` without player settings">
+With the `player-settings` module off, `/autosell` answers *"Autosell is now on"* and changes nothing,
+and autosell stays on for everybody who holds the permission.
+</Callout>
+
+### Configuration
+
+`modules/sell-wands/config.yml`:
+
+| Setting | Default | What it does |
+|---|---|---|
+| `wand.material` | `BLAZE_ROD` | The item a wand is |
+| `wand.name`, `wand.lore` | | `%multiplier%` and `%uses%` work in both |
+| `wand.cooldown-seconds` | 1.0 | Seconds between two uses |
+| `autosell.flush-seconds` | 5 | How long drops wait before they are sold |
+| `autosell.report-seconds` | 60 | How often the player hears what was sold. `0` never |
+
+Both autosell timers are scheduled once, when the plugin starts: a change to them needs a restart.
+
+| Permission | What it allows |
+|---|---|
+| `exyliasurvivalcore.sellwands.use` | Using a wand |
+| `exyliasurvivalcore.sellwands.autosell` | Autosell, and `/autosell` |
+| `exyliasurvivalcore.sellwands.admin` | `/sellwandadmin` |

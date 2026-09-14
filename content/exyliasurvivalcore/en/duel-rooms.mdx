@@ -1,0 +1,307 @@
+---
+title: "Duel Rooms"
+description: "Regions that lock into a PvP room once enough enemies step in, fight to the last one standing, pay the winner and open again."
+---
+
+A duel room is a region with no queue and no command. Players walk in. Once enough enemies are inside, a
+border goes up on the region's faces, a countdown runs, and the fight lasts until one fighter is left.
+The winner gets a few seconds to collect the loot, then the border comes down and the room waits for
+the next group.
+
+The module is `duel-rooms` in `config.yml`. Rooms are built from `/duelroomsadmin` and stored in the
+database. Its settings are in `modules/duel-rooms/config.yml`.
+
+## How a duel runs
+
+| Phase | What happens | Length |
+|---|---|---|
+| Waiting | Players stand in the room. A boss bar shows how many enemies are in and how many are needed | Until enough enemies are in |
+| Countdown | The border goes up and anyone who was not picked is sent to the exit. Hits do nothing yet | `countdown-seconds`, 3 |
+| Fight | PvP between the fighters. Anyone who dies, leaves or logs out is out | Up to `max-duration-seconds`, 180 |
+| Loot | The fight is decided. The room stays closed so the winner can pick up the drops | `loot-seconds`, 5 |
+| Open | The border comes down. Anyone left inside is sent to the exit, the winner only when `teleport-winner-out` is on | — |
+
+When the border is down, everyone still standing in the room counts as having just walked in. If
+`teleport-winner-out` is off, the winner starts waiting for the next duel straight away.
+
+Anyone who walks into a room while a duel is running is sent back to the exit with
+`duel-rooms.room-busy`. Once a second the room also sends out anyone who got in another way. Players
+with `exyliasurvivalcore.duelrooms.bypass` never join a duel and are never sent out.
+
+Only players in survival or adventure mode can join. A fighter switched to creative or spectator during a
+duel is taken out of it, as if they had logged out, but is not killed.
+
+## Only enemies fight
+
+With [ExyliaClans](/docs/exyliaclans) installed, two players from the same clan or from allied clans are
+never picked for the same duel. When the room fills, the waiting players are shuffled and fighters are
+taken one at a time, skipping anyone on the same side as a fighter already picked. The room closes once
+that gives the number of players it needs.
+
+So three clanmates and one outsider in a room for two make a duel of two: one random clanmate against
+the outsider. The other two clanmates are sent to the exit. The waiting boss bar counts sides like this
+too, not bodies. A player who walks in when everyone already waiting is on their side gets
+`duel-rooms.allied-waiting`.
+
+Without a clan plugin, every player counts as an enemy.
+
+<Callout type="note" title="A room can wait with a valid duel inside">
+Fighters are picked in a single pass, and only when someone walks in. Say A is allied with B and B is
+allied with C, but A and C are enemies. If the shuffle puts B first, B is picked and both A and C are
+skipped, so the duel does not start. It is only tried again when another player enters.
+</Callout>
+
+## Leaving a fight
+
+| What the fighter does | During the countdown | During the fight |
+|---|---|---|
+| Logs out | The duel is called off for everyone (`duel-rooms.aborted`) | They are killed and drop their loot, when `kill-on-leave` is on |
+| Gets out of the room | Same | Same, and they are told `duel-rooms.fled` |
+| Dies | Same | Out of the fight, and the others are told who is left |
+| Runs a command | Blocked, except `allowed-commands` | Blocked, except `allowed-commands` |
+| Teleports out | Blocked | Blocked |
+
+Being killed for logging out mid-fight is the point of `kill-on-leave`: a losing player cannot log off to
+keep the loot the winner fought for. With it off, leaving only takes the player out of the fight.
+
+Commands are checked before any other plugin sees them, and a namespace does not get around the list:
+`minecraft:msg` counts as `msg`. A teleport to anywhere outside the room is cancelled, whether it comes
+from `/spawn`, an ender pearl, a chorus fruit, a portal or another plugin. Both blocks end when the fight
+is decided, so the winner can leave during the loot time.
+
+Nobody can dig out or tunnel in. While a duel runs, the border blocks and every block on the region's
+faces cannot be broken. Explosions skip them, pistons cannot move them, and they do not fade, burn or
+get changed by mobs. This applies to every player, including those with bypass.
+
+## Fights where nobody lands a hit
+
+A fight in which nobody lands a hit for `inactivity-seconds` (30) ends with no winner, under the
+*CANCELLED* title. That covers players who stand still, go AFK or refuse to fight. A warning is sent
+10 seconds before, or halfway through when `inactivity-seconds` is under 20.
+
+Only a hit that did damage resets the timer. A blocked hit, a cancelled one, or a hit from a player who
+is not in the duel does not. Arrows and other projectiles count.
+
+`0` turns the check off.
+
+## Hits
+
+Inside a running duel, a hit between two fighters goes through even where another plugin, spawn
+protection, WorldGuard or the room's own `PVP` flag would deny it. A hit between a fighter and anyone
+outside the duel is blocked both ways. During the countdown, hits between fighters are blocked too.
+
+## Effects and flight
+
+A room can give its fighters potion effects for the fight. They are applied when the fight starts, not
+during the countdown. In the editor, each effect's seconds are kept as typed, and `-1` lasts the whole
+fight. Every effect is capped at `max-duration-seconds` + `countdown-seconds` + 30 seconds, or one hour
+when there is no time limit, so a crash mid-duel cannot leave a player buffed for good.
+
+Fighters get their own effects back afterwards. When the fight starts, any effect a player already had of
+the same type as one of the room's effects is saved and cleared first. Minecraft keeps the stronger of two
+effects, so a potion drunk beforehand would otherwise hide the room's effect. When the player is out of
+the fight, or the fight is decided, the room's effects are removed and theirs are put back. A player who
+died gets nothing back.
+
+With `disable-flight` on, fighters lose flight when the fight starts. A `/fly` typed mid-fight is taken
+back within a second. Whatever flight a player had is given back at the end.
+
+## The winner
+
+When one fighter is left:
+
+- The winner gets the *VICTORY* title and the losers still online get *DEFEAT*.
+- The room's rewards are given to the winner. If the winner logs out before that happens, the rewards
+  are kept and given on their next join.
+- With `broadcast-results` on, `duel-rooms.broadcast` is sent to the server and the console. Players can
+  mute it from `/settings` with *duel-announcements*.
+- [`DuelRoomEndEvent`](/docs/exyliasurvivalcore/api) fires before the rewards are given.
+
+A fight that runs out of time, or where the last fighters go down together, ends with no winner under the
+*DRAW* title. Nobody is paid, and everyone is sent to the exit when the room opens.
+
+## Setting up a room
+
+`/duelroomsadmin` opens the list of rooms on this server. The emerald creates one: type an ID
+(lowercase, unique, at most 64 characters) and the room's setup screen opens. Left-click a room to edit
+it, right-click to delete it. Deleting asks for no confirmation.
+
+| Button | What it sets |
+|---|---|
+| Room status | Enabled or disabled. A room needs a region and an exit before it can be enabled |
+| Display name | The name in titles, boss bars and the broadcast. Defaults to the ID |
+| Room region | The arena, selected with the region wizard. Its faces become the border |
+| Exit location | Where you are standing. Players who are sent out go here. It must be outside the region |
+| Players needed | How many fighters close the room, from 2 to 16. Default 2 |
+| Border block | Any solid block. Default `RED_STAINED_GLASS` |
+| Duel effects | The effects editor described above |
+| Winner rewards | The rewards editor |
+| Room flags | The flags screen below. Needs the region first |
+| Delete room | Stops any duel in the room and removes it |
+
+The list shows each room as *Ready* (enabled, with a region and an exit), *Incomplete* (enabled but
+missing one of them) or *Disabled*.
+
+The region has to be at least 3×4×3 blocks. Its border is capped at `max-border-blocks`, 20000, counted
+over every block on the six faces. A selection over that is refused with the count and the limit.
+Selecting a new region keeps the flags of the old one.
+
+The border only replaces blocks that can be replaced, such as air, water and tall grass. Solid blocks
+already on a face stay as they are and act as part of the wall. When the room opens, each replaced block
+is put back, but only where the border block is still there. The border is recorded in the database
+while it stands, so if the server crashes or stops mid-duel it is taken down on the next start, once
+the world is loaded.
+
+Fighters standing on a face when the room closes are moved one block inwards, so the border does not
+close on them.
+
+<Callout type="note" title="Which edits stop a running duel">
+Changing the region, the exit, the players needed, or enabling or disabling the room stops a duel
+running in it, and the fighters get `duel-rooms.room-stopped`. Deleting the room does the same. The
+display name, border block, effects, rewards and flags can be changed mid-duel: the duel keeps the copy
+it started with, and flags are read live.
+</Callout>
+
+Rooms are stored with the server that created them. On a network sharing one database, each server only
+loads and lists its own rooms.
+
+## Room flags
+
+The flags live on the room's region. There is one row per flag, and a click cycles it through
+**allow → deny → default**. *Default* means the room leaves it to whatever region contains it.
+
+| Flag | Allowed means | Default |
+|---|---|---|
+| `PVP` | Combat between players | allow |
+| `BUILD` | Placing blocks | allow |
+| `BREAK` | Breaking blocks | allow |
+| `INTERACT` | Using blocks and entities | allow |
+| `PLAYER_BUILD_ONLY` | Only blocks a player placed can be broken | deny |
+| `ALLOWED_BLOCKS_ONLY` | Only the listed materials can be placed | deny |
+| `BREAKABLE_BLOCKS_ONLY` | Only the listed materials can be broken | deny |
+| `TEMPORARY_BLOCKS` | Placed blocks disappear again | deny |
+| `RE_GIVE_BLOCKS` | A temporary block is given back when it goes | deny |
+| `REGION_MEMBERS_ONLY` | Only members may act | deny |
+| `ENTRY` | Entering, teleports included | allow |
+| `EXIT` | Leaving, teleports included | allow |
+| `ITEM_DROP` | Dropping items | allow |
+| `ITEM_PICKUP` | Picking items up | allow |
+| `FALL_DAMAGE` | Taking fall damage | allow |
+| `KEEP_INVENTORY` | A player who dies inside keeps their items and levels | deny |
+
+These defaults are ExyliaLib's region policies, as the screen shows them. `KEEP_INVENTORY` is this
+plugin's own. Two more buttons sit under the flags. **Block list** adds a material to the list used by
+`ALLOWED_BLOCKS_ONLY` and `BREAKABLE_BLOCKS_ONLY`, and shift-click clears it. **Temporary blocks** sets
+how long a placed block lasts while `TEMPORARY_BLOCKS` is allowed.
+
+All sixteen are enforced by the plugin for every region it registers. The plugin checks the first
+fifteen, except that ExyliaLib runs temporary blocks and re-given blocks itself. Players in creative mode
+are held by no flag.
+
+- **Keep inventory.** With `KEEP_INVENTORY` allowed, a fighter who dies keeps everything and drops
+  nothing, so the winner has no loot to collect. Graves see the kept inventory too.
+- **PvP.** A running duel overrides `PVP` between its fighters, as described above.
+- **Members only.** Rooms have no members, so `REGION_MEMBERS_ONLY` stops everyone from building,
+  breaking and using blocks.
+- **Entry and exit.** Denying `ENTRY` stops players walking in, so the room never fills. Denying `EXIT`
+  stops fighters walking out, but the room still sends players to the exit, because a teleport run by a
+  plugin is let through.
+
+## Configuration
+
+`modules/duel-rooms/config.yml`
+
+### `settings`
+
+| Setting | Default | What it does |
+|---|---|---|
+| `countdown-seconds` | 3 | Seconds between the room closing and the fight starting |
+| `max-duration-seconds` | 180 | Longest a fight lasts before it ends as a draw. `0` means no limit |
+| `inactivity-seconds` | 30 | Seconds without a hit before the fight is cancelled with no winner. `0` turns it off |
+| `loot-seconds` | 5 | Seconds the winner has to collect the loot before the room opens |
+| `teleport-winner-out` | `true` | Send the winner to the exit when the room opens. A draw always sends everyone out |
+| `disable-flight` | `true` | Take flight away from fighters for the fight |
+| `kill-on-leave` | `true` | Kill a fighter who logs out or gets out of the room mid-fight |
+| `allowed-commands` | `msg`, `tell`, `w`, `r`, `reply` | Commands a fighter may still use, without the slash |
+| `broadcast-results` | `true` | Announce every winner to the server |
+| `max-border-blocks` | 20000 | Largest border a room may have, in blocks |
+
+### `visuals`
+
+| Key | Type | When | Supports |
+|---|---|---|---|
+| `waiting-bossbar` | Boss bar, purple | While players wait. Fills as enemies arrive | `%room_name%`, `%current%`, `%required%` |
+| `countdown-title` | Title | Every second of the countdown | `%room_name%`, `%seconds%` |
+| `fight-title` | Title | When the fight starts | `%room_name%` |
+| `fight-bossbar` | Boss bar, red | During the fight. Empties as time runs out | `%room_name%`, `%time_left%`, `%alive%` |
+| `victory-title` | Title | To the winner | `%room_name%`, `%winner%`, `%losers%` |
+| `defeat-title` | Title | To the losers | `%room_name%`, `%winner%`, `%losers%` |
+| `draw-title` | Title | When nobody won | `%room_name%` |
+| `inactive-title` | Title | When the fight is cancelled for inactivity | `%room_name%` |
+| `loot-bossbar` | Boss bar, green | While the winner collects the loot | `%room_name%`, `%seconds%` |
+
+`%time_left%` shows `∞` when there is no time limit. An empty `text` hides that readout.
+
+```yaml
+visuals:
+  fight-bossbar:
+    text: "{letters}%room_name% {letters_black}» {info}%time_left% ⌚ {letters_black}┃ {highlight}%alive% {letters}alive"
+    colour: RED
+    overlay: PROGRESS
+    count-up: 0.0
+    progress: 1.0
+    time-style: auto
+  victory-title:
+    text: "{success}&lVICTORY"
+    subtitle: "{letters}You won in {highlight}%room_name%"
+    fade-in: 0.25
+    stay: 3.0
+    fade-out: 1.0
+    time-style: auto
+```
+
+<Callout type="note" title="The readouts used to be action bars">
+Before version 2 of this file, the waiting, fight and loot readouts were action bars. When an older file
+is loaded, the `text` of `waiting-actionbar`, `fight-actionbar` and `loot-actionbar` is moved to the
+matching boss bar.
+</Callout>
+
+### `sounds`
+
+Format `SOUND_NAME|VOLUME|PITCH`. An empty value plays nothing.
+
+| Key | Default | Played |
+|---|---|---|
+| `countdown` | `BLOCK_NOTE_BLOCK_HAT\|1.0\|1.4` | Every second of the countdown |
+| `start` | `ENTITY_ENDER_DRAGON_GROWL\|0.6\|1.2` | When the fight starts |
+| `victory` | `UI_TOAST_CHALLENGE_COMPLETE\|1.0\|1.0` | To the winner |
+| `defeat` | `ENTITY_WITHER_SPAWN\|0.4\|1.6` | To the losers, and to everyone when nobody won |
+| `expel` | `ENTITY_ENDERMAN_TELEPORT\|1.0\|1.0` | To a player sent out of a busy room |
+
+Messages are under `duel-rooms` in `messages.yml`.
+
+## Permissions
+
+| Permission | Description |
+|---|---|
+| `exyliasurvivalcore.duelrooms.admin` | `/duelroomsadmin` and every button on its screens |
+| `exyliasurvivalcore.duelrooms.bypass` | Never joins a duel and is never sent out of a room |
+
+## API
+
+`DuelRoomEndEvent` fires when a fight is decided, with the room's ID, the winner or `null`, and everyone
+who started the duel. See the [API page](/docs/exyliasurvivalcore/api).
+
+<Callout type="warning" title="Not every ended duel fires the event">
+The event fires when one fighter is left, when time runs out, and when a fight is cancelled for
+inactivity. In the last two cases the winner is `null`.
+
+It does not fire when a duel is called off during its countdown, when an admin edits or deletes the room
+mid-fight, when the server stops mid-duel, or when the border fails to go up. The event's own
+documentation mentions only the countdown case.
+</Callout>
+
+<Callout type="note" title="One message, two reasons">
+`duel-rooms.aborted` reads *"a player left before it started"*. It is also sent when the border has not
+gone up 15 seconds after the countdown ended, and the duel is called off for that reason.
+</Callout>

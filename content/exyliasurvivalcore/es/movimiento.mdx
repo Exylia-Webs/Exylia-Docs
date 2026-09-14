@@ -8,6 +8,11 @@ de acción y título, cancelada al moverse o al recibir daño, con un sonido por
 se la salta entera. Cada módulo tiene su propia copia de esos ajustes, así que un home puede ser
 instantáneo mientras un warp tarda cinco segundos.
 
+Un teletransporte que no puede ocurrir dice por qué en vez de no hacer nada. Spawn, homes, warps, TPA,
+`/back` y los portales comparten cuatro líneas de `messages.yml`: `errors.server-unreachable` (el sitio
+está en un servidor al que este no llega), `errors.world-not-loaded`, `errors.player-not-found` y
+`errors.teleport-failed`.
+
 ## Spawn
 
 `/spawn` teletransporta al spawn del servidor. `/spawn set` lo guarda, y necesita
@@ -26,6 +31,12 @@ instantáneo mientras un warp tarda cinco segundos.
 
 `/spawn` en sí no comprueba **ningún permiso**. El spawn se envía además a los clientes como waypoint
 donde estén Apollo o Feather.
+
+Cada servidor tiene **su propio** spawn. La fila lleva el nombre del servidor, así que varios servidores
+con la misma base de datos ya no se pisan unos a otros con una posición en un mundo que los demás no
+tienen. Un servidor sin fila propia lee el spawn único que escribían las versiones anteriores y guarda una
+copia con su propio nombre. Si el mundo del spawn no está cargado en ese servidor, `respawn-at-spawn` no
+toca el punto de reaparición.
 
 ## Homes
 
@@ -67,13 +78,58 @@ cruzan la red.
 | `exyliasurvivalcore.warps.bypass.cost` | El coste |
 | `exyliasurvivalcore.warps.bypass.cooldown` | El cooldown |
 
-`modules/warps/menus/warp_setup.yml` es el único editor de administración de este plugin que puedes
-personalizar sin riesgo: todos los demás viven bajo `menus/admin/` y se reescriben desde el jar.
+`exyliasurvivalcore.warps.bypass` se salta además la cuenta atrás del warp.
+
+| Ajuste | Por defecto | Qué hace |
+|---|---|---|
+| `warmup-seconds` | 3 | Cuenta atrás antes del warp |
+| `cancel-on-move`, `cancel-on-damage` | `true` | Qué la detiene |
+| `cooldown-seconds` | 0 | Segundos antes de que el mismo jugador pueda volver a usar el mismo warp. `0` lo desactiva |
+| `blacklisted-worlds` | `[]` | Mundos desde los que `/warp` se niega |
+
+El cooldown cuenta **por jugador y por warp**, y se guarda en la base de datos (`sc_warp_cooldowns`), así
+que un warp que lleva al jugador a otro servidor no le regala allí un cooldown nuevo.
+
+El coste se comprueba antes de la cuenta atrás pero **se cobra al llegar**. El dinero y el cooldown solo
+se gastan cuando el teletransporte sale bien: salirse de la cuenta atrás, un mundo que ya no está cargado
+o un servidor al que no se llega no cuestan nada ni empiezan ningún cooldown.
+
+`modules/warps/menus/warp_setup.yml` es un editor de administración que vive con los menús de jugador y no
+bajo `menus/admin/`, así que lo que cambies en él se conserva. Todo lo que hay bajo `menus/admin/` se
+reescribe desde el jar en cada arranque.
 
 ## TPA
 
 `/tpa <jugador>` pide ir hacia él; `/tpahere <jugador>` le pide que venga. `/tpaccept` y `/tpadeny`
-responden, con un nombre opcional para elegir qué petición.
+responden, con un nombre opcional para elegir qué petición. Sin nombre responden a la más reciente.
+
+`/tpacancel [jugador]` retira una petición que enviaste y que aún no tiene respuesta; sin nombre, la más
+reciente. Necesita `exyliasurvivalcore.tpa.cancel`. El autocompletado solo ofrece nombres con sentido:
+`/tpaccept` y `/tpadeny` sugieren a quienes te están esperando, y `/tpacancel` a quienes has pedido.
+
+### Entre servidores
+
+El otro jugador puede estar en cualquier servidor de la red. Para eso hacen falta los teletransportes
+entre servidores de ExyliaLib: donde no están disponibles, un jugador de otro servidor cuenta como no
+encontrado. Quien se mueve pasa al servidor del otro jugador. Un `tpa` mueve a quien lo envía y un
+`tpahere` mueve al destinatario, y la posición del otro jugador se lee al acabar la cuenta atrás, no al
+aceptar la petición.
+
+- El auto-aceptar lo deciden los ajustes del destinatario, en su propio servidor.
+- La pantalla de confirmación muestra a un jugador de otro servidor por el nombre de ese servidor. Su
+  mundo, posición, vida y comida se leen `—`.
+
+<Callout type="warning" title="Quien cambia de servidor antes de la respuesta no se mueve">
+Cada servidor guarda su propia copia de las peticiones en las que participa alguien que está en él. Quien
+envía una petición y se va a un tercer servidor mientras espera no tiene copia allí. Cuando el destinatario
+acepta, a este se le dice que se aceptó, pero nadie se mueve. El comentario del código dice que ese
+jugador "sigue recibiendo la respuesta esté donde esté". El código no lo hace.
+</Callout>
+
+La petición es un aviso centrado con botones clicables **[✔ ACCEPT]** y **[✘ DENY]**.
+`tpa.request-received` y `tpa.request-here-received` ahora son listas, una línea por entrada, y una línea
+puede empezar con `[center]`. Un `messages.yml` existente solo recibe el aviso nuevo donde la línea seguía
+siendo la de antes por defecto. Una línea que hayas reescrito sigue siendo tuya.
 
 | Ajuste | Por defecto | Qué hace |
 |---|---|---|
@@ -98,8 +154,17 @@ filas.
 | `save-on-death` | `true` |
 | `save-on-teleport` | `true` |
 | `save-on-portal` | `false` |
+| `blacklisted-worlds` | `[]` |
 
-El punto vive solo en memoria, así que un reinicio lo borra.
+Se recuerda un sitio por jugador, y se guarda en la base de datos (`sc_back`). Sobrevive a un reinicio y
+acompaña al jugador a otro servidor: el sitio del que salió en uno es el que `/back` ofrece en el
+siguiente. Deja de ofrecerse pasados `teleport.back-history-minutes` de `config.yml`, 30 por defecto.
+
+Los homes, `/back` y un TPA dentro del mismo servidor guardan el sitio solo cuando el teletransporte **sale
+bien**, así que una cuenta atrás de la que el jugador se sale no deja un `/back` apuntando a donde estaba.
+Un warp lo guarda al acabar su cuenta atrás, justo antes de moverse, y lo mismo hace un TPA que pasa al
+jugador a otro servidor. El otro servidor lee la fila en cuanto el jugador entra, así que se escribe antes
+de que se vaya.
 
 ## Teletransporte aleatorio
 
@@ -151,3 +216,52 @@ en llenarse.
 `exyliasurvivalcore.near.radius.<n>` sube el radio de un jugador, ganando el nodo más alto — pero
 `max-radius` lo sigue limitando. `distance-type` solo decide a quién se filtra; la distancia que se
 muestra es siempre horizontal.
+
+## La sección `teleport`
+
+`config.yml` tiene una sección `teleport` que se entrega a ExyliaLib al arrancar y en cada `/sc reload`.
+Guarda los valores por defecto de cualquier teletransporte que no fije los suyos, y lo que comparten los
+traspasos entre servidores.
+
+```yaml
+teleport:
+  warmup-seconds: 0.0
+  cancel-on-move: true
+  cancel-on-damage: true
+  safe-search-radius: 5
+  safe-max-attempts: 32
+  cross-server-ttl-seconds: 300
+  cross-server-settle-seconds: 0.5
+  back-history-size: 3
+  back-history-minutes: 30
+  tpa-expiry-seconds: 60
+  tpa-max-pending: 8
+  random-max-attempts: 16
+```
+
+| Clave | Rango | Qué hace aquí |
+|---|---|---|
+| `warmup-seconds` | 0 o más | La cuenta atrás de un teletransporte al que ningún módulo pone la suya. Admite decimales |
+| `cancel-on-move`, `cancel-on-damage` | — | Lo mismo, para esa cuenta atrás |
+| `cross-server-ttl-seconds` | 30–3600 | Cuánto sigue valiendo un destino en cola para otro servidor |
+| `cross-server-settle-seconds` | 0,05–5 | Cuánto espera el servidor de llegada antes de mover al jugador |
+| `back-history-minutes` | 1–1440 | Cuánto tiempo sigue ofreciendo `/back` su sitio |
+
+Los valores fuera de rango se ajustan al límite.
+
+<Callout type="warning" title="`warmup-seconds` llega a los teletransportes que debían ser instantáneos">
+Los módulos solo ponen cuenta atrás cuando la suya es mayor que cero y el jugador no tiene el nodo de
+bypass. Cualquier otro teletransporte usa este valor: un spawn, home o `/back` de un jugador con el nodo de
+bypass de ese módulo, un warp de un jugador con `exyliasurvivalcore.warps.bypass`, un spawn, home, warp,
+TPA o `/back` cuyo `warmup-seconds` propio sea `0`, un portal, y el movimiento que hace un warp **después**
+de su propia cuenta atrás. Subirlo por encima de `0` añade una segunda cuenta atrás a los warps y una
+simple, sin título ni sonido, al resto.
+</Callout>
+
+<Callout type="note" title="Seis de estas claves no cambian nada en este plugin">
+`safe-search-radius`, `safe-max-attempts`, `back-history-size`, `tpa-expiry-seconds`, `tpa-max-pending` y
+`random-max-attempts` son de los aterrizajes seguros, el historial de back, las peticiones y los
+teletransportes aleatorios propios de ExyliaLib. Ningún módulo de aquí los usa. Las peticiones de TPA
+caducan con el `request-expire-seconds` del módulo tpa, `/back` guarda un solo sitio y `/rtp` busca con su
+propio pool.
+</Callout>

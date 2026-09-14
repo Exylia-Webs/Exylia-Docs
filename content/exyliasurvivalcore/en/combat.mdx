@@ -1,6 +1,6 @@
 ---
 title: "Combat"
-description: "Kill rewards and streaks, bounties on players' heads, tracked statistics with leaderboards, and what happens on death."
+description: "Kill rewards and streaks, bounties on players' heads, tracked statistics and module counters with leaderboards, what happens on death, and graves."
 ---
 
 ## Kill rewards
@@ -10,6 +10,7 @@ Every kill can pay, and consecutive kills build a streak. Both are written in
 
 ```yaml
 on-kill:
+  money: 3
   commands: []
   killer:   { chat: "", actionbar: "", title: "", sound: "" }
   victim:   { chat: "", actionbar: "", title: "", sound: "" }
@@ -29,8 +30,18 @@ streak-end:
 `%killer%`, `%victim%`, `%streak%` and `%victim_streak%` are available throughout. Commands take a
 `console:` or `player:` prefix.
 
+`money` pays the killer in the default currency, multiplied by money boosters for `kill-rewards` (see
+[Economy](/docs/exyliasurvivalcore/economy)), and `%money%` is what was paid, after boosters. It works in
+`on-kill`, in every streak milestone and in `streak-end`. The shipped `on-kill` pays 3 this way, where it
+used to run `eco give %killer% 50`.
+
 `settings.worlds` is a whitelist — empty means every world. `settings.streak-reset-on-logout` decides
 whether a streak survives a disconnect.
+
+`/killrewardsadmin reset <player>` and `/killrewardsadmin resetbest <player>` (alias `/kra`, node
+`exyliasurvivalcore.killrewards.admin`) clear a player's current or best streak, whether they are online
+or not. Both streaks live in memory, so a restart clears them as well. The stats module's
+`best_kill_streak` is a separate, stored value and is not touched.
 
 ## Bounties
 
@@ -39,8 +50,8 @@ players can contribute to the same head, and `/bounty` lists the open ones with 
 
 | Setting | Default | What it does |
 |---|---|---|
-| `min-amount` | 100 | Smallest contribution |
-| `max-amount` | 1000000 | Largest, `-1` for unlimited |
+| `min-amount` | 25 | Smallest contribution |
+| `max-amount` | 100000 | Largest, `-1` for unlimited |
 | `max-bounties-per-placer` | 5 | How many heads one player may fund |
 | `max-target-pool` | `-1` | Ceiling on one head's total |
 | `allow-self-bounty` | `false` | Whether a player may fund their own head |
@@ -51,6 +62,10 @@ players can contribute to the same head, and `/bounty` lists the open ones with 
 | `target-bossbar-duration-seconds` | 10 | How long the boss bar shows on the target |
 
 Administrators get `/bountyadmin add`, `remove` and `clear`.
+
+Another plugin can refuse a claim through `BountyClaimEvent`, which is asked before any money moves: a
+refused claim leaves every bounty on the victim for the next kill. See
+[API](/docs/exyliasurvivalcore/api).
 
 <Callout type="warning" title="Two things on this module do not work as they read">
 `/bounty cancel` opens the same list `/bounty` does and cancels nothing — cancel a contribution from
@@ -63,23 +78,43 @@ the flag out correctly and hands it to the confirmation screen, but the shipped
 
 ## Statistics
 
-Kills, deaths, best streak and current streak are tracked per player, and `modules/stats/stats.yml`
-decides which of them are shown and ranked.
+Two kinds of number reach the stats screen. The stats module keeps four PvP values of its own — kills,
+deaths, best streak and current streak — and every module keeps **counters** of what its players do:
+blocks mined, crates opened, warps taken. `modules/stats/stats.yml` decides which of them are shown and
+ranked.
+
+The shipped file is deliberately short — the stats players compete on:
 
 ```yaml
 stats:
-  kills:            { enabled: true, type: INTERNAL, format: NUMBER, leaderboard: true,  … }
-  deaths:           { enabled: true, type: INTERNAL, format: NUMBER, leaderboard: true,  … }
-  best_kill_streak: { enabled: true, type: INTERNAL, format: NUMBER, leaderboard: true,  … }
-  current_streak:   { enabled: true, type: INTERNAL, format: NUMBER, leaderboard: false, … }
-  playtime:         { enabled: true, type: PAPI,     format: TIME,   placeholder: "%exyliasurvivalcore_playtime_millis%" }
-  kdr:              { enabled: true, type: COMPUTED, format: DECIMAL, formula: KILLS_PER_DEATH }
+  kills:              { type: INTERNAL, format: NUMBER,  leaderboard: true, … }
+  deaths:             { type: INTERNAL, format: NUMBER,  leaderboard: true, … }
+  kdr:                { type: COMPUTED, format: DECIMAL, formula: KILLS_PER_DEATH }
+  best_kill_streak:   { type: INTERNAL, format: NUMBER,  leaderboard: true, … }
+  current_streak:     { type: INTERNAL, format: NUMBER,  leaderboard: false, … }
+  duels_won:          { type: COUNTER,  counter: 'duels.wins',         format: NUMBER }
+  balance:            { type: VAULT,    format: MONEY }
+  bounties_claimed:   { type: COUNTER,  counter: 'bounties.claimed',   format: NUMBER }
+  bounties_earned:    { type: COUNTER,  counter: 'bounties.earned',    format: MONEY }
+  votes_total:        { type: COUNTER,  counter: 'votes.total',        format: NUMBER }
+  votes_best_streak:  { type: COUNTER,  counter: 'votes.best_streak',  format: NUMBER }
+  market_sold:        { type: COUNTER,  counter: 'market.sold',        format: NUMBER }
+  market_earned:      { type: COUNTER,  counter: 'market.earned',      format: MONEY }
+  blocks_mined:       { type: COUNTER,  counter: 'mines.blocks',       format: NUMBER }
+  farming_harvested:  { type: COUNTER,  counter: 'farming.harvested',  format: NUMBER }
+  crates_opened:      { type: COUNTER,  counter: 'crates.opened',      format: NUMBER }
+  missions_completed: { type: COUNTER,  counter: 'missions.completed', format: NUMBER }
+  mobs_killed:        { type: COUNTER,  counter: 'kills.mobs',         format: NUMBER }
+  playtime:           { type: PAPI,     format: TIME, placeholder: "%exyliasurvivalcore_playtime_millis%" }
 ```
+
+Every entry ships `enabled: true`, and every one except `current_streak` is ranked.
 
 | `type` | Where the number comes from |
 |---|---|
-| `INTERNAL` | One of the four counters the plugin keeps itself |
-| `COMPUTED` | A formula over other stats |
+| `INTERNAL` | One of the four PvP values the stats module keeps: `kills`, `deaths`, `best_kill_streak`, `current_streak` |
+| `COUNTER` | A module counter, named by `counter`. Left out, the stat's own id is used as the key |
+| `COMPUTED` | A formula over the PvP values |
 | `PAPI` | Any PlaceholderAPI name |
 | `VAULT` | The player's balance |
 
@@ -93,18 +128,57 @@ while still showing it on the profile.
 | Setting | Default | What it does |
 |---|---|---|
 | `leaderboard-refresh-interval` | 300 | Seconds between leaderboard rebuilds |
-| `papi-sample-interval` | 60 | Seconds between samples of a `PAPI` stat |
+| `papi-sample-interval` | 60 | Seconds between samples of a `PAPI` or `VAULT` stat |
 | `leaderboard-size` | 100 | How deep a board goes |
+| `counter-flush-interval` | 60 | Seconds between writes of the counters that changed. Anything below 5 is treated as 5 |
 
-A reload reschedules both timers with the new values.
+A reload reschedules all three timers with the new values.
 
-<Callout type="danger" title="`/stats` does not exist at runtime">
-The command class is registered but its method is missing the annotation that makes it a command, so
-nothing is added to the server. `exyliasurvivalcore.stats` and `exyliasurvivalcore.stats.others` are
-therefore unreachable.
+### Counters
+
+A counter exists the moment a module counts it; nothing has to be declared.
+`%exyliasurvivalcore_stats_counter_<key>%` reads any counter by its key, as a plain number, whether or
+not `stats.yml` lists it — `%exyliasurvivalcore_stats_counter_mines.blocks%`, for instance. A `COUNTER`
+block is only what puts it on the stats screen and gives it a leaderboard. Missions and seasons read the
+same counters: see [Missions and seasons](/docs/exyliasurvivalcore/missions-and-seasons).
+
+| Module | Counters |
+|---|---|
+| Stats (PvP) | `kills.players`, `kills.mobs`, `kills.mob.<type>`, `deaths.total` |
+| Bounties | `bounties.claimed`, `bounties.earned`, `bounties.lost` |
+| Duel rooms | `duels.played`, `duels.wins`, `duels.<room>.played` |
+| Graves | `graves.created`, `graves.collected`, `graves.looted` |
+| Rankup, playtime rewards, farming, reclaim | `rankup.ranks`, `playtime.rewards`, `farming.harvested`, `farming.<category>.harvested`, `reclaim.claimed`, `reclaim.<section>.claimed` |
+| Kits, crates, loot chests | `kits.claimed`, `kits.<kit>.claimed`, `crates.opened`, `crates.<crate>.opened`, `lootchests.opened`, `lootchests.<chest>.opened` |
+| Mines | `mines.blocks`, `mines.<mine>.blocks` |
+| Warps, homes, spawn, back, tpa, rtp | `warps.used`, `warps.<warp>.used`, `homes.teleports`, `homes.created`, `homes.deleted`, `spawn.teleports`, `back.used`, `tpa.teleports`, `rtp.used`, `rtp.<id>.used` |
+| Portals, jump pads, power-ups, AFK zones | `portals.used`, `portals.<portal>.used`, `jumpads.used`, `jumpads.<jumpad>.used`, `powerups.picked`, `powerups.<powerup>.picked`, `afkzones.rewards`, `afkzones.<zone>.rewards` |
+| Repair | `repair.items` |
+| Missions | `missions.completed`, `missions.<pool>.completed`, `missions.earned` |
+| Rewards, votes | `rewards.claimed`, `votes.total`, `votes.<service>`, `votes.best_streak` |
+| Market, auctions, orders, trade | `market.listed`, `market.sold`, `market.bought`, `market.earned`, `market.spent`, `auctions.listed`, `auctions.bids`, `auctions.won`, `auctions.spent`, `auctions.sold`, `auctions.earned`, `orders.placed`, `orders.filled`, `orders.received`, `orders.earned`, `trade.completed` |
+| Sell wands | `sellwands.uses`, `sellwands.items`, `autosell.items` |
+| Protections | `protections.created`, `protections.upgrades`, `protections.raids`, `protections.lives_lost`, `protections.bans`, `protections.bought`, `protections.sold`, `protections.rented`, `protections.warp_visits` |
+
+Keys are lower-cased, and one longer than 100 characters is ignored rather than cut short. Money
+counters — `.earned`, `.spent` — add whole units. `votes.best_streak` is a best, not a sum: it keeps the
+highest streak seen. The list in the shipped `stats.yml` header covers most of these but not all; this
+table follows the code.
+
+Counting happens in memory. Changed counters are written every `counter-flush-interval` seconds, when a
+player leaves and on shutdown, so a crash can lose at most that interval. While the stats module is off
+nothing is counted, and what would have been is not kept for later.
+
+<Callout type="danger" title="`/stats` still does not exist at runtime">
+The command was rewritten to open anybody's stats, including a player who is offline — their PvP
+values, their counters, and the last sample of their `PAPI` and `VAULT` stats — but its method still
+carries none of the annotations that make Lamp register a command, so nothing is added to the server.
+`exyliasurvivalcore.stats` and `exyliasurvivalcore.stats.others` are therefore unreachable, and so is
+looking at another player's stats.
 
 The screens themselves work: bind `survivalcore:stats_open` to a button in any menu, an NPC or a
-hotbar item and the profile and its leaderboards open normally.
+hotbar item and the viewer's own profile and its leaderboards open normally. Leaderboards include
+offline players.
 </Callout>
 
 ## Death
@@ -118,3 +192,71 @@ The death module is three settings.
 | `custom-messages` | `true` | The death line comes from `messages.yml` rather than vanilla |
 
 The death broadcast is one of the seven that respect a player's `/settings` preferences.
+
+When the graves module makes a grave, the drops go into it first and the death module finds nothing
+left to scatter.
+
+## Graves
+
+A player who dies leaves a grave where they fell: a player head with their face on it, floating text
+with a countdown, and everything they dropped inside. One click on the head — left or right, main hand —
+collects all of it. There is no window onto a grave.
+
+The module is on by default. Its settings are in `modules/graves/config.yml`.
+
+| Setting | Default | What it does |
+|---|---|---|
+| `settings.expire-minutes` | 60 | How long a grave stands. `-1` — or `0` — keeps it until it is collected |
+| `settings.on-expire` | `DROP` | What an expired grave does with its items: `DROP` them where it stood, or `DELETE` them. Anything other than `DELETE` drops |
+| `settings.protect-minutes` | 15 | How long only the owner may open it. `0` opens it to everybody from the start, `-1` keeps it the owner's for good |
+| `settings.killer-can-loot` | `true` | Whether the player who made the kill may open it during protection |
+| `settings.keep-experience` | `true` | Whether the experience that would have dropped goes into the grave and back to whoever collects it |
+| `settings.max-graves-per-player` | 5 | Graves one player may have standing. Dying with this many drops the oldest one's items where it stands. `-1` is no limit |
+| `settings.blacklisted-worlds` | `[]` | Worlds, by name, where nobody gets a grave |
+| `settings.allow-teleport` | `false` | Whether `/graves` lets a player teleport to one of theirs |
+| `settings.teleport-cost` | 0.0 | What that teleport costs. `0` is free |
+| `hologram.enabled` | `true` | Floating text above the grave |
+| `hologram.offset` | 1.4 | How far above the block |
+| `hologram.lines` | three lines | `%player%` whose grave, `%items%` how many stacks, `%time_left%` until it expires, `%protection%` who may open it |
+| `sounds.created` | `BLOCK_BELL_RESONATE\|0.8\|0.6` | Played to the owner when the grave is made |
+| `sounds.collected` | `BLOCK_CHEST_OPEN\|1.0\|1.2` | Played to whoever collects it |
+
+`%protection%` reads "Anybody can open it", "Only the owner can open it", or "Protected » " followed by
+the time left; the three lines are `hologram-open`, `hologram-protected` and `hologram-protected-for` in
+the `graves` section of `messages.yml`. The countdowns tick every second, and expired graves are swept
+on the same timer.
+
+### When a grave is made
+
+- Not when the world keeps inventories, not in a blacklisted world, and not when there is nothing to
+  keep — no items and no experience.
+- The head goes in the block the player died in when it is air, water, lava, grass, fern, snow or
+  seagrass; otherwise the first such block up to six above. With no room at all there is no grave and
+  the drops fall as they would have.
+- The block the head replaced is put back when the grave goes.
+- If the grave cannot be stored, its items and experience drop on the spot instead.
+
+A grave cannot be broken, and explosions and pistons leave it alone.
+
+### Collecting
+
+The owner can always open their grave. During protection, so can the killer when `killer-can-loot` is
+on; anybody else is told whose grave it is and how long until it opens. Once protection is over, anyone
+can take it — the owner's message says "Grave collected", anyone else's says they looted it.
+
+Items go into the collector's inventory. What does not fit is kept in ExyliaLib's pending-reward table
+and handed over the next time they join. The experience is given with the items.
+
+Two players clicking the same grave in the same tick, or a grave expiring while it is being opened, get
+exactly one winner: taking a grave is deleting its row, and only whoever removed it gets the items.
+
+### `/graves`
+
+`/graves` (alias `/grave`, node `exyliasurvivalcore.graves`) lists a player's own graves in
+`modules/graves/menus/graves.yml`: where each one is, what is inside, how long ago they died, how long it
+has left and who may open it. A player with none is told so and no menu opens. With `allow-teleport`
+on, clicking a grave charges `teleport-cost` and takes them to it; with a cost above 0 and no economy
+available, the teleport is refused. The menu can also be opened with the `survivalcore:graves_open`
+action.
+
+When several servers share one database, a grave is loaded only on the server it was made on.

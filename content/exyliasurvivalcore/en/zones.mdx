@@ -6,6 +6,10 @@ description: "Mines that reset, zones rebuilt from schematics, AFK zones that pa
 Six modules turn a region of the world into something. All six are built from admin menus and stored in
 the database.
 
+Mines, regenerating zones, AFK zones, jump pads and power-up zones record the server that created them.
+On a network whose servers share one database, each server loads and lists only its own. A row written
+before the server was recorded belongs to every server that reads it. Portals do not record a server.
+
 ## Mines
 
 A mine is a region that comes back. There are two kinds, and you pick which when you create it.
@@ -33,12 +37,37 @@ through as it is mined, each with its own regeneration time, loot and effects. `
 
 `default-realistic-regen-seconds` is 60.
 
+Every block still broken when the module starts is **healed at once**, whatever time it had left. A
+restart does not resume the timers. A block whose chunk is not loaded stays tracked and is retried every
+10 seconds until the chunk loads; its row is only deleted once the block is back. Rows for a mine this
+server does not know are left alone, since on a shared database that mine belongs to another server.
+
 Both kinds share: an entry teleport, a permission, auto-pickup — mined blocks go straight to the
 inventory — restrict-breaking, which stops anything not in the mine's own list from being broken, and
 break effects.
 
-`visuals` carries the reset warning title, the reset boss bar, the entry title and the action bar, with
-`%mine_name%`, `%seconds%`, `%next_reset%` and `%time%`.
+`visuals` carries the reset warning title, the reset boss bar, the entry title and the "next reset" bar,
+with `%mine_name%`, `%seconds%`, `%next_reset%` and `%time%`.
+
+The "next reset" readout inside a classic mine is a **boss bar**, `visuals.bossbar`, no longer an action bar.
+It empties as the reset comes closer and gives way to the reset countdown bar for the warning seconds. An
+existing `modules/mines/config.yml` keeps its text: `visuals.actionbar.text` is moved to
+`visuals.bossbar.text`.
+
+### Breaking a block in a mine
+
+A break the mine owns is performed by the plugin, not by the game:
+
+- Experience goes **straight to the miner**, Mending included, instead of dropping an orb.
+- The tool takes damage through the server's own path, so Unbreaking applies, `PlayerItemDamageEvent` fires
+  and the tool breaks with its sound.
+- Each drop and each loot item is offered to autosell first, for a player who has it on. See
+  [Economy](/docs/exyliasurvivalcore/economy).
+
+Other plugins' tools break mine blocks through the same path. A 3x3 pickaxe calling
+`breakMineBlock` in the [API](/docs/exyliasurvivalcore/api) gets the mine's permission check, its loot and its
+regeneration on all nine blocks. A `MineBlockBreakEvent` is fired before every such break, and cancelling
+it leaves the block alone.
 
 ## Regenerating zones
 
@@ -58,6 +87,26 @@ The warning applies to `FIXED` only.
 The flags screen is ExyliaLib's region policies, one row per flag, cycling **allow → deny → default**.
 Two extra keys sit alongside them: an allowed-blocks list, and a seconds value for temporary blocks.
 
+ExyliaLib only resolves the flags; this plugin is what enforces them, in every region it registers. A player
+in creative mode is held by none of them.
+
+| Flag | What it covers |
+|---|---|
+| `PVP` | Combat between players, checked where both the attacker and the victim stand |
+| `BUILD`, `BREAK` | Placing and breaking blocks |
+| `INTERACT` | Using blocks and entities |
+| `PLAYER_BUILD_ONLY` | Only blocks a player placed may be broken |
+| `ALLOWED_BLOCKS_ONLY`, `BREAKABLE_BLOCKS_ONLY` | Only the materials on the list may be placed, or broken. When on, the list alone decides |
+| `TEMPORARY_BLOCKS` | Placed blocks disappear after the seconds value |
+| `RE_GIVE_BLOCKS` | A temporary block is given back when it goes |
+| `REGION_MEMBERS_ONLY` | These regions have no members, so nobody may build or use blocks |
+| `ENTRY`, `EXIT` | Walking in or out, ender pearls, chorus fruit and typed commands included. A teleport run by a plugin passes |
+| `ITEM_DROP`, `ITEM_PICKUP` | Dropping and picking up items |
+| `FALL_DAMAGE` | Taking fall damage |
+| `KEEP_INVENTORY` | A player dying inside keeps their items and levels and drops nothing. This one is ExyliaSurvivalCore's own |
+
+The temporary-blocks seconds only reach ExyliaLib while `TEMPORARY_BLOCKS` is on.
+
 <Callout type="warning" title="No FastAsyncWorldEdit schematics means no regeneration">
 If schematic support is not usable the plugin logs `Regen zones are off: <reason>` once at boot. The
 module still enables and the menus still work — but a regeneration silently does nothing.
@@ -75,8 +124,10 @@ Each zone has its own interval and its own reward list. `visuals` covers the bos
 the reward title, the action bar, and the two lines of the summary a player gets when they leave, with
 `%zone_name%`, `%time_in_zone%`, `%next_reward%`, `%amount%` and `%reward_name%`.
 
-Item rewards are no longer dropped on the floor when the inventory is full: the player is told once with
-`afk-zones.inventory-full` and the reward is held back.
+Item rewards are never dropped on the floor. On the first interval after a player's inventory fills up,
+they are told with `afk-zones.inventory-full`, and that round's items are kept for them and handed over on
+their next join. Every interval after that skips the item rewards until they make room. Money, commands,
+experience and messages need no room and are always paid.
 
 <Callout type="note" title="There is no bare `/afkzone`">
 Only `/afkzone preview <id>` exists. `/afkzone` on its own prints the command framework's usage line.
@@ -87,8 +138,31 @@ Only `/afkzone preview <id>` exists. `/afkzone` on its own prints the command fr
 A region that teleports whoever walks into it, or runs commands on them, or both. Built from
 `/portalsadmin`.
 
-This module has no configuration file at all — a portal is a region, a destination and a command list,
-and all three live in the database.
+A portal is a region, a destination and a command list, stored in the database. The setup screen adds
+three more things:
+
+| Per-portal field | What it does |
+|---|---|
+| Name | What the entry title shows. Typed in when clicked; a portal with no name shows its id |
+| State | A disabled portal stays where it is and does nothing |
+| Permission | The node a player needs. Left-click to type one, right-click to clear it. Anybody without it is told `portals.no-permission` and is not taken |
+
+`modules/portals/config.yml` holds what every portal shares:
+
+```yaml
+settings:
+  cooldown-seconds: 2
+effects:
+  enter-sound: "BLOCK_PORTAL_TRAVEL|0.4|1.6"
+  enter-title: { … }   # %portal% is the portal's name
+```
+
+`cooldown-seconds` is how long the **same** portal waits before it takes the same player again, which is
+what stops two portals pointed at each other bouncing somebody back and forth. `0` turns it off. The wait
+is kept in memory and cleared when the player leaves.
+
+A portal whose destination cannot be reached tells the player why, with the teleport lines described in
+[Movement](/docs/exyliasurvivalcore/movement).
 
 ## Jump pads
 
@@ -138,8 +212,4 @@ The floating items are drawn packet-level through PacketEvents, which is why it 
 <Callout type="note" title="`modules/powerups/config.yml` has no comments">
 It is the one generated file with no explanation in it — sixteen bare keys. The table above is what
 they mean.
-</Callout>
-
-<Callout type="warning" title="`/powerupsadmin` says nothing when the module is off">
-Every other admin command answers with `errors.module-disabled`. This one just does nothing.
 </Callout>

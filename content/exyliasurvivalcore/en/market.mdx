@@ -1,0 +1,362 @@
+---
+title: "Market, auctions and orders"
+description: "Player listings at a fixed price, an auction house with held bids and anti-snipe, and buy orders paid up front that anybody can fill."
+---
+
+Three modules let players trade with each other without meeting. The **market** sells at a price the
+seller sets, the **auction house** sells to whoever bids highest, and **orders** turn it round: a
+buyer pays first and sellers fill the order.
+
+Each one has its own switch under `modules` in `config.yml` (`market`, `auctions`, `orders`), and all
+three are on by default. Each needs an economy. Without one the module still loads, logs a warning, and
+refuses every sale, bid and order.
+
+## What the three share
+
+**Any currency.** A price can be in any currency registered on the server, with the default one listed
+first. When a player leaves the currency out of a command and there is more than one, a picker opens
+(`menus/currency_select.yml`). With a single currency nobody is asked. Currencies themselves are
+covered on [Economy](/docs/exyliasurvivalcore/economy).
+
+**The item leaves the hand.** Listing or auctioning takes the whole stack in the main hand at once. If
+the database write fails, the stack and the fee come back.
+
+**Delivery never drops anything.** Items handed out by these modules (a purchase, an auction won, an
+expired listing, a delivered order) go through the plugin's reward store. Anything that does not fit in
+the inventory, and anything owed to a player who is offline, is kept and handed over on their next
+join.
+
+**Limits come from permissions.** The configured per-player limit applies unless the player holds a
+numbered permission, in which case the highest number they hold wins. A configured limit of `0` or
+less means no limit, and the menus then show `∞`.
+
+| Limit | Permission |
+|---|---|
+| Market listings | `exyliasurvivalcore.market.listings.<number>` |
+| Running auctions | `exyliasurvivalcore.auctions.limit.<number>` |
+| Open orders | `exyliasurvivalcore.orders.limit.<number>` |
+
+**Fees and taxes are percentages.** They are rounded to two decimals and then to the currency's own
+precision. Prices in the settings (`min-price`, `max-price`, `broadcast-above`) are plain numbers,
+compared against the price in whichever currency it was set in.
+
+**Announcements are in the default currency only.** A market sale or an auction won at or above
+`broadcast-above` is announced to the server only when it was priced in the default currency, since
+100 gems and 100 coins are not the same amount. Each player can turn market and auction announcements
+off in `/settings`. See [Quality of life](/docs/exyliasurvivalcore/quality-of-life).
+
+## Market
+
+| Command | What it does |
+|---|---|
+| `/market`, `/ah` | Opens the board |
+| `/market sell <price> [currency]` | Lists the stack in your hand |
+| `/market mine`, `/market listings` | Your own listings |
+| `/marketadmin remove <id>`, `/ahadmin` | Takes one listing down and returns it to its seller |
+| `/marketadmin clear <player>` | Takes down everything a player has up |
+
+`exyliasurvivalcore.market` opens the market, `exyliasurvivalcore.market.sell` is needed to list, and
+`exyliasurvivalcore.market.admin` covers `/marketadmin`. The admin commands run from a player only,
+not the console.
+
+### Listing
+
+Hold the item and use `/market sell`, or press **Sell what you hold** on the board or on your listings.
+The button asks for the currency, then for the price in chat.
+
+A listing is refused when the material is in `blocked-materials`, when the item is damaged and
+`allow-damaged-items` is off, when the price is outside `min-price` and `max-price`, or when the
+player is at their limit. The **listing fee** is then charged: a percentage of the asking price. It
+is not refunded when the listing expires or is cancelled, which is what stops the market being used
+as free storage.
+
+### Buying
+
+Clicking a listing opens a confirmation showing the total, the price per item, the currency, and the
+buyer's balance before and after. Confirming takes the money first and then claims the listing. If
+somebody else got there first, the money goes straight back.
+
+The seller is paid the price minus `sales-tax-percent`, online or not, and the stack is delivered to
+the buyer. `allow-self-purchase` is off by default: cancelling is how you take your own listing back.
+
+### Expiry and cancelling
+
+A listing lasts `listing-hours`. `0` or less means it never expires. Expired listings disappear from
+the board and can no longer be bought. A check every minute sends them back to the seller, who is told
+if they are online. Listings that ran out while the server was down go back the same way once it
+starts.
+
+Clicking a listing in **My listings** takes it back.
+
+### Looking inside
+
+A shulker box or bundle with something in it is drawn with its own template. **Shift-click** it on the
+board or in your listings, or use **Look inside** on the confirmation, to open it. A box inside the box
+opens the same way, and **Back** climbs out one level at a time. The screen shows a copy, so nothing
+in it can be taken, and looking buys nothing. `preview.container-hint` is the lore added to a container
+drawn inside the preview, with `%items%`.
+
+Every listing's lore also describes the stack: its size, how many items are inside it, its
+enchantments (including those stored in an enchanted book) and, when the shop module buys that item,
+what the shop pays for one.
+
+### The board
+
+**Search** filters by material, seller name or item name, up to 32 characters. Right-click clears it.
+**Order** steps through newest first, cheapest first and most expensive first. Search and order are
+forgotten when the player leaves.
+
+| Setting | Default | What it does |
+|---|---|---|
+| `max-listings-per-player` | 5 | Listings one player may have up |
+| `min-price` | 1.0 | Lowest asking price |
+| `max-price` | -1.0 | Highest asking price. `-1` is no ceiling |
+| `listing-hours` | 48 | How long a listing stays up |
+| `listing-fee-percent` | 2.0 | Charged when listing, never refunded |
+| `sales-tax-percent` | 5.0 | Taken from the seller's payout |
+| `allow-self-purchase` | `false` | Whether a player may buy their own listing |
+| `broadcast-above` | 100000.0 | Announce a sale at or above this. `-1` never |
+| `blocked-materials` | `BEDROCK`, `COMMAND_BLOCK`, `BARRIER`, `STRUCTURE_BLOCK` | Never listable |
+| `allow-damaged-items` | `true` | Whether damaged tools and armour may be listed |
+
+These live under `settings` in `modules/market/config.yml`. `sounds` sets `listed`, `bought`, `sold`
+and `cancelled`.
+
+| Placeholder | Value |
+|---|---|
+| `%exyliasurvivalcore_market_listings%` | Listings up on the server |
+| `%exyliasurvivalcore_market_value%` | The asking prices of every listing, added up |
+| `%exyliasurvivalcore_market_mine%` | Listings the reader has up |
+
+<Callout type="note" title="Totals mix currencies">
+`%exyliasurvivalcore_market_value%` and the **Worth** line in My listings add every price together,
+whatever currency each one is in, and format the sum as money in the default currency. On a server
+with one currency the figure is exact.
+</Callout>
+
+## Auctions
+
+| Command | What it does |
+|---|---|
+| `/auction`, `/auctions` | Opens the auction house |
+| `/auction sell <start> [hours] [buyout] [currency]` | Auctions the stack in your hand |
+| `/auction mine`, `/auction selling` | Your own auctions |
+| `/auctionadmin remove <id>`, `/auctionsadmin` | Takes one auction down |
+| `/auctionadmin clear <player>` | Takes down everything a player is running |
+
+`exyliasurvivalcore.auctions` opens the auction house, `exyliasurvivalcore.auctions.sell` is needed to
+sell, and `exyliasurvivalcore.auctions.admin` covers `/auctionadmin`, which runs from a player only.
+
+### Opening an auction
+
+In the command, hours come before the buyout. Leaving the hours out uses `default-hours`, and a buyout
+of `0` means no buyout. **Auction what you hold** asks for the currency, then opens a form with the
+starting price, an optional buy-it-now price and the hours.
+
+An auction is refused when the material is blocked, the item is damaged and `allow-damaged-items` is
+off, the start is below `min-start-price`, the buyout is not above the start, the hours fall outside
+`min-hours` and `max-hours`, or the player is at their limit. The fee is a percentage of the
+**starting** price and is not refunded, even if nobody bids.
+
+### Bidding
+
+The first bid must be at least the starting price. After that, each bid must beat the top bid by
+`min-bid-increment-percent` of it or by `min-bid-increment`, whichever is more.
+
+Clicking an auction opens the bid screen:
+
+- **Bid** places exactly the next valid bid.
+- **Bid another amount** takes a typed amount, from the next valid bid up to the buyout.
+- **Buy it now** appears only when the auction has a buyout.
+
+A bid is **held**. The money leaves the bidder when the bid is placed and stays with the auction. When
+somebody outbids them, it goes straight back, whether they are online or not. Raising your own top bid
+works the same way: the old amount comes back and the new one is held. Nobody can bid on their own
+auction.
+
+A bid that reaches the buyout price counts as a buyout, and the buyer pays the buyout price.
+
+### Anti-snipe
+
+A bid placed with less than `anti-snipe-seconds` left pushes the end back to that many seconds from
+the bid, so the last word does not go to whoever clicked last. `0` turns it off.
+
+### How an auction ends
+
+Auctions are checked every second.
+
+| Ending | Item | Money |
+|---|---|---|
+| Time runs out with bids | To the top bidder | Top bid to the seller, minus `sales-tax-percent` |
+| Time runs out with no bids | Back to the seller | Nothing, and the fee stays spent |
+| Buyout | To the buyer | Buyout price to the seller, minus tax; the top bid goes back to its bidder |
+| Seller cancels | Back to the seller | Only allowed while nobody has bid |
+| Staff remove it | Back to the seller | The top bid goes back to its bidder |
+
+Items go to the winner through the reward store, so a winner who is offline receives them on their
+next join.
+
+### The board
+
+An auction is drawn in one of three templates in `modules/auctions/menus/auctions.yml`: `item` for one
+you can bid on, `leading` for one you are winning, and `mine` for your own, which opens My auctions
+when clicked. **Sort** steps through ending soonest (the default), newest, cheapest and most expensive,
+by current price. **Search** works as on the market. The lore shows what is inside a shulker box or
+bundle, but auctions have no look-inside screen.
+
+| Setting | Default | What it does |
+|---|---|---|
+| `max-auctions-per-player` | 3 | Auctions one player may run at a time |
+| `min-start-price` | 1.0 | Lowest starting price |
+| `min-bid-increment-percent` | 5.0 | A new bid must beat the top one by this share of it… |
+| `min-bid-increment` | 1.0 | …or by this much, whichever is more |
+| `min-hours` | 1 | Shortest auction |
+| `max-hours` | 72 | Longest auction |
+| `default-hours` | 24 | Used when the seller does not say |
+| `anti-snipe-seconds` | 30 | See above. `0` is off |
+| `listing-fee-percent` | 2.0 | Of the starting price, never refunded |
+| `sales-tax-percent` | 5.0 | Of the winning bid |
+| `broadcast-above` | 100000.0 | Announce a win at or above this. `-1` never |
+| `blocked-materials` | `BEDROCK`, `COMMAND_BLOCK`, `BARRIER`, `STRUCTURE_BLOCK` | Never auctionable |
+| `allow-damaged-items` | `true` | Whether damaged items may be auctioned |
+
+These live under `settings` in `modules/auctions/config.yml`. `sounds` sets `listed`, `bid`, `outbid`,
+`won`, `sold` and `cancelled`.
+
+| Placeholder | Value |
+|---|---|
+| `%exyliasurvivalcore_auctions_running%` | Auctions running on the server |
+| `%exyliasurvivalcore_auctions_mine%` | Auctions the reader is running |
+| `%exyliasurvivalcore_auctions_leading%` | Auctions the reader is currently winning |
+
+## Orders
+
+| Command | What it does |
+|---|---|
+| `/orders`, `/order` | Opens the board of open orders |
+| `/orders create <amount> <price> [currency]` | Orders more of what you are holding |
+| `/orders mine` | Your orders, and what has arrived for them |
+| `/ordersadmin cancel <id>`, `/ordersa` | Closes somebody's order and refunds them |
+
+`exyliasurvivalcore.orders` opens orders, `exyliasurvivalcore.orders.create` is needed to place one,
+and `exyliasurvivalcore.orders.admin` covers `/ordersadmin`.
+
+### Placing an order
+
+Hold **one** of the item you want. It becomes the order's template: sellers must deliver items that
+match it exactly, with the same name, enchantments and other data. The amount is how many units you
+want, from 1 to `max-amount`, and **the price is for all of them**. **Order what you hold** asks for
+the amount, the currency and then the price.
+
+The full price plus `creation-fee-percent` is taken **up front**. The fee is never refunded. Blocked
+materials cannot be ordered, and neither can damaged items; orders have no setting to allow them.
+Only orders still taking items count towards the limit, so a finished order waiting to be collected
+does not.
+
+### Filling an order
+
+Anybody can sell into an open order, and the buyer does not need to be online. The board lists open
+orders with the best price per unit first. Clicking one shows how many matching items you carry, how
+many will be sold and what you will earn. Confirming takes them from your inventory and hotbar (not
+the off-hand, armour slots or containers), up to what the order still needs, and pays you at once
+minus `sales-tax-percent`.
+
+A seller is paid for the units they deliver, as that share of the total rounded down. The last unit
+settles the remainder, so the partial payments always add up to exactly the order's price. If the
+order filled up or closed while you were confirming, the items it no longer needs come back to you.
+
+`allow-self-fill` is off by default.
+
+### Collecting, closing and expiry
+
+Delivered items wait in the order. In **My orders**, left-clicking an order collects as many as fit in
+your inventory, and the rest stay ready for later. Right-clicking closes the order: no more items are
+taken, the part of the price not yet paid to sellers is refunded, and anything already delivered can
+still be collected.
+
+An order lasts `order-hours`. `0` or less means it never expires. Every minute, expired orders are
+closed and refunded the same way, and the buyer is told if they are online. An order is deleted once
+it is closed or complete and nothing is left to collect.
+
+| Status | Meaning |
+|---|---|
+| Taking items | Open |
+| Complete | Everything asked for has arrived |
+| Ran out | Expired, not yet closed by the minute check |
+| Closed | Cancelled or expired, and refunded |
+
+| Setting | Default | What it does |
+|---|---|---|
+| `max-orders-per-player` | 5 | Open orders one player may have |
+| `max-amount` | 2304 | Most units one order may ask for |
+| `min-price` | 1.0 | Lowest total price |
+| `max-price` | -1.0 | Highest total price. `-1` is no ceiling |
+| `order-hours` | 72 | How long an order takes items |
+| `creation-fee-percent` | 1.0 | Charged on top of the price, never refunded |
+| `sales-tax-percent` | 5.0 | Taken from what a seller is paid |
+| `allow-self-fill` | `false` | Whether a player may sell into their own order |
+| `blocked-materials` | `BEDROCK`, `COMMAND_BLOCK`, `BARRIER`, `STRUCTURE_BLOCK`, `SPAWNER` | Never orderable |
+
+These live under `settings` in `modules/orders/config.yml`.
+
+| Placeholder | Value |
+|---|---|
+| `%exyliasurvivalcore_orders_mine%` | The reader's orders still taking items |
+| `%exyliasurvivalcore_orders_ready%` | Items delivered to the reader and not collected yet |
+| `%exyliasurvivalcore_orders_open_total%` | Orders taking items on the server |
+
+## Across servers
+
+Orders are built for several servers sharing one database. Every change to an order holds a lock row
+that exactly one server can take at a time, and reads the order fresh from the database. Other servers
+refresh their copy when an order changes. A player who hits an order another server is changing sees
+*"Somebody else is using that order right now"* after about two seconds of retries.
+
+<Callout type="warning" title="Run the market and the auction house on one server">
+The market and the auction house read their rows once, when the module starts, and never hear about
+changes made on another server. A listing or auction can still end only once, because ending one
+deletes its row and only the server whose delete succeeds settles it. What goes wrong is everything
+else: a listing put up on one server is not visible on another until that server restarts, and two
+bids on the same auction from two servers each rewrite the whole row, so one bid overwrites the other
+and the overwritten bid is never refunded.
+</Callout>
+
+## Menus
+
+| File | Screen |
+|---|---|
+| `modules/market/menus/market.yml` | The board |
+| `modules/market/menus/my_listings.yml` | Your listings |
+| `modules/market/menus/confirm.yml` | Purchase confirmation |
+| `modules/market/menus/preview.yml` | Inside a shulker box or bundle |
+| `modules/auctions/menus/auctions.yml` | The auction house |
+| `modules/auctions/menus/my_auctions.yml` | Your auctions |
+| `modules/auctions/menus/bid.yml` | Bid, custom bid and buy it now |
+| `modules/orders/menus/orders.yml` | Open orders |
+| `modules/orders/menus/my_orders.yml` | Your orders |
+| `modules/orders/menus/fill.yml` | Selling into an order |
+
+<Callout type="note" title="Admin commands need an id nobody is shown">
+`/marketadmin remove`, `/auctionadmin remove` and `/ordersadmin cancel` take the row's id, a UUID. No
+menu, message or tab completion shows it, so it has to come from the database: `sc_market_listings`,
+`sc_auctions` or `sc_orders`. `clear <player>` needs no id.
+</Callout>
+
+## In the ledger and the stat counters
+
+Every movement of money carries a reason in the economy ledger:
+
+| Module | Reasons |
+|---|---|
+| Market | `market:fee`, `market:fee-refund`, `market:buy`, `market:refund`, `market:sale` |
+| Auctions | `auctions:fee`, `auctions:fee-refund`, `auctions:bid`, `auctions:bid-refund`, `auctions:outbid`, `auctions:buyout`, `auctions:buyout-refund`, `auctions:sale`, `auctions:cancel-refund` |
+| Orders | `orders:place`, `orders:place-refund`, `orders:fill`, `orders:refund` |
+
+They also feed the stat counters that [missions and seasons](/docs/exyliasurvivalcore/missions-and-seasons)
+measure:
+
+| Module | Counters |
+|---|---|
+| Market | `market.listed`, `market.bought`, `market.spent`, `market.<currency>.spent`, `market.sold`, `market.earned`, `market.<currency>.earned` |
+| Auctions | `auctions.listed`, `auctions.bids`, `auctions.won`, `auctions.spent`, `auctions.sold`, `auctions.earned` |
+| Orders | `orders.placed`, `orders.filled`, `orders.earned`, `orders.received` |

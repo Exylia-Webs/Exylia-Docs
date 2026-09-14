@@ -1,0 +1,230 @@
+---
+title: "Administrar protecciones"
+description: "El menú de administración de protecciones, el editor de tiers en el juego, importar ProtectionStones, retirar terreno inactivo, funcionar con o sin WorldGuard y los permisos."
+---
+
+Lo que solo hace el staff con las [protecciones](/docs/exyliasurvivalcore/protecciones): encontrar
+cualquier protección de la red y arreglarla, editar tiers sin tocar el archivo, traer las regiones de
+ProtectionStones y limpiar el terreno donde ya no juega nadie. Todos los menús y comandos de esta página
+necesitan `exyliasurvivalcore.protections.admin`.
+
+## Permisos
+
+No se declara nada en `plugin.yml`, así que ningún permiso tiene valor por defecto: hay que concederlos.
+Los operadores pasan todas las comprobaciones, con la excepción que se explica abajo.
+
+| Permiso | Qué concede |
+|---|---|
+| `exyliasurvivalcore.protections` | `/protections` y todos los subcomandos de jugador |
+| `exyliasurvivalcore.protections.select` | Proteger terreno por selección, mientras `selection.enabled` esté encendido |
+| `exyliasurvivalcore.protections.limit.<n>` | Tener hasta `n` protecciones. Cuenta el más alto; sin ninguno, `settings.default-limit` (3) |
+| `exyliasurvivalcore.protections.bypass` | Romper, colocar y usar cualquier cosa en todas las protecciones, y entrar en todas. Solo cuando está puesto explícitamente |
+| `exyliasurvivalcore.protections.admin` | Los comandos y menús de administración; entrar en todas las protecciones; contar como dueño de todas en los menús y comandos |
+
+Hay dos más que escribes tú: el `permission` de un tier, necesario para colocar y comprar su núcleo, y el
+`permission` de un nivel de mejora, necesario para alcanzarlo.
+
+<Callout type="warning" title="Admin no es bypass">
+`exyliasurvivalcore.protections.admin` cuenta como dueño, así que a un admin que rompe el núcleo de otro
+se le ofrece recogerlo, y se queda el objeto. No le deja romper ni colocar un solo bloque dentro. Eso lo
+hace `exyliasurvivalcore.protections.bypass`, y solo cuando el permiso está **puesto** en el jugador: un
+operador pasa la comprobación de admin y aun así no construye donde no es miembro.
+</Callout>
+
+## Comandos
+
+| Comando | Qué hace |
+|---|---|
+| `/protections admin` | El menú de administración |
+| `/protections admin give <jugador> <tier> [cantidad]` | Dar núcleos de un tier, de 1 a 64 |
+| `/protections admin migrate <INTERNAL\|WORLDGUARD>` | Cambiar el backend, escribirlo en la configuración y trasladar todas las regiones de este servidor |
+| `/protections admin import protectionstones [--dry-run]` | Convertir regiones de ProtectionStones en protecciones |
+| `/protections admin cleanup <días> [preview\|confirm] [--include-unknown]` | Retirar las protecciones donde nadie ha jugado en esos días |
+
+`give` y `migrate`, `import` y `cleanup` también funcionan desde la consola.
+
+## El menú de administración
+
+`/protections admin` lista todas las protecciones de la red, ordenadas por dueño y luego por nombre. Cinco
+filtros la acotan:
+
+| Filtro | Cómo se fija |
+|---|---|
+| Dueño | Se escribe; cualquier dueño cuyo nombre lo contenga |
+| Nombre | Se escribe; una protección cuyo nombre lo contenga, o cuyo id empiece por ello |
+| Mundo | Cada clic pasa al siguiente mundo con alguna protección, y luego vuelve a cualquiera |
+| Servidor | Cada clic pasa al siguiente servidor, y luego vuelve a cualquiera |
+| Estado | Cualquiera → normal → asaltable → abandonada → en venta → en alquiler |
+
+El estado de una protección es lo más urgente de ella, en este orden: asaltable, abandonada, en venta, en
+alquiler, normal. Los filtros de cada admin son suyos y se mantienen hasta que se reinicia el servidor.
+
+Los botones **editor de tiers** y **limpieza de inactivas** abren las secciones de abajo. Una protección
+abre su pantalla de administración:
+
+| Botón | Qué hace |
+|---|---|
+| Abrir como dueño | La pantalla de gestión de la protección; un admin pasa allí todas las comprobaciones de dueño y rol |
+| Teletransportar | A su hogar, o encima del núcleo si no tiene, en cualquier servidor, con el calentamiento del hogar |
+| Logs | Su registro de auditoría |
+| Fijar nivel | De 0 al nivel más alto del tier. Subir hace crecer el terreno como una mejora; bajar conserva el terreno |
+| Traspasar | Se la da a un jugador, digan lo que digan sus límites. Los miembros se quedan o se van según `market.keep-members` |
+| Vidas | Con los asaltos activos: fijar sus vidas, terminando cualquier asalto y enfriamiento, o limpiar el asalto para devolver todas las vidas |
+| Mantenimiento | Con el mantenimiento activo: perdonar un abandono; no se debe nada y el siguiente periodo empieza ahora |
+| Borrado forzado | La borra haga lo que haga; su banco se paga al dueño |
+
+Cada acción de admin se escribe en el log de la protección como hecha por un admin.
+
+<Callout type="note" title="Fijar nivel comprueba menos que una mejora">
+Subir el nivel desde la pantalla de administración solo se rechaza si el terreno ampliado se solaparía con
+otra protección. A diferencia de la mejora de un jugador, no comprueba `settings.min-distance`, las
+regiones ajenas de WorldGuard ni el borde del mundo.
+</Callout>
+
+## El editor de tiers
+
+El botón **editor de tiers** lista cada tier con su tamaño, altura, precio en tienda, límite y cuántas
+protecciones de la red lo usan. **Nuevo tier** pide un id — hasta 32 caracteres de `a-z`, `0-9`, `-` y
+`_` — y lo abre con los campos por defecto.
+
+| Botón | Escribe | Entrada |
+|---|---|---|
+| Bloque núcleo | `material` | Enseñar un objeto; tiene que ser un bloque colocable |
+| Nombre | `name` | Texto, con tokens de color y `&l` |
+| Lore | `lore` | Texto, con las líneas separadas por `\|` |
+| Radio | `radius` | De 0 a 512 |
+| Altura | `height` | Clic para alternar entre `FULL` y `CUBOID` |
+| Altura cuboide | `y-radius` | De 0 a 512 |
+| Precio en tienda | `price` | 0 o más; 0 lo deja fuera de la tienda |
+| Moneda | `currency` | Clic para pasar a la siguiente moneda de la economía, y luego volver a la de por defecto |
+| Permiso | `permission` | Texto; `-` para ninguno |
+| Límite | `limit` | De 0 a 1000; 0 sin límite |
+| Vidas | `raids.tier-lives.<tier>` | De 1 a 100 |
+| Mantenimiento | `upkeep.tier-costs.<tier>` | 0 o más |
+| Flags | `flags` | Un interruptor por flag, para los flags con los que empieza una protección nueva |
+
+Cada cambio reescribe `modules/protections/config.yml`, así que todos los servidores que leen ese archivo
+lo recogen. Las vidas y el coste de mantenimiento de un tier se guardan en sus propias secciones, y sin
+editarlos el tier se queda con `raids.default-lives` y `upkeep.default-cost`.
+
+**Borrar tier** se rechaza mientras cualquier protección de la red use el tier, y para el tier que nombra
+`selection.tier`. Los objetos núcleo de un tier borrado dejan de funcionar: colocar uno se rechaza.
+
+<Callout type="warning" title="Cambiar un tier no llega a las protecciones que ya existen">
+Las protecciones conservan la caja que recibieron; un radio o una altura nuevos solo se aplican a los
+núcleos colocados después. El cambio delicado es el del bloque núcleo: un núcleo solo se quita del mundo
+mientras siga siendo el bloque del tier, así que borrar, recoger u ocultar una protección colocada con el
+bloque anterior deja ese bloque en pie.
+</Callout>
+
+## Importar ProtectionStones
+
+`/protections admin import protectionstones` convierte regiones de ProtectionStones en protecciones.
+Necesita WorldGuard activo; ProtectionStones puede estar ya desinstalado, porque WorldGuard conserva las
+regiones y sus flags. Ejecútalo antes con `--dry-run`: informa de lo que pasaría y no cambia nada.
+
+Recorre todos los mundos cargados de este servidor y toma cada región llamada `ps<x>x<y>y<z>z`. El núcleo
+es el bloque al que apunta ese nombre, y la caja de la región pasa a ser el terreno.
+
+| Región | Pasa a ser |
+|---|---|
+| `ps-block-material` | El tier: primero `import.tier-map` — el bloque tal como está escrito, como `PLAYER_HEAD:Notch`, y luego sin el sufijo —, después el tier que se coloca con el mismo bloque y después `import.default-tier` |
+| Primer dueño | El dueño |
+| Otros dueños | Miembros con `import.owner-role` |
+| Miembros | Miembros con `import.member-role` |
+| `ps-name` | El nombre, como texto plano de hasta 32 caracteres; sin él, el nombre por defecto |
+| `ps-home` | El hogar; sin él, encima del núcleo |
+| `pvp`, `mob-spawning`, `fire-spread`, `crop-growth`, `leaf-decay` | El flag del mismo nombre |
+| `tnt`, `creeper-explosion`, `other-explosion` | `explosions` |
+| `water-flow`, `lava-flow` | `liquid-flow` |
+| `entry` | `visitor-entry` |
+
+Un flag que la región nunca fijó conserva el valor por defecto del tier. Cuando varios flags de WorldGuard
+alimentan uno solo, basta con que uno deniegue para apagarlo. Un rol que la protección no tiene se cambia
+por su primer rol distinto de `visitor`.
+
+| Clave | Por defecto | Qué hace |
+|---|---|---|
+| `import.tier-map` | `{}` | Bloque de ProtectionStones e id de tier |
+| `import.default-tier` | `small` | El tier para los bloques que no coinciden con nada; vacío salta esas regiones |
+| `import.owner-role` | `trusted` | El rol que reciben los dueños que no son el primero |
+| `import.member-role` | `member` | El rol que reciben los miembros |
+| `import.remove-source-regions` | `false` | Si cada región importada se quita de WorldGuard |
+
+Una región se queda fuera, y se lista con el motivo, cuando no es un cuboide (las regiones fusionadas de
+ProtectionStones son polígonos), no tiene dueño, no tiene tier o se solapa con una protección que ya
+existe o con otra que la misma ejecución ya tomó. El informe cuenta las importadas, las ya importadas, las
+solapadas y las saltadas, y lista los diez primeros problemas.
+
+El id de una protección importada sale de su servidor, su mundo y su región, así que volver a ejecutar la
+importación salta lo que ya trajo. No se comprueban los límites, y cada protección pertenece al servidor
+que ejecutó la importación.
+
+<Callout type="warning" title="Las regiones conservadas siguen actuando en WorldGuard">
+Con `import.remove-source-regions` apagado, que es lo de por defecto, las regiones de ProtectionStones se
+quedan en WorldGuard y siguen haciendo cumplir a sus antiguos dueños y miembros junto a la protección
+nueva. También cuentan como regiones ajenas: mejorar una protección importada, fusionarla o moverla sobre
+su antigua región se rechaza con el mensaje de solape con WorldGuard hasta que la región se quite o se
+añada a `settings.allowed-world-guard-regions`. Enciende la clave para quitar cada región al importarla;
+un `--dry-run` avisa cuando está encendida.
+</Callout>
+
+## Limpieza de inactivas
+
+Retira las protecciones cuyo dueño y miembros han dejado de jugar. Desde el menú, el botón **limpieza de
+inactivas** pregunta cuántos días — de 1 a 3650, ofreciendo primero `cleanup.default-days` (30) — y lista
+lo que se iría. Desde el comando, `/protections admin cleanup <días>` muestra el recuento y las diez
+primeras, y con `confirm` la ejecuta.
+
+Una protección se retira cuando:
+
+1. Su dueño y todos sus miembros se vieron por última vez hace más de esos días. Los miembros de clan no
+   cuentan: un clan se añade entero.
+2. Nadie en ella es **desconocido** — nunca visto —, salvo con `--include-unknown` o el interruptor
+   **jugadores nunca vistos** del menú.
+3. Nadie la alquila ahora mismo, con `cleanup.skip-with-tenants`.
+4. Su banco no guarda nada, con `cleanup.skip-with-bank`.
+
+"Visto por última vez" es la última entrada o salida de un jugador en cualquier servidor de la red, y
+ahora mismo mientras está conectado.
+
+| Clave | Por defecto | Qué hace |
+|---|---|---|
+| `cleanup.default-days` | 30 | Los días que el menú propone primero |
+| `cleanup.skip-with-tenants` | `true` | Conservar las protecciones alquiladas ahora mismo |
+| `cleanup.skip-with-bank` | `false` | Conservar las protecciones con dinero en el banco. Apagado: el dinero se paga al dueño |
+| `cleanup.batch-size` | 20 | Protecciones retiradas por tick |
+
+La retirada va de `batch-size` en `batch-size` por tick, y vuelve a juzgar cada protección antes, así que
+un dueño que ha vuelto desde la vista previa conserva su terreno. Cada una queda registrada como retirada
+por la limpieza de inactivas.
+
+<Callout type="note" title="Nadie está inactivo antes de que el módulo lo haya visto">
+Cuando cargan las protecciones, cada dueño y miembro sin momento de última vista se registra como visto en
+ese momento. En un servidor que acaba de empezar a usar el módulo no se retira nada hasta que pasen esos
+días, y "desconocido" solo cubre a los jugadores añadidos desde el último arranque que no han entrado.
+</Callout>
+
+## WorldGuard
+
+WorldGuard es una dependencia opcional. El módulo pregunta si hay un plugin llamado WorldGuard activo sin
+cargar ninguna clase de WorldGuard, así que un servidor sin él activa las protecciones con normalidad y
+funciona con el backend `INTERNAL`.
+
+| Sin WorldGuard | Qué pasa |
+|---|---|
+| `settings.backend: WORLDGUARD` | El módulo funciona como `INTERNAL` y deja en la consola `Protections are set to the WORLDGUARD backend, but WorldGuard is not enabled. Falling back to INTERNAL.` |
+| `/protections admin migrate WORLDGUARD` | Se rechaza: WorldGuard no está activo en este servidor |
+| `/protections admin import protectionstones` | Se rechaza igual |
+| Colocar, mover, mejorar, fusionar | No hay comprobación de regiones ajenas; no hay regiones que comprobar |
+
+Con WorldGuard activo, colocar terreno comprueba las regiones ajenas en los dos backends, y el backend
+`WORLDGUARD` refleja cada protección de este servidor como una región, como se explica en
+[Protecciones](/docs/exyliasurvivalcore/protecciones#backends).
+
+Si WorldGuard está o no se decide al activarse el módulo. Instalarlo después requiere reiniciar.
+
+**Migrar.** `/protections admin migrate WORLDGUARD` escribe `settings.backend` y crea una región por cada
+protección de este servidor; `migrate INTERNAL` quita de todos los mundos cargados todas las regiones cuyo
+id empieza por `sc_ps_`. La respuesta dice cuántas protecciones de este servidor se sincronizaron. Cada
+servidor de una red migra las suyas.

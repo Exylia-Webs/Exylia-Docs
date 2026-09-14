@@ -1,0 +1,319 @@
+---
+title: "Recompensas y votos"
+description: "Recompensas que se reclaman desde un menú, una vez, por intervalo o por calendario con rachas, y votos por NuVotifier con rachas diarias y una fiesta de votos de red."
+---
+
+## Recompensas
+
+Una recompensa es una fila en la base de datos, montada entera desde `/rewardsadmin`: unos objetos, unos
+comandos, un tipo que dice cada cuánto se puede coger y un permiso opcional. No hay ningún archivo de
+recompensas. `/rewards` abre la lista, y el jugador la reclama desde ahí.
+
+Lo que la separa de un [kit](/docs/exyliasurvivalcore/kits-y-cajas) es el tipo: una recompensa puede
+reiniciarse por calendario y llevar una racha para quien vuelve.
+
+### Tipos
+
+| Tipo | Cuándo se puede volver a reclamar |
+|---|---|
+| Una vez | Nunca. Su límite es siempre 1, diga lo que diga **Máximo de reclamos** |
+| Intervalo | Cuando ha pasado su intervalo desde el último reclamo. Un intervalo de `0s` es sin espera |
+| Diaria | Una vez al día, desde `reset-hour` |
+| Semanal | Una vez por semana, desde el lunes a `reset-hour` |
+| Mensual | Una vez al mes, desde el día 1 a `reset-hour` |
+
+Diaria, semanal y mensual se calculan con el reloj, no se programan: un jugador que entra tras una semana
+fuera simplemente está en otro periodo, y un servidor que estuvo apagado durante un reinicio no tiene nada
+que recuperar. **Máximo de reclamos** sigue valiendo para todos los tipos menos Una vez, como total de por
+vida por jugador; `-1` es ilimitado.
+
+### Rachas
+
+Cada reclamo escribe una racha:
+
+- **Diaria, semanal, mensual** — la racha sube si el último reclamo fue en el periodo justo anterior, y
+  vuelve a 1 si no.
+- **Intervalo** — sube si el último reclamo fue dentro de dos intervalos. Con un intervalo de 24 horas,
+  saltarse un día la rompe.
+- **Una vez** — siempre 1.
+
+La lista y la vista previa enseñan la racha que escribió el último reclamo. Una racha rota sigue
+mostrando su número viejo hasta que el siguiente reclamo la deja en 1.
+
+### Reclamar
+
+Un reclamo se comprueba en este orden: desactivada, falta el permiso de la recompensa, agotada, todavía
+en espera. Solo la que pasa las cuatro se entrega.
+
+- **Los objetos** van por la entrega del plugin: lo que no cabe se guarda y se entrega en el siguiente
+  login del jugador, nunca se tira.
+- **Los comandos** se ejecutan desde consola salvo que la línea empiece por `player:`, `console:`,
+  `player-proxy:` o `console-proxy:`. Se rellenan tanto `%player%` como `%player_name%`.
+- El reclamo suma al contador de estadísticas `rewards.claimed`.
+
+`exyliasurvivalcore.rewards.bypass` ignora la espera y el límite de reclamos. Nunca se salta el permiso
+propio de la recompensa ni una recompensa desactivada.
+
+<Callout type="warning" title="El bypass solo funciona desde el menú">
+El botón de reclamar de la lista y de la vista previa comprueba `exyliasurvivalcore.rewards.bypass`.
+`/rewards claim <id>` no, así que a un jugador con el bypass se le sigue diciendo que espere cuando reclama
+por comando.
+</Callout>
+
+### Las pantallas del jugador
+
+`modules/rewards/menus/list.yml` dibuja cada recompensa con una de cuatro plantillas — `item_template`
+(lista), `cooldown_template`, `used_template` y `locked_template` — así que cómo se ve una recompensa
+bloqueada, y si se puede pulsar, se decide en el archivo. Clic izquierdo reclama, clic derecho abre la
+vista previa.
+
+`modules/rewards/menus/preview.yml` enseña los objetos tal cual, el botón de reclamar en el slot 8 dibujado
+con los mismos estados más `disabled_template`, y un objeto **Bonuses** con los comandos *con nombre* de la
+recompensa. Nombra tres y añade `labels.more` por el resto; un comando sin nombre no se enseña nunca. Una
+recompensa sin objetos ni comandos no abre vista previa.
+
+Los dos archivos son tuyos. Los botones son `survivalcore:reward_open_list`,
+`survivalcore:reward_claim <id>` y `survivalcore:reward_preview <id>`; ninguno comprueba
+`exyliasurvivalcore.rewards`, así que un botón de recompensa puesto en otro sitio funciona para cualquiera.
+
+### Montar una recompensa
+
+`/rewardsadmin` abre `menus/admin/rewards_admin_list.yml`: todas las recompensas, activadas o no, con
+**Create reward**. Clic izquierdo edita, clic derecho borra tras confirmar. La pantalla de edición,
+`menus/admin/reward_admin_edit.yml`, tiene un botón por campo:
+
+| Campo | Por defecto en una recompensa nueva |
+|---|---|
+| Icono | `CHEST` |
+| Nombre | El id |
+| Descripción | Vacía. Escribir `clear` la vacía |
+| Estado | Activada. Una desactivada no la ven los jugadores |
+| Permiso | Ninguno. Escribir `clear` lo quita |
+| Objetos | Ninguno, se editan en el editor de objetos de ExyliaLib |
+| Bonuses | Sin comandos, se editan en el editor de comandos con nombre |
+| Tipo | Una vez. El botón pasa por los cinco |
+| Intervalo | 24 horas, escrito como `1d`, `12h30m` o `0s`. Solo lo lee Intervalo |
+| Máximo de reclamos | `-1` |
+| Orden | `0`. El más bajo sale primero |
+
+**Clone** copia todo a un id nuevo y **Preview** abre la vista previa del jugador. Los dos archivos de
+admin se regeneran desde el jar en cada arranque y en cada reload; edita los dos del jugador.
+
+### Comandos
+
+| Comando | Permiso | Qué hace |
+|---|---|---|
+| `/rewards` | `exyliasurvivalcore.rewards` | Abre la lista |
+| `/rewards preview <recompensa>` | `exyliasurvivalcore.rewards` | Abre la vista previa de una |
+| `/rewards claim <recompensa>` | `exyliasurvivalcore.rewards` | Reclama sin el menú |
+| `/rewardsadmin` | `exyliasurvivalcore.rewards.admin` | Abre la lista de admin |
+| `/rewardsadmin give <jugador> <recompensa>` | `exyliasurvivalcore.rewards.admin` | Reclama por él, ignorando espera y límite |
+| `/rewardsadmin preview <recompensa>` | `exyliasurvivalcore.rewards.admin` | La vista previa, sin el permiso de la recompensa |
+| `/rewardsadmin reset <jugador> <recompensa>` | `exyliasurvivalcore.rewards.admin` | Olvida su espera, reclamos y racha de una recompensa |
+| `/rewardsadmin resetall <jugador>` | `exyliasurvivalcore.rewards.admin` | Lo mismo con todas |
+
+Todos son solo para jugadores. `reset` y `resetall` aceptan jugadores desconectados.
+
+<Callout type="note" title="`give` es un reclamo, y dice que ha funcionado en cualquier caso">
+`/rewardsadmin give` cuenta como reclamo: suma a los reclamos y a la racha del jugador. Sigue rechazando una
+recompensa desactivada y una tras un permiso que el jugador no tiene — a él le llega el rechazo — y al
+admin se le dice que se ha dado igualmente.
+</Callout>
+
+### Ajustes
+
+`modules/rewards/config.yml`:
+
+| Ajuste | Por defecto | Qué hace |
+|---|---|---|
+| `settings.show-locked-rewards` | `true` | Lista las recompensas tras un permiso que falta, dibujadas bloqueadas. Apagado las oculta |
+| `settings.notify-on-join` | `true` | Avisa al entrar de cuántas recompensas hay listas |
+| `settings.reset-hour` | `0` | Hora, 0–23, a la que se reinician diarias, semanales y mensuales |
+| `settings.timezone` | `""` | La zona en la que se lee esa hora, como `Europe/Madrid`. Vacía o desconocida es la del servidor |
+| `sounds.claim` | `ENTITY_PLAYER_LEVELUP\|1.0\|1.2` | Suena al reclamar |
+| `sounds.error` | `ENTITY_VILLAGER_NO\|1.0\|1.0` | Suena al rechazar |
+
+`labels.ready`, `unlimited`, `none`, `more`, `once`, `interval` (con `%time%`), `daily`, `weekly` y
+`monthly` son las palabras que rellenan las pantallas para una espera terminada, un número ilimitado, un
+campo vacío y el tipo.
+
+### Placeholders
+
+Un id de recompensa con guiones bajos se lee entero.
+
+| Placeholder | Devuelve |
+|---|---|
+| `%exyliasurvivalcore_rewards_ready%` | Cuántas recompensas podría reclamar ahora |
+| `%exyliasurvivalcore_rewards_cooldown_<id>%` | Tiempo restante, `Ready`, o `N/A` si la recompensa no existe |
+| `%exyliasurvivalcore_rewards_streak_<id>%` | La racha de su último reclamo, o `N/A` |
+| `%exyliasurvivalcore_rewards_claims_<id>%` | Reclamos restantes, `∞`, o `N/A` |
+
+El placeholder de espera escribe `Ready` por su cuenta; `labels.ready` no le llega.
+
+## Votos
+
+Los votos llegan por NuVotifier o por el Votifier original, que se busca por cualquiera de los dos nombres
+un tick después de arrancar el servidor. Sin ninguno, el log lo dice y los votos solo llegan por
+`/voteadmin fake`.
+
+`modules/votes/votes.yml` guarda las webs, lo que paga un voto, las recompensas de racha y las de la fiesta
+de votos. Es tuyo; las claves que añade una versión nueva aparecen solas, y `/sc reload` lo vuelve a leer.
+
+### El camino de un voto
+
+1. **Se guarda.** El voto se guarda con un id calculado a partir de la web, el nombre y la marca de tiempo
+   de la web, así que el mismo voto reenviado a varios servidores cae en una sola fila. Un nombre que no
+   sea de 1 a 32 letras, dígitos, `_`, `.` o `*` se descarta sin avisar.
+2. **Se anuncia.** Cada servidor lo anuncia una vez a sus jugadores, a los que tienen `vote-announcements`
+   encendido en [`/settings`](/docs/exyliasurvivalcore/utilidades).
+3. **Se paga, una vez.** El servidor en el que está el jugador se queda la fila, y solo uno puede. Un
+   jugador desconectado cobra la próxima vez que entra en cualquier servidor, todos los votos que tenga
+   pendientes, del más antiguo al más nuevo.
+4. **Cuenta para la fiesta.** Una segunda tabla guarda el voto para la fiesta, incluidos los de jugadores
+   desconectados.
+
+El anuncio y el pago inmediato viajan por el canal `votes` de ExyliaLib. En un solo servidor no hace falta
+nada. En una red hace falta Redis y una base de datos compartida: sin Redis cada servidor solo oye los
+votos que recibió, y un voto para un jugador en otro servidor espera a su siguiente login.
+
+Cada pago suma al contador `votes.total`, a un contador `votes.<web>` (el nombre de la web en minúsculas,
+con todo lo que no sea letra, dígito o `_` cambiado por `_`) y al récord personal `votes.best_streak`.
+
+### votes.yml
+
+```yaml
+sites:
+  minecraft-mp:
+    name: '{primary}&lMINECRAFT-MP'
+    url: 'https://minecraft-mp.com/server/000000/vote/'
+    icon: PAPER
+
+vote:
+  money: 30
+  rewards: []
+  message: '… Thanks for voting on %service%! +%money% · Streak » %streak%'
+
+streaks:
+  '3':  { money: 60,  rewards: [], message: '…' }
+  '7':  { money: 150, rewards: [], message: '…' }
+  '30': { money: 750, rewards: [], message: '…' }
+
+party:
+  money: 20
+  rewards: []
+  message: '… Vote party reward » +%money%'
+  commands:
+    - 'boostersadmin global money 1.5 30m'
+```
+
+| Bloque | Se paga |
+|---|---|
+| `sites` | Nada: las páginas que lista `/vote`. `name` por defecto es el id, `icon` es `PAPER` |
+| `vote` | Por cada voto |
+| `streaks.<días>` | Cuando un voto deja la racha del jugador en exactamente esos días, cada vez que pasa |
+| `party` | A todos los conectados en todos los servidores cuando empieza la fiesta |
+| `party.commands` | Una vez para toda la red, desde la consola del servidor que empezó la fiesta |
+
+Todos los bloques que pagan aceptan las mismas tres claves:
+
+- `money` — se paga en la moneda por defecto y lo multiplican los boosters de dinero de `votes`
+  (ver [Economía](/docs/exyliasurvivalcore/economia)). Necesita una economía; sin ella no paga nada.
+- `rewards` — una [lista de recompensas de Exylia](#listas-de-recompensas).
+- `message` — se envía al pagarse el bloque; vacío para ninguno. `%player%` y `%money%` en todos, y
+  `%service%`, `%streak%` y `%total%` en `vote` y `streaks`.
+
+Las webs sustituyen a las URL de ejemplo que trae el archivo. Pulsar una en `/vote` cierra el menú y manda
+el enlace al chat.
+
+### Rachas
+
+Un día es un día natural en `settings.timezone`, desde medianoche: los votos no tienen hora de reinicio.
+Un voto al día siguiente del último alarga la racha, un segundo voto el mismo día no la toca, y un día sin
+votar la reinicia. `%exyliasurvivalcore_votes_streak%` ya lee 0 en cuanto pasa un día entero sin votar.
+
+### La fiesta de votos
+
+Cada voto, desde cualquier servidor, cuenta para una única fiesta de toda la red. Tras cada voto, cada
+servidor enseña a sus jugadores una boss bar con la cuenta durante `party.bossbar-seconds`. Cuando la
+cuenta llega a `party.target`, el primer servidor que se queda el testigo de la fiesta la empieza: todos los
+conectados en todas partes cobran el bloque `party`, `party.commands` se ejecuta una vez, la cuenta vuelve a
+cero, y se avisa a los jugadores con `vote-announcements` encendido.
+
+`party.target: 0` apaga la cuenta hacia una fiesta. `/voteadmin party` sigue empezando una.
+
+### Recordatorios
+
+A un jugador que no ha votado hoy se le recuerda tres segundos después de entrar, si `remind-on-join` está
+encendido, y cada `reminder-minutes` mientras esté conectado.
+
+<Callout type="note" title="`reminder-minutes` necesita reiniciar">
+El temporizador de recordatorios se programa una sola vez, al activarse el plugin, y un reload no lo
+vuelve a programar. Un intervalo nuevo, o encender o apagar el temporizador, espera a un reinicio.
+</Callout>
+
+### Ajustes
+
+`modules/votes/config.yml`:
+
+| Ajuste | Por defecto | Qué hace |
+|---|---|---|
+| `settings.timezone` | `""` | La zona en la que se cuenta un día, para rachas y *votado hoy*. Vacía o desconocida es la del servidor |
+| `settings.reminder-minutes` | `30` | Minutos entre recordatorios. `0` nunca |
+| `settings.remind-on-join` | `true` | Recordar al entrar |
+| `party.target` | `50` | Votos que necesita la red. `0` apaga la fiesta |
+| `party.bossbar` | Una barra `PURPLE`, `NOTCHED_10` | Se enseña tras cada voto. `%count%`, `%target%`, `%left%`. Texto vacío la oculta |
+| `party.bossbar-seconds` | `8` | Cuánto dura |
+
+### Comandos
+
+| Comando | Alias | Permiso | Qué hace |
+|---|---|---|---|
+| `/vote` | `/votes` | `exyliasurvivalcore.votes` | Las webs, tus totales y la fiesta |
+| `/voteadmin fake <jugador> [web]` | `/votea` | `exyliasurvivalcore.votes.admin` | Un voto como si lo mandara una web, recompensas y fiesta incluidas. La web por defecto es `Test` |
+| `/voteadmin party` | `/votea` | `exyliasurvivalcore.votes.admin` | Empieza la fiesta ya, lleve la cuenta que lleve |
+
+Los dos subcomandos de admin funcionan desde consola. La pantalla es `modules/votes/menus/vote.yml`; sus
+botones son `survivalcore:votes_open` y `survivalcore:votes_link <web>`.
+
+### Placeholders
+
+Los números propios de un jugador leen 0 hasta que su fila se carga al entrar.
+
+| Placeholder | Devuelve |
+|---|---|
+| `%exyliasurvivalcore_votes_total%` | Votos que se le han pagado |
+| `%exyliasurvivalcore_votes_streak%` | Su racha tal como está hoy |
+| `%exyliasurvivalcore_votes_best_streak%` | Su racha más larga |
+| `%exyliasurvivalcore_votes_voted_today%` | `true` / `false` |
+| `%exyliasurvivalcore_votes_party_count%` | Votos hacia la fiesta actual |
+| `%exyliasurvivalcore_votes_party_target%` | `party.target` |
+| `%exyliasurvivalcore_votes_party_left%` | Los dos anteriores restados, nunca por debajo de 0 |
+
+## Listas de recompensas
+
+Los `rewards` de `votes.yml` y los [premios](/docs/exyliasurvivalcore/misiones-y-temporadas#premios) de
+`seasons.yml` son listas de recompensas de ExyliaLib. Un texto suelto es un comando de consola; un mapa
+indica su `type`.
+
+```yaml
+rewards:
+  - 'eco give %player_name% 500'
+  - type: ECONOMY
+    value: '750'
+  - type: ITEM
+    itemSnapshot: DIAMOND
+    itemAmount: 4
+    chance: 25.0
+```
+
+| `type` | Lee |
+|---|---|
+| `COMMAND` | `command`, ejecutado desde consola con los placeholders del jugador rellenos |
+| `ITEM` | `itemSnapshot` e `itemAmount`. Lo que no cabe espera al siguiente login |
+| `MESSAGE` | `message` |
+| `ECONOMY` | `value`, y `currency` para una moneda que no sea la de por defecto. No lo multiplican los boosters |
+| `EXPERIENCE` | `value`, en puntos de experiencia |
+| `POTION` | `value`, escrito `SPEED:1:300` |
+
+Cualquiera acepta además `chance`, `permission`, y `minAmount` con `maxAmount` para un rango. Una entrada con
+un tipo desconocido se avisa en el log y se salta; el resto de la lista se entrega igual.

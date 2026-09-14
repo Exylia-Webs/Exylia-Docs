@@ -1,0 +1,223 @@
+---
+title: "Protection raids"
+description: "Lives, the core's health, what a raid opens, siege windows and the offline shield."
+---
+
+Raids give every protection a number of **lives**. Enemies take them by hitting the core and by killing
+members inside it. A protection with no lives left is **raidable** for a while: enemies may break,
+place and open containers in it, and anybody may walk in. Once the raid ends, the protection gets a
+life back and a cooldown during which it cannot lose any.
+
+Raids are off by default. Turn them on with `submodules.raids` in `modules/protections/config.yml`;
+every setting on this page sits under `raids` in that file. For the protections themselves (tiers,
+roles, flags, the backends) see [Protections](/docs/exyliasurvivalcore/protections).
+
+## Who counts as an enemy
+
+A player is an **enemy** of a protection unless they are:
+
+- the owner,
+- a member, including through a clan added to it and a tenant renting the whole protection,
+- a clan ally of the owner, while `allies-are-friends` is `true` (the default) and a clan plugin is
+  installed.
+
+Only enemies damage a core, take lives through kills, and get the raid permissions below. Anybody
+else who breaks the core is refused as usual. When the owner breaks it, the core is picked up, as
+always.
+
+## Lives
+
+| Setting | Default | What it does |
+|---|---|---|
+| `tier-lives` | `small: 3`, `medium: 4`, `large: 5` | Lives per tier |
+| `default-lives` | `3` | Lives of a tier left out of `tier-lives` |
+| `regen-minutes` | `60` | Minutes for one life to grow back. `0` turns it off |
+| `restore-price` | `5000` | What buying one life back costs. `0` turns it off |
+| `restore-currency` | blank | Currency of that price. Blank is the default currency |
+
+A protection's maximum lives are its tier's lives plus the `bonus-lives` of its level, while upgrades
+are on (see [Protection economy](/docs/exyliasurvivalcore/protection-economy#level-upgrades)). The
+maximum is never below 1. Lowering a tier's lives in the config caps the lives protections already
+hold.
+
+**Growing back.** A life grows back every `regen-minutes`, up to the maximum. The clock starts when the
+first life is lost, not when the protection was made. Unfinished progress is kept: with 60 minutes a
+life, a protection that lost two lives has one back after 60 minutes and both after 120. Nothing
+grows back during a raid.
+
+**Buying one back.** Any member clicks the lives button of the protection's menu to buy one life for
+`restore-price`, in `restore-currency` (see [Economy](/docs/exyliasurvivalcore/economy)). It is refused
+while the protection is raidable or already full. It is allowed during the cooldown.
+
+Lives are stored with the protection, so they are the same on every server of a network.
+
+## The core's health
+
+An enemy who breaks the core does not break it. The core takes damage instead, and it loses a life
+once its health runs out.
+
+| Setting | Default | What it does |
+|---|---|---|
+| `core-health` | `150` | Health per life |
+| `tool-damage` | `NETHERITE_PICKAXE: 4`, `DIAMOND_PICKAXE: 3`, `IRON_PICKAXE: 2` | Damage per hit by the item in the main hand |
+| `default-damage` | `1` | Damage of a hit with anything else |
+| `hit-cooldown-millis` | `500` | A player's hits closer together than this are ignored |
+| `core-heal-seconds` | `30` | Seconds without a hit before a damaged core is back to full health |
+| `hit-actionbar` | see below | What the attacker sees after each hit |
+| `hit-sound` | `BLOCK_ANVIL_LAND\|0.4\|1.6` | The sound of a hit |
+
+Every hit deals at least 1. At the defaults, one life costs 150 hits with an empty hand, or 38 with a
+netherite pickaxe, and a hit counts at most once every half second. When health reaches 0 the
+protection loses a life and the core starts again at full health.
+
+The action bar reads `⚔ Core » %health%/%max_health% ┃ Lives » %lives%/%max_lives%`. It also takes
+`%name%` and `%owner%`.
+
+A core's health is kept only in the memory of the protection's server. A restart heals it, which
+changes little because a quiet core heals after 30 seconds anyway.
+
+<Callout type="note" title="A protection without a core loses lives only through kills">
+Land protected by selecting two corners has no core, and neither does a core that is hidden. There is
+nothing to hit, so these lose lives only when members are killed. With `allow-hidden-core: false` (the
+default), a core cannot be hidden while raids are on. Cores hidden before raids were turned on stay
+hidden.
+</Callout>
+
+## Kills
+
+| Setting | Default | What it does |
+|---|---|---|
+| `lives-per-kill` | `1` | Lives an enemy takes by killing a member inside. `0` turns it off |
+| `kill-cooldown-minutes` | `10` | Minutes before killing the same member in the same protection takes a life again |
+
+The victim must be the owner or a member, killed inside that protection by an enemy player. The
+offline shield never applies to a kill, since the victim was online. Siege windows, a raid already
+running and the cooldown still do.
+
+## When lives cannot be taken
+
+A hit or a kill takes nothing, and the attacker is told why, when:
+
+1. raids are off,
+2. the protection is already raidable,
+3. it is in the cooldown after a raid,
+4. siege windows are on and none is open,
+5. for a hit only: the offline shield is up.
+
+The attacker sees these messages at most once every two seconds.
+
+## The raid
+
+Taking the last life starts the raid.
+
+| Setting | Default | What it does |
+|---|---|---|
+| `raidable-minutes` | `30` | How long the raid lasts |
+| `raidable-permissions` | `break`, `place`, `containers`, `doors`, `redstone`, `buckets` | What enemies may do inside |
+| `explosions-while-raidable` | `false` | Whether explosions break blocks even with the protection's `explosions` flag off |
+| `lives-after-raid` | `1` | Lives it has once the raid ends. Kept between 1 and the maximum |
+| `cooldown-minutes` | `120` | Minutes after the raid during which it cannot lose lives |
+| `raidable-bar` | see below | The boss bar shown inside |
+
+While it lasts:
+
+- Every player with **raid announcements** on is told that `%raider%` raided `%name%` and for how long
+  it is open. Players switch this in their [preferences](/docs/exyliasurvivalcore/quality-of-life), the
+  `raid-announcements` setting.
+- Enemies have the `raidable-permissions` inside, whatever the roles say.
+- Anybody may enter, whatever the lock or the bans say.
+- Everybody standing inside sees a red boss bar, `⚔ %name% is raidable » %time_left% ⌚`, draining as
+  time runs out. It also takes `%owner%` and `%raider%`.
+- The protection cannot be picked up, moved, deleted, sold, given away, offered for rent or upgraded.
+  A sale already listed is cancelled. The same refusal applies while its core is damaged and not yet
+  healed.
+- Member perks stop and its public warp is hidden or refused.
+
+When time runs out, the protection has `lives-after-raid` lives and starts its cooldown. The server
+ends raids once a second. Short of the last life, each lost life is told to the attacker and to every
+defender online on that server.
+
+<Callout type="note" title="With the WorldGuard backend">
+While a protection is raidable, its mirrored WorldGuard region lets everybody build and drops its entry
+denial. That is wider than `raidable-permissions`, which this module enforces itself. The region goes
+back to normal when the raid ends.
+</Callout>
+
+## Siege windows
+
+With windows on, lives can only be lost at the times you choose.
+
+| Setting | Default | What it does |
+|---|---|---|
+| `siege-windows.enabled` | `false` | Whether lives can only be lost inside a window |
+| `siege-windows.timezone` | blank | Time zone the windows are read in, like `Europe/Madrid`. Blank or unknown means the server's |
+| `siege-windows.windows` | `SATURDAY 18:00-22:00`, `SUNDAY 18:00-22:00` | The windows |
+
+```yaml
+raids:
+  siege-windows:
+    enabled: true
+    timezone: "Europe/Madrid"
+    windows:
+      - "SATURDAY 18:00-22:00"
+      - "FRIDAY 23:00-02:00"
+      - "DAILY 12:00-12:30"
+```
+
+A window is a day in English (`MONDAY` to `SUNDAY`), or `DAILY` for every day, then `HH:MM-HH:MM`. The
+start is inside the window and the end is not. A window that ends before it starts runs past midnight
+into the next day: `FRIDAY 23:00-02:00` is open on Saturday at 01:30. Lines that cannot be read are
+skipped.
+
+When a window opens or closes, every player with raid announcements on is told. A raid that started
+inside a window runs its full `raidable-minutes`, even past the window's end. With
+`effects.no-flight-during-siege` on, member flight stops while a window is open.
+
+## The offline shield
+
+The shield stops a core from being hit while nobody who defends the protection is online.
+
+| Setting | Default | What it does |
+|---|---|---|
+| `offline-shield.enabled` | `true` | Whether the shield is used |
+| `offline-shield.grace-minutes` | `10` | Minutes after the last defender leaves this server before the shield goes up |
+| `offline-shield.clan-members-count` | `false` | Whether members of a clan added to the protection count as defenders |
+
+The defenders are the owner and the members, plus the members of added clans when
+`clan-members-count` is on. A defender online on the protection's server, or one who left it less than
+`grace-minutes` ago, keeps the shield down.
+
+On a network, the other servers are asked next, about the first 32 defenders. If none of them is online
+anywhere, the shield is up. If the answer does not come, the shield stays up and the land stays
+protected. The grace only counts players who left this server.
+
+The shield blocks hits on the core only, not kills.
+
+## Raid states
+
+The lives button of the protection's menu and `%exyliasurvivalcore_protections_raid_state%` show one of
+five states, checked in this order:
+
+| State | When |
+|---|---|
+| Raidable | A raid is running |
+| Cooling down | In the cooldown after a raid |
+| Shielded | Every defender is offline, as far as this server can tell |
+| Under siege | Siege windows on and one open. With windows off, while the core is damaged |
+| Safe | Anything else |
+
+The same menu button shows the core's health, the time left of a raid or cooldown, and the restore
+price.
+
+## Placeholders
+
+These read the protection the player stands in, and are blank outside one or while raids are off.
+
+| Placeholder | What it returns |
+|---|---|
+| `%exyliasurvivalcore_protections_lives%` | Lives left |
+| `%exyliasurvivalcore_protections_max_lives%` | Lives at most |
+| `%exyliasurvivalcore_protections_raid_state%` | The state label above |
+
+Admins set a protection's lives, or clear its raid, from the admin menu. The in-game tier editor
+writes a tier's lives. See [Administering protections](/docs/exyliasurvivalcore/protection-admin).

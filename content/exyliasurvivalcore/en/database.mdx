@@ -1,6 +1,6 @@
 ---
 title: "Database"
-description: "The thirty-one tables, which module owns each, what is indexed, and the two schema quirks worth knowing."
+description: "The seventy-two tables, which module owns each, what they hold, and the schema quirks worth knowing."
 ---
 
 Every module that stores anything opens its own tables, and a module that is off creates none. All of
@@ -16,10 +16,13 @@ repository is opened. There is no schema file to apply and no migration to run.
 | `spawn_data` | `id` | The spawn location. One row |
 | `homes` | `id` = a UUID | The owner (indexed), name, location and icon |
 | `sc_warps` | `id` | Display name, enabled, cost, permission, icon, location |
+| `sc_warp_cooldowns` | `<playerUuid>:<warpId>` | When the player last used that warp |
 | `tpa_settings` | `playeruuid` | Whether they accept requests, auto-accept and confirm |
 | `rtp_cooldowns` | `id` | Player (indexed), world, when it was used |
+| `sc_back` | the player UUID | Where they last left from, and when |
 
-`/back` keeps nothing: its point is in memory and a restart clears it.
+`/back` and the warp cooldowns are rows rather than memory because a warp can put the player on another
+server, and the server they arrive on has to know both.
 
 ## Combat
 
@@ -27,10 +30,23 @@ repository is opened. There is no schema file to apply and no migration to run.
 |---|---|---|
 | `player_stats` | `playeruuid` | Name, kills, deaths, best kill streak |
 | `stat_cache` | `<uuid>:<statId>` | One cached stat value per player, for the leaderboards |
+| `sc_stat_counters` | `<uuid>:<key>` | Every counter a module keeps: player name, counter key, amount |
 | `sc_bounties` | `id` | Target, placer, amount, when it was placed, when it expires, anonymous |
+| `sc_graves` | `id` | Owner, killer, location, the block the grave replaced, the items, the experience, when it expires and until when it is protected |
 
 `player_stats` carries three descending indexes — on kills, deaths and best streak — so a leaderboard is
-a bounded read. `stat_cache` has the plugin's only multi-column index, on the stat id and its value.
+a bounded read. `sc_stat_counters` is what a `COUNTER` stat in `stats.yml`, a mission and a season all
+read, so counting something new never needs a table of its own.
+
+A grave's items live in its row and nowhere else: collecting it deletes the row, and only the collection
+whose delete removed something pays out.
+
+## Duel rooms
+
+| Table | Key | Holds |
+|---|---|---|
+| `sc_duel_rooms` | `id` | Server, display name, region, exit location, players required, border material, effects, rewards, enabled |
+| `sc_duel_room_borders` | the room id | The world, material and blocks of the border |
 
 ## Progression
 
@@ -41,6 +57,25 @@ a bounded read. `stat_cache` has the plugin's only multi-column index, on the st
 | `farming_data` | `playeruuid` | Per-category counts and claimed milestones |
 | `reclaim_data` | `playeruuid` | What has been claimed once, and the last claim per section |
 | `player_join_data` | `id` = the player UUID | First join, join number, total joins |
+
+## Missions and seasons
+
+| Table | Key | Holds |
+|---|---|---|
+| `sc_missions` | `<uuid>\|<pool>\|<period>\|<missionId>` | One mission a player was dealt: pool, period, mission, the counter value it started from, the target, claimed |
+| `sc_seasons` | `<track>:<period>` | The season a track is counting right now, and when it started |
+| `sc_season_results` | `<seasonId>:<position>` | A closed season's board: track, period, position, player, score, when it closed |
+
+## Rewards and votes
+
+| Table | Key | Holds |
+|---|---|---|
+| `sc_rewards` | `id` | Display name, description, permission, type, cooldown, maximum claims, enabled, items, commands, icon, order |
+| `sc_reward_claims` | `<playerId>:<rewardId>` | Last claim, claim count, streak, the last period claimed |
+| `sc_voters` | the player UUID | Name, total votes, streak, best streak, the last day voted, the last vote's time |
+| `sc_votes` | `id` | A vote not yet paid: username, service, when, the party it counts towards |
+| `sc_vote_log` | `id` | Every vote received: username, service, when, party number |
+| `sc_vote_party` | the party number | When the party being filled started |
 
 ## Kits and crates
 
@@ -53,22 +88,81 @@ a bounded read. `stat_cache` has the plugin's only multi-column index, on the st
 | `sc_crate_players` | `<uuid>:<crateId>` | Keys held, openings since pity, total opened. Player indexed |
 | `sc_crate_openings` | `id` | The history: who, which crate, which reward, which tier, when. Player indexed |
 | `sc_loot_chest_templates` | `id` | The loot table and who made it |
-| `sc_loot_chests` | `id` | A placed chest: template, location, cooldown, last refill |
-| `sc_item_spawners` | `id` | Locations, the interval range and the loot table |
+| `sc_loot_chests` | `id` | A placed chest: server, template, location, cooldown, last refill |
+| `sc_item_spawners` | `id` | Server, locations, the interval range and the loot table |
 
 ## Zones
 
 | Table | Key | Holds |
 |---|---|---|
-| `sc_mines` | `id` | The region, type, composition, levels, reset settings, teleports, flags |
+| `sc_mines` | `id` | Server, the region, type, composition, levels, reset settings, teleports, flags |
 | `sc_mine_broken_blocks` | `id` | One row per block mid-regeneration in a realistic mine. Mine indexed |
-| `sc_regen_zones` | `id` | The region, mode, intervals and flags |
-| `sc_afk_zones` | `id` | The region, reward interval and reward list |
+| `sc_regen_zones` | `id` | Server, the region, mode, intervals and flags |
+| `sc_afk_zones` | `id` | Server, the region, reward interval and reward list |
 | `survival_portals` | `id` | The region, the destination and the command list |
-| `sc_jumpads` | `id` | Power, direction, glide, and the block locations |
-| `sc_powerup_zones` | `id` | Mode, area or locations, timings and the power-up entries |
+| `sc_jumpads` | `id` | Server, power, direction, glide, and the block locations |
+| `sc_powerup_zones` | `id` | Server, mode, area or locations, timings and the power-up entries |
 
 `survival_portals` is the one table with the `survival_` prefix rather than `sc_`.
+
+## Economy
+
+| Table | Key | Holds |
+|---|---|---|
+| `sc_currencies` | `id` | One currency as set up in game: kind, order, names, symbol, icon, decimals, formats, aliases, item, starting and maximum balance, permission, transfer and exchange rules, leaderboard, networked, commands |
+| `sc_economy_settings` | one row | Experience as a currency, the currency published to Vault and whether it is forced, whether the ledger is on |
+| `exylia_balances` | `<uuid>\|<currency>` | One player's balance in one stored currency: player, name, currency, amount |
+| `exylia_balance_pending` | a generated number | A change another server could not apply itself: player, currency, amount, whether it replaces the balance, reason, who made it |
+| `exylia_ledger` | a generated number | Every stored operation: player, currency, change, the balance after it, reason, who made it, server, when |
+| `sc_boosters` | `id` | Owner (empty for a global booster), type, source, multiplier, duration, when it expires (`0` while not started), who granted it |
+
+An empty `sc_economy_settings` is a server whose currencies have not been set up yet. A balance row is
+written only by the server its player is on; every other server leaves a pending row, which that server
+folds in and deletes. See [Economy](/docs/exyliasurvivalcore/economy).
+
+## Shop
+
+| Table | Key | Holds |
+|---|---|---|
+| `sc_shop_categories` | `id` | Display name, description, icon, position, permission, currency, rotation, discount, enabled |
+| `sc_shop_products` | `id` | Category, position, type, item or commands, currency, buy and sell prices, dynamic pricing, stock and restock, buy and sell limits, permission, discount, enabled |
+| `sc_shop_limits` | `id` | How much one player bought and sold of one product in the current limit period |
+| `sc_shop_log` | `id` | Every purchase and sale: player, product, category, action, amount, unit price, total, currency, when |
+
+## Market
+
+| Table | Key | Holds |
+|---|---|---|
+| `sc_market_listings` | `id` | Seller, item, amount, price, material, currency, when it expires |
+| `sc_auctions` | `id` | Seller, item, amount, material, currency, starting price, buyout, top bid and bidder, bids, when it ends |
+| `sc_orders` | `id` | Buyer, item, material, amount wanted, delivered, collected, price, currency, closed, when it expires |
+| `sc_order_locks` | the order id | An empty row. Whoever deletes it may change the order, then writes it back |
+
+## Trade and vaults
+
+| Table | Key | Holds |
+|---|---|---|
+| `sc_vaults` | `<uuid>\|<number>` | One vault of one player: owner, its number (the `vault_number` column), contents |
+
+A trade keeps nothing: it lives in memory until it completes or is cancelled.
+
+## Protections
+
+| Table | Key | Holds |
+|---|---|---|
+| `sc_protections` | `id` | Server, owner, name, tier, world, bounds, core block, hidden, home, and in one `data` column its roles, members, clan grants, per-player overrides, flags, access, raid state, subregions and rents |
+| `sc_protection_accounts` | the protection id | Bank balance, when the next upkeep payment is due, when it was abandoned |
+| `sc_protection_account_locks` | the protection id | An empty row. Whoever deletes it may change the account |
+| `sc_protection_listings` | the protection id | A protection for sale: seller, price, currency |
+| `sc_protection_rent_offers` | `<protectionId>:<target>` | A plot, or the whole protection, offered for rent: owner, price, currency, period, maximum periods |
+| `sc_protection_logs` | `id` | What happened inside a protection: server, who, action (the `log_action` column), detail, where, the day and time |
+| `sc_protection_warps` | the protection id | The warp a protection publishes: name, icon, description, location |
+| `sc_protection_warp_ratings` | `<warpId>:<player>` | One player's stars for one warp |
+| `sc_protection_warp_visits` | `<warpId>:<player>:<day>` | One visit per player per day |
+| `sc_protection_seen` | the player UUID | When they last joined or left any server — how upkeep tells an abandoned protection from a quiet one |
+
+See [Protections](/docs/exyliasurvivalcore/protections) and
+[Protection economy](/docs/exyliasurvivalcore/protection-economy).
 
 ## Quality of life
 
@@ -77,12 +171,18 @@ a bounded read. `stat_cache` has the plugin's only multi-column index, on the st
 | `player_utils_data` | `playeruuid` | Whether flight and night vision are on |
 | `sc_player_settings` | `playeruuid` | The preferences the player has turned **off** |
 
+## Optimization
+
+| Table | Key | Holds |
+|---|---|---|
+| `sc_item_updates` | the group name | The item that is replaced and the item it becomes |
+
 ## Modules that store nothing
 
-`back`, `blocked-items`, `death`, `enchantments`, `kill-rewards`, `near`, `repair` and
-`scheduled-commands`. Kill streaks are counted in memory and lost on a restart.
+`blocked-items`, `death`, `enchantments`, `kill-rewards`, `near`, `optimization`, `repair`,
+`scheduled-commands`, `sell-wands` and `trade`. Kill streaks are counted in memory and lost on a restart.
 
-## Two things worth knowing before you touch a table by hand
+## Things worth knowing before you touch a table by hand
 
 <Callout type="note" title="A stored location can name another server">
 Homes, warps, portals and crate blocks store `server,world,x,y,z,yaw,pitch`, where `-` means "this
@@ -97,10 +197,19 @@ underscore, holding different things: the domain timestamp — when the bounty w
 template was made — and the row's own creation time. Read the right one.
 </Callout>
 
-Every table also carries `created_at` and `updated_at`. Nothing has a unique constraint beyond its
-primary key.
+<Callout type="danger" title="Some rows are claimed by deleting them">
+A vote is paid, a season is closed, a vote party is started, a grave is collected, a protection is bought
+or rented, and an order or a protection account is changed by whichever server manages to **delete** the
+row first — only one delete succeeds, which is what makes each of those happen once across a network.
+Deleting such a row by hand is not a clean-up: it pays nothing, closes nothing, or destroys what the row
+held — and a deleted `sc_order_locks` row leaves its order unchangeable until the next start writes the
+lock again.
+</Callout>
+
+The tables the plugin has had the longest also carry `created_at` and `updated_at`; the newer ones carry
+only the columns above. Nothing has a unique constraint beyond its primary key.
 
 ## Sharing across servers
 
-Point every server at the same database and homes, warps, kits, ranks, statistics, crates and the rest
-are shared. Nothing is pushed live between servers: a row is picked up the next time it is read.
+Point every server at the same database and homes, warps, kits, ranks, statistics, crates, balances,
+protections and the rest are shared.

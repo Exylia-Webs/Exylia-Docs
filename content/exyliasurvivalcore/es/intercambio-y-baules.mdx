@@ -1,0 +1,282 @@
+---
+title: "Intercambio y baúles"
+description: "Intercambios cara a cara con una ventana compartida, una cuenta atrás y dinero en cualquier moneda, y baúles personales guardados en la base de datos."
+---
+
+## Intercambio
+
+Dos jugadores, una ventana cada uno, y nada se mueve hasta que los dos han aceptado exactamente lo que ven
+en pantalla.
+
+### Pedirlo
+
+| Comando | Qué hace |
+|---|---|
+| `/trade <jugador>` | Envía una petición |
+| `/trade accept [jugador]` | Acepta la petición que tienes |
+| `/trade deny` | La rechaza, y se lo dice a quien la envió |
+
+Agacharse y hacer clic derecho sobre un jugador envía la misma petición, solo con la mano principal.
+Necesita `exyliasurvivalcore.trade`, igual que el comando, y no hace nada si otro plugin ha cancelado el clic.
+
+La petición llega por chat con botones de **ACEPTAR** y **RECHAZAR** en los que se puede hacer clic. Unas
+cuantas reglas deciden qué pasa con ella:
+
+- **Pedirlo de vuelta es aceptar.** Si A se lo ha pedido a B y B hace `/trade A` o se agacha y le hace clic
+  a A, se abre la ventana. Por eso dos jugadores que se agachan y se hacen clic el uno al otro empiezan a
+  intercambiar.
+- **Enviar otra vez la misma petición** se lo recuerda a quien la envía, sin volver a avisar al destinatario.
+- **Un jugador tiene una sola petición entrante.** Una más nueva de otra persona sustituye a la anterior.
+- **`/trade accept <jugador>` con un nombre que no coincide** responde que nadie te lo está pidiendo y
+  descarta la petición pendiente.
+- Una petición dura `request-expire-seconds`, 30 por defecto. Con `0` o menos no caduca nunca.
+- `exyliasurvivalcore.trade` cubre también `/trade accept`, así que un jugador sin ese permiso puede recibir
+  una petición pero no aceptarla.
+
+Una petición se rechaza cuando cualquiera de los dos ya está intercambiando, cuando alguno está en creativo
+(salvo con `allow-creative`), cuando están en mundos distintos (con `same-world` activado) o cuando están
+más lejos que `max-distance`. Las mismas comprobaciones se repiten al aceptar. A un jugador que ha
+desactivado **Peticiones de intercambio** en `/settings` no se le puede pedir nada. Consulta
+[Comodidad](/docs/exyliasurvivalcore/utilidades).
+
+### La ventana
+
+La ventana tiene seis filas. Tu oferta es la cuadrícula de cuatro por cuatro de la izquierda, la del otro
+jugador es la de la derecha, y una columna oscura separa las dos.
+
+| Dónde | Qué es |
+|---|---|
+| Cuadrícula izquierda | Tu oferta. Ranuras reales: lo que pones aquí ha salido de tu inventario |
+| Cuadrícula derecha | Una copia de la oferta del otro. De ella no se puede sacar nada |
+| Abajo a la izquierda | Tu estado. Un clic para aceptar, otro para retirarlo |
+| Abajo en el centro | El resumen de ambos lados, que se convierte en la cuenta atrás |
+| Abajo a la derecha | El estado del otro jugador |
+| Esquinas inferiores | Los botones de dinero, el tuyo a la izquierda y el suyo a la derecha |
+| Centro de la última fila | **CANCELAR** |
+
+Algunos clics funcionan distinto aquí que en un cofre normal:
+
+- **Shift-clic** sobre un objeto de tu inventario lo pone en tu cuadrícula, juntándolo con las pilas que ya
+  haya, y nunca en la del otro jugador.
+- **El doble clic** para recoger una pila en el cursor se rechaza en cualquier parte de la ventana.
+- **Arrastrar** solo se permite cuando todas las ranuras que toca están en tu cuadrícula.
+
+`blocked-materials` lista los materiales que no pueden entrar en un intercambio, por nombre de material. La
+comprobación cubre colocar un objeto, meterlo con shift-clic, cambiarlo con una tecla numérica y
+arrastrarlo. Mira el objeto en sí, no lo que lleva dentro una shulker.
+
+### Aceptar y la cuenta atrás
+
+Cuando los dos aceptan, empieza una cuenta atrás de `confirm-delay-seconds`, 3 por defecto, y el
+intercambio se hace al llegar a cero. Con `0` se hace en el momento en que acepta el segundo jugador.
+
+Estas acciones retiran **las dos** aceptaciones:
+
+- Un cambio en cualquiera de las dos cuadrículas.
+- Un cambio en el dinero de cualquiera de los dos. Escribir otra vez la misma cantidad no cuenta como cambio.
+- Abrir tu página de dinero.
+- Volver a hacer clic en tu propio estado. No se puede retirar solo tu aceptación.
+
+Cuando un cambio detiene una cuenta atrás en marcha, se avisa a los dos jugadores de que algo ha cambiado.
+
+La cuenta atrás va con un reloj que avanza una vez por segundo desde que se abrió la ventana, así que su
+primer segundo puede durar menos de un segundo entero.
+
+### Dinero
+
+Tu botón de dinero abre una página con una entrada por cada moneda que admite el intercambio. Clic
+izquierdo en una entrada para escribir una cantidad; clic derecho para quitar esa moneda de tu oferta. La
+pregunta se hace por chat, o en una ventana de diálogo si el `input.yml` de ExyliaLib prefiere diálogos y el
+cliente los admite. Cerrar la página o pulsar **VOLVER** te devuelve al intercambio sin cancelarlo.
+
+- **Qué monedas.** Las de la lista `currencies`, por id y en ese orden. Si la lista está vacía, el
+  intercambio admite todas las monedas registradas en la economía, con la moneda por defecto primero. Se
+  dejan fuera las que la economía no conoce. La página muestra hasta 28. La lista se fija al abrirse la
+  ventana, así que una moneda añadida a mitad de intercambio no aparece.
+- **Al escribir una cantidad.** Se redondea hacia abajo a lo que admite la moneda, y se rechaza si ahora
+  mismo no tienes tanto. Una cantidad de cero quita esa moneda de tu oferta.
+- **Durante el intercambio no se reserva nada.** Tu saldo se vuelve a comprobar en el momento del
+  intercambio. Si alguno de los dos ya no tiene lo que ofreció, el intercambio se cae con el mensaje de que
+  alguien ya no tenía el dinero.
+- **Todo o nada.** En el momento del intercambio, primero se retiran todas las cantidades de los dos lados y
+  solo después se ingresan. Si falla cualquier retirada o ingreso, se devuelve todo lo que ya se había
+  movido, se cancela el intercambio y los objetos vuelven a sus dueños. Los objetos solo se mueven cuando ya
+  se ha movido todo el dinero.
+
+Con `allow-money: false`, o en un servidor sin economía, los botones de dinero se convierten en paneles de
+marco sin función.
+
+<Callout type="note" title="Los comentarios de currencies están desactualizados">
+El comentario de `currencies` dice que las monedas de objeto y de experiencia nunca valen, y que la ventana
+tiene sitio para cuatro. El código ofrece todas las monedas que conoce la economía, incluidas las de objeto y
+experiencia, y la página de dinero admite 28. Los tipos de moneda están en
+[Economía](/docs/exyliasurvivalcore/economia).
+</Callout>
+
+### Cómo termina un intercambio
+
+| Qué pasa | Resultado |
+|---|---|
+| Los dos aceptan y la cuenta atrás llega a cero | Se hace el intercambio |
+| Cualquiera pulsa **CANCELAR** o cierra la ventana | Se cancela |
+| Cualquiera muere | Se cancela |
+| Cualquiera se desconecta | Se cancela |
+| Se alejan más que `max-distance`, o acaban en mundos distintos con `same-world` activado | Se cancela; se comprueba una vez por segundo |
+| Una cantidad ofrecida ya no se puede pagar en el momento del intercambio | Se cancela |
+| Se apaga el módulo o el servidor | Se cancela |
+
+Recibir daño no termina un intercambio. Pasar a creativo con la ventana abierta tampoco, porque el modo
+creativo solo se comprueba al empezar.
+
+Cuando se cancela, cada cuadrícula vuelve al jugador que la llenó. Cuando se completa, cada cuadrícula pasa
+al otro jugador. En los dos casos los objetos pasan por las recompensas pendientes del plugin: lo que no
+cabe en el inventario, y lo que se le debe a un jugador que se ha ido, se guarda y se le entrega la próxima
+vez que entre. No se tira nada al suelo.
+
+Cada intercambio completado suma uno al contador `trade.completed`. Lo muestra una estadística de
+`modules/stats/stats.yml` con `type: COUNTER` y `counter: trade.completed`. Consulta
+[Combate](/docs/exyliasurvivalcore/combate).
+
+### Ajustes
+
+`modules/trade/config.yml`:
+
+| Ajuste | Por defecto | Qué hace |
+|---|---|---|
+| `settings.request-expire-seconds` | 30 | Cuánto dura una petición. Con `0` o menos no caduca nunca |
+| `settings.request-on-shift-click` | `true` | Si agacharse y hacer clic derecho sobre un jugador envía una petición |
+| `settings.max-distance` | 10.0 | En bloques. `-1` significa a cualquier distancia |
+| `settings.same-world` | `true` | Si los dos tienen que estar en el mismo mundo |
+| `settings.confirm-delay-seconds` | 3 | La cuenta atrás cuando aceptan los dos |
+| `settings.allow-money` | `true` | Si se puede ofrecer dinero |
+| `settings.currencies` | `[]` | Ids de moneda. Vacío significa todas |
+| `settings.allow-creative` | `false` | Si un jugador en creativo puede intercambiar |
+| `settings.blocked-materials` | `[]` | Materiales que no se pueden intercambiar |
+
+La sección `sounds` tiene `request`, `opened`, `accepted`, `countdown`, `completed` y `cancelled`, cada uno
+escrito como `SONIDO|volumen|tono`.
+
+### `window.yml`
+
+`modules/trade/window.yml` es el aspecto de la ventana: el título, el título de la página de dinero, el
+texto que se muestra cuando no hay dinero (`money-none`), y un bloque de objeto para cada parte de la
+ventana. Los bloques son `separator`, `frame`, `own-waiting`, `own-ready`, `partner-waiting`,
+`partner-ready`, `info`, `countdown`, `money-own`, `money-partner`, `money-entry`, `money-back` y `cancel`.
+Las ranuras no están en el archivo y no se pueden mover.
+
+| Valores | Dónde |
+|---|---|
+| `%player%` `%partner%` `%money%` `%partner_money%` `%items%` `%partner_items%` `%seconds%` | Todos los bloques |
+| `%currency%` `%currency_icon%` `%amount%` `%partner_amount%` `%balance%` | `money-entry`, además de los anteriores |
+
+`%money%` y `%partner_money%` llevan una moneda por línea: la línea de lore en la que están escritos se
+dibuja una vez por moneda, así que ponlos en una línea propia. `money-entry` usa
+`material: "%currency_icon%"`, así que cada entrada muestra el icono de su moneda.
+
+El archivo se actualiza con `BundledFiles` de ExyliaLib en cada arranque y en cada recarga:
+
+- Lo que cambias no se sobrescribe nunca.
+- Un bloque que añade una versión nueva se escribe en tu archivo.
+- Un valor por defecto que cambia una versión nueva, en un valor que no has tocado, espera en
+  `/exylialib updates` hasta que lo apliques o te quedes con el tuyo.
+
+La ventana lee primero la copia que viene dentro del jar y pone tu archivo encima. Por eso un bloque que
+falta en tu archivo, porque lo has borrado o porque aún no se ha añadido, se dibuja con los valores de
+fábrica. Borrar un bloque no quita esa parte de la ventana.
+
+## Baúles
+
+Un baúl es un cofre personal que un jugador puede abrir desde cualquier sitio, guardado en la base de datos.
+
+| Comando | Alias | Permiso |
+|---|---|---|
+| `/vault` | `/pv`, `/vaults` | `exyliasurvivalcore.vaults` |
+| `/vault <número>` | `/pv`, `/vaults` | `exyliasurvivalcore.vaults` |
+| `/vaultadmin view <jugador> <número>` | `/pvadmin` | `exyliasurvivalcore.vaults.admin` |
+
+`/vault` sin número abre la lista de baúles. `/vault <número>` abre ese baúl directamente.
+
+### Cuántos
+
+`exyliasurvivalcore.vaults.amount.<número>` fija cuántos baúles tiene un jugador. Si un jugador tiene varios
+de estos permisos, gana el número más alto, aunque sea menor que `default-vaults`. Un jugador sin ninguno, o
+solo con `.amount.0`, recibe `default-vaults`. El resultado siempre se limita a `max-vaults`.
+
+| Ajuste | Por defecto | Qué hace |
+|---|---|---|
+| `settings.default-vaults` | 1 | Baúles de un jugador sin permiso de cantidad |
+| `settings.max-vaults` | 9 | El máximo que puede tener cualquiera, digan lo que digan sus permisos |
+| `settings.rows` | 6 | Filas por baúl, limitadas a 1–6 |
+| `settings.title` | `{primary}&lVAULT {letters_black}» {highlight}%number%` | El título de la ventana. `%number%` es el baúl y `%player%` su dueño |
+| `settings.blocked-materials` | `[]` | Materiales que no se pueden meter en un baúl |
+| `sounds.opened`, `sounds.closed` | `BLOCK_BARREL_OPEN\|1.0\|1.2`, `BLOCK_BARREL_CLOSE\|1.0\|1.2` | Suenan al abrir, y al cerrar una vez guardado el baúl |
+
+`modules/vaults/config.yml`. El comentario de `title` solo menciona `%number%`, pero `%player%` también se
+sustituye. Merece la pena añadirlo si los administradores abren baúles ajenos, porque el título por defecto no
+dice de quién es el baúl.
+
+`blocked-materials` se comprueba igual que en los intercambios: al colocar, con shift-clic, con teclas
+numéricas y al arrastrar, por el material del propio objeto. No saca un objeto bloqueado que ya esté dentro
+de un baúl.
+
+### Una ventana por baúl
+
+Un baúl está abierto como mucho en una ventana en todo el servidor. A cualquier otro que intente abrirlo, sea
+el propio dueño en una segunda ventana o un administrador, se le dice que está abierto en otro sitio y que lo
+intente de nuevo. Un bloqueo que ha dejado un jugador que ya no está conectado se libera cuando alguien
+vuelve a abrir ese baúl.
+
+El contenido se lee al abrir la ventana y se guarda al cerrarla: con Escape, cuando un jugador se desconecta
+y cuando se apaga el módulo. Al apagarse, el plugin espera hasta diez segundos a que terminen esos
+guardados. Entre una apertura y otra no se guarda nada en memoria.
+
+<Callout type="warning" title="Un servidor por base de datos">
+El bloqueo vive en el proceso del servidor. Dos servidores que comparten una base de datos podrían abrir
+cada uno el mismo baúl, y se queda lo del que cierre último. Los baúles son para un solo servidor, o para
+una red en la que un jugador solo llega a un servidor con el módulo activado.
+</Callout>
+
+### Almacenamiento
+
+Los baúles se guardan en la tabla `sc_vaults`, una fila por jugador y por número de baúl. La fila se escribe
+la primera vez que se cierra ese baúl, así que un baúl que nunca se ha abierto no tiene fila.
+
+**Reducir `rows`** no hace perder nada. La próxima vez que se abre un baúl, lo que queda más allá del nuevo
+tamaño va a las recompensas pendientes del dueño y se le entrega la próxima vez que entre, aunque esté
+conectado cuando ocurre. **Perder un permiso de cantidad** tampoco borra nada: esos baúles aparecen como
+bloqueados en la lista y su contenido sigue en la tabla.
+
+### La lista
+
+`modules/vaults/menus/vaults.yml` es un menú paginado con una entrada por cada número de 1 a `max-vaults`.
+Los baúles que el jugador tiene desbloqueados usan `item_template`, y el resto `locked_template`. Es uno de
+los menús de módulo que conservan tus cambios al actualizar. Consulta [Menús](/docs/exyliasurvivalcore/menus).
+
+| Valor | Qué es |
+|---|---|
+| `%vault_number%` | El baúl |
+| `%vault_used%` | Pilas guardadas en él |
+| `%vault_size%` | Ranuras por baúl, según el `rows` actual |
+| `%vault_free%` | Tamaño menos ocupadas |
+| `%player_name%` | El jugador |
+| `%vaults_unlocked%` | Cuántos tiene |
+| `%vaults_max%` | Cuántos muestra la lista |
+
+Las cuentas de ocupadas y libres salen del último guardado, así que un baúl que nunca se ha cerrado aparece
+vacío.
+
+| Acción | Qué hace |
+|---|---|
+| `survivalcore:vault_open <número>` | Cierra el menú y abre ese baúl, si el jugador tiene tantos |
+| `survivalcore:vaults_open` | Abre la lista |
+
+Ninguna de las dos acciones comprueba `exyliasurvivalcore.vaults`, así que un botón con una de ellas abre
+baúles a un jugador que no podría usar `/vault`.
+
+### Abrir el de otro
+
+`/vaultadmin view <jugador> <número>` abre el baúl de otro jugador en la misma ventana que tendría el dueño,
+con el mismo bloqueo. Solo lo pueden usar jugadores, no la consola. El jugador puede estar desconectado,
+siempre que el servidor lo conozca. El número no se comprueba contra lo que tiene permitido el dueño ni
+contra `max-vaults`, así que un administrador puede abrir, y llenar, un baúl al que el dueño todavía no
+llega. `/vaultadmin` sin nada más muestra el uso.

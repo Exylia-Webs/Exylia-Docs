@@ -1,0 +1,284 @@
+---
+title: "Misiones y temporadas"
+description: "Misiones diarias y semanales y clasificaciones diarias, semanales y mensuales, medidas las dos sobre los contadores de estadísticas y pagadas una sola vez entre servidores."
+---
+
+Ni las misiones ni las temporadas cuentan nada por sí mismas. Cada módulo ya suma a un **contador de
+estadísticas** cuando un jugador hace algo — un bloque roto en una mina, una caja abierta, un voto pagado —
+y una misión o una temporada es un objetivo o una clasificación sobre uno de esos contadores. Las dos
+necesitan el módulo `stats`; con él apagado todos los contadores leen cero, y cada módulo lo avisa una vez
+en el log.
+
+## Qué contadores se pueden usar
+
+El `stat` de una misión y el `counter` de una temporada son **claves de contador**, como `mines.blocks`,
+`farming.harvested`, `kills.players`, `kills.mobs`, `crates.opened`, `market.sold`, `votes.total` o
+`missions.completed`. La lista completa, con lo que cuenta cada una, está en
+[Estadísticas](/docs/exyliasurvivalcore/combate#estadísticas).
+
+- Las claves pasan a minúsculas, así que `Mines.Blocks` es `mines.blocks`.
+- Nada comprueba que una clave exista. Una clave que nadie cuenta lee 0 para siempre: su misión no se
+  termina nunca y su temporada no clasifica a nadie. No se avisa en el log.
+- Los ids de `modules/stats/stats.yml` que no son contadores — `kills`, `deaths`, `kdr`, `playtime` y el
+  resto de estadísticas `INTERNAL`, `COMPUTED`, `PAPI` y `VAULT` — **no** son claves de contador y aquí
+  leen 0. Usa `kills.players`, no `kills`.
+
+## Misiones
+
+Un jugador tiene un grupo de misiones diarias y otro de semanales. `/missions` las enseña; una terminada se
+cobra desde ahí.
+
+### Cómo se elige un grupo
+
+- Qué misiones pide una rotación, y el objetivo de una misión con rango, se sacan de un generador con la
+  rotación como semilla. **Todo el servidor recibe las mismas misiones con los mismos números**, y
+  sobreviven a un reinicio.
+- Se sacan `daily-count` y `weekly-count` misiones del grupo de cada rotación. Un grupo con menos misiones
+  que eso las reparte todas.
+- El progreso es el contador ahora menos lo que marcaba cuando se entregó la misión. Lo que el jugador hizo
+  antes no cuenta nunca, y el punto de partida solo se toma cuando sus contadores ya han cargado.
+- Las rotaciones se calculan con el reloj. Un jugador recibe el grupo nuevo al entrar, al abrir
+  `/missions`, y en la siguiente comprobación mientras está conectado. Un grupo que sustituye a otro suena
+  con `missions-rotated` y envía el mensaje de *New missions*; el primer grupo de un jugador no.
+
+La fila de una misión va por jugador, rotación y misión, así que un jugador no puede tener la misma misión
+dos veces en un periodo en ningún servidor.
+
+### missions.yml
+
+`modules/missions/missions.yml`. Una sección `missions` que una versión anterior dejara en `config.yml` se
+mueve aquí al arrancar.
+
+```yaml
+missions:
+  daily_mine:
+    display-name: 'Deep Shift'
+    icon: IRON_PICKAXE
+    description:
+      - 'Break blocks in any of the server mines.'
+    stat: 'mines.blocks'
+    amount: 250-600
+    pool: DAILY
+    money: 60
+    commands: []
+```
+
+| Clave | Por defecto | Qué hace |
+|---|---|---|
+| `display-name` | La clave del bloque | El nombre en pantalla |
+| `icon` | `PAPER` | Un material. Uno desconocido es `PAPER` |
+| `description` | ninguna | Líneas bajo el nombre |
+| `stat` | — | La [clave de contador](#qué-contadores-se-pueden-usar). Obligatoria |
+| `amount` | — | Un número, o un rango como `300-700` sorteado una vez por rotación. Obligatorio, mayor que 0 |
+| `pool` | `DAILY` | `DAILY` o `WEEKLY` |
+| `money` | `0` | Se paga al cobrarla, en la moneda por defecto |
+| `commands` | ninguno | Se ejecutan al cobrarla, desde consola salvo que la línea empiece por `player:` |
+
+Un bloque sin `stat`, con un `amount` que no es un número o rango positivo, o con un `pool` que no es
+ninguno de los dos, se salta con un aviso. `/sc reload` vuelve a leer el archivo. El archivo que viene
+trae siete misiones diarias y seis semanales.
+
+<Callout type="warning" title="Un rango que empieza en 0 puede entregar una misión ya terminada">
+Con `amount: 0-5` el sorteo puede caer en 0, y una misión con objetivo 0 está terminada en el momento en que
+se entrega.
+</Callout>
+
+### Cobrar
+
+Una misión terminada se cobra pulsándola, o con **Collect everything**. La fila se marca como cobrada antes
+de pagar nada, así que un doble clic paga una vez.
+
+- `money` pasa por los boosters de dinero de `missions` — ver [Economía](/docs/exyliasurvivalcore/economia) —
+  y necesita una economía.
+- `commands` reciben `%player%`, `%player_name%`, `%mission%`, `%target%` y `%money%`, el dinero pagado de
+  verdad o, si no se pagó nada, la cantidad configurada.
+- Suma a `missions.completed`, a `missions.daily.completed` o `missions.weekly.completed`, y a
+  `missions.earned` con el dinero pagado.
+
+Cada `check-interval-seconds` el plugin busca misiones recién terminadas. Con `auto-claim: false` al jugador
+le llega *Mission complete* una vez por sesión, y una semanal se anuncia a los jugadores con
+`mission-announcements` encendido en [`/settings`](/docs/exyliasurvivalcore/utilidades). Con
+`auto-claim: true` se cobra en ese momento.
+
+<Callout type="note" title="El cobro automático se salta los anuncios">
+Una misión cobrada por `auto-claim` solo envía la línea de *Collected*. El mensaje de *Mission complete* y el
+anuncio semanal no se envían nunca.
+</Callout>
+
+Una misión quitada de `missions.yml` mientras un jugador la tiene se dibuja como **Retired mission** y no
+se puede cobrar. `/missionsadmin reset` es como un admin le da un grupo nuevo.
+
+### La pantalla
+
+`modules/missions/menus/missions.yml`. La línea **Reward** enseña el dinero configurado antes de boosters;
+una misión que solo paga comandos pone **Items**, den lo que den los comandos. Los botones son
+`survivalcore:missions_open`, `survivalcore:missions_claim <fila>` y `survivalcore:missions_claim_all`.
+
+### Ajustes
+
+`modules/missions/config.yml`:
+
+| Ajuste | Por defecto | Qué hace |
+|---|---|---|
+| `settings.daily-count` | `3` | Misiones diarias por jugador |
+| `settings.weekly-count` | `2` | Misiones semanales por jugador |
+| `settings.reset-hour` | `0` | Hora, 0–23, a la que cambian las dos rotaciones |
+| `settings.weekly-reset-day` | `MONDAY` | Día en que empieza la rotación semanal. Uno desconocido es `MONDAY` |
+| `settings.timezone` | `""` | Zona IANA para las dos. Vacía o desconocida es la del servidor |
+| `settings.auto-claim` | `false` | Cobra las misiones terminadas sin pasar por el menú |
+| `settings.broadcast-weekly` | `true` | Anuncia una misión semanal terminada. Las diarias nunca |
+| `settings.check-interval-seconds` | `20` | Segundos entre comprobaciones. Nunca menos de 5; se lee al arrancar, así que un cambio necesita reiniciar |
+| `sounds.mission-completed` | `UI_TOAST_CHALLENGE_COMPLETE\|1.0\|1.0` | Misión terminada |
+| `sounds.mission-claimed` | `ENTITY_PLAYER_LEVELUP\|1.0\|1.4` | Misión cobrada |
+| `sounds.missions-rotated` | `BLOCK_NOTE_BLOCK_CHIME\|1.0\|1.2` | Un grupo nuevo sustituyó al anterior |
+
+### Comandos
+
+| Comando | Alias | Permiso | Qué hace |
+|---|---|---|---|
+| `/missions` | `/mission` | `exyliasurvivalcore.missions` | Abre la pantalla |
+| `/missionsadmin reset <jugador>` | `/missionadmin` | `exyliasurvivalcore.missions.admin` | Borra sus misiones, esté conectado o no; la próxima vez recibe el grupo del periodo con un punto de partida nuevo |
+
+`/missionsadmin` funciona desde consola.
+
+### Placeholders
+
+| Placeholder | Devuelve |
+|---|---|
+| `%exyliasurvivalcore_missions_daily_done%` | Misiones diarias terminadas o cobradas |
+| `%exyliasurvivalcore_missions_daily_total%` | Misiones diarias que tiene |
+| `%exyliasurvivalcore_missions_weekly_done%` | Misiones semanales terminadas o cobradas |
+| `%exyliasurvivalcore_missions_weekly_total%` | Misiones semanales que tiene |
+| `%exyliasurvivalcore_missions_claimable%` | Terminadas y sin cobrar |
+| `%exyliasurvivalcore_missions_daily_resets%` | Tiempo hasta la rotación diaria |
+| `%exyliasurvivalcore_missions_weekly_resets%` | Tiempo hasta la rotación semanal |
+
+## Temporadas
+
+Una temporada es una clasificación sobre un contador durante un día, una semana o un mes. Al terminar se
+pagan los mejores puestos y se abre la siguiente.
+
+### Cómo cuenta una temporada
+
+Mientras una temporada está abierta, todo lo que se suma a su contador se suma también bajo una clave
+propia, `seasons.<temporada>.<periodo>`. Su clasificación es la de esa clave, así que solo cuenta lo que se
+suma con la temporada abierta, y un reload no reinicia una temporada en marcha.
+
+<Callout type="warning" title="Los contadores de récord personal nunca clasifican">
+Solo alimentan una temporada los contadores a los que se suma. Un contador que se escribe como récord
+personal — `votes.best_streak` es el único que trae el plugin — nunca llega a la clave de una temporada, así que una
+temporada sobre uno de ellos no clasifica a nadie.
+</Callout>
+
+### El cierre, una vez entre servidores
+
+Cada servidor comprueba una vez por minuto, la primera diez segundos después de arrancar. Cuando el
+periodo de una temporada ha terminado y han pasado además `close-delay-minutes`:
+
+1. Todos los servidores intentan borrar la fila de la temporada; el que lo consigue es el único que sigue.
+2. Clasifica los `leaderboard-size` primeros puestos, o tantos como paguen los premios si son más. Una
+   puntuación de 0 no entra.
+3. Guarda los resultados, paga los premios, abre la siguiente temporada y borra el contador de la temporada.
+4. Todos los servidores anuncian los tres primeros a los jugadores con `season-announcements` encendido en
+   [`/settings`](/docs/exyliasurvivalcore/utilidades).
+
+Lo que se cuenta durante el margen de cierre sigue contando para la temporada que se cierra. El premio de un
+jugador conectado en el servidor que cierra se entrega en el momento con *You finished #N*; cualquier otro,
+desconectado o en otro servidor, lo recibe en su siguiente login. El anuncio viaja por el canal `seasons`,
+que en una red necesita Redis.
+
+Una temporada sin fila abierta la abre el primer servidor que se da cuenta: al momento en un primer
+arranque y a los cinco minutos en cualquier otro caso, para no pisarse con un servidor que está entre
+cerrar y volver a abrir.
+
+### Periodos y zona horaria
+
+| Periodo | Nombre | Empieza |
+|---|---|---|
+| `DAILY` | `20260912` | Cada día a `reset-hour` |
+| `WEEKLY` | `2026w37` | El lunes a `reset-hour`. No se puede cambiar, a diferencia de las misiones |
+| `MONTHLY` | `202609` | El día 1 a `reset-hour` |
+
+Todo se lee en `settings.timezone`.
+
+### seasons.yml
+
+`modules/seasons/seasons.yml` es tuyo; las claves que añade una versión nueva aparecen solas, y
+`/sc reload` lo vuelve a leer.
+
+```yaml
+seasons:
+  voters:
+    display-name: '{primary}&lTOP VOTERS'
+    description: 'Votes cast for the server'
+    icon: PAPER
+    counter: 'votes.total'
+    period: MONTHLY
+    format: NUMBER
+    prizes:
+      '1':
+        - type: ECONOMY
+          value: '1500'
+        - 'boostersadmin give %player_name% money 2 2h'
+      '2':
+        - type: ECONOMY
+          value: '900'
+```
+
+| Clave | Por defecto | Qué hace |
+|---|---|---|
+| *(la clave del bloque)* | — | El id de la temporada: minúsculas, dígitos, `_` y `-`, hasta 40. Cualquier otra cosa se salta con un aviso |
+| `display-name` | El id | El nombre en pantalla |
+| `description` | `""` | Una línea en `/seasons` |
+| `icon` | `NETHER_STAR` | El objeto en `/seasons` |
+| `counter` | — | La [clave de contador](#qué-contadores-se-pueden-usar). Obligatoria; una que empiece por `seasons.` se rechaza |
+| `period` | `WEEKLY` | `DAILY`, `WEEKLY` o `MONTHLY`. Uno desconocido es `WEEKLY`, sin avisar |
+| `format` | `NUMBER` | `NUMBER`, `DECIMAL`, `MONEY` o `TIME`, cómo se escriben las puntuaciones. Uno desconocido es `NUMBER`, sin avisar |
+| `prizes` | ninguno | Por puesto |
+
+El archivo que viene clasifica `miners` y `farmers` por semana y `voters` por mes.
+
+### Premios
+
+Cada clave bajo `prizes` es un puesto, `'1'`, o un rango, `'4-10'`, y su valor es una
+[lista de recompensas de Exylia](/docs/exyliasurvivalcore/recompensas-y-votos#listas-de-recompensas). Un
+puesto cubierto por dos claves se queda con la primera que esté escrita. Una clave que no es un puesto se
+avisa y se salta. El dinero de los premios no lo multiplican los boosters.
+
+### Ajustes
+
+`modules/seasons/config.yml`:
+
+| Ajuste | Por defecto | Qué hace |
+|---|---|---|
+| `settings.timezone` | `""` | La zona en la que se cuentan días, semanas y meses. Vacía o desconocida es la del servidor |
+| `settings.reset-hour` | `0` | Hora, 0–23, a la que empieza un día |
+| `settings.close-delay-minutes` | `2` | Minutos que una temporada sigue abierta tras acabar su tiempo, para que se escriban las últimas cuentas |
+| `settings.leaderboard-size` | `10` | Puestos que enseña una clasificación |
+
+### Pantallas y comandos
+
+`modules/seasons/menus/seasons.yml` lista cada temporada con sus tres primeros y el puesto y la puntuación
+del jugador; pulsar una abre `season_board.yml`, la clasificación completa con el premio de cada puesto y
+los ganadores de la temporada anterior. Las clasificaciones en pantalla tienen como mucho un minuto. Los
+botones son `survivalcore:seasons_open` y `survivalcore:seasons_board <temporada>`.
+
+| Comando | Alias | Permiso | Qué hace |
+|---|---|---|---|
+| `/seasons` | `/season` | `exyliasurvivalcore.seasons` | Abre la lista |
+| `/seasonsadmin close <temporada>` | `/seasonsa` | `exyliasurvivalcore.seasons.admin` | Clasifica y paga la temporada ya y abre la siguiente al momento |
+
+`/seasonsadmin close` funciona desde consola. La temporada que abre dura hasta el final normal del periodo,
+así que cerrar una semanal un jueves deja una corta hasta el lunes.
+
+### Placeholders
+
+Un id de temporada con guiones bajos se lee entero; en los `top_` el puesto va primero.
+
+| Placeholder | Devuelve |
+|---|---|
+| `%exyliasurvivalcore_seasons_left_<temporada>%` | Tiempo hasta que acaba, o vacío si la temporada no existe |
+| `%exyliasurvivalcore_seasons_value_<temporada>%` | La puntuación del jugador, con formato, o `0` |
+| `%exyliasurvivalcore_seasons_position_<temporada>%` | Su puesto, o `0` si no está clasificado |
+| `%exyliasurvivalcore_seasons_top_name_<puesto>_<temporada>%` | El nombre en ese puesto, o `—` |
+| `%exyliasurvivalcore_seasons_top_value_<puesto>_<temporada>%` | La puntuación en ese puesto, o `—` |

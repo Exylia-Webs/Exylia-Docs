@@ -1,0 +1,349 @@
+---
+title: "Shop"
+description: "The server shop: categories and products built in game, buying and selling, a currency per product, stock, limits, moving prices, rotations and discounts."
+---
+
+The shop is a set of **categories**, each holding **products** that the shop sells, buys back, or both.
+All of it is built in game from `/shopadmin`. There is no catalogue file: categories and products are
+database rows. `modules/shop/config.yml` only holds the settings that apply to the whole shop.
+
+The module is the `shop` switch in `config.yml`, and like every switch it takes a restart. It needs an
+economy. Without one the plugin logs a warning at startup, and every purchase and sale is refused with
+*"No economy is installed, so the shop is closed."* Currencies, balances and Vault are covered in
+[Economy](/docs/exyliasurvivalcore/economy).
+
+## Commands and permissions
+
+| Command | Aliases | What it does |
+|---|---|---|
+| `/shop [category]` | `/tienda` | Opens the shop, or goes straight to one category by id. An unknown id says so and opens the shop instead |
+| `/sell` | `/vender` | Opens the sell window |
+| `/sell hand` | | Sells the product you are holding |
+| `/sell all` | | Sells everything in your inventory that the shop buys back |
+| `/shopadmin` | `/shopa` | Opens the editor |
+| `/shopadmin log <player> [rows]` | `/shopa log` | Lists a player's latest purchases and sales, newest first. `rows` defaults to 10 and is capped at 50. Works from the console |
+
+| Permission | Description |
+|---|---|
+| `exyliasurvivalcore.shop` | `/shop` |
+| `exyliasurvivalcore.shop.sell` | `/sell` and the sell buttons: the sell window and *sell everything* |
+| `exyliasurvivalcore.shop.admin` | `/shopadmin` and every button in the editor. It also gets past every category and product permission |
+| `exyliasurvivalcore.shop.sell.<multiplier>` | Multiplies what the shop pays this player, for example `exyliasurvivalcore.shop.sell.1.5`. The highest node a player holds is the one that counts, and nothing below 1 has any effect |
+
+Selling a single product from its category screen needs only `exyliasurvivalcore.shop`. The `.sell`
+node guards `/sell`, the sell window and the *sell everything* button.
+
+<Callout type="note" title="`exyliasurvivalcore.shop.category.` is checked nowhere">
+The code declares that prefix, but nothing reads it. To lock a category, type any node into the
+category's own **Permission** field in the editor.
+</Callout>
+
+The module adds no PlaceholderAPI placeholders. The `%product_*%` and `%category_*%` values in the menu
+files work only inside those menus, and each file lists its own values in its header.
+
+## Building the catalogue
+
+`/shopadmin` opens the category list. The emerald creates a category: type an id, which is lowercased
+and can be up to 64 characters, and the category editor opens.
+
+### A category
+
+| Field | Default | What it does |
+|---|---|---|
+| Status | On | A disabled category disappears for players, and nothing in it can be bought or sold |
+| Name | The id | The button's title |
+| Description | — | The button's lore |
+| Icon | `CHEST` | What the button looks like |
+| Position | Auto | Where the button goes on the front screen, from 0 to 20 |
+| Permission | — | The node a player needs to open the category and trade in it |
+| Currency | The default currency | The currency **new** products in this category start with. Products already there keep theirs |
+| Discount | — | A percentage off every buy price in the category, for a set length of time |
+| Rotation | Off | Shows a changing selection of products instead of all of them |
+| Products per rotation | 7 | 1 to 45 |
+| Rotation length | 24 hours | At least 1 |
+| Products | | Opens the layout grid |
+| Preview | | Opens the category as a player sees it |
+| Delete | | Removes the category **and every product in it**, after a confirmation |
+
+Positions are chosen on a **grid picker** that has the front screen's shape: 21 buttons in rows of seven.
+Free positions are green. Taken ones are red and show the name of whatever holds them. **Auto**
+puts the category in the first gap. A category with no position, or one whose position is already
+taken, goes into the first free position on screen, and gaps left between placed categories stay empty.
+
+On the text prompts for a description or a permission, `clear` or `none` removes the value.
+
+### The layout grid
+
+**Products** opens a 54-slot grid. The top five rows are the category's 45 positions, slot for slot as
+players see them. The bottom row holds instructions, **Back**, and a command block.
+
+- **Put an item on a free slot** and that slot becomes a product. The product is an exact copy of the
+  stack on your cursor, including its name, lore, enchantments and count. Nothing is taken: the stack
+  stays on your cursor.
+- **Click a product** to open its editor.
+- **Shift-click a product**, then click a free slot, to move it there. Clicking a taken slot cancels the move.
+- **The command block** creates a product that runs commands instead of handing over an item, in the
+  first free position. When all 45 positions are full it refuses.
+
+**The stack is the unit.** If you drop 16 arrows, the product is sold and bought back 16 at a time,
+and the price is the price of those 16. When a player sells, their items are compared with the stored
+stack in every way except the count.
+
+A new product has **both prices switched off** and is shown as *not on sale* until you give it at least one.
+
+### A product
+
+| Field | Default | What it does |
+|---|---|---|
+| Item | The stack that was dropped | Click it to hand over a different stack through a one-slot window. The new stack's count becomes the unit |
+| Status | On | A disabled product disappears from the category |
+| Name | The item's own name | `clear` goes back to the item's name |
+| Description | — | An extra line in the lore |
+| Buy price | `-1` | Price per unit. `-1`, or any negative number, takes the product off sale |
+| Sell price | `-1` | What the shop pays per unit. `-1` means the shop does not buy it back. A command product is never bought back |
+| Currency | The category's currency at creation | Chosen from every currency the economy knows, with the default listed first |
+| Pricing | Fixed | Click to cycle through **Fixed**, **By demand** and **Random** |
+| Discount | — | A percentage off the buy price, for a set length of time |
+| Stock | `-1` | Units shared by the whole server. `-1` means unlimited |
+| Restock | Never | How often the stock refills |
+| Buy limit | `-1` | Units one player may buy per period |
+| Sell limit | `-1` | Units one player may sell per period |
+| Limit period | 24 hours | How long one period lasts. At least 1 |
+| Permission | — | The node a player needs to trade this product |
+| Position | Set by the grid | 0 to 44, on the same kind of grid picker, with **Auto** |
+| Commands | — | Command products only. They run when the product is bought, with `%player%` and `%player_name%` replaced by the buyer |
+| Delete | | After a confirmation |
+
+The buy and sell buttons show two figures: the **base** price you set and the price **right now**,
+after pricing, discounts and your own sell bonus.
+
+### The example catalogue
+
+When the shop starts and finds no categories and no products, it writes five categories with
+`settings.example-catalogue` on, which is the default:
+
+| Id | Icon | Position | Products |
+|---|---|---|---|
+| `blocks` | `BRICKS` | 8 | 15, from dirt at 3 / 1 to obsidian at 45 / 15 |
+| `armoury` | `DIAMOND_SWORD` | 9 | 16 arrows, bows, shields, and iron and diamond gear. Buy only |
+| `farming` | `WHEAT` | 10 | 15 seeds, crops and a hay block |
+| `mobs` | `ZOMBIE_HEAD` | 11 | 16, from rotten flesh at 3 / 1 to shulker shells at 150 / 50 |
+| `miscellaneous` | `CHEST` | 12 | 15 odds and ends. Torches, experience bottles, name tags, saddles, ender chests and anvils are buy only |
+
+Every price is a whole number in the default currency, and every product uses fixed pricing with no
+stock or limits. The prices follow two rules. A product sells back for about a third of its buy price.
+When one product can be crafted into another, the output never sells for more than its inputs. Gear,
+and anything crafted from materials the shop doesn't sell, is buy only. Edit or delete these like any
+other category.
+
+<Callout type="warning" title="Deleting everything brings the examples back">
+The check runs on every start, not only the first. If you delete every category and product and
+`example-catalogue` is still `true`, the next start writes the five categories again. Set it to `false`
+before you clear the shop.
+</Callout>
+
+## Buying and selling
+
+`/shop` opens the front screen: 21 category buttons with the player's balance in every currency. A
+category the player lacks the permission for is left out, or drawn behind iron bars when
+`hide-locked-categories` is `false`.
+
+Inside a category, the way a product is drawn depends on what the viewer can do with it: buy and sell,
+buy only, sell only, a command, sold out, locked (no permission) or not on sale. If a product sells
+both ways and is sold out, it is shown as sell only, because the shop still buys it back.
+
+| Click | Does |
+|---|---|
+| Left | Opens the amount screen to buy |
+| Right | Opens the amount screen to sell |
+| Shift | Buys or sells `shift-click-amount` units immediately |
+
+On a sell-only product, both left and right click sell.
+
+The **amount screen** has buttons for −64, −16, −1, +1, +16 and +64, plus **ONE** and **MAX**. MAX is the
+most the player can do right now. When buying, that is the lowest of `max-amount`, the stock, their
+remaining buy limit, what their balance covers, and how many units fit in their inventory. When selling,
+it is the lowest of `max-amount`, the units they carry and their remaining sell limit. **CONFIRM** only
+appears while the chosen amount is possible. A command product is always bought one at a time, and its
+amount buttons are hidden.
+
+A purchase happens in a fixed order. The stock and the player's limit are reserved first. Then the
+money is taken. The items or commands are handed over last. If a step fails, the steps before it are
+undone. A purchase that won't fit in the inventory is refused before anything is charged. Room is
+counted across the storage slots and the hotbar.
+
+A sale runs the other way round: the items leave the inventory first and the money arrives second. If
+the payment fails, the items come back.
+
+### The three ways to sell in bulk
+
+- **The sell window**: the gold ingot on either shop screen (left click) or `/sell`. It has 45 slots.
+  Put items in and **close it to sell**. Anything the shop doesn't buy comes back, and so does any
+  leftover that doesn't make a whole unit. If there is no room for them, they are kept and delivered the
+  next time the player joins. A reload that closes an open sell window completes the sale first.
+- **Sell everything**: the gold ingot's right click or `/sell all`. It sells every product the shop buys
+  back from the slots `sell-all-scope` covers, then reports one line per product and a total per currency.
+- **`/sell hand`**: works out which product the held item is and sells as many units as that stack holds.
+
+When an item matches more than one product, all three methods, and the sell wands, use the **oldest**
+enabled product in an enabled category.
+
+<Callout type="warning" title="`sell-all-scope: STORAGE` still takes from the hotbar">
+With `STORAGE`, `/sell all` counts only the 27 storage slots. The items it then removes are taken
+starting from the first hotbar slot. If a product sits in both places, the hotbar stack goes first and
+the same amount stays behind in storage.
+</Callout>
+
+<Callout type="note" title="`/sell hand` does not take only the held stack">
+The held stack decides which product is sold and how many units. The items themselves are taken from
+anywhere in the inventory, starting with the first hotbar slot.
+</Callout>
+
+## Prices
+
+A unit price is worked out in this order:
+
+1. The **base price** you set.
+2. **Pricing** changes it: fixed leaves it alone, by demand adds the current drift, and random applies
+   the current draw. This step affects the buy price and the sell price equally.
+3. **Buy side**: the larger of the product's discount and the category's discount is taken off. The two
+   are not added together.
+4. **Sell side**: the result is multiplied by the player's best `exyliasurvivalcore.shop.sell.<multiplier>`
+   node and by any money booster that applies to `shop-sell`.
+5. The price is rounded to the decimals of the product's currency.
+
+The total for several units is rounded once, at the end.
+
+### Currencies
+
+Every product has its own currency, and it is used for the price, the balance check and the payment.
+Different products in the same category can use different currencies, and a *sell everything* reports
+one total per currency. Any currency the economy knows can be picked, including the experience currencies
+once they are turned on. See [Economy](/docs/exyliasurvivalcore/economy).
+
+### By demand
+
+Every unit bought pushes the price **up** by `step-percent` of the base. Every unit sold back pushes it
+**down** by the same amount. The drift is kept between `floor-percent` and `ceiling-percent` of the base,
+and when nobody trades it moves back towards the base by `decay-percent-per-hour` percentage points each
+hour.
+
+With the defaults, 10 units bought put a price of 100 at 110. After two hours with no trading it is back
+at 100. However much is traded, it stays between 50 and 200. Sales through sell wands and autosell move
+the price too. Switching a product's pricing mode resets its drift to zero.
+
+The lore shows the drift as **Trend**: *Stable*, or a signed percentage.
+
+### Random
+
+Each product gets a new random price every `reset-hours`, anywhere within `spread-percent` above or below
+its base. The draw depends only on the product and the period, so it is the same on every server and
+survives a restart. Periods are counted from midnight UTC, so with the default of 6 hours the prices
+change at 00:00, 06:00, 12:00 and 18:00 UTC. **Trend** shows how long until the next draw.
+
+### Discounts
+
+A discount has a percentage from 0 to 100 and a duration of at least one minute (`2d`, `12h`, …).
+Entering `0` removes it. A discount only lowers buy prices, and it ends by itself when its time is up.
+When both the product and its category have one, the larger applies.
+
+## Stock and limits
+
+**Stock** is shared by every player. Buying takes units out. Selling back puts units in, up to the
+maximum. Setting the stock fills it to that number. When it reaches zero the product is drawn as sold
+out with a restock countdown, and a purchase is refused with the time left.
+
+**Restock** refills the stock to its maximum. The interval is entered as a duration (`30m`, `6h`, `0s`
+for never) and stored in whole minutes. The countdown starts when you set it. The plugin checks once a
+minute. After a refill, the next one is due one interval later.
+
+<Callout type="note" title="Two restock details">
+An interval under a minute, such as `30s`, is stored as zero minutes, which means **never**. A restock
+that falls due while the stock is already full does not start a new countdown, so the first purchase
+after that is refilled within the next minute.
+</Callout>
+
+**Limits** apply to each player and each product. Buy and sell limits are counted separately, but they
+share one period of `Limit period` hours. The period starts at the player's first trade that counts. Once
+it has run out, both counts start again from zero at their next trade. A player who reaches a limit is
+told what the limit is and how long until it resets. A trade is only counted while its limit is set, so
+adding a limit later starts every player at zero. A player's counts are loaded when they join.
+
+For a limit that covers the whole server, use stock.
+
+<Callout type="warning" title="Several servers on one database">
+Each server reads the catalogue once, when the module starts. Changes made in the editor on one server
+are written to the database, but other servers don't see them until they restart. Stock, limits and the
+demand drift are also held by each server separately. Two servers selling the same product each work from
+their own copy, and whichever writes last wins.
+</Callout>
+
+## Rotations
+
+A category with **Rotation** on ignores product positions. It shows `Products per rotation` of its
+enabled products, drawn afresh every `Rotation length` hours and placed from the first slot. As with random
+prices, the draw depends only on the category and the period. It is the same on every server, periods are
+counted from midnight UTC, and nothing about it is stored. On the front screen a rotating category shows
+how long until the next draw.
+
+<Callout type="note" title="On offer counts the whole category">
+The rotating button's *On offer* line shows every enabled product in the category, not the number the
+current rotation displays.
+</Callout>
+
+<Callout type="note" title="A disabled category cannot be previewed">
+**Preview** opens the category the way a player would. A disabled category is refused with *"There is no
+shop category called …"*, even for an admin.
+</Callout>
+
+## Settings
+
+`modules/shop/config.yml`:
+
+| Setting | Default | What it does |
+|---|---|---|
+| `settings.hide-locked-categories` | `true` | Leaves a category the player can't open off the front screen. `false` draws it locked |
+| `settings.shift-click-amount` | 1 | Units a shift-click buys or sells without opening the amount screen |
+| `settings.sell-all-scope` | `ALL` | `ALL` includes the hotbar in *sell everything*. `STORAGE` limits it to the 27 storage slots |
+| `settings.max-amount` | 2304 | The most units one purchase or sale on the amount screen can reach |
+| `settings.example-catalogue` | `true` | Whether an empty shop is filled with the five example categories on start |
+| `demand.step-percent` | 1.0 | Percentage of the base that one unit bought adds and one unit sold removes |
+| `demand.floor-percent` | 50.0 | The lowest a demand price can go, as a percentage of the base |
+| `demand.ceiling-percent` | 200.0 | The highest it can go |
+| `demand.decay-percent-per-hour` | 5.0 | Percentage points the drift recovers each hour |
+| `random.spread-percent` | 25.0 | How far above or below the base a random draw can land |
+| `random.reset-hours` | 6 | How long one draw lasts |
+| `sounds.bought` | `ENTITY_EXPERIENCE_ORB_PICKUP\|1.0\|1.4` | `SOUND\|volume\|pitch` |
+| `sounds.sold` | `ENTITY_PLAYER_LEVELUP\|0.8\|1.6` | |
+| `sounds.failed` | `ENTITY_VILLAGER_NO\|1.0\|1.0` | |
+
+Rotation size and length, stock, restock, limits and discounts are set per category or per product in
+the editor, not in this file.
+
+## Where it is kept
+
+| What | Where |
+|---|---|
+| Categories | `sc_shop_categories` |
+| Products, with their current stock, demand drift and next restock | `sc_shop_products` |
+| Each player's limit counts | `sc_shop_limits` |
+| Every purchase and sale: player, product, action, units, unit price, total and currency | `sc_shop_log`, read by `/shopadmin log`. It is never pruned |
+| Settings | `modules/shop/config.yml` |
+| Player screens | `modules/shop/menus/shop.yml`, `category.yml`, `amount.yml`. These are yours to edit |
+| Editor screens | `menus/admin/shop_categories.yml`, `shop_category.yml`, `shop_product.yml`. They are overwritten on every start and reload |
+| Text, including the sell window and layout grid titles | The `shop` section of `messages.yml` |
+
+The sell window and the layout grid are plain inventories rather than menu files, so their layout can't
+be edited. See [Database](/docs/exyliasurvivalcore/database) and [Menus](/docs/exyliasurvivalcore/menus).
+
+## Other modules that use shop prices
+
+- **Sell wands and autosell** sell only what the shop buys back, at the price the shop would pay that
+  player, with a wand's own multiplier on top. They count against sell limits and move demand prices. The
+  `sell-wands` module needs the shop enabled.
+- **Money boosters** with the `shop-sell` source raise every shop sale, including sales through wands.
+- **The market** adds *Shop pays … each* to a listing whose item the shop buys back. That figure is the
+  price after pricing and before any player's bonus, divided down to a single item.
+
+Sell wands and boosters are documented in [Economy](/docs/exyliasurvivalcore/economy), and the market in
+[Market](/docs/exyliasurvivalcore/market).

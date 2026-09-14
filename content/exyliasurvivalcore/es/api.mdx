@@ -1,12 +1,15 @@
 ---
 title: "API"
-description: "Lee homes, warps, kits, rangos y leaderboards, controla los viajes y los reclamos, y cancela cualquiera de ellos antes de que ocurra."
+description: "Lee homes, warps, kits, rangos, llaves de cajas, recompensas por cabeza y leaderboards, controla los viajes, los reclamos y la rotura de bloques en minas, abre las pantallas del plugin y entérate de duelos, reinicios y ascensos."
 badge: "dev"
 ---
 
-`SurvivalService` es la parte de ExyliaSurvivalCore que otro plugin puede leer o accionar: homes,
-warps, kits, estadísticas y rangos. Seis eventos cancelables se colocan delante de las cosas que
-cambian el mundo de un jugador, así que una integración puede negarlas en vez de limpiar después.
+`SurvivalService` es la parte de ExyliaSurvivalCore que otro plugin puede leer o accionar: spawn,
+teletransporte aleatorio, homes, warps, kits, llaves de cajas, estadísticas, rangos, recompensas por
+cabeza, bloques de minas y seis de las pantallas del plugin. Lo acompañan diez eventos. Ocho son
+cancelables y se disparan delante de las cosas que cambian el mundo de un jugador, así que una
+integración puede negarlas en vez de limpiar después; los otros dos avisan de un duelo o de un
+reinicio de mina que ya ocurrió.
 
 ```java
 ExyliaAPI.get(SurvivalService.class).ifPresent(survival ->
@@ -16,7 +19,11 @@ ExyliaAPI.get(SurvivalService.class).ifPresent(survival ->
 
 <Callout type="note" title="Agregarlo a tu proyecto">
 El artefacto, el repositorio y la línea del `plugin.yml` son los mismos para todos los plugins de
-Exylia y están en la [página de la API pública](/docs/exylialib/api).
+Exylia y están en la [página de la API pública](/docs/exylialib/api). El teletransporte aleatorio,
+los kits de regalo, las llaves de cajas, la escalera de rangos y su coste, la rotura de bloques en
+minas, las recompensas por cabeza, los abridores de menú, y `BountyClaimEvent`, `DuelRoomEndEvent`,
+`MineBlockBreakEvent` y `MineResetEvent` llegaron en `exylia-api` `v1.133.0`: compila contra esa
+etiqueta o una más nueva para usarlos.
 </Callout>
 
 <Callout type="warning" title="Tener el service no es tener los módulos">
@@ -24,13 +31,15 @@ El plugin es un conjunto de módulos que el administrador enciende uno a uno, as
 puede correr el survival core sin homes, sin warps o sin kits. Cada método se degrada cuando su
 módulo está apagado — una lista vacía, un `Optional` vacío, `false`, `0` o no hacer nada — y nunca
 lanza una excepción. `isModuleEnabled` es como distingues «no tiene homes» de «no hay módulo de
-homes».
+homes». Los abridores de menú son la excepción que lo confirma: le dicen al jugador que el módulo
+está apagado, igual que el comando.
 </Callout>
 
 Todo lo que devuelve un valor lee una caché y puedes llamarlo desde el redibujado de un menú o desde
-un placeholder. Todo lo demás teletransporta a un jugador, le da objetos o le cobra dinero, y ejecuta
-el mismo flujo que su propio comando — con sus comprobaciones de permisos y los mensajes que ve —,
-así que llámalo en el hilo principal y no más veces de las que un jugador podría provocarlo.
+un placeholder. Todo lo demás teletransporta a un jugador, le da objetos, rompe un bloque, abre una
+pantalla o le cobra dinero, y ejecuta el mismo flujo que su propio comando o su propio golpe — con
+sus comprobaciones de permisos y los mensajes que ve —, así que llámalo en el hilo dueño del jugador
+(o, para un bloque de mina, del bloque) y no más veces de las que un jugador podría provocarlo.
 
 ## Módulos
 
@@ -40,8 +49,9 @@ así que llámalo en el hilo principal y no más veces de las que un jugador pod
 | `Set<String> enabledModules()` | Todos los ids de módulo que están encendidos. |
 
 Los ids son el vocabulario del propio plugin y el conjunto crece entre releases, así que trata uno
-desconocido como un módulo que tu integración no conoce y no como un error. Los siete que hay detrás
-de este service son `spawn`, `homes`, `warps`, `kits`, `stats`, `rankup` y `playtime-rewards`.
+desconocido como un módulo que tu integración no conoce y no como un error. Los que hay detrás de
+este service son `spawn`, `rtp`, `homes`, `warps`, `kits`, `crates`, `stats`, `rankup`,
+`playtime-rewards`, `mines` y `bounties`, y `duel-rooms` dispara uno de los eventos.
 
 ## Spawn
 
@@ -49,6 +59,21 @@ de este service son `spawn`, `homes`, `warps`, `kits`, `stats`, `rankup` y `play
 |---|---|
 | `Optional<Location> spawn()` | Dónde está el spawn del servidor. Vacío si no hay ninguno puesto o el módulo está apagado. |
 | `void teleportToSpawn(Player player)` | Manda al jugador allí. |
+
+## Teletransporte aleatorio
+
+| Método | Qué hace |
+|---|---|
+| `void randomTeleport(Player player, String worldId)` | Manda al jugador a un punto aleatorio de un mundo, igual que `/rtp <mundo>`. Para un NPC o un portal que haga las veces del comando. |
+
+`worldId` es el nombre del mundo tal como lo lista la configuración del teletransporte aleatorio.
+Primero se comprueba el mundo — que esté en la lista, activado y cargado; si no, al jugador se le
+dice que no existe —, después su cooldown y su saldo, y luego corre el warmup exactamente como el del
+comando, mensajes incluidos. No se comprueba `exyliasurvivalcore.rtp`, el permiso que pide el propio
+`/rtp`; los permisos para saltarse el cooldown y el precio siguen valiendo.
+
+La búsqueda de un punto seguro se hace después del warmup, así que el jugador aterriza un momento
+después de que la llamada vuelva, o no aterriza si se mueve o recibe daño mientras tanto.
 
 ## Homes
 
@@ -89,8 +114,16 @@ pagarlo, así que sirve para poner una fila en gris en un menú, no para garanti
 | `Optional<SurvivalKit> kit(String kitId)` | Uno por su id. Vacío si ninguno tiene ese id. |
 | `KitClaimStatus kitStatus(Player player, String kitId)` | Si podría reclamarlo ahora mismo, y por qué no. La misma respuesta que daría `claimKit`, calculada sin entregar nada — que es de donde un menú dibuja la fila. |
 | `boolean claimKit(Player player, String kitId)` | Le da el kit. Hace todas las comprobaciones primero y no entrega nada si una falla, así que un reclamo rechazado no le cuesta ni un uso ni un cooldown. |
+| `boolean giveKit(Player player, String kitId, boolean ignoreLimits)` | Le da el kit como recompensa y no como reclamo — una misión, un voto, una caja que paga con un kit. `claimKit` es esto con `ignoreLimits` en false. |
 | `long kitCooldownMillis(UUID player, String kitId)` | Milisegundos hasta que pueda reclamarlo otra vez. |
 | `int kitUsesLeft(UUID player, String kitId)` | Reclamos que le quedan. `-1` si el kit no tiene límite. |
+
+Con `ignoreLimits` en true, `giveKit` se salta el cooldown y el límite de usos del kit, igual que la
+entrega de un administrador y el kit de primera entrada. El regalo queda registrado igualmente, así
+que arranca el cooldown y cuenta como un uso para el próximo reclamo del propio jugador. Todo lo demás
+se comprueba en ambos casos — que el kit esté activado, que el jugador tenga su permiso y el hueco en
+el inventario —, y los dos métodos disparan `KitClaimEvent` y le cuentan al jugador el rechazo igual
+que el comando.
 
 <Callout type="note" title="Los dos contadores de kit responden 0 con el jugador desconectado">
 `kitCooldownMillis` y `kitUsesLeft` responden `0` para alguien que no está conectado, y es a
@@ -99,6 +132,23 @@ así que preguntar por alguien ausente no tiene respuesta que dar ni motivo para
 Un `0` de `kitUsesLeft` también significa «no existe ese kit», así que comprueba que el jugador esté
 conectado antes de leer cualquiera de los dos como un número.
 </Callout>
+
+## Cajas
+
+| Método | Qué hace |
+|---|---|
+| `int crateKeys(UUID player, String crateId)` | Cuántas llaves de una caja tiene un jugador en su saldo. `0` si no tiene, está desconectado, la caja no existe o el módulo está apagado. |
+| `boolean giveCrateKeys(UUID player, String crateId, int amount)` | Suma llaves a su saldo. `false` para una caja desconocida, un `amount` menor que `1` o el módulo apagado. |
+
+`crateKeys` cuenta solo el saldo. Las llaves físicas que lleva en el inventario son objetos como
+cualquier otro y no cuentan. El saldo se guarda por jugador conectado, así que uno desconectado da
+`0` en vez de leer la base de datos en el hilo que llama.
+
+`giveCrateKeys` es para un listener de votos, una tienda o el premio de un evento, y funciona con un
+jugador desconectado o en otro servidor. Primero se carga su saldo, así que una entrega nunca escribe
+una fila construida desde cero encima de las llaves que ya tenía. Para alguien ya cargado en este
+servidor las llaves llegan al instante; para cualquier otro llegan cuando termina esa lectura, un
+momento después de que vuelva `true`. Al jugador no se le dice nada.
 
 ## Estadísticas
 
@@ -124,14 +174,71 @@ tiempo jugado, no el contador de sesión del servidor.
 
 | Método | Qué hace |
 |---|---|
+| `List<Rank> ranks()` | La escalera entera, del más bajo al más alto. Vacía si el módulo está apagado. |
 | `Optional<Rank> currentRank(UUID player)` | El rango que alcanzó. Vacío si todavía no tiene ninguno. |
 | `Optional<Rank> nextRank(UUID player)` | El rango al que va. Vacío si ya está arriba del todo. |
 | `int prestigeLevel(UUID player)` | Cuántas veces hizo prestigio. `0` si nunca lo hizo. |
+| `double nextRankCost(UUID player)` | El dinero que le cobrará su próximo ascenso. `0` si es gratis, ya está arriba del todo, está desconectado o el módulo está apagado. |
 | `boolean canRankUp(Player player)` | Si cumple todos los requisitos de su siguiente rango. |
 | `boolean rankUp(Player player)` | Lo sube de rango, cobrando, ejecutando los comandos de recompensa y anunciándolo igual que su propio comando. |
 
 `canRankUp` necesita al jugador y no su id: un requisito puede ser un permiso o un placeholder que
 solo se resuelve contra alguien conectado.
+
+`nextRankCost` es la suma de los requisitos de dinero del siguiente rango tal como los paga este
+jugador: multiplicados una vez por cada nivel de prestigio por el multiplicador de coste del
+prestigio (ver [progresión](/docs/exyliasurvivalcore/progresion)). Es solo dinero: un rango también
+puede pedir tiempo jugado, un permiso o una condición de placeholder, así que un jugador que puede
+pagarlo igual puede ser rechazado. Lee el rango del jugador de la caché, y por eso responde `0` para
+alguien desconectado.
+
+## Minas
+
+| Método | Qué hace |
+|---|---|
+| `MineBreakResult breakMineBlock(Player player, Block block)` | Rompe un bloque igual que lo haría el propio golpe del jugador dentro de una mina. `UNCLAIMED` si ninguna mina es dueña del bloque o el módulo de minas está apagado. |
+
+Para plugins que rompen bloques en nombre de un jugador — un pico de 3x3, un minero de vetas. Dentro
+de una mina la rotura de bloques del propio servidor siempre se cancela y la mina quita el bloque
+ella misma, así que romper un bloque ahí de cualquier otra forma se salta el permiso de la mina, su
+loot y su regeneración, y deja un agujero que la mina nunca rellena. Pasa cada bloque por aquí primero
+y rómpelo tú solo con `UNCLAIMED`.
+
+La mina comprueba su permiso, dispara `MineBlockBreakEvent` y rompe el bloque con el objeto que el
+jugador tiene en la mano principal: sus encantamientos dan forma a los drops vanilla (Fortuna, Toque
+de seda) salvo que el bloque tenga una tabla de loot propia, y pierde durabilidad en ambos casos. Un
+jugador con `exyliasurvivalcore.mines.admin` pasa tanto el permiso como la restricción. Al jugador no
+se le dice nada cuando la mina se niega: quien llama y recibe un rechazo en ocho bloques a la vez es
+quien sabe si merece un mensaje.
+
+## Recompensas por cabeza
+
+| Método | Qué hace |
+|---|---|
+| `BigDecimal bountyTotal(UUID player)` | La suma de todas las recompensas puestas sobre un jugador, que es lo que cobra quien lo mate. `BigDecimal.ZERO` si no hay ninguna o el módulo está apagado. |
+
+Todas las recompensas viven en memoria, así que responde también para un jugador desconectado.
+
+## Menús
+
+| Método | Abre | Permiso que comprueba |
+|---|---|---|
+| `void openKitsMenu(Player player)` | La lista de kits, como `/kit`. | `exyliasurvivalcore.kits` |
+| `void openWarpsMenu(Player player)` | La lista de warps, como `/warps`. | `exyliasurvivalcore.warps.use` |
+| `void openHomesMenu(Player player)` | Los homes del jugador, como `/homes`. | `exyliasurvivalcore.homes` |
+| `void openRankUpMenu(Player player)` | La escalera de rangos, como `/rankup`. | `exyliasurvivalcore.rankup` |
+| `void openRandomTeleportMenu(Player player)` | El selector de mundo, como `/rtp`. | `exyliasurvivalcore.rtp` |
+| `void openPlaytimeRewardsMenu(Player player)` | Las recompensas por tiempo jugado, como `/playtime`. | Ninguno — `/playtime` no pide ninguno. |
+
+Para un NPC, un cartel o un objeto del lobby que lleve a una pantalla. Cada uno comprueba primero el
+permiso que pide su comando, y un jugador sin él recibe el mensaje de falta de permiso del propio
+plugin en vez de la pantalla. Un módulo apagado también se le dice al jugador, igual que lo dice el
+comando, así que quien llama no tiene nada que explicar en ningún caso.
+
+`openHomesMenu` le dice a un jugador sin homes que no tiene ninguno en vez de mostrarle una pantalla
+vacía. `openRankUpMenu` no cobra nada: la pantalla muestra el progreso y es desde donde el jugador
+sube de rango. Elegir un mundo en `openRandomTeleportMenu` arranca el mismo flujo que
+`randomTeleport`, con cooldown, precio y warmup.
 
 ## Tipos
 
@@ -146,10 +253,18 @@ jugador concreto pueda usarlo depende además de su cooldown, así que pregunta 
 `warpCooldownMillis` en vez de decidirlo solo con `cost` y `permission`.
 
 **`SurvivalKit`** — `id`, `displayName`, `description`, `permission`, `cooldownMillis` (`0` si no hay
-espera), `maxUses` (`0` si no hay límite) y `enabled`. El contenido queda fuera a propósito: es un
-array de `ItemStack` que pertenece al plugin y que se reescribe cada vez que un administrador edita
-el kit, y entregarlo dejaría que alguien cambiara lo que recibe todo el mundo. Reclama el kit, o
-cancela `KitClaimEvent` y dale tú lo que quieras.
+espera), `maxUses` y `enabled`. El contenido queda fuera a propósito: es un array de `ItemStack` que
+pertenece al plugin y que se reescribe cada vez que un administrador edita el kit, y entregarlo
+dejaría que alguien cambiara lo que recibe todo el mundo. Reclama el kit, o cancela `KitClaimEvent` y
+dale tú lo que quieras.
+
+<Callout type="warning" title="maxUses es -1 sin límite, no 0">
+El javadoc del record dice que `maxUses` es `0` cuando no hay límite. El plugin pasa tal cual el
+valor del kit, y marca un kit ilimitado con `-1`: el editor de administración guarda cualquier número
+negativo como `-1`, y la comprobación del reclamo solo trata `-1` como ilimitado. Un kit con `maxUses`
+en `0` se rechaza con `MAX_USES_REACHED` desde el primer reclamo. Lee `-1` como ilimitado, que es
+también lo que devuelve `kitUsesLeft`.
+</Callout>
 
 **`KitClaimStatus`** — `SUCCESS`, `NO_PERMISSION`, `ON_COOLDOWN`, `MAX_USES_REACHED`,
 `KIT_DISABLED`, `KIT_NOT_FOUND` (también cuando el módulo de kits no está encendido) y `NO_ROOM` (no
@@ -171,13 +286,25 @@ configuración.
 **`Rank`** — `id`, `displayName` y `order` (más bajo va antes en la escalera). Los requisitos quedan
 fuera: se leen de la configuración a los tipos del propio plugin, y uno de ellos puede ser una
 expresión de placeholder arbitraria que solo el plugin sabe evaluar. Pregunta `canRankUp` en vez de
-intentar deducir la respuesta.
+intentar deducir la respuesta, y `nextRankCost` para la parte de dinero.
+
+**`MineBreakResult`** — qué pasó con un bloque entregado a `breakMineBlock`. Solo `UNCLAIMED` deja el
+bloque en manos de quien llama; cualquier otro valor significa que una mina es su dueña y no hay que
+romperlo de ninguna otra forma.
+
+| Valor | Significa |
+|---|---|
+| `BROKEN` | La mina lo rompió, con los drops, el loot y la regeneración que tiene el golpe del propio jugador. |
+| `UNCLAIMED` | Ninguna mina es su dueña: está fuera de toda mina activada, o dentro de una que no gestiona ese material y deja romper lo demás, o el módulo de minas está apagado. Rómpelo a tu manera, con tus propias comprobaciones de protección. |
+| `NO_PERMISSION` | El jugador no tiene el permiso que nombra la mina. |
+| `RESTRICTED` | La mina no gestiona ese material y prohíbe romper cualquier otra cosa dentro de ella. |
+| `CANCELLED` | Un handler canceló `MineBlockBreakEvent`. |
 
 ## Eventos
 
-Seis eventos en `net.exylia.lib.api.survival.event`. Los seis son `Cancellable`, y los seis se
-disparan *antes* de que se escriba, se entregue, se cobre o se mueva nada — así que cancelar deja al
-jugador exactamente como estaba, sin nada que deshacer.
+Diez eventos en `net.exylia.lib.api.survival.event`. Ocho son `Cancellable`, y esos ocho se disparan
+*antes* de que se escriba, se entregue, se cobre, se mueva o se rompa nada — así que cancelar deja al
+jugador exactamente como estaba, sin nada que deshacer. Los otros dos avisan de algo que ya ocurrió.
 
 Cancelar tampoco le dice nada al jugador. El handler que negó la acción es el único que sabe por qué,
 y se espera que lo diga él.
@@ -188,18 +315,24 @@ y se espera que lo diga él.
 | `HomeDeleteEvent` | Un home está a punto de borrarse. | Sí |
 | `HomeTeleportEvent` | Un jugador viaja a uno de sus homes. | Sí |
 | `WarpTeleportEvent` | Un jugador viaja a un warp. | Sí |
-| `KitClaimEvent` | Un jugador reclama un kit. | Sí |
+| `KitClaimEvent` | Un jugador reclama un kit, o se le entrega uno con `giveKit`. | Sí |
 | `RankUpEvent` | Un jugador sube en la escalera de rangos. | Sí |
+| `BountyClaimEvent` | Un asesino cobra las recompensas puestas sobre el jugador que mató. | Sí |
+| `MineBlockBreakEvent` | Un jugador rompe un bloque que pertenece a una mina, con su propio golpe o a través de `breakMineBlock`. | Sí |
+| `DuelRoomEndEvent` | Un duelo en una sala de duelo quedó decidido. | No — el último luchador ya cayó o huyó. |
+| `MineResetEvent` | Una mina terminó de rellenarse. | No — los bloques ya están colocados. |
 
 ### ¿Un evento no cancelado significa que ocurrió?
 
-Tres lo prometen y tres no, y la diferencia es lo que queda entre el evento y el resultado.
+Para los ocho que se pueden cancelar, depende de lo que queda entre el evento y el resultado.
 
 | Evento | Si no lo cancelas |
 |---|---|
-| `KitClaimEvent` | **Ocurre.** Se dispara cuando ya pasaron todas las comprobaciones — el kit activado, el permiso, el cooldown, los usos que quedan y el hueco en el inventario — y antes de entregar un solo objeto. Nada posterior a este punto puede negar el reclamo. |
+| `KitClaimEvent` | **Ocurre.** Se dispara cuando ya pasaron todas las comprobaciones — el kit activado, el permiso, el cooldown y los usos que quedan (salvo que `giveKit` se saltara esos dos), y el hueco en el inventario — y antes de entregar un solo objeto. Nada posterior a este punto puede negar el reclamo. Cancelar no entrega objetos, no ejecuta comandos de recompensa, no escribe cooldown y no cuenta ningún uso. |
 | `HomeSetEvent` | **Ocurre.** Se dispara cuando el plugin ya sabe que la llamada saldría adelante: el mundo no está en la lista negra y, si el home es nuevo, el jugador está por debajo de su límite. Cancelar es lo único que todavía puede pararlo. |
 | `HomeDeleteEvent` | **Ocurre.** Se dispara antes de tocar nada — la fila sigue en la base de datos y en la lista cacheada del jugador —, así que cancelar deja el home tal cual estaba y dejarlo pasar lo borra. |
+| `BountyClaimEvent` | **Ocurre.** Se dispara cuando la víctima ya murió y se sabe quién la mató, antes de quitarle las recompensas o de pagar nada. Después no se comprueba nada más: las recompensas se retiran y el total se deposita al asesino. Cancelar deja todas las recompensas sobre la víctima para la próxima muerte — el punto donde negar una muerte que no debería contar, como dos miembros de un clan o dos cuentas de la misma IP intercambiándose muertes. |
+| `MineBlockBreakEvent` | **Ocurre.** Se dispara cuando la mina ya aceptó la rotura — el jugador tiene su permiso y el bloque es uno que gestiona — y antes de que le pase nada al bloque. Dejarlo pasar rompe el bloque; cancelarlo lo deja en su sitio y `breakMineBlock` responde `CANCELLED`. |
 | `HomeTeleportEvent` | **No promete la llegada.** Lo que viene después puede ser un warmup del que el jugador se sale caminando o durante el que le pegan, y el home puede apuntar a un mundo que este servidor no puede resolver. Escucha un movimiento tuyo si necesitas saber que llegó. |
 | `WarpTeleportEvent` | **No promete la llegada.** El warmup que viene se cancela si el jugador se mueve o recibe daño, y el pago solo se cobra si el warmup llega al final. En el momento del evento no se cobró nada ni se escribió cooldown, así que un evento cancelado no le cuesta nada al jugador. |
 | `RankUpEvent` | **No promete el ascenso.** El cobro se hace después del evento y todavía puede fallar — un plugin de economía que desapareció, o un saldo que se movió entre la comprobación y el cargo — y entonces el jugador se queda donde estaba. Compara `getTo()` con `currentRank(UUID)` si necesitas saber que cuajó. |
@@ -221,20 +354,54 @@ warmup que no lleva a ninguna parte.
   venir de otro plugin a través de `setHome(Player, String, Location)`. `getName()` es el id del
   home, no un nombre visible, y por eso poner un nombre que el jugador ya usó mueve ese home en vez
   de añadir un segundo.
-- Todos se llaman en el hilo del que llama, que en Folia es un hilo de región y no un único hilo
-  principal. Todo lo que toque el resto del mundo hay que programarlo.
+- `BountyClaimEvent` trae `getKiller()`, `getVictim()`, `getAmount()` y `getBounties()`. Todas las
+  recompensas sobre la víctima se cobran a la vez, así que `getAmount()` es el total entero como
+  `BigDecimal` y `getBounties()` cuántas colocaciones lo forman, como mínimo `1`. Se dispara después
+  de la muerte, y solo si la víctima tenía una recompensa y la mató un jugador.
+- `MineBlockBreakEvent` trae `getPlayer()`, `getMineId()` y `getBlock()`, y el bloque todavía tiene
+  el tipo que el jugador estaba minando. Dentro de una mina el `BlockBreakEvent` del propio servidor
+  siempre se cancela, así que un listener que ignora los eventos cancelados nunca ve una rotura en una
+  mina: escucha este. Se vuelve a disparar por cada bloque que un handler rompa con
+  `breakMineBlock`, así que un handler que lo haga tiene que distinguir sus propias roturas.
+- `MineResetEvent.getMineId()` nombra la mina. Se dispara cuando el último bloque vuelve a su sitio,
+  lo haya pedido el temporizador, el umbral de vaciado o un administrador, y después de sacar a los
+  jugadores que los bloques nuevos dejaron enterrados. El relleno se reparte en varios ticks, así que
+  llega un poco después de que empezara el reinicio. Solo lo disparan las minas clásicas: una mina
+  realista hace crecer cada bloque por su cuenta y nunca vuelve a estar llena en un momento concreto.
+- `DuelRoomEndEvent` trae `getRoomId()`, `getWinner()` y `getParticipants()`. `getWinner()` es un
+  `UUID` que puede ser `null`, `null` en un empate: no queda nadie en pie, se acabó el tiempo del
+  combate o nadie acertó un golpe dentro del límite de inactividad de la sala. `getParticipants()` es
+  todo el que empezó el duelo en el orden en que entró, ganador incluido, y alguno puede haber salido
+  del servidor: quien se desconecta pierde, pero participó igual. Se dispara antes de que las
+  recompensas de la sala lleguen al ganador, y la sala sigue cerrada durante su tiempo de loot, así que
+  los jugadores normalmente siguen dentro.
+- Cada uno se llama en el hilo dueño de aquello de lo que trata — el jugador, o en los dos eventos de
+  minas el bloque y el último bloque rellenado de la mina —, que en Folia es un hilo de región y no un
+  único hilo principal. `DuelRoomEndEvent` se llama en el hilo que notó el final: el temporizador de
+  las salas, una vez por segundo en el hilo global, o el hilo de región del jugador cuya muerte,
+  desconexión o salida lo decidió; ninguno de los dos tiene garantizado ser dueño del ganador. Todo lo
+  que toque el resto del mundo, o a un jugador del que el hilo no es dueño, hay que programarlo.
+
+<Callout type="warning" title="Un duelo que para un administrador no avisa de nada">
+El javadoc dice que solo un duelo suspendido durante su cuenta atrás se queda sin `DuelRoomEndEvent`.
+En el plugin, un administrador que cambia o borra una sala para lo que esté corriendo en ella de la
+misma manera, con el combate ya empezado, y ese camino tampoco dispara el evento. Un duelo que termina
+así no tiene resultado que un listener pueda contar.
+</Callout>
 
 ## Lo que no expone
 
-El plugin tiene treinta y un módulos y este service llega a siete. El resto — portales, minas, zonas
-de regeneración, cofres de loot, objetos bloqueados y los demás módulos de construcción de mundo —
-son herramientas de administración cuyo estado es un conjunto de objetos colocados, y no hay nada
-útil que un tercero pueda hacer con ellos. Quedan fuera porque no tienen superficie entre plugins, no
-porque el trabajo esté a medias.
+El plugin tiene cincuenta módulos y este service llega a una docena. El resto — portales, zonas de
+regeneración, cofres de loot, objetos bloqueados y los demás módulos de construcción de mundo — son
+herramientas de administración cuyo estado es un conjunto de objetos colocados, y no hay nada útil
+que un tercero pueda hacer con ellos. Las minas publican su rotura y su reinicio y nada más, para que
+un plugin que rompe bloques por un jugador reciba el loot y la regeneración de la mina en vez de un
+agujero.
 
-Dentro de los siete también quedan fuera los abridores de menú, los flujos de editor y las escrituras
+Dentro de los módulos a los que llega quedan fuera los flujos de editor y las escrituras
 administrativas, igual que el contenido de los kits y los requisitos de los rangos: los dos
-pertenecen al plugin y los dos se reescriben cada vez que un administrador los edita.
+pertenecen al plugin y los dos se reescriben cada vez que un administrador los edita. Las únicas
+pantallas que abre son las seis que un jugador podría abrir con su propio comando.
 
 Si te falta algo, pídelo en [Discord](https://discord.exylia.net) — añadir un método a un service es
 un release menor.

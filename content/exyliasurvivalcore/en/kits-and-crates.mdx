@@ -20,7 +20,7 @@ A kit is a database row, built entirely from `/kitadmin`. There is no kit file.
 | Max uses | `-1` for unlimited |
 | First-join kit | Given automatically the first time a player joins |
 | Auto-equip armour | Armour goes on rather than into the bag |
-| Drop when full | Overflow is dropped rather than refused |
+| Drop when full | On, a claim goes through and what does not fit is kept for the player's next join. Off, a claim that would not fit is refused before anything is given |
 | Sort order | Where it sits in the list |
 
 The list draws a kit in one of four states — ready, on cooldown, used up, or locked — each with its own
@@ -37,7 +37,9 @@ lore appended to those containers, with `%items%`.
 | `show-locked-kits` | `true` |
 
 `exyliasurvivalcore.kits.bypass` skips cooldowns and use limits. `/kitadmin give`, `reset` and
-`resetall` handle a player's record.
+`resetall` handle a player's record; `give` hands the kit over whether or not the player has waited for
+it. Another plugin can do the same through the [API](/docs/exyliasurvivalcore/api), with or without the
+cooldown and the use limit.
 
 ## Crates
 
@@ -52,7 +54,8 @@ Everything is built from `/cratesadmin`.
 
 Keys are **physical items** by default: a `TRIPWIRE_HOOK` with the crate's own name, given with
 `/cratesadmin key give`. Virtual keys — a counter on the player rather than an item — are given with
-`/cratesadmin key virtual`.
+`/cratesadmin key virtual`. Keys another plugin gives through the [API](/docs/exyliasurvivalcore/api)
+are virtual.
 
 Those five `key` subcommands are the only ones that run from the console, which is what a web store
 needs:
@@ -64,6 +67,9 @@ needs:
 /cratesadmin key take <player> <crate> <amount>
 /cratesadmin key set <player> <crate> <amount>
 ```
+
+Physical keys that do not fit are kept for the player's next join rather than dropped at their feet —
+see [Items that do not fit](#items-that-do-not-fit). So are key items handed back when an opening fails.
 
 ### Tiers
 
@@ -171,3 +177,37 @@ Both the item spawners and the loot-chest templates carry a complete "click a ch
 contents as the loot table" flow in the code, but no menu button anywhere calls it. Build loot tables
 in the loot editor.
 </Callout>
+
+## On a network
+
+When several servers share one database, crate blocks, placed loot chests and item spawners each
+belong to the server they were placed on, and each server loads only its own. Loot chests and item
+spawners placed before the server was recorded load on every server that reads them.
+
+## Items that do not fit
+
+Items these modules hand out are no longer dropped at a player's feet when their inventory is full.
+What does not fit goes into ExyliaLib's pending-reward table and is handed over the next time the
+player joins, with the `rewards.claimed` line from `messages.yml` — "Delivered N rewards that were
+waiting for you." That covers:
+
+- the overflow of a kit whose **Drop when full** is on;
+- physical keys from `/cratesadmin key give` and `giveall`;
+- key items handed back when a crate opening fails;
+- the crate placement wand.
+
+Nothing is handed over while the player stays online: the table is drained on join.
+
+## Counters
+
+These modules count into the stats counters, which leaderboards, missions and seasons read — see
+[Statistics](/docs/exyliasurvivalcore/combat#statistics).
+
+| Counter | What it counts |
+|---|---|
+| `kits.claimed` | Kits claimed |
+| `kits.<kit>.claimed` | The same, for one kit |
+| `crates.opened` | Crates opened, one per key spent — a bulk opening of ten counts ten |
+| `crates.<crate>.opened` | The same, for one crate |
+| `lootchests.opened` | Loot chests opened while ready |
+| `lootchests.<chest>.opened` | The same, for one placed chest by its id |

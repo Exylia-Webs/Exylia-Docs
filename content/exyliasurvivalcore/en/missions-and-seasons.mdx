@@ -1,0 +1,281 @@
+---
+title: "Missions and seasons"
+description: "Daily and weekly missions and daily, weekly and monthly rankings, both measured against the stat counters and paid once across servers."
+---
+
+Missions and seasons count nothing themselves. Every module already adds to a **stat counter** when a
+player does something — a block broken in a mine, a crate opened, a vote paid — and a mission or a season
+is a target or a ranking over one of those counters. Both need the `stats` module; with it off every
+counter reads zero, and each module says so once in the log.
+
+## Which counters can be named
+
+A mission's `stat` and a season's `counter` are **counter keys**, such as `mines.blocks`,
+`farming.harvested`, `kills.players`, `kills.mobs`, `crates.opened`, `market.sold`, `votes.total` or
+`missions.completed`. The full list, with what each one counts, is in
+[Statistics](/docs/exyliasurvivalcore/combat#statistics).
+
+- Keys are lower-cased, so `Mines.Blocks` is `mines.blocks`.
+- Nothing checks that a key exists. A key nothing counts reads 0 forever: its mission never finishes
+  and its season never ranks anyone. No warning is logged.
+- The ids in `modules/stats/stats.yml` that are not counters — `kills`, `deaths`, `kdr`, `playtime` and
+  the other `INTERNAL`, `COMPUTED`, `PAPI` and `VAULT` stats — are **not** counter keys and read 0 here.
+  Use `kills.players`, not `kills`.
+
+## Missions
+
+A player holds a set of daily missions and a set of weekly ones. `/missions` shows them; a finished one is
+collected from there.
+
+### How a set is chosen
+
+- Which missions a rotation asks for, and the target of a mission with a range, are drawn from a generator
+  seeded on the rotation itself. **Everyone on the server gets the same missions with the same numbers**,
+  and they survive a restart.
+- `daily-count` and `weekly-count` missions are drawn from the pool of that rotation. A pool with fewer
+  missions than that hands out all of them.
+- Progress is the counter now minus what it read when the mission was handed out. What a player did before
+  never counts, and the baseline is only taken once their counters have loaded.
+- Rotations are worked out from the clock. A player is handed the new set on join, on opening
+  `/missions`, and on the next check while online. A set that replaces an older one plays
+  `missions-rotated` and sends the *New missions* message; a first ever set does not.
+
+A mission's row is keyed by the player, the rotation and the mission, so a player cannot hold the same
+mission twice in one period on any server.
+
+### missions.yml
+
+`modules/missions/missions.yml`. A `missions` section left in `config.yml` by an older version is moved
+here on start.
+
+```yaml
+missions:
+  daily_mine:
+    display-name: 'Deep Shift'
+    icon: IRON_PICKAXE
+    description:
+      - 'Break blocks in any of the server mines.'
+    stat: 'mines.blocks'
+    amount: 250-600
+    pool: DAILY
+    money: 60
+    commands: []
+```
+
+| Key | Default | What it does |
+|---|---|---|
+| `display-name` | The block's key | The name on screen |
+| `icon` | `PAPER` | A material. Unknown is `PAPER` |
+| `description` | none | Lines under the name |
+| `stat` | — | The [counter key](#which-counters-can-be-named). Required |
+| `amount` | — | A number, or a range such as `300-700` drawn once per rotation. Required, above 0 |
+| `pool` | `DAILY` | `DAILY` or `WEEKLY` |
+| `money` | `0` | Paid on collection, in the default currency |
+| `commands` | none | Run on collection, from the console unless a line starts with `player:` |
+
+A block with no `stat`, an `amount` that is not a positive number or range, or a `pool` that is neither
+is skipped with a warning. `/sc reload` re-reads the file. The shipped file has seven daily and six
+weekly missions.
+
+<Callout type="warning" title="A range that starts at 0 can hand out a finished mission">
+In `amount: 0-5`, the draw can land on 0, and a mission with a target of 0 is finished the moment it is
+handed out.
+</Callout>
+
+### Collecting
+
+A finished mission is collected by clicking it, or by **Collect everything**. The row is marked collected
+before anything is paid, so a double click pays once.
+
+- `money` goes through money boosters for `missions` — see [Economy](/docs/exyliasurvivalcore/economy) —
+  and needs an economy.
+- `commands` get `%player%`, `%player_name%`, `%mission%`, `%target%` and `%money%`, the money actually
+  paid or, when nothing was, the configured amount.
+- It counts `missions.completed`, `missions.daily.completed` or `missions.weekly.completed`, and
+  `missions.earned` for the money paid.
+
+Every `check-interval-seconds` the plugin looks for missions that have just been finished. With
+`auto-claim: false` the player is sent *Mission complete* once per session, and a weekly one is broadcast
+to players with `mission-announcements` on in [`/settings`](/docs/exyliasurvivalcore/quality-of-life).
+With `auto-claim: true` it is collected there and then.
+
+<Callout type="note" title="Auto-claim skips the announcements">
+A mission collected by `auto-claim` sends only the *Collected* line. The *Mission complete* message and the
+weekly broadcast are never sent.
+</Callout>
+
+A mission removed from `missions.yml` while a player holds it is drawn as **Retired mission** and cannot be
+collected. `/missionsadmin reset` is how an admin hands them a fresh set.
+
+### The screen
+
+`modules/missions/menus/missions.yml`. The **Reward** line shows the configured money before boosters;
+a mission that pays only commands reads **Items**, whatever the commands give. The buttons are
+`survivalcore:missions_open`, `survivalcore:missions_claim <row>` and `survivalcore:missions_claim_all`.
+
+### Settings
+
+`modules/missions/config.yml`:
+
+| Setting | Default | What it does |
+|---|---|---|
+| `settings.daily-count` | `3` | Daily missions per player |
+| `settings.weekly-count` | `2` | Weekly missions per player |
+| `settings.reset-hour` | `0` | Hour, 0–23, both rotations turn over at |
+| `settings.weekly-reset-day` | `MONDAY` | Day the weekly rotation starts. Unknown is `MONDAY` |
+| `settings.timezone` | `""` | IANA zone for both. Empty or unknown is the server's |
+| `settings.auto-claim` | `false` | Collect finished missions without the menu |
+| `settings.broadcast-weekly` | `true` | Broadcast a finished weekly mission. Daily ones never are |
+| `settings.check-interval-seconds` | `20` | Seconds between checks. Never below 5; read at start, so a change needs a restart |
+| `sounds.mission-completed` | `UI_TOAST_CHALLENGE_COMPLETE\|1.0\|1.0` | A mission finished |
+| `sounds.mission-claimed` | `ENTITY_PLAYER_LEVELUP\|1.0\|1.4` | A mission collected |
+| `sounds.missions-rotated` | `BLOCK_NOTE_BLOCK_CHIME\|1.0\|1.2` | A new set replaced the old one |
+
+### Commands
+
+| Command | Aliases | Permission | What it does |
+|---|---|---|---|
+| `/missions` | `/mission` | `exyliasurvivalcore.missions` | Opens the screen |
+| `/missionsadmin reset <player>` | `/missionadmin` | `exyliasurvivalcore.missions.admin` | Deletes their missions, online or not; the next look hands out the period's set with a fresh baseline |
+
+`/missionsadmin` runs from the console.
+
+### Placeholders
+
+| Placeholder | Returns |
+|---|---|
+| `%exyliasurvivalcore_missions_daily_done%` | Daily missions finished or collected |
+| `%exyliasurvivalcore_missions_daily_total%` | Daily missions held |
+| `%exyliasurvivalcore_missions_weekly_done%` | Weekly missions finished or collected |
+| `%exyliasurvivalcore_missions_weekly_total%` | Weekly missions held |
+| `%exyliasurvivalcore_missions_claimable%` | Finished and not collected |
+| `%exyliasurvivalcore_missions_daily_resets%` | Time until the daily rotation |
+| `%exyliasurvivalcore_missions_weekly_resets%` | Time until the weekly rotation |
+
+## Seasons
+
+A season is a ranking over one counter for a day, a week or a month. When it ends, the best places are
+paid and the next season opens.
+
+### How a season counts
+
+While a season is open, every addition to its counter is also added under a key of its own,
+`seasons.<season>.<period>`. Its ranking is that key's leaderboard, so only what is counted while the
+season is open ranks in it, and a reload does not reset a season that is running.
+
+<Callout type="warning" title="Personal-best counters never rank">
+Only counters that are added to feed a season. A counter written as a personal best — `votes.best_streak` is
+the only one shipped — is never added to a season's key, so a season over one ranks nobody.
+</Callout>
+
+### Closing, once across servers
+
+Every server checks once a minute, the first time ten seconds after start. When a season's period is
+over and `close-delay-minutes` more have passed:
+
+1. Every server tries to delete the season's row; the one that succeeds is the only one that goes on.
+2. It ranks the top `leaderboard-size` places, or as many as the prizes pay if that is more. A score of 0
+   is not placed.
+3. It stores the results, pays the prizes, opens the next season and deletes the season's counter.
+4. Every server announces the top three to players with `season-announcements` on in
+   [`/settings`](/docs/exyliasurvivalcore/quality-of-life).
+
+What is counted during the close delay still counts for the season that is closing. A prize for a player
+online on the closing server is given there and then with *You finished #N*; anyone else, offline or on
+another server, gets it on their next join. The announcement travels on the `seasons` channel, which on a
+network needs Redis.
+
+A season with no open row is opened by the first server that notices, straight away on a first start and
+after five minutes otherwise, so a server between closing and reopening is not raced.
+
+### Periods and time zone
+
+| Period | Name | Starts |
+|---|---|---|
+| `DAILY` | `20260912` | Every day at `reset-hour` |
+| `WEEKLY` | `2026w37` | Monday at `reset-hour`. Not configurable, unlike missions |
+| `MONTHLY` | `202609` | The 1st at `reset-hour` |
+
+All of it is read in `settings.timezone`.
+
+### seasons.yml
+
+`modules/seasons/seasons.yml` is yours to edit; keys a later version adds appear on their own, and
+`/sc reload` re-reads it.
+
+```yaml
+seasons:
+  voters:
+    display-name: '{primary}&lTOP VOTERS'
+    description: 'Votes cast for the server'
+    icon: PAPER
+    counter: 'votes.total'
+    period: MONTHLY
+    format: NUMBER
+    prizes:
+      '1':
+        - type: ECONOMY
+          value: '1500'
+        - 'boostersadmin give %player_name% money 2 2h'
+      '2':
+        - type: ECONOMY
+          value: '900'
+```
+
+| Key | Default | What it does |
+|---|---|---|
+| *(the block's key)* | — | The season id: lower-case letters, digits, `_` and `-`, up to 40. Anything else is skipped with a warning |
+| `display-name` | The id | The name on screen |
+| `description` | `""` | One line in `/seasons` |
+| `icon` | `NETHER_STAR` | The item in `/seasons` |
+| `counter` | — | The [counter key](#which-counters-can-be-named). Required; a key starting `seasons.` is refused |
+| `period` | `WEEKLY` | `DAILY`, `WEEKLY` or `MONTHLY`. Unknown is `WEEKLY`, silently |
+| `format` | `NUMBER` | `NUMBER`, `DECIMAL`, `MONEY` or `TIME`, how scores are written. Unknown is `NUMBER`, silently |
+| `prizes` | none | By place |
+
+The shipped file ranks `miners` and `farmers` weekly and `voters` monthly.
+
+### Prizes
+
+Each key under `prizes` is a place, `'1'`, or a range, `'4-10'`, and its value is an
+[Exylia reward list](/docs/exyliasurvivalcore/rewards-and-votes#reward-lists). A place covered by two keys
+takes the first one written. A key that is not a place is reported and skipped. Prize money is not
+multiplied by boosters.
+
+### Settings
+
+`modules/seasons/config.yml`:
+
+| Setting | Default | What it does |
+|---|---|---|
+| `settings.timezone` | `""` | The zone days, weeks and months are counted in. Empty or unknown is the server's |
+| `settings.reset-hour` | `0` | Hour, 0–23, a day starts at |
+| `settings.close-delay-minutes` | `2` | Minutes a season stays open after its time is up, so the last counts are written |
+| `settings.leaderboard-size` | `10` | Places a ranking shows |
+
+### Screens and commands
+
+`modules/seasons/menus/seasons.yml` lists every season with its top three and the player's place and
+score; clicking one opens `season_board.yml`, the full ranking with each place's prize and the last
+season's winners. Rankings on screen are at most a minute old. The buttons are
+`survivalcore:seasons_open` and `survivalcore:seasons_board <season>`.
+
+| Command | Aliases | Permission | What it does |
+|---|---|---|---|
+| `/seasons` | `/season` | `exyliasurvivalcore.seasons` | Opens the list |
+| `/seasonsadmin close <season>` | `/seasonsa` | `exyliasurvivalcore.seasons.admin` | Ranks and pays the season now and opens the next straight away |
+
+`/seasonsadmin close` runs from the console. The season it opens runs to the normal end of the period,
+so closing a weekly season on Thursday leaves a short one until Monday.
+
+### Placeholders
+
+A season id with underscores is read whole; in the `top_` ones the place comes first.
+
+| Placeholder | Returns |
+|---|---|
+| `%exyliasurvivalcore_seasons_left_<season>%` | Time until it ends, or empty for an unknown season |
+| `%exyliasurvivalcore_seasons_value_<season>%` | The player's score, formatted, or `0` |
+| `%exyliasurvivalcore_seasons_position_<season>%` | Their place, or `0` when not ranked |
+| `%exyliasurvivalcore_seasons_top_name_<place>_<season>%` | The name at that place, or `—` |
+| `%exyliasurvivalcore_seasons_top_value_<place>_<season>%` | The score at that place, or `—` |

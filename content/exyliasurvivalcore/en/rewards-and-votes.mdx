@@ -1,0 +1,313 @@
+---
+title: "Rewards and votes"
+description: "Rewards claimed from a menu, once, on an interval or on the calendar with streaks, and votes through NuVotifier with daily streaks and a network vote party."
+---
+
+## Rewards
+
+A reward is a database row built entirely from `/rewardsadmin`: some items, some commands, a type that
+says how often it may be taken, and an optional permission. There is no rewards file. `/rewards` opens
+the list, and a player takes a reward from there.
+
+It differs from a [kit](/docs/exyliasurvivalcore/kits-and-crates) in its type: a reward can reset on the
+calendar and keep a streak for a player who comes back.
+
+### Types
+
+| Type | When it can be claimed again |
+|---|---|
+| Once | Never. Its claim limit is always 1, whatever **Max claims** says |
+| Interval | Once its interval has passed since the last claim. An interval of `0s` means no wait |
+| Daily | Once per day, from `reset-hour` |
+| Weekly | Once per week, from Monday at `reset-hour` |
+| Monthly | Once per month, from the 1st at `reset-hour` |
+
+Daily, weekly and monthly are worked out from the clock, not scheduled: a player who logs in after a
+week away is simply in a new period, and a server that was off over a reset needs no catch-up. **Max
+claims** still applies to every type but Once, as a lifetime total per player; `-1` is unlimited.
+
+### Streaks
+
+Every claim writes a streak:
+
+- **Daily, weekly, monthly** — the streak goes up when the last claim was in the period just before this
+  one, and starts again at 1 otherwise.
+- **Interval** — it goes up when the last claim was within two intervals. On a 24-hour interval, missing a
+  day breaks it.
+- **Once** — always 1.
+
+The list and the preview show the streak the last claim wrote. A broken streak keeps showing its old
+number until the next claim resets it to 1.
+
+### Claiming
+
+A claim is checked in this order: switched off, missing the reward's permission, used up, still waiting.
+Only a reward that passes all four is handed over.
+
+- **Items** go through the plugin's delivery: what does not fit is kept and handed over on the player's
+  next join, never dropped.
+- **Commands** run from the console unless a line starts with `player:`, `console:`, `player-proxy:` or
+  `console-proxy:`. `%player%` and `%player_name%` are both filled in.
+- The claim counts towards the `rewards.claimed` stat counter.
+
+`exyliasurvivalcore.rewards.bypass` ignores the wait and the claim limit. It never skips the reward's own
+permission or a disabled reward.
+
+<Callout type="warning" title="The bypass works from the menu only">
+The claim button in the list and the preview checks `exyliasurvivalcore.rewards.bypass`. `/rewards claim
+<id>` does not, so a player holding the bypass is still told to wait when they claim by command.
+</Callout>
+
+### The player screens
+
+`modules/rewards/menus/list.yml` draws each reward in one of four templates — `item_template` (ready),
+`cooldown_template`, `used_template` and `locked_template` — so what a locked reward looks like, and
+whether it can be clicked, is decided in the file. Left-click claims, right-click previews.
+
+`modules/rewards/menus/preview.yml` shows the items as themselves, the claim button in slot 8 drawn by
+the same states plus `disabled_template`, and a **Bonuses** item listing the reward's *named* commands.
+It names three and adds `labels.more` for the rest; a command without a name is never shown. A reward
+with no items and no commands does not open a preview at all.
+
+Both files are yours to edit. The buttons are `survivalcore:reward_open_list`,
+`survivalcore:reward_claim <id>` and `survivalcore:reward_preview <id>`; none of them checks
+`exyliasurvivalcore.rewards`, so a reward button bound elsewhere works for anyone.
+
+### Building a reward
+
+`/rewardsadmin` opens `menus/admin/rewards_admin_list.yml`: every reward, enabled or not, with **Create
+reward**. Left-click edits, right-click deletes after a confirmation. The edit screen,
+`menus/admin/reward_admin_edit.yml`, has one button per field:
+
+| Field | Default on a new reward |
+|---|---|
+| Icon | `CHEST` |
+| Display name | The id |
+| Description | Empty. Typing `clear` empties it |
+| Status | Enabled. A disabled reward is hidden from players |
+| Permission | None. Typing `clear` removes it |
+| Items | None, edited in ExyliaLib's item editor |
+| Bonuses | No commands, edited in the named-command editor |
+| Type | Once. The button cycles through the five |
+| Interval | 24 hours, typed as `1d`, `12h30m` or `0s`. Only Interval reads it |
+| Max claims | `-1` |
+| Sort order | `0`. Lower is shown first |
+
+**Clone** copies everything into a new id and **Preview** opens the player's preview. Both admin files are
+regenerated from the jar on every start and every reload; edit the two player files instead.
+
+### Commands
+
+| Command | Permission | What it does |
+|---|---|---|
+| `/rewards` | `exyliasurvivalcore.rewards` | Opens the list |
+| `/rewards preview <reward>` | `exyliasurvivalcore.rewards` | Opens one reward's preview |
+| `/rewards claim <reward>` | `exyliasurvivalcore.rewards` | Claims without the menu |
+| `/rewardsadmin` | `exyliasurvivalcore.rewards.admin` | Opens the admin list |
+| `/rewardsadmin give <player> <reward>` | `exyliasurvivalcore.rewards.admin` | Claims for them, ignoring the wait and the limit |
+| `/rewardsadmin preview <reward>` | `exyliasurvivalcore.rewards.admin` | The preview, without the reward's permission |
+| `/rewardsadmin reset <player> <reward>` | `exyliasurvivalcore.rewards.admin` | Forgets their wait, claims and streak for one reward |
+| `/rewardsadmin resetall <player>` | `exyliasurvivalcore.rewards.admin` | The same for every reward |
+
+Every one of them is player-only. `reset` and `resetall` take offline players.
+
+<Callout type="note" title="`give` is a claim, and says it worked either way">
+`/rewardsadmin give` counts as a claim: it adds to the player's claims and streak. It still refuses a
+disabled reward and one behind a permission the player lacks — they are sent the refusal — and the admin
+is told the reward was given regardless.
+</Callout>
+
+### Settings
+
+`modules/rewards/config.yml`:
+
+| Setting | Default | What it does |
+|---|---|---|
+| `settings.show-locked-rewards` | `true` | List rewards behind a missing permission, drawn locked. Off hides them |
+| `settings.notify-on-join` | `true` | Tell a player on join how many rewards are ready |
+| `settings.reset-hour` | `0` | Hour, 0–23, daily, weekly and monthly rewards reset at |
+| `settings.timezone` | `""` | The zone that hour is read in, such as `Europe/Madrid`. Empty or unknown is the server's |
+| `sounds.claim` | `ENTITY_PLAYER_LEVELUP\|1.0\|1.2` | Played on a claim |
+| `sounds.error` | `ENTITY_VILLAGER_NO\|1.0\|1.0` | Played on a refusal |
+
+`labels.ready`, `unlimited`, `none`, `more`, `once`, `interval` (with `%time%`), `daily`, `weekly` and
+`monthly` are the words the screens fill in for a wait that is over, an unlimited count, an empty field
+and the type.
+
+### Placeholders
+
+A reward id with underscores is read whole.
+
+| Placeholder | Returns |
+|---|---|
+| `%exyliasurvivalcore_rewards_ready%` | How many rewards the player could claim now |
+| `%exyliasurvivalcore_rewards_cooldown_<id>%` | Time left, `Ready`, or `N/A` for a reward that does not exist |
+| `%exyliasurvivalcore_rewards_streak_<id>%` | The streak of their last claim, or `N/A` |
+| `%exyliasurvivalcore_rewards_claims_<id>%` | Claims left, `∞`, or `N/A` |
+
+The cooldown placeholder writes `Ready` itself; `labels.ready` does not reach it.
+
+## Votes
+
+Votes arrive through NuVotifier or the original Votifier, found by either plugin name the tick after the
+server enables. Without either, the log says so and votes only arrive through `/voteadmin fake`.
+
+`modules/votes/votes.yml` holds the sites, what a vote pays, the streak rewards and the vote party's
+rewards. It is yours to edit; keys a later version adds appear on their own, and `/sc reload` re-reads it.
+
+### What a vote goes through
+
+1. **Stored.** The vote is saved under an id worked out from the site, the name and the site's timestamp,
+   so the same vote forwarded to several servers lands on one row. A name that is not 1–32 letters,
+   digits, `_`, `.` or `*` is dropped silently.
+2. **Announced.** Every server tells its own players once, to those with `vote-announcements` on in
+   [`/settings`](/docs/exyliasurvivalcore/quality-of-life).
+3. **Paid, once.** The server the player is on takes the row, and only one server can. A player who is
+   offline is paid the next time they join any server, however many votes are waiting, oldest first.
+4. **Counted for the party.** A second table keeps the vote for the party, offline players included.
+
+The announcement and the instant payment travel on ExyliaLib's `votes` channel. On one server that needs
+nothing. On a network it needs Redis and a shared database: without Redis a server only hears the votes
+it received, and a vote for a player on another server waits for their next join.
+
+Each payment counts the `votes.total` counter, a `votes.<site>` counter (the site name lower-cased, anything
+that is not a letter, digit or `_` turned into `_`) and the `votes.best_streak` personal best.
+
+### votes.yml
+
+```yaml
+sites:
+  minecraft-mp:
+    name: '{primary}&lMINECRAFT-MP'
+    url: 'https://minecraft-mp.com/server/000000/vote/'
+    icon: PAPER
+
+vote:
+  money: 30
+  rewards: []
+  message: '… Thanks for voting on %service%! +%money% · Streak » %streak%'
+
+streaks:
+  '3':  { money: 60,  rewards: [], message: '…' }
+  '7':  { money: 150, rewards: [], message: '…' }
+  '30': { money: 750, rewards: [], message: '…' }
+
+party:
+  money: 20
+  rewards: []
+  message: '… Vote party reward » +%money%'
+  commands:
+    - 'boostersadmin global money 1.5 30m'
+```
+
+| Block | Paid |
+|---|---|
+| `sites` | Nothing: the pages `/vote` lists. `name` defaults to the id, `icon` to `PAPER` |
+| `vote` | For every vote |
+| `streaks.<days>` | When a vote moves the player's streak to exactly that many days, each time it does |
+| `party` | To everyone online on every server when the party starts |
+| `party.commands` | Once for the whole network, from the console of the server that started the party |
+
+Every paying block takes the same three keys:
+
+- `money` — paid in the default currency and multiplied by money boosters for `votes`
+  (see [Economy](/docs/exyliasurvivalcore/economy)). Needs an economy; without one it pays nothing.
+- `rewards` — an [Exylia reward list](#reward-lists).
+- `message` — sent once the block is paid; empty for none. `%player%` and `%money%` everywhere, and
+  `%service%`, `%streak%` and `%total%` in `vote` and `streaks`.
+
+The sites replace the placeholder URLs you ship with. Clicking one in `/vote` closes the menu and sends
+the link to chat.
+
+### Streaks
+
+A day is a calendar day in `settings.timezone`, from midnight: votes have no reset hour. A vote the day
+after the last one extends the streak, a second vote the same day leaves it alone, and a day without a vote
+starts it over. `%exyliasurvivalcore_votes_streak%` already reads 0 once a whole day has passed with no
+vote.
+
+### The vote party
+
+Every vote, from any server, counts towards one network-wide party. After each vote, every server shows
+its players a boss bar with the count for `party.bossbar-seconds`. When the count reaches `party.target`,
+the first server to take the party's token starts it: everyone online everywhere is paid the `party`
+block, `party.commands` run once, the count starts again from zero, and players with
+`vote-announcements` on are told.
+
+`party.target: 0` turns counting towards a party off. `/voteadmin party` still starts one.
+
+### Reminders
+
+A player who has not voted today is reminded three seconds after joining, when `remind-on-join` is on,
+and every `reminder-minutes` while online.
+
+<Callout type="note" title="`reminder-minutes` needs a restart">
+The reminder timer is scheduled once, when the plugin enables, and a reload does not reschedule it. A
+new interval, or turning the timer on or off, waits for a restart.
+</Callout>
+
+### Settings
+
+`modules/votes/config.yml`:
+
+| Setting | Default | What it does |
+|---|---|---|
+| `settings.timezone` | `""` | The zone a day is counted in, for streaks and *voted today*. Empty or unknown is the server's |
+| `settings.reminder-minutes` | `30` | Minutes between reminders. `0` never |
+| `settings.remind-on-join` | `true` | Remind on join |
+| `party.target` | `50` | Votes the network needs. `0` turns the party off |
+| `party.bossbar` | A `PURPLE`, `NOTCHED_10` bar | Shown after each vote. `%count%`, `%target%`, `%left%`. Empty text hides it |
+| `party.bossbar-seconds` | `8` | How long it stays |
+
+### Commands
+
+| Command | Aliases | Permission | What it does |
+|---|---|---|---|
+| `/vote` | `/votes` | `exyliasurvivalcore.votes` | The sites, your totals and the party |
+| `/voteadmin fake <player> [site]` | `/votea` | `exyliasurvivalcore.votes.admin` | A vote as if a site sent it, rewards and party included. The site defaults to `Test` |
+| `/voteadmin party` | `/votea` | `exyliasurvivalcore.votes.admin` | Starts the party now, whatever the count |
+
+Both admin subcommands run from the console. The screen is `modules/votes/menus/vote.yml`; its buttons are
+`survivalcore:votes_open` and `survivalcore:votes_link <site>`.
+
+### Placeholders
+
+A player's own numbers read 0 until their row has loaded on join.
+
+| Placeholder | Returns |
+|---|---|
+| `%exyliasurvivalcore_votes_total%` | Votes they have been paid for |
+| `%exyliasurvivalcore_votes_streak%` | Their streak as it stands today |
+| `%exyliasurvivalcore_votes_best_streak%` | Their longest streak |
+| `%exyliasurvivalcore_votes_voted_today%` | `true` / `false` |
+| `%exyliasurvivalcore_votes_party_count%` | Votes towards the current party |
+| `%exyliasurvivalcore_votes_party_target%` | `party.target` |
+| `%exyliasurvivalcore_votes_party_left%` | The two above subtracted, never below 0 |
+
+## Reward lists
+
+`votes.yml`'s `rewards` and `seasons.yml`'s [prizes](/docs/exyliasurvivalcore/missions-and-seasons#prizes)
+are ExyliaLib reward lists. A bare string is a console command; a map names its `type`.
+
+```yaml
+rewards:
+  - 'eco give %player_name% 500'
+  - type: ECONOMY
+    value: '750'
+  - type: ITEM
+    itemSnapshot: DIAMOND
+    itemAmount: 4
+    chance: 25.0
+```
+
+| `type` | Reads |
+|---|---|
+| `COMMAND` | `command`, run from the console with the player's placeholders filled in |
+| `ITEM` | `itemSnapshot` and `itemAmount`. What does not fit waits for the next join |
+| `MESSAGE` | `message` |
+| `ECONOMY` | `value`, and `currency` for one other than the default. Not multiplied by boosters |
+| `EXPERIENCE` | `value`, in experience points |
+| `POTION` | `value`, written `SPEED:1:300` |
+
+Any of them also takes `chance`, `permission`, and `minAmount` with `maxAmount` for a range. An entry with
+an unknown type is reported in the log and skipped; the rest of the list is still given.

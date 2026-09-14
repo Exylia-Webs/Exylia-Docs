@@ -1,37 +1,110 @@
 ---
 title: "Configuration"
-description: "The generated files, how they are written, which are yours to shape freely, and the comments that are out of date."
+description: "The files on disk, how each kind is written and updated, what an edit survives, the teleport section of config.yml, and the comments that are out of date."
 ---
 
-Everything lives in `plugins/ExyliaSurvivalCore/`. Nothing except the menus exists inside the jar: the
-configuration is generated from the plugin's own schema on first run, comments included.
+Everything lives in `plugins/ExyliaSurvivalCore/`. `config.yml`, `messages.yml` and each module's
+`config.yml` are generated from the plugin's own schema on first run, comments included. The menus and
+the default ladders — ranks, rewards, categories, missions, votes, seasons and the rest — ship inside
+the jar and are written from it.
 
-## Three kinds of file
+## Five kinds of file
 
 | Kind | Behaviour | Which files |
 |---|---|---|
-| **Schema-backed** | Fixed keys, generated with comments. A key the schema does not know is reported once as `UNKNOWN_KEY` and removed | `config.yml`, `messages.yml`, and each `modules/<id>/config.yml` |
+| **Schema-backed** | Fixed keys, generated with comments. A key the schema does not know is reported once as `UNKNOWN_KEY` and removed | `config.yml`, `messages.yml`, each `modules/<id>/config.yml`, `crates/tiers.yml`, `crates/animations.yml` |
 | **Free-form** | Written once with a header, never rewritten. Nothing is pruned, nothing you delete comes back | `modules/reclaim/config.yml`, `modules/scheduled-commands/config.yml`, `modules/blocked-items/rules.yml`, `modules/enchantments/rules.yml` |
-| **Lifted out** | A map that cannot live inside a schema record, moved into a sibling file the first time | `farming/categories.yml`, `join-leave/groups.yml`, `kill-rewards/rewards.yml`, `playtime-rewards/rewards.yml`, `rankup/ranks.yml`, `repair/groups.yml`, `rtp/worlds.yml`, `stats/stats.yml` |
+| **Lifted out** | A map that cannot live inside a schema record, kept in a sibling file. Written from the jar on a first install, never rewritten after | `farming/categories.yml`, `join-leave/groups.yml`, `kill-rewards/rewards.yml`, `missions/missions.yml`, `playtime-rewards/rewards.yml`, `rankup/ranks.yml`, `repair/groups.yml`, `rtp/worlds.yml`, `stats/stats.yml` |
+| **Bundled and tracked** | Written from the jar, then kept up to date without undoing your edits — see below | `votes/votes.yml`, `seasons/seasons.yml`, `trade/window.yml`, every menu under `modules/<id>/menus/` and `menus/currency_select.yml` |
+| **Replaced** | Deleted and written from the jar on every start and every reload | Everything under `menus/admin/` |
 
 A lifted-out file that already exists is treated as already moved, so a file you deliberately emptied
 stays empty rather than having the shipped defaults written back over it.
 
+## What an edit survives
+
+The bundled-and-tracked files are refreshed on every start, and the menus, `votes.yml` and `seasons.yml`
+again on every reload. For each YAML file the plugin compares three things: your file, the shipped file,
+and the defaults you last reviewed, which are kept in `.defaults/files/` inside the plugin folder.
+
+- **A missing file** is written — unless it was installed before and you deleted it. A deleted menu stays
+  deleted, and the console names the menu it could not register.
+- **A key the new version adds** is written into your file at once, comments included.
+- **A default that changed or was removed**, on a key still at the value you last reviewed, is left as it
+  is and listed in `/exylialib updates`, where you apply or keep it.
+- **Anything you changed or deleted** is never touched.
+- **A file whose shipped `menu-version` (or `defaults-version`) is higher than yours** is replaced whole;
+  your previous file is kept next to it as `<name>.v<old version>`.
+
+On a server updating from a version that tracked nothing yet, every value already on disk counts as
+yours, and a key missing from your file is listed in `/exylialib updates` rather than added, since you
+may have deleted it on purpose. A file that does not parse is left untouched and reported.
+
+`trade/window.yml` goes one step further: the window reads the jar's copy first and yours on top of it,
+so an item a new version adds is drawn even while its entry waits in `/exylialib updates`.
+
 ## `config.yml`
 
-Two keys: `debug`, and the thirty-two module switches. That is the entire file — see
-[Modules](/docs/exyliasurvivalcore/modules).
+Three blocks: `debug`, the fifty module switches — see [Modules](/docs/exyliasurvivalcore/modules) —
+and `teleport`.
 
 There is **no database section here**. The database is configured in `database.yml`, written by
 ExyliaLib.
 
+### `teleport`
+
+How teleports behave when nothing asks for something else. The plugin hands this section to ExyliaLib's
+teleports on every start and every reload.
+
+```yaml
+teleport:
+  warmup-seconds: 0.0
+  cancel-on-move: true
+  cancel-on-damage: true
+  safe-search-radius: 5
+  safe-max-attempts: 32
+  cross-server-ttl-seconds: 300
+  cross-server-settle-seconds: 0.5
+  back-history-size: 3
+  back-history-minutes: 30
+  tpa-expiry-seconds: 60
+  tpa-max-pending: 8
+  random-max-attempts: 16
+```
+
+| Key | Default | Range | What it does |
+|---|---|---|---|
+| `warmup-seconds` | `0.0` | 0 or more | How long a player waits before being moved. Decimals allowed |
+| `cancel-on-move` | `true` | | Leaving the starting block during the countdown calls it off |
+| `cancel-on-damage` | `true` | | Taking damage during the countdown calls it off |
+| `safe-search-radius` | `5` | 0–32 | How far from the destination to look for a safe landing, when the teleport asked for one |
+| `safe-max-attempts` | `32` | 1–256 | How many blocks that search may check before reporting that nowhere safe was found |
+| `cross-server-ttl-seconds` | `300` | 30–3600 | How long a destination queued for another server stays valid |
+| `cross-server-settle-seconds` | `0.5` | 0.05–5 | How long the destination server waits after a player arrives before moving them |
+| `back-history-size` | `3` | 1–16 | How many places a player may walk back through |
+| `back-history-minutes` | `30` | 1–1440 | How long one of those places stays offered |
+| `tpa-expiry-seconds` | `60` | 5–3600 | How long an unanswered request stays askable |
+| `tpa-max-pending` | `8` | 1–64 | How many requests one player may be sitting on |
+| `random-max-attempts` | `16` | 1–64 | How many places a random teleport may try before giving up |
+
+A value outside its range is pulled back to the nearest end of it; a negative warmup becomes `0`.
+
+<Callout type="note" title="The modules keep their own teleport settings">
+Spawn, homes, back, TPA and warps still take their warmup, their cancel rules and their effects from
+their own `config.yml`. `/back` reads `back-history-minutes` to decide whether the place it stored is
+still offered. The TPA module expires its requests by `settings.request-expire-seconds` in
+`modules/tpa/config.yml` (60 by default); nothing in this plugin reads `tpa-expiry-seconds` or
+`tpa-max-pending`.
+</Callout>
+
 ## `messages.yml`
 
-One `prefix` and thirty-four sections — one per module, plus `errors`, `admin` and a few shared ones.
+One `prefix` and fifty-one sections — `errors`, `admin`, and one for every module except `join-leave`.
 Every line the plugin sends is in this file; nothing player-facing is hardcoded.
 
 `errors` is the shared block: `module-disabled`, `no-permission`, `player-not-found`,
-`invalid-number`, `world-blacklisted`.
+`invalid-number`, `world-blacklisted`. `admin.restart-required` is the line `/sc reload` ends with when a
+module switch is waiting for a restart.
 
 A line may open with an effect tag such as `[sound:ENTITY_VILLAGER_NO|1.0|1.0]`, which is an
 instruction and never reaches the screen. `%prefix%` is substituted from the `prefix` key.
@@ -57,7 +130,7 @@ Sounds are always `SOUND_NAME|VOLUME|PITCH`, and a blank string disables one.
 
 | Module | Files |
 |---|---|
-| `spawn`, `tpa`, `homes`, `back`, `warps` | `config.yml` — the warmup, the bypass node, blacklisted worlds, the sounds and the three effects |
+| `spawn`, `tpa`, `homes`, `back`, `warps` | `config.yml` — the warmup, the bypass node, blacklisted worlds, the sounds and the effects |
 | `rtp` | `config.yml` plus `worlds.yml` |
 | `join-leave` | `config.yml` plus `groups.yml` |
 | `kill-rewards` | `config.yml` plus `rewards.yml` |
@@ -65,20 +138,32 @@ Sounds are always `SOUND_NAME|VOLUME|PITCH`, and a blank string disables one.
 | `rankup` | `config.yml` plus `ranks.yml` |
 | `farming` | `config.yml` plus `categories.yml` |
 | `stats` | `config.yml` plus `stats.yml` |
+| `missions` | `config.yml` plus `missions.yml` |
 | `repair` | `config.yml` plus `groups.yml` |
 | `crates` | `config.yml` plus `tiers.yml` and `animations.yml` |
 | `enchantments` | `config.yml` plus `rules.yml` |
+| `votes` | `config.yml` plus `votes.yml` |
+| `seasons` | `config.yml` plus `seasons.yml` |
+| `trade` | `config.yml` plus `window.yml` |
 | `blocked-items` | `rules.yml` only |
 | `reclaim`, `scheduled-commands` | `config.yml` only, free-form |
-| `player-utils`, `near`, `jumpads`, `kits`, `bounties`, `afk-zones`, `item-spawners`, `loot-chests`, `death`, `powerups`, `mines` | `config.yml` only |
+| `player-utils`, `near`, `jumpads`, `kits`, `bounties`, `afk-zones`, `item-spawners`, `loot-chests`, `death`, `powerups`, `mines`, `portals`, `duel-rooms`, `graves`, `vaults`, `market`, `auctions`, `orders`, `shop`, `rewards`, `boosters`, `sell-wands`, `optimization`, `protections` | `config.yml` only |
 | `regen-zones` | `modules/regenzones/config.yml` — **no dash in the folder name** |
-| `portals`, `player-settings` | **No configuration file at all** |
+| `economy` | **No configuration file.** The currencies and the economy settings live in the database and are edited with `/economyadmin`. A `modules/economy/currencies.yml` is read once, the first time those tables are empty, and renamed to `currencies.yml.imported`; a server that still has `plugins/ExyliaLib/currencies.yml` and not this one gets that file copied over first |
+| `player-settings`, `item-updater` | **No configuration file at all** |
 
 What each key does is on that module's own page: [Movement](/docs/exyliasurvivalcore/movement),
-[Combat](/docs/exyliasurvivalcore/combat), [Progression](/docs/exyliasurvivalcore/progression),
+[Combat](/docs/exyliasurvivalcore/combat), [Duel rooms](/docs/exyliasurvivalcore/duel-rooms),
+[Progression](/docs/exyliasurvivalcore/progression),
+[Missions and seasons](/docs/exyliasurvivalcore/missions-and-seasons),
+[Rewards and votes](/docs/exyliasurvivalcore/rewards-and-votes),
 [Kits and crates](/docs/exyliasurvivalcore/kits-and-crates), [Zones](/docs/exyliasurvivalcore/zones),
-[Restrictions](/docs/exyliasurvivalcore/restrictions) and
-[Quality of life](/docs/exyliasurvivalcore/quality-of-life).
+[Restrictions](/docs/exyliasurvivalcore/restrictions),
+[Quality of life](/docs/exyliasurvivalcore/quality-of-life),
+[Optimization](/docs/exyliasurvivalcore/optimization), [Economy](/docs/exyliasurvivalcore/economy),
+[Shop](/docs/exyliasurvivalcore/shop), [Market](/docs/exyliasurvivalcore/market),
+[Trade and vaults](/docs/exyliasurvivalcore/trade-and-vaults) and
+[Protections](/docs/exyliasurvivalcore/protections).
 
 ## Comments that are out of date
 
@@ -86,15 +171,15 @@ The generated files carry their own explanations, and four of those are wrong. T
 that a file disagreeing with this documentation is not a surprise.
 
 <Callout type="danger" title="`menus/admin/` is not yours, whatever its header says">
-All thirty-six admin menu files open with *"This file is yours to edit… written once, when it is
-missing, and never overwritten"*. The directory is deleted and re-extracted from the jar on **every**
-start and **every** `/sc reload`. The header is correct only in the twenty-two menus under
-`modules/*/menus/`.
+All forty-nine admin menu files open with *"This file is yours to edit… written once, when it is
+missing, and never overwritten"*. The directory is replaced from the jar on **every** start and
+**every** `/sc reload`.
 </Callout>
 
 <Callout type="warning" title="`ranks.yml` lists requirement types that do not exist">
-Its header mentions `kills` and `level`. The real set is `money`, `playtime`, `placeholder` and
-`permission`; a requirement of any other type is dropped silently when the file is read.
+Its header lists `money`, `playtime`, `kills` and `level`. The real set is `money`, `playtime`,
+`placeholder` and `permission`; a requirement of any other type is dropped silently when the file is
+read.
 </Callout>
 
 <Callout type="note" title="`admin.usage` names two subcommands `/survivalcore` does not have">
@@ -110,7 +195,15 @@ values; edit them in each module's `config.yml`.
 
 ## Reloading
 
-`/survivalcore reload`, from the console or in game, re-reads `config.yml` including `debug`, every
-module's own files — the nine that cache theirs included — `messages.yml`, and the menus.
+`/survivalcore reload`, from the console or in game, runs three steps in order:
 
-It does **not** apply a module switch. Turning a module on or off needs a restart.
+1. **configs** — `config.yml` including `debug` and `teleport`, `messages.yml` and the prefix, and every
+   schema-backed module file.
+2. **modules** — each module that is on declares its files again and re-reads what it keeps: ladders,
+   rules, `missions.yml`, `votes.yml`, `seasons.yml` and the rest.
+3. **menus** — `menus/admin/` is replaced from the jar, the other menus are refreshed as described
+   above, and every menu is compiled again. This step also runs on `/exylialib reload`.
+
+A step that fails is reported by name and the ones after it still run. The reload does **not** apply a
+module switch; when one no longer matches what is running, it ends by naming the modules that need a
+restart.

@@ -1,6 +1,6 @@
 ---
 title: "Installation"
-description: "Dependencies, first boot, the files the plugin generates, where the database is set, and what a reload actually reloads."
+description: "Dependencies and what each optional one enables, first boot, the files the plugin generates, where the database is set, and what a reload actually reloads."
 ---
 
 ## Before you start
@@ -16,16 +16,30 @@ this one, even if you only wanted `/home` and `/spawn`.
 `ExyliaLib` is listed under `softdepend` on purpose — the loader that installs ExyliaLib is the one
 that has to load first for that install to happen — but nothing here runs without it. It provides the
 configuration, menus, database, placeholders, holograms, scoreboards, regions, wizards, chat inputs,
-teleports, the economy facade and the scheduler.
+teleports, the scheduler, and the facades that read other plugins' economies and clans. The plugin
+names no minimum ExyliaLib version: the loader installs the library, and the library's own updater
+keeps it current.
 
-Optional:
+## Optional plugins
 
-- **PlaceholderAPI** to use the plugin's placeholders outside it.
-- **WorldGuard** for the region scopes in the enchantment and blocked-item rules.
-- **An economy plugin** through ExyliaLib's economy facade — Vault or PlayerPoints. Without one, prices
-  and payouts are skipped and the console says so once at boot.
-- **Apollo** or **FeatherServerAPI** so spawn and homes show as client waypoints.
-- **The `Worlds` plugin** on Folia.
+Declared under `softdepend`, each one switches on something specific:
+
+| Plugin | What it enables |
+|---|---|
+| `PlaceholderAPI` | The plugin's placeholders outside it; `placeholder` requirements in `ranks.yml`; stats of type `PAPI`, such as the shipped `playtime`. |
+| `WorldGuard` | Region scopes in the enchantment and blocked-item rules. For protections: the `WORLDGUARD` backend, which mirrors every protection as a WorldGuard region; refusing land that overlaps somebody else's WorldGuard region; and the ProtectionStones import. **Protections do not need it** — the default backend is `INTERNAL`. |
+| `BlueMap`, `dynmap` | Protections drawn on the web map, when turned on in `modules/protections/config.yml`. |
+| `Votifier` (or NuVotifier) | Votes reaching the `votes` module. Without it, votes only arrive through `/voteadmin fake`. |
+| `Apollo` (`Apollo-Bukkit`, `Apollo-Folia`), `FeatherServerAPI` | Spawn and homes shown as client waypoints. |
+| `Worlds` | World handling on Folia. |
+
+Two more are not in `plugin.yml` and are read through ExyliaLib:
+
+- **Vault or PlayerPoints** — their currencies sit next to the ones the `economy` module stores, and the
+  `economy` module can publish one of its own currencies as the server's Vault economy. See
+  [Economy](/docs/exyliasurvivalcore/economy).
+- **ExyliaClans or SimpleClans** — clans and alliances for duel rooms and protections. Without one,
+  nobody is in a clan.
 
 ## Installing
 
@@ -39,7 +53,7 @@ Optional:
     menus and the tables of every module that is on.
   </Step>
   <Step title="Turn off what you do not want">
-    All thirty-two switches ship as `true`. Set the rest to `false` and restart — see
+    All fifty switches ship as `true`. Set the rest to `false` and restart — see
     [Modules](/docs/exyliasurvivalcore/modules).
   </Step>
   <Step title="Set the spawn and grant the nodes">
@@ -48,11 +62,17 @@ Optional:
   </Step>
 </Steps>
 
-Two warnings are worth recognising in the console at boot:
+Warnings worth recognising in the console at boot:
 
-- `No economy is installed: prices and payouts are skipped.` — no economy provider was found.
+- `No economy is installed: prices and payouts are skipped.` — no currency is registered at all: the
+  `economy` module is off and neither Vault nor PlayerPoints provides one.
 - `Regen zones are off: <reason>` — FastAsyncWorldEdit's schematic support is not usable, so the
   regen-zones module loads but never regenerates anything.
+- `NuVotifier is not installed: votes only arrive through /voteadmin fake.`
+- `Missions are on but stats are off: …` and `Seasons rank stat counters, and the stats module is off:
+  nothing will be ranked.` — both read the stat counters, which only the `stats` module keeps.
+- `Protections are set to the WORLDGUARD backend, but WorldGuard is not enabled. Falling back to
+  INTERNAL.`
 
 ## Generated files
 
@@ -60,25 +80,27 @@ All of them live in `plugins/ExyliaSurvivalCore/`.
 
 | Path | Contents |
 |---|---|
-| `config.yml` | `debug` and the thirty-two module switches. Nothing else. |
-| `messages.yml` | Every line the plugin sends, in thirty-four sections. |
-| `modules/<id>/config.yml` | One per module, its own settings. |
-| `modules/<id>/<data>.yml` | The ladders: ranks, rewards, categories, groups, worlds, stats, rules. |
-| `modules/<id>/menus/` | The twenty-two player-facing screens. **Yours to edit.** |
-| `menus/admin/` | The thirty-six admin screens. **Rewritten from the jar on every start and every reload.** |
+| `config.yml` | `debug`, the fifty module switches and the `teleport` section. |
+| `messages.yml` | Every line the plugin sends, in fifty-one sections. |
+| `modules/<id>/config.yml` | One per module that has settings. |
+| `modules/<id>/<data>.yml` | The ladders: ranks, rewards, categories, groups, worlds, stats, missions, rules. |
+| `modules/votes/votes.yml`, `modules/seasons/seasons.yml`, `modules/trade/window.yml` | Shipped files kept up to date without undoing your edits. |
+| `modules/<id>/menus/`, `menus/currency_select.yml` | The sixty-nine menus outside `menus/admin/`. **Yours to edit**; new keys are added, your values are kept. |
+| `menus/admin/` | The forty-nine admin screens. **Rewritten from the jar on every start and every reload.** |
+| `.defaults/files/` | The shipped defaults you last reviewed, which is how an update tells your edits from its own. |
 | `database.yml` | Database engine and Redis, written by ExyliaLib. |
 
-Nothing but the menus exists inside the jar: the configuration files are generated from the plugin's
-own schema, comments included. A key the schema does not recognise is reported once as `UNKNOWN_KEY`
-and removed.
+`config.yml`, `messages.yml` and every `modules/<id>/config.yml` are generated from the plugin's own
+schema, comments included. A key the schema does not recognise is reported once as `UNKNOWN_KEY` and
+removed. The menus and the default ladders are shipped inside the jar. How each kind of file is written
+and updated is on [Configuration](/docs/exyliasurvivalcore/configuration).
 
 <Callout type="danger" title="Do not edit anything under `menus/admin/`">
-That whole directory is deleted and re-extracted from the jar every time the plugin enables **and**
-every time you run `/sc reload`. Edits there are lost, without a warning.
+That whole directory is replaced from the jar every time the plugin enables **and** every time you run
+`/sc reload`. Edits there are lost, without a warning.
 
-Each of those thirty-six files opens with a header saying it is yours and is never overwritten. **That
-header is wrong.** It is correct only in the twenty-two menus under `modules/*/menus/`, which really
-are written once and left alone.
+Each of those forty-nine files opens with a header saying it is yours and is never overwritten. **That
+header is wrong.**
 
 The one exception is `modules/warps/menus/warp_setup.yml` — an admin editor that lives outside
 `menus/admin/` and therefore survives.
@@ -87,8 +109,8 @@ The one exception is `modules/warps/menus/warp_setup.yml` — an admin editor th
 ## Database
 
 By default the plugin uses **H2**: a file inside the plugin folder, with no server and no maintenance.
-To share homes, warps, kits, ranks and statistics across servers, point every server at the same
-database:
+To share homes, warps, kits, ranks, balances and statistics across servers, point every server at the
+same database:
 
 ```yaml title="plugins/ExyliaSurvivalCore/database.yml"
 database:
@@ -105,8 +127,8 @@ Supported engines: `h2`, `mysql`, `mariadb`, `postgresql` and `mongodb`. An engi
 recognise falls back to H2 with a console warning. The file is ExyliaLib's; its full reference,
 including the `redis` block, is in the [library's database page](/docs/exylialib/database).
 
-The thirty-one tables are listed on the [Database](/docs/exyliasurvivalcore/database) page. A module
-that is off never creates its own.
+The tables are listed on the [Database](/docs/exyliasurvivalcore/database) page. A module that is off
+never creates its own.
 
 ## Reloading
 
@@ -114,18 +136,29 @@ that is off never creates its own.
 /survivalcore reload
 ```
 
-Aliases `/sc`. It runs from the console, and it reloads **three** things: the configuration files, each
-module's own cached configuration, and the menus.
+Aliases `/sc`. It runs from the console, and it reloads **three** things in order: the configuration
+files, each module's own files, and the menus. A step that fails is reported by name and the steps
+after it still run.
 
 | Reloaded | Not reloaded |
 |---|---|
-| `config.yml`, including `debug` | The module switches — a module turned on or off needs a restart |
-| Every `modules/<id>/` file, including the nine modules that cache theirs | The database connection |
+| `config.yml`, including `debug` and `teleport` | The module switches — a module turned on or off needs a restart |
+| Every `modules/<id>/` file of a module that is on | The database connection |
 | `messages.yml` | Anything stored in the database, which is read when it changes |
-| The menus — which also wipes `menus/admin/` back to the jar | |
+| The menus — which also replaces `menus/admin/` from the jar | |
+
+When a switch in `config.yml` no longer matches what is running, the reload ends with
+*"Restart to apply module changes » …"* and the ids of those modules.
 
 ## Updating
 
-Replace the jar and restart. Your edits to `config.yml`, `messages.yml`, every file under `modules/`
-and the twenty-two module menus are kept; `menus/admin/` is refreshed from the jar. Everything in the
-database is untouched.
+Replace the jar and restart. `menus/admin/` is refreshed from the jar. Everything in the database is
+untouched. Everything else keeps your edits:
+
+- `config.yml`, `messages.yml` and each module's `config.yml` keep your values.
+- The free-form and lifted-out files — `ranks.yml`, `rewards.yml`, `rules.yml` and the rest — are never
+  rewritten.
+- The module menus, `votes.yml`, `seasons.yml` and `trade/window.yml` receive keys a new version adds;
+  a default that changed waits in `/exylialib updates` instead of overwriting yours. A file whose
+  shipped `menu-version` is higher than yours is replaced, and yours is kept next to it as
+  `<name>.v<old version>`.

@@ -1,0 +1,317 @@
+---
+title: "Salas de duelo"
+description: "Regiones que se cierran en una sala PvP cuando entran suficientes enemigos, se luchan hasta que queda uno, pagan al ganador y vuelven a abrirse."
+---
+
+Una sala de duelo es una región sin cola y sin comando: los jugadores entran. Cuando dentro hay
+suficientes enemigos, se levanta un borde en las caras de la región, corre una cuenta atrás y se lucha
+hasta que queda un solo luchador. El ganador tiene unos segundos para recoger el botín; después el borde
+cae y la sala espera al siguiente grupo.
+
+El módulo es `duel-rooms` en `config.yml`. Las salas se montan desde `/duelroomsadmin` y viven en la base
+de datos. Sus ajustes están en `modules/duel-rooms/config.yml`.
+
+## Cómo transcurre un duelo
+
+| Fase | Qué pasa | Duración |
+|---|---|---|
+| Espera | Los jugadores están en la sala. Una barra de jefe muestra cuántos enemigos hay y cuántos hacen falta | Hasta que haya suficientes enemigos |
+| Cuenta atrás | Se levanta el borde y quien no ha sido elegido se envía a la salida. Los golpes todavía no hacen nada | `countdown-seconds`, 3 |
+| Combate | PvP entre los luchadores. Quien muere, sale o se desconecta queda fuera | Hasta `max-duration-seconds`, 180 |
+| Botín | El combate está decidido. La sala sigue cerrada para que el ganador recoja lo que ha caído | `loot-seconds`, 5 |
+| Apertura | El borde cae. Quien siga dentro se envía a la salida, y el ganador solo si `teleport-winner-out` está activado | — |
+
+Cuando el borde ha caído, todos los que siguen en la sala cuentan como si acabaran de entrar. Si
+`teleport-winner-out` está desactivado, el ganador empieza a esperar el siguiente duelo en ese mismo
+momento.
+
+Quien entra en una sala con un duelo en marcha vuelve a la salida con `duel-rooms.room-busy`. Además, una
+vez por segundo la sala expulsa a quien haya llegado por otro camino. Los jugadores con
+`exyliasurvivalcore.duelrooms.bypass` nunca entran en un duelo y nunca se les expulsa.
+
+Solo pueden unirse jugadores en modo supervivencia o aventura. A un luchador que pasa a creativo o
+espectador durante un duelo se le saca del duelo, como si se hubiera desconectado, pero no se le mata.
+
+## Solo luchan enemigos
+
+Con [ExyliaClans](/docs/exyliaclans) instalado, nunca se eligen para el mismo duelo dos jugadores del
+mismo clan o de clanes aliados. Cuando la sala se llena, se barajan los jugadores que esperan y se toman
+luchadores de uno en uno, saltando a quien sea del mismo bando que un luchador ya elegido. La sala se
+cierra en cuanto eso da los jugadores que necesita.
+
+Así, tres compañeros de clan y un jugador de fuera en una sala para dos dan un duelo de dos: un compañero
+al azar contra el de fuera. Los otros dos compañeros se envían a la salida. La barra de espera también
+cuenta bandos, no personas. Quien entra cuando todos los que ya esperan son de su bando recibe
+`duel-rooms.allied-waiting`.
+
+Sin un plugin de clanes, todos los jugadores cuentan como enemigos.
+
+<Callout type="note" title="Una sala puede quedarse esperando con un duelo válido dentro">
+Los luchadores se eligen en una sola pasada, y solo cuando alguien entra. Supongamos que A es aliado de B
+y B es aliado de C, pero A y C son enemigos. Si al barajar B sale primero, se elige a B y se saltan tanto
+A como C, así que el duelo no empieza. No se vuelve a intentar hasta que entra otro jugador.
+</Callout>
+
+## Salir de un combate
+
+| Lo que hace el luchador | Durante la cuenta atrás | Durante el combate |
+|---|---|---|
+| Se desconecta | El duelo se cancela para todos (`duel-rooms.aborted`) | Se le mata y suelta su botín, si `kill-on-leave` está activado |
+| Sale de la sala | Igual | Igual, y se le avisa con `duel-rooms.fled` |
+| Muere | Igual | Queda fuera del combate, y a los demás se les dice cuántos quedan |
+| Usa un comando | Bloqueado, salvo `allowed-commands` | Bloqueado, salvo `allowed-commands` |
+| Se teletransporta fuera | Bloqueado | Bloqueado |
+
+Que se mate a quien se desconecta en pleno combate es el sentido de `kill-on-leave`: un jugador que va
+perdiendo no puede desconectarse para quedarse el botín por el que lucha el ganador. Con el ajuste
+desactivado, salir solo le saca del combate.
+
+Los comandos se comprueban antes de que los vea cualquier otro plugin, y un espacio de nombres no sirve
+para saltarse la lista: `minecraft:msg` cuenta como `msg`. Se cancela cualquier teletransporte a un punto
+fuera de la sala, venga de `/spawn`, de una perla de ender, de una fruta coral, de un portal o de otro
+plugin. Los dos bloqueos terminan cuando el combate está decidido, así que el ganador puede irse durante
+el tiempo de botín.
+
+Nadie puede cavar para salir ni hacer un túnel para entrar. Mientras hay un duelo, no se pueden romper ni
+los bloques del borde ni ningún bloque de las caras de la región. Las explosiones los respetan, los
+pistones no pueden moverlos, y no se desvanecen, no arden ni los cambian los mobs. Esto vale para todos
+los jugadores, también para los que tienen bypass.
+
+## Combates en los que nadie acierta un golpe
+
+Un combate en el que nadie acierta un golpe durante `inactivity-seconds` (30) termina sin ganador, con el
+título *CANCELLED*. Eso cubre a quien se queda quieto, se va AFK o se niega a luchar. Se avisa 10 segundos
+antes, o a mitad de ese tiempo cuando `inactivity-seconds` es menor de 20.
+
+Solo reinicia el temporizador un golpe que hace daño. No lo reinicia un golpe bloqueado, uno cancelado ni
+el de un jugador que no está en el duelo. Las flechas y demás proyectiles cuentan.
+
+`0` desactiva la comprobación.
+
+## Golpes
+
+Dentro de un duelo en marcha, un golpe entre dos luchadores entra aunque otro plugin, la protección del
+spawn, WorldGuard o el propio flag `PVP` de la sala lo denegaran. Un golpe entre un luchador y alguien de
+fuera del duelo se bloquea en los dos sentidos. Durante la cuenta atrás, los golpes entre luchadores
+también se bloquean.
+
+## Efectos y vuelo
+
+Una sala puede dar efectos de poción a sus luchadores para el combate. Se aplican cuando empieza el
+combate, no durante la cuenta atrás. En el editor, los segundos de cada efecto se guardan tal y como se
+escriben, y `-1` dura todo el combate. Ningún efecto dura más de `max-duration-seconds` +
+`countdown-seconds` + 30 segundos, o una hora si no hay límite de tiempo, para que una caída del servidor
+en pleno duelo no deje a nadie con el efecto para siempre.
+
+Los luchadores recuperan después sus propios efectos. Al empezar el combate, cualquier efecto que el
+jugador ya tuviera del mismo tipo que uno de los de la sala se guarda y se quita primero. Minecraft se
+queda con el más fuerte de dos efectos, así que una poción bebida antes taparía el efecto de la sala.
+Cuando el jugador queda fuera del combate, o el combate se decide, se quitan los efectos de la sala y se
+le devuelven los suyos. Quien ha muerto no recupera nada.
+
+Con `disable-flight` activado, los luchadores pierden el vuelo al empezar el combate. Un `/fly` escrito
+en pleno combate se retira en menos de un segundo. El vuelo que tuviera cada jugador se le devuelve al
+final.
+
+## El ganador
+
+Cuando queda un solo luchador:
+
+- El ganador recibe el título *VICTORY* y los perdedores que sigan conectados, *DEFEAT*.
+- Las recompensas de la sala se dan al ganador. Si se desconecta antes de que lleguen, se guardan y se le
+  dan la próxima vez que entre.
+- Con `broadcast-results` activado, `duel-rooms.broadcast` se envía al servidor y a la consola. Cada
+  jugador puede silenciarlo desde `/settings` con *duel-announcements*.
+- [`DuelRoomEndEvent`](/docs/exyliasurvivalcore/api) se lanza antes de dar las recompensas.
+
+Un combate que se queda sin tiempo, o en el que los últimos luchadores caen a la vez, termina sin ganador
+con el título *DRAW*. No se paga a nadie, y todos se envían a la salida cuando la sala se abre.
+
+## Montar una sala
+
+`/duelroomsadmin` abre la lista de salas de este servidor. La esmeralda crea una: se escribe un ID (en
+minúsculas, único, de 64 caracteres como mucho) y se abre la pantalla de configuración de la sala. Clic
+izquierdo en una sala para editarla, clic derecho para borrarla. Borrar no pide confirmación.
+
+| Botón | Qué ajusta |
+|---|---|
+| Room status | Activada o desactivada. Una sala necesita región y salida antes de poder activarse |
+| Display name | El nombre en títulos, barras de jefe y el anuncio. Por defecto, el ID |
+| Room region | La arena, seleccionada con el asistente de regiones. Sus caras se convierten en el borde |
+| Exit location | Donde estás. Los jugadores expulsados van aquí. Tiene que estar fuera de la región |
+| Players needed | Cuántos luchadores cierran la sala, de 2 a 16. Por defecto, 2 |
+| Border block | Cualquier bloque sólido. Por defecto, `RED_STAINED_GLASS` |
+| Duel effects | El editor de efectos descrito arriba |
+| Winner rewards | El editor de recompensas |
+| Room flags | La pantalla de flags de abajo. Necesita la región primero |
+| Delete room | Detiene cualquier duelo en la sala y la elimina |
+
+La lista marca cada sala como *Ready* (activada, con región y salida), *Incomplete* (activada pero le
+falta alguna de las dos) o *Disabled*.
+
+La región tiene que medir al menos 3×4×3 bloques. Su borde tiene un tope de `max-border-blocks`, 20000,
+contado sobre todos los bloques de las seis caras. Una selección que lo supera se rechaza indicando la
+cuenta y el límite. Al seleccionar una región nueva se conservan los flags de la anterior.
+
+El borde solo sustituye bloques reemplazables, como el aire, el agua o la hierba alta. Los bloques sólidos
+que ya estén en una cara se quedan como están y hacen de pared. Al abrirse la sala, cada bloque sustituido
+se repone, pero solo donde siga estando el bloque del borde. Mientras está levantado, el borde queda
+registrado en la base de datos, así que si el servidor se cae o se para en pleno duelo, se retira en el
+siguiente arranque, en cuanto el mundo esté cargado.
+
+A los luchadores que están sobre una cara cuando la sala se cierra se les mueve un bloque hacia dentro,
+para que el borde no se cierre sobre ellos.
+
+<Callout type="note" title="Qué cambios detienen un duelo en marcha">
+Cambiar la región, la salida o los jugadores necesarios, o activar o desactivar la sala, detiene el duelo
+que haya dentro, y los luchadores reciben `duel-rooms.room-stopped`. Borrar la sala hace lo mismo. El
+nombre, el bloque del borde, los efectos, las recompensas y los flags se pueden cambiar en pleno duelo: el
+duelo conserva la copia con la que empezó, y los flags se leen en vivo.
+</Callout>
+
+Cada sala se guarda con el servidor que la creó. En una red que comparte base de datos, cada servidor solo
+carga y lista sus propias salas.
+
+## Flags de la sala
+
+Los flags viven en la región de la sala. Hay una fila por flag, y cada clic la cicla por **permitir →
+denegar → por defecto**. *Por defecto* significa que la sala lo deja en manos de la región que la
+contenga.
+
+| Flag | Permitido significa | Por defecto |
+|---|---|---|
+| `PVP` | Combate entre jugadores | permitir |
+| `BUILD` | Colocar bloques | permitir |
+| `BREAK` | Romper bloques | permitir |
+| `INTERACT` | Usar bloques y entidades | permitir |
+| `PLAYER_BUILD_ONLY` | Solo se pueden romper bloques colocados por un jugador | denegar |
+| `ALLOWED_BLOCKS_ONLY` | Solo se pueden colocar los materiales de la lista | denegar |
+| `BREAKABLE_BLOCKS_ONLY` | Solo se pueden romper los materiales de la lista | denegar |
+| `TEMPORARY_BLOCKS` | Los bloques colocados vuelven a desaparecer | denegar |
+| `RE_GIVE_BLOCKS` | Un bloque temporal se devuelve cuando desaparece | denegar |
+| `REGION_MEMBERS_ONLY` | Solo los miembros pueden actuar | denegar |
+| `ENTRY` | Entrar, teletransportes incluidos | permitir |
+| `EXIT` | Salir, teletransportes incluidos | permitir |
+| `ITEM_DROP` | Tirar objetos | permitir |
+| `ITEM_PICKUP` | Recoger objetos | permitir |
+| `FALL_DAMAGE` | Recibir daño por caída | permitir |
+| `KEEP_INVENTORY` | Quien muere dentro conserva sus objetos y niveles | denegar |
+
+Estos valores por defecto son los de las políticas de región de ExyliaLib, tal y como los muestra la
+pantalla. `KEEP_INVENTORY` es propio de este plugin. Debajo de los flags hay dos botones más. **Block
+list** añade un material a la lista que usan `ALLOWED_BLOCKS_ONLY` y `BREAKABLE_BLOCKS_ONLY`, y con
+mayúsculas + clic se vacía. **Temporary blocks** fija cuánto dura un bloque colocado mientras
+`TEMPORARY_BLOCKS` está permitido.
+
+El plugin hace cumplir los dieciséis en todas las regiones que registra. El propio plugin comprueba los
+quince primeros, salvo los bloques temporales y los bloques devueltos, que los gestiona ExyliaLib. Los
+jugadores en modo creativo no están sujetos a ningún flag.
+
+- **Conservar inventario.** Con `KEEP_INVENTORY` permitido, un luchador que muere lo conserva todo y no
+  suelta nada, así que el ganador no tiene botín que recoger. Las tumbas también ven el inventario
+  conservado.
+- **PvP.** Un duelo en marcha se impone a `PVP` entre sus luchadores, como se explica arriba.
+- **Solo miembros.** Las salas no tienen miembros, así que `REGION_MEMBERS_ONLY` impide a todos
+  construir, romper y usar bloques.
+- **Entrada y salida.** Denegar `ENTRY` impide entrar andando, así que la sala nunca se llena. Denegar
+  `EXIT` impide que los luchadores salgan andando, pero la sala sigue enviando a los jugadores a la
+  salida, porque un teletransporte ejecutado por un plugin se deja pasar.
+
+## Configuración
+
+`modules/duel-rooms/config.yml`
+
+### `settings`
+
+| Ajuste | Por defecto | Qué hace |
+|---|---|---|
+| `countdown-seconds` | 3 | Segundos entre que la sala se cierra y empieza el combate |
+| `max-duration-seconds` | 180 | Lo máximo que dura un combate antes de terminar en empate. `0` es sin límite |
+| `inactivity-seconds` | 30 | Segundos sin un golpe antes de cancelar el combate sin ganador. `0` lo desactiva |
+| `loot-seconds` | 5 | Segundos que tiene el ganador para recoger el botín antes de que se abra la sala |
+| `teleport-winner-out` | `true` | Enviar al ganador a la salida cuando la sala se abre. Un empate siempre envía fuera a todos |
+| `disable-flight` | `true` | Quitar el vuelo a los luchadores durante el combate |
+| `kill-on-leave` | `true` | Matar al luchador que se desconecta o sale de la sala en pleno combate |
+| `allowed-commands` | `msg`, `tell`, `w`, `r`, `reply` | Comandos que un luchador puede seguir usando, sin la barra |
+| `broadcast-results` | `true` | Anunciar a cada ganador en el servidor |
+| `max-border-blocks` | 20000 | El borde más grande que puede tener una sala, en bloques |
+
+### `visuals`
+
+| Clave | Tipo | Cuándo | Admite |
+|---|---|---|---|
+| `waiting-bossbar` | Barra de jefe, morada | Mientras se espera. Se llena según llegan enemigos | `%room_name%`, `%current%`, `%required%` |
+| `countdown-title` | Título | Cada segundo de la cuenta atrás | `%room_name%`, `%seconds%` |
+| `fight-title` | Título | Cuando empieza el combate | `%room_name%` |
+| `fight-bossbar` | Barra de jefe, roja | Durante el combate. Se vacía según pasa el tiempo | `%room_name%`, `%time_left%`, `%alive%` |
+| `victory-title` | Título | Al ganador | `%room_name%`, `%winner%`, `%losers%` |
+| `defeat-title` | Título | A los perdedores | `%room_name%`, `%winner%`, `%losers%` |
+| `draw-title` | Título | Cuando nadie gana | `%room_name%` |
+| `inactive-title` | Título | Cuando el combate se cancela por inactividad | `%room_name%` |
+| `loot-bossbar` | Barra de jefe, verde | Mientras el ganador recoge el botín | `%room_name%`, `%seconds%` |
+
+`%time_left%` muestra `∞` cuando no hay límite de tiempo. Un `text` vacío oculta esa indicación.
+
+```yaml
+visuals:
+  fight-bossbar:
+    text: "{letters}%room_name% {letters_black}» {info}%time_left% ⌚ {letters_black}┃ {highlight}%alive% {letters}alive"
+    colour: RED
+    overlay: PROGRESS
+    count-up: 0.0
+    progress: 1.0
+    time-style: auto
+  victory-title:
+    text: "{success}&lVICTORY"
+    subtitle: "{letters}You won in {highlight}%room_name%"
+    fade-in: 0.25
+    stay: 3.0
+    fade-out: 1.0
+    time-style: auto
+```
+
+<Callout type="note" title="Las indicaciones antes eran barras de acción">
+Antes de la versión 2 de este archivo, las indicaciones de espera, combate y botín eran barras de acción.
+Al cargar un archivo antiguo, el `text` de `waiting-actionbar`, `fight-actionbar` y `loot-actionbar` pasa
+a la barra de jefe correspondiente.
+</Callout>
+
+### `sounds`
+
+Formato `SOUND_NAME|VOLUME|PITCH`. Un valor vacío no reproduce nada.
+
+| Clave | Por defecto | Suena |
+|---|---|---|
+| `countdown` | `BLOCK_NOTE_BLOCK_HAT\|1.0\|1.4` | Cada segundo de la cuenta atrás |
+| `start` | `ENTITY_ENDER_DRAGON_GROWL\|0.6\|1.2` | Cuando empieza el combate |
+| `victory` | `UI_TOAST_CHALLENGE_COMPLETE\|1.0\|1.0` | Al ganador |
+| `defeat` | `ENTITY_WITHER_SPAWN\|0.4\|1.6` | A los perdedores, y a todos cuando nadie gana |
+| `expel` | `ENTITY_ENDERMAN_TELEPORT\|1.0\|1.0` | A un jugador expulsado de una sala ocupada |
+
+Los mensajes están bajo `duel-rooms` en `messages.yml`.
+
+## Permisos
+
+| Permiso | Descripción |
+|---|---|
+| `exyliasurvivalcore.duelrooms.admin` | `/duelroomsadmin` y todos los botones de sus pantallas |
+| `exyliasurvivalcore.duelrooms.bypass` | Nunca entra en un duelo y nunca se le expulsa de una sala |
+
+## API
+
+`DuelRoomEndEvent` se lanza cuando se decide un combate, con el ID de la sala, el ganador o `null`, y
+todos los que empezaron el duelo. Consulta la [página de la API](/docs/exyliasurvivalcore/api).
+
+<Callout type="warning" title="No todos los duelos que terminan lanzan el evento">
+El evento se lanza cuando queda un solo luchador, cuando se acaba el tiempo y cuando un combate se cancela
+por inactividad. En los dos últimos casos el ganador es `null`.
+
+No se lanza cuando un duelo se cancela durante la cuenta atrás, cuando un administrador edita o borra la
+sala en pleno combate, cuando el servidor se para en pleno duelo, ni cuando el borde no llega a
+levantarse. La documentación del propio evento solo menciona el caso de la cuenta atrás.
+</Callout>
+
+<Callout type="note" title="Un mensaje, dos motivos">
+`duel-rooms.aborted` dice *"a player left before it started"*. También se envía cuando el borde no se ha
+levantado 15 segundos después de terminar la cuenta atrás y el duelo se cancela por ese motivo.
+</Callout>

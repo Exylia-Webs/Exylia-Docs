@@ -1,0 +1,227 @@
+---
+title: "Optimization"
+description: "Ground items and mobs stacked into one entity, spawners stacked into one block, per-chunk limits, and outdated items replaced by their fixed version."
+---
+
+Two modules. `optimization` gives the server fewer entities to tick: items and mobs stack into one entity,
+spawners stack into one block, and each chunk has limits. `item-updater` replaces outdated items in
+players' inventories with a fixed version.
+
+## Optimization
+
+The module is `optimization` in `config.yml`. Its settings are in `modules/optimization/config.yml`, and it
+has no commands.
+
+The file's header points at Paper's own settings first: `merge-radius` and `entity-activation-range` in
+`spigot.yml`, and the despawn and per-chunk save limits in `paper-world-defaults.yml`.
+
+The amount a stack stands for is saved on the entity or the block itself, so stacks survive a restart. A
+mob or item another plugin has stored data on is never stacked, because that plugin is treating it as its
+own.
+
+### Items on the ground
+
+Dropped items of the same kind join into one entity that can hold more than a full stack. When a new item
+drops, it looks for a matching stack within `items.radius` blocks. If adding it would not pass
+`items.max-amount`, the new item joins that stack instead of spawning. Items are matched on everything:
+type, name, lore, enchantments and data.
+
+The entity carries up to one full stack of the item, and its name shows the real amount from two items
+upwards:
+
+```yaml
+items:
+  name: "{highlight}%amount%x {letters}%item%"
+```
+
+Picking a stack up takes as much as the inventory has room for, and the rest stays on the ground with a
+smaller amount. Hoppers pick stacks up the same way. Items that roll into each other after landing are
+merged by the plugin, not by the server, so the amount in the name stays correct.
+
+Only ordinary items stack. These never do: an item nobody can pick up, one that never despawns, one with a
+custom name, one another plugin has marked, and anything that does not stack in an inventory, such as tools
+or armour.
+
+`items.lifetime-seconds` shortens how long a dropped item lasts, up to 300 seconds. The server removes an
+item once it is five minutes old, so the plugin makes a new item that much older when it spawns. `0` keeps
+the server's own despawn time. This applies to every ordinary item, even when `items.enabled` is off.
+
+| Setting | Default | What it does |
+|---|---|---|
+| `items.enabled` | `true` | Stack items on the ground past a full stack |
+| `items.radius` | 3.0 | How far, in blocks, a dropped item looks for a stack to join |
+| `items.max-amount` | 2048 | The most items one stack on the ground holds |
+| `items.name` | `{highlight}%amount%x {letters}%item%` | The name a stack shows once it holds more than one item |
+| `items.lifetime-seconds` | 0 | Seconds a dropped item lasts, up to 300. `0` is the server's own despawn time |
+
+### Mobs
+
+Mobs of a listed type stack into one entity that stands for all of them. There are two ways mobs join a
+stack:
+
+- **On spawn.** A new mob joins a matching stack within `mobs.radius` blocks, as long as the total stays
+  within `mobs.max-amount`.
+- **Every five seconds.** Mobs within 32 blocks of each player are checked, and those standing within
+  `mobs.radius` of each other are merged. Mobs that walk together end up stacked too.
+
+The name shows the amount:
+
+```yaml
+mobs:
+  name: "{highlight}%amount%x {letters}%type%"
+```
+
+**Killing a stack kills one mob.** The death drops one mob's loot and counts as one kill. A new stack one
+smaller spawns in its place, so a farm pays what it always did from far fewer entities. The same happens
+however the stack dies: lava, the void or `/kill` also take only one. The mob that replaces the stack is a
+fresh one. Only its age, a slime's size and a sheep's colour and shearing are copied.
+
+Mobs only stack with mobs that look alike. A baby never joins adults, a small slime never joins a big one,
+and sheep must share colour and shearing.
+
+A mob stacks only if it spawned for one of the listed `mobs.reasons`. The defaults include `SPAWNER_EGG` and
+`BREEDING`, so mobs from spawn eggs and bred mobs stack as well as natural and spawner ones. A mob that is
+already a stack keeps stacking, whatever brought it back.
+
+These mobs never stack: named mobs, tamed mobs, leashed mobs, mobs with a rider or riding something, and
+mobs another plugin keeps data on.
+
+With `mobs.disable-ai` on, a stack stands still and does not attack. A mob that is back down to one gets
+its AI back.
+
+| Setting | Default | What it does |
+|---|---|---|
+| `mobs.enabled` | `true` | Stack mobs of a listed type |
+| `mobs.radius` | 5.0 | How far, in blocks, a mob looks for a stack to join, on spawn and in the five-second merge |
+| `mobs.max-amount` | 50 | The most mobs one stack stands for |
+| `mobs.name` | `{highlight}%amount%x {letters}%type%` | The name a stack shows |
+| `mobs.types` | `ZOMBIE`, `SKELETON`, `SPIDER`, `CAVE_SPIDER`, `BLAZE`, `WITCH`, `ENDERMAN`, `ZOMBIFIED_PIGLIN`, `IRON_GOLEM`, `PIG`, `COW`, `SHEEP`, `CHICKEN` | The mob types that stack |
+| `mobs.reasons` | `NATURAL`, `SPAWNER`, `SPAWNER_EGG`, `BREEDING` | The spawn reasons a mob can stack from |
+| `mobs.disable-ai` | `false` | Stacks stand still and do not attack |
+
+Type and reason names are not case-sensitive.
+
+### Spawners
+
+Using a spawner item on a placed spawner of the same mob adds it to that block instead of placing it. This
+needs `exyliasurvivalcore.optimization.spawners`. Outside creative, one spawner is taken from the hand. A
+block holds up to `spawners.max-amount` spawners.
+
+**A stacked spawner spawns its whole stack.** Each time it spawns a mob:
+
+- If mob stacking is on and the type is listed, it spawns one mob standing for as many mobs as the block
+  holds spawners.
+- Otherwise, it spawns that many separate mobs.
+
+Sneaking and right-clicking a spawner with an empty hand shows how many spawners it holds.
+
+Breaking a stacked spawner takes one spawner off it and leaves the block. With `spawners.silk-touch-returns`
+on and a Silk Touch tool, that spawner is given to the player. Otherwise it is lost. The last spawner
+breaks the way the server breaks any spawner.
+
+| Setting | Default | What it does |
+|---|---|---|
+| `spawners.enabled` | `true` | Using a spawner on one of the same mob adds to it |
+| `spawners.max-amount` | 10 | The most spawners one block stands for |
+| `spawners.silk-touch-returns` | `true` | Breaking a stacked spawner with Silk Touch gives one spawner back |
+
+<Callout type="note" title="The broken-spawner message always mentions Silk Touch">
+`optimization.spawner-broken` ends with *"Silk Touch keeps it."* It is also sent when
+`spawners.silk-touch-returns` is off, and then Silk Touch keeps nothing.
+</Callout>
+
+### Limits per chunk
+
+```yaml
+limits:
+  entities-per-chunk:
+    CHICKEN: 50
+    COW: 50
+    PIG: 50
+    SHEEP: 50
+    ZOMBIE: 40
+    SKELETON: 40
+  blocks-per-chunk:
+    HOPPER: 64
+```
+
+**`entities-per-chunk`**, by entity type. A spawn that would pass the limit is refused. Spawns made by
+plugins or commands are not limited. Mobs from spawn eggs, breeding and spawners are. A stacked mob counts
+once, so a chunk can hold the limit times `mobs.max-amount` mobs. Limits are checked before mob stacking,
+so in a chunk that is at its limit, a spawn that would have joined a stack is refused as well. No
+permission bypasses this limit.
+
+**`blocks-per-chunk`**, by material. Placing a block past the limit is cancelled with
+`optimization.block-limit`. Only blocks with a block entity are counted, such as hoppers, chests, furnaces
+and spawners. A material without one, such as stone, is never counted, so its limit never applies. Players
+with `exyliasurvivalcore.optimization.bypass` are not limited.
+
+Names are not case-sensitive. An empty map turns that limit off. Neither limit has an on/off switch of its
+own: they run whenever the module is on.
+
+### Permissions
+
+| Permission | Description |
+|---|---|
+| `exyliasurvivalcore.optimization.spawners` | Adding a spawner to a spawner of the same mob |
+| `exyliasurvivalcore.optimization.bypass` | Placing blocks past `limits.blocks-per-chunk` |
+
+## Item updater
+
+When an item has to change — a reworked custom sword, a crate key with a new lore — the item updater
+replaces every copy of the old item with the new one as players come across it. The module is
+`item-updater` in `config.yml`. It has no configuration file.
+
+An **update** is a pair: the outdated item and the fixed item. Every stack that matches the outdated item
+exactly becomes the fixed item and keeps its amount. The match covers the whole item: type, name, lore,
+enchantments, durability and every data component. An item that differs in any of those is left alone.
+
+Items are checked at these moments:
+
+| When | What is checked |
+|---|---|
+| Joining | The inventory and the ender chest |
+| Switching hotbar slot | The slot switched to |
+| Closing any inventory | The player's own inventory, which is where an item taken from a chest, a vault or a trade ends up |
+
+Nothing runs on a timer. A player is told with `item-updater.updated` how many items changed. Items inside
+chests, vaults or on the ground are not touched until they reach the player's inventory. The ender chest
+is only checked on join and by `/itemupdater run`.
+
+Updates are stored in the database, so every server of a network sharing it applies the same updates. An
+update saved on one server reaches the others without a restart. An item that one server's version cannot
+read waits for a server that can.
+
+### Commands
+
+| Command | What it does |
+|---|---|
+| `/itemupdater`, `/iu` | Opens the list of updates |
+| `/itemupdater run` | Checks the inventory and ender chest of every player online on this server now, and says how many items changed |
+
+Both need `exyliasurvivalcore.itemupdater.admin`, and so does every button on the two screens.
+
+### The screens
+
+**`item_update_list`** lists every update with its outdated and fixed item. **Update now** does what
+`/itemupdater run` does. **New update** asks for a name (at most 64 characters), then for the outdated item,
+then for the fixed one. Nothing is saved until both items are in, so an abandoned creation leaves nothing
+behind.
+
+**`item_update_edit`** shows one update:
+
+| Button | What it does |
+|---|---|
+| Outdated item | Hand over a new outdated item |
+| Fixed item | Hand over a new fixed item |
+| Take copies | Gives you one of each. The outdated copy is updated as soon as you hold it or close your inventory |
+| Delete | Asks for confirmation. Items stop updating, and items already updated stay as they are |
+
+An update is refused when both items are the same, or when another update already replaces that outdated
+item.
+
+### Permissions
+
+| Permission | Description |
+|---|---|
+| `exyliasurvivalcore.itemupdater.admin` | `/itemupdater`, `/itemupdater run` and every button on the two screens |
