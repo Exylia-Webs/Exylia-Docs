@@ -1,0 +1,262 @@
+---
+title: "Entrenamiento"
+description: "La sesión en solitario desde el inicio hasta el descanso, cómo se juzga un clic y qué protege el plugin mientras un jugador está dentro."
+---
+
+Una sesión en solitario es un jugador, una arena y un motor. El motor es el mismo objeto que usa un
+duelo, así que todo lo que esta página cuenta sobre clics, la hotbar y las protecciones vale también para
+los duelos; lo que añade un duelo está en [Duelos](/docs/exyliaaimtrainer/duelos). Qué son los ejercicios
+y cómo una partida se convierte en un número está en [Ejercicios](/docs/exyliaaimtrainer/ejercicios) y
+[Puntuación](/docs/exyliaaimtrainer/puntuacion).
+
+## Empezar un ejercicio
+
+Tres formas de entrar:
+
+- `/aim train <drill>`. Sin ejercicio arranca `training.default-drill` (`gridshot` por defecto), o el
+  primer ejercicio de `config.yml` si ese ya no existe.
+- `/aim drills`, o **Drills** en `/aim`, y un clic en un ejercicio.
+- **Play again** en la pantalla de resultado o en la hotbar, que repite el ejercicio en el que ya está el
+  jugador.
+- **Change drill** en la pantalla de resultado o en la hotbar, que cambia de ejercicio sin salir de la
+  arena. Ver [Cambiar de ejercicio](#cambiar-de-ejercicio).
+
+Antes de mover nada, el inicio se rechaza, con un mensaje, cuando:
+
+| Situación | Mensaje |
+|---|---|
+| El id del ejercicio no está en `config.yml` | Unknown drill `<drill>`. |
+| PacketEvents no está disponible | Targets need PacketEvents, which this server does not have. |
+| No hay ninguna arena lista, o todas las listas están llenas | No arena is ready. Ask an administrator. |
+| El jugador ya está en un ejercicio o en un duelo | Finish what you are doing first. |
+| El jugador espera en una cola de ExyliaPracticeCore y practice no lo presta | Practice cannot lend you right now. |
+| Otro plugin tiene al jugador | You are busy in `<plugin>`. |
+| Otro plugin desaconseja tomar al jugador | Not right now: `<reason>`. |
+
+<Callout type="note" title="Sin arena no hay ejercicio">
+Un ejercicio siempre se juega en una arena. Sin ninguna lista el jugador se rechaza antes de reclamarlo,
+así que un rechazo nunca toca su inventario ni su posición. Ver [Arenas](/docs/exyliaaimtrainer/arenas).
+</Callout>
+
+Un jugador que espera en una cola de practice no se rechaza por estar tomado por practice: practice lo
+presta, le guarda el sitio en la cola y lo pide de vuelta cuando encuentra una partida. Eso está en
+[Compatibilidad](/docs/exyliaaimtrainer/compatibilidad).
+
+## Una sesión, de principio a fin
+
+<Steps>
+  <Step title="Reclamo e instantánea">
+    El jugador se reclama como `TRAINING`, se recuerda su ubicación y se guarda su inventario. El chat lo
+    confirma: "Drill started: `<drill>` · ×`<difficulty>` difficulty." El ejercicio queda guardado en su
+    perfil como su última elección.
+  </Step>
+  <Step title="Aislamiento">
+    Entra en un grupo propio: no ve a nadie, nadie lo ve y no se le puede tocar desde fuera.
+  </Step>
+  <Step title="La arena">
+    Se elige la arena lista que aloja a menos jugadores y se le teletransporta a su spawn.
+  </Step>
+  <Step title="Se le viste al llegar">
+    Solo cuando ya está en la arena se vacía su inventario y su modo de juego pasa a **aventura**. El orden
+    es a propósito: un plugin de inventario por mundo guarda lo que el jugador lleva al cambiar de mundo,
+    así que vaciarlo antes del teletransporte escribiría un inventario vacío en el mundo del que viene.
+  </Step>
+  <Step title="La pantalla">
+    Se congela el movimiento, el slot en mano pasa al primero, el arma del ejercicio va en él (o se deja
+    vacío), aparecen los botones de la hotbar, la boss bar y el sidebar, y empieza la cuenta atrás. Ver
+    [HUD](/docs/exyliaaimtrainer/hud).
+  </Step>
+  <Step title="Cuenta atrás">
+    `training.countdown` segundos (`3.0` por defecto) con el efecto `countdown`. **Golpear al aire termina
+    la cuenta atrás al instante.** `0` la omite.
+  </Step>
+  <Step title="La partida">
+    Suena el efecto `go` y aparecen los primeros objetivos. La partida dura el `duration` del ejercicio, o
+    hasta que se responden los intentos de un ejercicio de reacción.
+  </Step>
+</Steps>
+
+## Las tres fases
+
+| Fase | Qué está pasando | Un golpe |
+|---|---|---|
+| `COUNTDOWN` | El número va bajando; no hay objetivos. | Empieza la partida ya. |
+| `RUNNING` | El ejercicio está en marcha. | Es un disparo, lo juzga el motor. |
+| `RESTING` | El ejercicio terminó y el jugador sigue en la arena. | Repite el ejercicio. |
+
+`%aim_phase%` las devuelve en minúsculas — `countdown`, `running`, `resting` — y `none` para un jugador
+que no está en un ejercicio, incluido quien está en un duelo. Ver
+[Placeholders](/docs/exyliaaimtrainer/placeholders).
+
+## Cuando termina un ejercicio
+
+Un ejercicio que llega a su fin no manda a nadie a casa. Por orden:
+
+1. Suena el efecto `session-complete` ("TIME", "Punch to play again").
+2. La partida se guarda, si pasó algo en ella.
+3. Se abre la pantalla **session summary**: rating, puntuación, dificultad, duración, ping, aciertos,
+   fallos, precisión de tiro, centrado, rachas, tiempos de flick y de reacción, tiempo sobre el objetivo y
+   la diferencia con su mejor marca en ese ejercicio.
+4. Llega una línea al chat: "★ New personal best · rating `<rating>` (+`<delta>`)" con el efecto
+   `personal-best`, o "Rating `<rating>` · your best is `<best>` (`<delta>`)".
+5. "Punch the air to play again, or use the hotbar. Home in `<seconds>`s."
+
+Después el jugador descansa `training.rest-seconds` (`5` por defecto). Un golpe en esa ventana, el botón
+**Play again** del resumen o el de la hotbar repiten el ejercicio; **Change drill** empieza otro. Cuando se
+acaba el tiempo vuelve a casa, pero solo si está inactivo:
+
+- Con el resumen todavía abierto, o sin ninguna pantalla abierta, está inactivo: el resumen se cierra y
+  vuelve a casa.
+- Con una pantalla que abrió él mismo —los ajustes, la lista de ejercicios, un valor que está escribiendo—
+  todavía está decidiendo. La espera vuelve a empezar, otros `rest-seconds`, y se comprueba de nuevo al
+  terminar.
+
+Con `rest-seconds: 0` vuelve a casa en cuanto termina el ejercicio.
+
+<Callout type="note" title="Al actualizar desde un descanso de 20 segundos">
+Las versiones anteriores traían `rest-seconds: 20.0`. La configuración migra un `20` que encuentre a `5`;
+cualquier otro valor que eligiera el dueño se conserva.
+</Callout>
+
+### Repetir
+
+Repetir es reiniciar del todo. Haga lo que haga la sesión — descansar, contar hacia atrás o ir por la
+mitad de una partida — la partida actual se detiene y se guarda, la cuenta atrás se descarta y empieza
+una nueva. La nueva partida lee los ajustes **actuales** del jugador, así que un cambio hecho en
+`/aim settings` mientras descansa se aplica, y sortea una secuencia aleatoria nueva.
+
+### Cambiar de ejercicio
+
+**Change drill**, en el resumen o en la hotbar, abre la lista de ejercicios. Un clic en un ejercicio desde
+dentro de una sesión no rechaza al jugador por estar ocupado: cambia la sesión a ese ejercicio en la misma
+arena, esté descansando, en la cuenta atrás o a mitad de partida. Funciona como Play again con otro
+ejercicio:
+
+- la partida en curso se detiene y se guarda bajo el ejercicio que era;
+- el nuevo ejercicio pasa a ser la última elección del jugador en su perfil;
+- el chat lo confirma: "Drill started: `<drill>` · ×`<difficulty>` difficulty.";
+- empieza una nueva cuenta atrás, con los ajustes actuales del jugador.
+
+No se dispara un nuevo evento de inicio; sigue siendo la misma sesión. Elegir un ejercicio que ya no existe
+responde "Unknown drill `<drill>`." y no cambia nada. En un duelo el botón abre igualmente la lista, pero la
+elección se rechaza con "Finish what you are doing first."
+
+## La hotbar
+
+Mientras corre un ejercicio o un duelo se dibujan cuatro botones sobre la hotbar. Son paquetes: ninguno es
+un ítem real, así que nada se puede tirar, mover ni sacar de la arena.
+
+| Slot | Botón | Clic derecho |
+|---|---|---|
+| 6.º (slot 5) | **Change drill** | Abre la lista de ejercicios; elegir uno cambia el ejercicio, como arriba. |
+| 7.º (slot 6) | **Settings** | Abre la pantalla de ajustes. Los cambios se aplican desde la siguiente partida. |
+| 8.º (slot 7) | **Play again** | Repite el ejercicio, como arriba. En un duelo no hace nada. |
+| 9.º (slot 8) | **Leave** | Sale del ejercicio, o abandona el duelo. |
+
+Los slots 0 a 4 quedan para el inventario real, porque el slot 0 lleva el arma del ejercicio cuando tiene
+una. Toda la capa se desactiva con `hud.hotbar: false`.
+
+<Callout type="warning" title="menus/hotbar.yml se reescribe en cada arranque y cada recarga">
+El archivo se copia desde el jar cada vez que el plugin arranca y cada vez que recarga, para que un botón
+añadido en una versión llegue a los servidores que ya lo tienen. Una edición no sobrevive. Para quitar la
+capa usa `hud.hotbar`.
+</Callout>
+
+## Cómo termina una sesión
+
+| Motivo | Cuándo | Qué ve el jugador |
+|---|---|---|
+| `COMPLETED` | El ejercicio llegó a su fin. La sesión sigue en descanso. | La pantalla de resumen y la línea de mejor marca. |
+| `LEFT` | `/aim leave`, un botón **Leave**, o se acabó el descanso. | "Drill stopped." si se cortó una partida; `/aim leave` además dice "You left." |
+| `DISCONNECTED` | El jugador se desconectó. | Nada. |
+| `CANCELLED` | Un cambio de mundo, un teletransporte que no hizo el plugin (una perla de ender, una fruta de chorus), una muerte causada por otro plugin, otro plugin reclamando al jugador, un administrador deteniendo la sesión, la arena desactivada o borrada, el plugin deshabilitándose. | Nada; se le manda a casa. |
+| `MATCH_FOUND` | ExyliaPracticeCore le encontró una partida mientras entrenaba. | "A practice match was found. Good luck!" |
+
+Una partida se guarda siempre que **haya pasado algo**: un acierto, un fallo, un objetivo caducado, una
+salida en falso o un tick de tracking. Eso vale también para una partida cortada: sus números llegan al
+perfil, a los récords del ejercicio y al historial igual que una terminada, solo que sin el resumen. Salir
+a mitad de partida ni anula una buena ni esconde una mala. Ver
+[Estadísticas](/docs/exyliaaimtrainer/estadisticas).
+
+El `AimTrainingEndEvent` lleva los mismos motivos; ver [API](/docs/exyliaaimtrainer/api).
+
+## Cómo se juzga un clic
+
+Nada de un objetivo existe en el servidor. Cada uno son dos entidades enviadas solo a su jugador: un block
+display que se ve y una hitbox de interacción montada encima que es la que se golpea. Nadie más los ve, el
+servidor no los tickea y no se guarda nada.
+
+| Qué | Cómo se decide |
+|---|---|
+| Un acierto | El propio cliente del jugador hace la misma prueba de hitbox que hace contra un rival de PvP y avisa de un ataque sobre la hitbox. El acierto se juzga donde el jugador vio el objetivo, a sus propios FPS. Ese paquete de ataque se descarta, así el servidor nunca ve un clic sobre una entidad que no tiene. |
+| Un fallo | Un golpe que no vino con ningún ataque. Antes de llamarlo fallo, el servidor lanza su propio rayo desde los ojos por la última rotación del jugador; si ese rayo cruza un objetivo, es un acierto. Solo si no, es fallo. |
+| Un objetivo en movimiento | Se juzga donde el cliente lo dibujó: se guarda cada posición enviada y la comprobación mira hacia atrás el ping del jugador más los dos ticks en que el cliente suaviza un movimiento. |
+| Alcance | 64 bloques en todo ejercicio salvo una pelea, dado como atributo temporal que se quita al salir. Una pelea `COMBO` se juega a los tres bloques del juego. |
+| Una pelea | Un golpe sobre un objetivo que sigue rojo del anterior (medio segundo) no hace nada, como en el juego. En una pelea 1.9 cada golpe, acierte o no, y cada cambio de slot reinician el cooldown de ataque, y un acierto con un golpe cargado al 90% o menos es **rushed** y cuenta como fallo. |
+| Una reacción | Se mide desde que se envió la luz, **restando el ping del jugador**, para que dos jugadores con conexiones distintas se califiquen por sus manos. |
+| Tracking | Se comprueba cada tick con la rotación que el cliente envió por última vez, contra donde el cliente dibujó el objetivo, perdonando medio tick a cada lado. |
+| Centrado | El rayo del servidor a través del objetivo dice lo centrado que fue un acierto. Si el rayo no lo toca porque la mira se estaba moviendo, ese acierto queda sin medir en vez de contarse como borde. |
+
+El ping se muestrea una vez por segundo. Lo que cada cosa hace a la puntuación está en
+[Puntuación](/docs/exyliaaimtrainer/puntuacion).
+
+## Mientras está dentro
+
+Las mismas protecciones valen para ejercicios y duelos. Afectan a quien está en una sesión; a los
+jugadores de fuera no se les toca.
+
+| Qué | Regla |
+|---|---|
+| Daño | Se cancela todo daño al jugador, y también cualquier ataque suyo contra lo que sea. |
+| Hambre | Congelada. |
+| Ítems | Tirar y recoger se cancelan. |
+| Bloques | Romper y colocar se cancelan. |
+| Otros jugadores | Invisibles en ambos sentidos, sin colisión, y hacer clic derecho sobre alguien de fuera de la sesión se cancela. |
+| Chat | Con `chat.isolation: true` (por defecto), un jugador en una sesión solo lee el chat de su sesión y el resto del servidor no lee nada de ella. Una sesión es un jugador, y cada lado de un duelo es la suya, así que en la práctica nadie lo lee. |
+| Comandos | Solo funcionan las etiquetas de `training.allowed-commands`. Cualquier otra responde "Leave with /aim leave before using that command." El prefijo `plugin:comando` se quita antes de comprobar. |
+| Modo de juego | Aventura, llegue como llegue. El modo original vuelve con la instantánea. |
+| Movimiento | **Congelado** durante la cuenta atrás y el ejercicio: se descartan los paquetes de movimiento del cliente. Girar sigue funcionando y es lo que apunta. |
+| Salir por otros medios | Un teletransporte que no hizo el plugin o un cambio de mundo termina el ejercicio, o hace abandonar el duelo. |
+| Una muerte de otro origen | Si otro plugin mata igualmente al jugador, se conserva el inventario, se vacían los drops, la consola avisa y se saca al jugador. |
+
+<Callout type="note" title="Quedarse quieto no es un ajuste">
+Todo ejercicio congela al jugador. No hay opción para caminar durante uno, ni para el jugador ni en
+`config.yml`: un ejercicio mide las manos.
+</Callout>
+
+## Configuración
+
+```yaml title="plugins/ExyliaAimTrainer/config.yml"
+training:
+  countdown: 3.0
+  rest-seconds: 5.0
+  default-drill: gridshot
+  allowed-commands: [aim, aimtrainer, at, msg, r, tell, w]
+
+chat:
+  isolation: true
+```
+
+| Clave | Por defecto | Qué hace |
+|---|---|---|
+| `training.countdown` | `3.0` | Segundos antes de que el primer objetivo esté activo. También es la cuenta atrás de cada ronda de duelo. `0` la omite. |
+| `training.rest-seconds` | `5.0` | Segundos que el jugador puede quedarse inactivo en la arena tras un ejercicio antes de volver a casa. Una pantalla que abrió él mismo alarga la espera. `0` lo manda a casa al momento. |
+| `training.default-drill` | `gridshot` | El ejercicio que arranca `/aim train` sin nombre. |
+| `training.allowed-commands` | ver arriba | Etiquetas de comandos que un jugador puede seguir usando en un ejercicio o un duelo. |
+| `chat.isolation` | `true` | Mantiene el chat de una sesión dentro de ella. `false` deja el chat tal como lo entrega el plugin de chat del servidor. |
+
+## Salir
+
+La salida sigue un orden fijo. Primero se retira el HUD: la boss bar, el alcance extra, el arma, la
+congelación, los botones de la hotbar, y la barra de experiencia vuelve a lo que el servidor tiene de
+verdad. Después el jugador sale del grupo de aislamiento, se oculta el sidebar, se le teletransporta a
+casa, se le devuelven inventario y modo de juego **allí**, y el reclamo se libera al final, para que
+ningún otro modo lo vista mientras sus cosas siguen de camino.
+
+Casa es `arena.return-location` si está puesta; si no, el punto exacto del que salió; si no, el spawn de
+su mundo. Ver [Arenas](/docs/exyliaaimtrainer/arenas).
+
+<Callout type="note" title="Tras un crash">
+Una instantánea que dejó un reinicio se restaura en la siguiente conexión del jugador, y se le devuelve a
+donde estaba antes de empezar la sesión. Nadie despierta dentro de una arena.
+</Callout>

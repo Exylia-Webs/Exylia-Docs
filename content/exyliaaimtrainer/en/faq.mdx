@@ -1,0 +1,185 @@
+---
+title: "Frequently asked questions"
+description: "The questions that come up most."
+---
+
+## The plugin does not start
+
+`packetevents` is a hard dependency: without it the server never loads the plugin. `ExyliaLib` is listed
+as soft only so the loader can install it, but the plugin needs it to run. Check both are in `plugins/`.
+
+## "Targets need PacketEvents, which this server does not have."
+
+A target is a pair of packet entities the server never has, so without a loaded PacketEvents there is
+nothing to draw and every drill and every duel request is refused with that line. The console says so at
+startup: *"PacketEvents is missing: targets cannot be drawn and no drill can start"*.
+
+## "No arena is ready. Ask an administrator."
+
+Drills and duels both need an arena, and there is no training where the player stands. An arena is ready
+when it is **enabled**, has its **spawn** set, and that spawn is in a world that is loaded. Open
+`/aimtraineradmin`, Arenas: a row marked incomplete is missing one of those.
+
+The same line appears when every ready arena is full. `arena.max-players-per-arena` caps what one arena
+hosts, counting one per drill and two per duel; `0`, the default, is unlimited. Every drill and duel goes
+to the ready arena hosting the fewest players at that moment, so a second arena shares the load.
+
+Duels also cannot begin in the first moments after boot, before the arenas have been read from the
+database — the console prints `Loaded N arenas and M drills` once they have.
+
+## "Finish what you are doing first."
+
+The player is already in a drill or a duel. "You are busy in `<plugin>`" means another Exylia plugin holds
+them — an FFA arena, an event, a practice match — and "Not right now: `<reason>`" means nobody holds them
+but a plugin advises against it, in its own words.
+
+## A player cannot duel somebody
+
+"`<name>` is busy right now" means another plugin, or this one, holds that player. "`<name>` is
+`<reason>`" means nobody holds them but a plugin advises against it — this plugin's own reason is
+"answering a duel request", given while a request sits open on either side of them.
+
+A player can only have one request waiting for them; a newer challenge replaces the older one. Requests
+expire after `match.duel-request-expiry`, thirty seconds by default, and both sides are told.
+
+## Hits feel off, or depend on ping
+
+The client does the aiming. Every target carries a hitbox the client tests with its own raycast, at its
+own frame rate, and reports the one it hit — the same test a PvP hit uses — so a target is hit where the
+player sees it. A swing that reports no hitbox is checked against the server's own ray through the
+crosshair before it is called a miss.
+
+Latency is accounted for where it would otherwise cost the player:
+
+- **Reaction** times have the player's ping subtracted: the light took half a round trip to reach them and
+  the click half a round trip to come back.
+- **Moving targets** — strafing flicks, tracking and fights — are judged where the client drew them when
+  the click or the aim left it: the server keeps every position it sent and rewinds by the ping plus the two
+  ticks the client smooths a move over.
+- **Tracking** reads the aim from the rotation packets as they arrive and forgives half a tick either side
+  for jitter, not a wider target.
+
+## Why does spam clicking not help?
+
+Every swing that hits nothing is a miss. In a flick drill a miss costs `scoring.miss-penalty` points (4)
+against the `hit-points` (10) a hit earns, and it drags the accuracy down.
+
+In a fight, a hit on a target still red from the last one — ten ticks, as in the game — does nothing, in
+1.8 and 1.9 drills alike, so spamming a 1.8 fight lands no more hits than clean clicks. In a 1.9 drill
+(`attack-cooldown: true`) every swing, hit or miss, and every change of held slot starts the cooldown over,
+and a hit on a swing charged no more than 90% is **rushed** and counts as a miss.
+
+## What is the difference between score and rating?
+
+The **score** is the drill's own number: points per minute for flicks and fights, a reaction score for
+reaction drills, time on target for tracking. It decides duel rounds, where both sides play the same drill.
+
+The **rating** is the score times the **difficulty** of the settings it was played at: the drill's
+`weight`, times what a smaller target is worth, times what a farther one is worth, clamped between
+`scoring.min-difficulty` (0.25) and `max-difficulty` (6.0). The rating is what the boards rank by default
+and what the overall board adds up, so nobody climbs by making their targets easy. See
+[Scoring](/docs/exyliaaimtrainer/scoring).
+
+## Can players walk during a drill?
+
+No. Every player is frozen for the drill, since it measures their hands and not their legs. While in a
+drill or a duel they can only run the commands in `training.allowed-commands` — by default `aim`,
+`aimtrainer`, `at`, `msg`, `r`, `tell` and `w`. An ender pearl, a teleport from another plugin or a world
+change takes them out of the session.
+
+## A player stays in the arena after the drill ends
+
+That is the rest: `training.rest-seconds`, five by default. The summary is on screen, punching the air
+replays the drill with whatever settings the player has now, **Change drill** picks another, and the time
+running out sends an idle player home. A player who opened the settings or the drill list is still
+deciding, and the wait starts over. Set it to `0` to send players home the moment a drill ends.
+
+## How do I add a drill?
+
+Write a new block under `drills` in `config.yml` and run `/aimtraineradmin reload`. A drill is a `kind` —
+`FLICK`, `REACTION`, `TRACK` or `COMBO` — and a set of numbers; nothing in the code knows the shipped ones
+by name, so a new one gets the same menus, records and boards. See [Drills](/docs/exyliaaimtrainer/drills).
+
+Records and boards are keyed by the drill's id. Renaming a key starts that drill over with empty boards,
+and a removed drill's history rows show its id where the name used to be.
+
+## Duels feel unfair when players use different settings
+
+They do not use them, by default. With `match.use-preferences: false` both sides play the drill as written,
+and both share one seed, so the same targets appear in the same places in the same order on both screens.
+Turning it on applies the challenger's size and distance to both players.
+
+## What is a draw, and why was a duel cancelled?
+
+A round goes to the higher score, then the better accuracy, then more hits. Level on all three is a draw:
+nobody scores, and the round is replayed under the same number. Three draws in a row means neither side is
+shooting, and the duel is cancelled with nothing stored.
+
+## Can I offer a best-of-2 or best-of-4?
+
+List the length in `match.formats` and set `match.allow-even-formats: true`. An even series can end level
+once every round has been played; when it does, the winner of the last round takes the duel.
+
+## A player is not on the leaderboard
+
+A board never places a zero, and there is one row per player. An accuracy only counts from sessions of at
+least `leaderboard.accuracy-min-shots` shots, twenty by default. Duels set no records at all: only drill
+sessions reach the boards and the overall rating.
+
+The board is cached for `leaderboard.cache-seconds`, five minutes by default. Beating a best rating drops
+the cache at once, so a player who just set one sees themselves; a better accuracy or streak without a
+better rating waits for the cache to expire.
+
+## How do I reset a player's statistics?
+
+`/aimtraineradmin`, Players, then the player and the reset button, behind a confirmation. The list shows
+online players only. The reset clears the profile — lifetime numbers, overall rating and duel record, while
+keeping their settings — every drill record, and their session history.
+
+<Callout type="note" title="Duel history is not deleted">
+The confirmation reads "every record, session and duel", but the rows in the duel history are left in
+place. The player's win and loss counts go back to zero; the list of past duels keeps its entries until
+they age out under `history.retention-days`.
+</Callout>
+
+## Can queued ExyliaPracticeCore players train?
+
+Yes, with `practice.train-while-queued` on, the default. The player keeps their place in the queue, and
+the moment a match is found the drill ends and they go to it. `practice.queue-prompt` offers the drills in
+chat when somebody joins a queue, and `practice.ranked-only` limits that prompt to ranked queues. See
+[Compatibility](/docs/exyliaaimtrainer/compatibility).
+
+## Players in a drill cannot see the server chat
+
+That is `chat.isolation`, on by default: whoever is in a drill or a duel reads that one and nothing else,
+and the rest of the server reads none of it. Set it to `false` to leave chat as the server's chat plugin
+delivers it.
+
+## My changes to the hotbar menu disappear
+
+`menus/hotbar.yml` is written from the jar on every start and every reload, over whatever is there. The
+other player menus follow the release while you have not touched them; an edited one is kept and the new
+version lands beside it as a `.new` file. `menus/admin/` is rewritten on every start. See
+[Menus](/docs/exyliaaimtrainer/menus).
+
+## My PlaceholderAPI placeholders show up unresolved
+
+The group name is part of the placeholder. Through PlaceholderAPI it is `%exyliaaimtrainer_aim_wins%`,
+never `%exyliaaimtrainer_wins%`; the shorter `%aim_wins%` is the name written inside the plugin's own
+files, which the plugin reads itself. See [Placeholders](/docs/exyliaaimtrainer/placeholders).
+
+## Where are the arenas and the statistics?
+
+In the database, not in YAML: `aim_arenas`, `aim_profiles`, `aim_records`, `aim_sessions` and
+`aim_matches`. H2 by default; point `database.yml` at MySQL, MariaDB, PostgreSQL or MongoDB to share them
+between servers. Session and duel history rows older than `history.retention-days` (30) are deleted every
+`prune-interval-minutes` (60); `0` days keeps everything. Reload does not touch any of it.
+
+## Does it work on Folia?
+
+Yes, it declares Folia support, and every event it fires runs on the thread that owns the player or the
+arena it is about.
+
+## Where do I get support?
+
+On the [Exylia Discord](https://discord.exylia.net).

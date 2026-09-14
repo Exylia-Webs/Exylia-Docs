@@ -1,0 +1,195 @@
+---
+title: "Statistics"
+description: "The profile, the records per drill, the session and duel history, and the leaderboards built on top."
+---
+
+Four tables hold what a player has done. Each answers a different question, and none is rebuilt from
+another, which is what makes the two history tables safe to prune.
+
+| Table | One row per | Answers |
+|---|---|---|
+| `aim_profiles` | Player | Lifetime numbers, the duel record, the overall rating and the player's settings |
+| `aim_records` | Player **and** drill | The bests, which is what a drill's leaderboard ranks |
+| `aim_sessions` | Finished solo run | The session history a player scrolls through |
+| `aim_matches` | Participant per duel | The duel history |
+
+The fifth table, `aim_arenas`, holds the arenas and is covered on [Arenas](/docs/exyliaaimtrainer/arenas).
+
+## The profile
+
+The row is loaded when the player joins, written on every change and again when they quit. A player
+whose row is still loading plays with the default settings.
+
+| Field | Moved by |
+|---|---|
+| Sessions | Every stored solo run. Duels do not count here. |
+| Total hits, total shots, accuracy | Solo runs **and** duels. A shot is a hit or a miss; an expired target is neither. Accuracy is stored as a percentage so the overall board can sort on it. |
+| Total time trained | Solo runs and duels. |
+| Fastest flick, fastest reaction | The lowest non-zero time, from solo runs and duels alike. |
+| Overall rating | Solo runs only: raised by however much the run raised the player's best rating in its drill. |
+| Matches, wins, losses, win rate | A decided duel. |
+| Rounds, round wins, round losses | A decided duel, from the final series score. |
+| Current streak, best streak | Duel win streak: up by one on a win, back to zero on a loss. |
+| Size, distance, colour, style, the five toggles | The [settings](/docs/exyliaaimtrainer/settings) screen. |
+| Last drill, last best-of | The last picks made in a menu, so the pickers open where the player left them. |
+
+The profile row also carries a `freeze` column. It is always written as `true` and nothing reads it;
+it stays so an existing table needs no migration.
+
+`/aim profile`, or `/aim stats`, opens the profile screen: rating, accuracy, sessions and duels on the
+head; hits, shots, fastest flick and reaction and time trained; duels played, wins, losses, win rate
+and rounds; the current and best duel streak; and buttons to **Records**, **Sessions**,
+**Duel history** and **Leaderboards**. `/aim profile <player>` opens someone else's, read from the
+database when they are offline. The name has to be one ExyliaLib's player cache knows; otherwise the
+command answers `player-not-found`.
+
+## Records
+
+One row per player and drill, keyed `uuid:drill`. A run is merged into its row when it **did
+anything**: a hit, a miss, an expired target, a false start or a single tracked tick. A run that ended
+during the countdown stores nothing.
+
+A run counts whether it ran its course or not. Leaving mid-run, quitting, being taken back by
+ExyliaPracticeCore or pressing **Play again** mid-run all store the run as far as it got.
+
+| Field | Merge rule |
+|---|---|
+| `sessions` | Plus one |
+| `bestRating` | The higher. The rating is the score times the difficulty; see [Scoring](/docs/exyliaaimtrainer/scoring). |
+| `ratingSize`, `ratingDistance` | The size and distance multipliers the player had set, **only** when the rating was beaten |
+| `bestScore` | The higher |
+| `bestAccuracy` | The higher, counting only a run with at least `leaderboard.accuracy-min-shots` shots |
+| `bestStreak` | The higher. A streak is hits in a row; a miss, an expired target or a false start ends it. |
+| `mostHits` | The higher |
+| `bestCombo` | The higher. Only a COMBO drill builds one. |
+| `bestReactionMillis` | The lower non-zero single reaction. Only a REACTION drill sets one. |
+| `bestFlickMillis` | The lower non-zero time between two hits |
+| `bestOnTarget` | The higher percentage of the run spent on target. Only a TRACK drill sets one. |
+| `totalHits`, `totalShots`, `totalTimeMillis` | Added up |
+
+When the rating beats the old best, the difference is added to the profile's overall rating, the
+result screen and chat call it a personal best, and the cached boards are dropped so the player sees
+themselves on the board they just climbed.
+
+<Callout type="note" title="Duels set no records">
+A duel moves the profile — the duel record, the lifetime hits, shots, time and fastest times — and
+writes two history rows. It never touches `aim_records`, so it cannot put anybody on a drill's board or
+raise their overall rating.
+</Callout>
+
+The **Records** screen, reached from the profile, lists every row the player holds in the order the
+drills appear in `config.yml`; a row for a drill no longer in the file goes last. Each row shows the
+best rating and the size and distance it was set at, the other bests, and the drill's lifetime
+sessions, accuracy and time.
+
+## Leaderboards
+
+There is one board per **drill**, sorted by one of seven categories, and one **overall** board.
+
+| Category | Sorts by | Default name |
+|---|---|---|
+| `rating` | `bestRating`, highest first | Rating |
+| `score` | `bestScore`, highest first | Best score |
+| `accuracy` | `bestAccuracy`, highest first | Accuracy |
+| `streak` | `bestStreak`, highest first | Best streak |
+| `hits` | `mostHits`, highest first | Most hits |
+| `reaction` | `bestReactionMillis`, **lowest** first | Fastest reaction |
+| `combo` | `bestCombo`, highest first | Best combo |
+
+Names and icons live in `messages.yml` under `menu.categories`.
+
+A player appears **once** per drill board, since the records are one row per player and drill. A zero
+never takes a place: an unset reaction, a combo in a drill that has none, an accuracy from runs below
+the shot floor. So the `reaction` board of a flick drill and the `combo` board of anything but a fight
+stay empty.
+
+<Callout type="tip" title="Rating is the fair one">
+Only `rating` compares two players who set their targets up differently: it carries the difficulty
+of the size and distance each played at. The other categories are raw bests. Every row shows the size
+and distance its **rating** was set at, whichever category the board is sorted by.
+</Callout>
+
+### The overall board
+
+Everybody by the sum of their best rating in every drill, read from `aim_profiles`. It sorts by
+`rating` or by `accuracy` (lifetime accuracy) and nothing else: the category row on that board offers
+those two, and asking for another category shows the rating board.
+
+### Opening a board
+
+`/aim leaderboard`, or `/aim top`, opens the board picker: the overall board first, then every drill
+in config order. `/aim leaderboard <drill>` opens that drill's board sorted by `rating`, and
+`/aim leaderboard <drill> <category>` by that category; `overall` works as the drill. An unknown drill
+opens the picker instead of an empty board, and an unknown category falls back to `rating`. Inside, the
+category buttons re-sort the open board in place, and the top three rows wear medals.
+
+The same boards are readable through PlaceholderAPI, as
+`%exyliaaimtrainer_aim_top_<drill>_<category>_<n>%` and its `_value`. See
+[Placeholders](/docs/exyliaaimtrainer/placeholders).
+
+### The cache
+
+```yaml title="plugins/ExyliaAimTrainer/config.yml"
+leaderboard:
+  entries: 10
+  cache-seconds: 300
+  accuracy-min-shots: 20
+```
+
+| Key | Default | What it does |
+|---|---|---|
+| `entries` | `10` | Rows per board. |
+| `cache-seconds` | `300` | How long a board is kept before the database is asked again. Anything below 5 is treated as 5. Read when the plugin starts: a reload does not change it. |
+| `accuracy-min-shots` | `20` | Shots a run needs before its accuracy may become a best. Ten out of ten is not a record. |
+
+Every board keeps two copies: a fresh one, which expires after `cache-seconds`, and the last one ever
+read. A menu waits for a fresh read; a placeholder shows the last copy while the fresh read runs in the
+background, so a hologram never blinks back to *Loading…* once it has shown a board.
+
+The fresh copies are dropped when a run beats a rating, and when a player is reset. A run that improves
+only another best — accuracy, hits, a streak — does not drop them: that board catches up within
+`cache-seconds`.
+
+## History
+
+Two lists, each reached from the other: **Sessions** (`/aim sessions`) and **Duel history**
+(`/aim history`). Both show the newest rows first.
+
+A **session** row is one stored solo run: the drill and its kind, the score, rating and difficulty,
+hits, misses, accuracy, precision, best streak and combo, the average flick and reaction, time on
+target, the duration, the average ping and the date. A run that set a personal best is drawn with a
+star.
+
+A **duel** writes two rows to `aim_matches`, one per participant, so "my duels" is a one-column query.
+Each carries the opponent, whether the player won, the drill, the best-of, the rounds for and against,
+the points for and against, the hits, the accuracy, the duration and when it ended. Only a duel that
+has a winner writes them; a cancelled duel writes nothing.
+
+```yaml title="plugins/ExyliaAimTrainer/config.yml"
+history:
+  entries: 20
+  retention-days: 30
+  prune-interval-minutes: 60
+```
+
+| Key | Default | What it does |
+|---|---|---|
+| `entries` | `20` | Rows shown, in each of the two lists. |
+| `retention-days` | `30` | Session and duel rows older than this are deleted. `0` keeps everything. |
+| `prune-interval-minutes` | `60` | How often the prune runs. Read when the plugin starts. The first duel sweep runs a minute after start, the first session sweep ninety seconds after. |
+
+A sweep looks at the oldest 500 rows of its table and deletes the ones past the cutoff, so a backlog
+drains over several sweeps rather than one long transaction.
+
+## Resetting a player
+
+From `/aimtraineradmin` → **Players**, behind a confirmation. A reset:
+
+- puts the profile back to zero — lifetime numbers, the duel record and the overall rating — while
+  **keeping** the player's settings and last picks;
+- deletes every record the player holds, so they leave every drill board;
+- deletes their session history;
+- drops the leaderboard cache.
+
+Their rows in `aim_matches` are **not** deleted: the duel history screen still lists past duels until
+retention removes them, even though the confirmation reads *"Every record, session and duel"*.

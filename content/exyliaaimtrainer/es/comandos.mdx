@@ -1,0 +1,110 @@
+---
+title: "Comandos"
+description: "El comando de jugador con sus subcomandos, el comando de staff, el valor por defecto de cada argumento opcional y por qué se rechaza un comando."
+---
+
+Dos raíces que nunca se solapan. `/aim` es la puerta del jugador y abre el menú principal;
+`/aimtraineradmin` es la puerta del staff y abre el menú de administración. `/aimtrainer` y `/at` son
+alias del primero, `/aimadmin` del segundo.
+
+## Comandos de jugador
+
+| Comando | Permiso | Qué hace |
+|---|---|---|
+| `/aim` | — | Abre el menú principal. |
+| `/aim train [ejercicio]` | `exyliaaimtrainer.train` | Empieza un ejercicio. Sin nombre, el de por defecto. |
+| `/aim drills` | `exyliaaimtrainer.train` | Abre el selector de ejercicios. |
+| `/aim settings` | `exyliaaimtrainer.settings` | Abre tus ajustes: tamaño, distancia, color y estilo de los objetivos, y qué muestra la pantalla. |
+| `/aim duel [jugador] [ejercicio] [bestOf]` | `exyliaaimtrainer.duel` | Sin jugador, abre el selector de rivales. Con uno, envía la solicitud directamente. |
+| `/aim accept` | `exyliaaimtrainer.duel` | Acepta la solicitud de duelo pendiente. |
+| `/aim deny` | `exyliaaimtrainer.duel` | La rechaza. |
+| `/aim profile [jugador]` | `exyliaaimtrainer.profile` | Abre un perfil: el tuyo, o el de otro. `/aim stats` es un alias. |
+| `/aim leaderboard [ejercicio] [categoria]` | `exyliaaimtrainer.leaderboard` | Sin ejercicio, el selector de tablas; con uno, la tabla de ese ejercicio. `/aim top` es un alias. |
+| `/aim history` | `exyliaaimtrainer.history` | Tus duelos recientes. |
+| `/aim sessions` | `exyliaaimtrainer.history` | Tus ejercicios recientes. |
+| `/aim leave` | `exyliaaimtrainer.leave` | Sale del ejercicio. Dentro de un duelo es un **abandono**: gana el rival. `/aim stop` es un alias. |
+
+Todos son para jugadores. Desde la consola, `/aim` y sus subcomandos responden con la línea
+`player-only`.
+
+### Valores por defecto de los argumentos opcionales
+
+| Argumento | Por defecto | Se rechaza cuando |
+|---|---|---|
+| `ejercicio` (train) | `training.default-drill` (`gridshot`). Si ese id no es un ejercicio configurado, el primer ejercicio de `drills`. | El id no es un ejercicio configurado: `unknown-drill`. |
+| `ejercicio` (duel) | El **primer ejercicio listado en `drills`**, no `training.default-drill`. | El id no es un ejercicio configurado: `unknown-drill`. |
+| `bestOf` | `match.default-format` (`3`) | La longitud no está en `match.formats`, o es par y `allow-even-formats` está apagado: `unknown-format`. El valor por defecto se comprueba igual, así que un `default-format` que no esté en `formats` rechaza todo duelo enviado sin longitud. |
+| `ejercicio` (leaderboard) | — | Un id desconocido abre el selector de tablas en vez de una tabla vacía. `overall` abre la tabla general. |
+| `categoria` | `rating` | Nunca: una categoría desconocida cae en `rating`. En la tabla general solo existen `rating` y `accuracy`; cualquier otra es `rating`. |
+| `jugador` (profile) | Tú | Ver abajo. |
+
+`/aim profile <jugador>` funciona con jugadores que el servidor ya conoce sin hacer una consulta:
+conectados, conocidos por el directorio de jugadores de ExyliaLib o presentes en la caché de usuarios del
+servidor. Sus números se leen de la base de datos si no están cargados. Un nombre que necesitaría una
+consulta responde con `player-not-found`, que por defecto dice que el jugador no está conectado.
+
+`/aim duel <jugador>` recibe un jugador conectado.
+
+### Por qué no empieza un ejercicio o un duelo
+
+`/aim train` comprueba, en este orden, y responde con la primera línea que aplique:
+
+| Línea | Sección | Cuándo |
+|---|---|---|
+| `unknown-drill` | `training` | El ejercicio no existe. |
+| `no-packets` | `common` | Falta PacketEvents, así que no se pueden dibujar objetivos. |
+| `no-arena` | `common` | No hay ninguna arena lista, o todas las listas están en `arena.max-players-per-arena`. |
+| `busy` | `common` | Ya estás en un ejercicio o en un duelo. |
+| `cannot-borrow` | `practice` | Estás esperando en una cola de ExyliaPracticeCore y practice no te presta, o `practice.train-while-queued` está apagado. |
+| `busy-elsewhere`, `busy-advice` | `common` | Otro plugin de Exylia te tiene, o desaconseja tomarte. |
+
+`/aim duel <jugador>` rechaza con `self-duel`, `no-packets`, `busy` (ya estás en algo), `target-busy` o
+`target-not-ready`. Otro plugin también puede cancelar `AimDuelRequestEvent`, y entonces no se dice nada.
+Hay una solicitud pendiente por jugador retado: una solicitud nueva sustituye a la anterior. `/aim accept`
+responde `no-pending` cuando no hay nada abierto o ya expiró, y `player-not-found` cuando el retador se
+fue; los dos lados se comprueban otra vez antes de crear el duelo.
+
+### Dentro de un ejercicio o un duelo
+
+Solo corren los comandos de `training.allowed-commands`: `aim`, `aimtrainer`, `at`, `msg`, `r`, `tell` y
+`w` por defecto. Cualquier otro se cancela con `command-blocked`. Un prefijo `plugin:comando` se quita antes
+de comprobar. No hay permiso que se salte la lista, y `/aimtraineradmin` no está en ella: un miembro del
+staff dentro de un ejercicio tiene que salir primero, o añadirlo a la lista.
+
+El autocompletado sugiere los ejercicios configurados, las longitudes de `match.formats` y las siete
+categorías de la tabla. La sugerencia de ejercicios también ofrece `overall`, que solo significa algo para
+`/aim leaderboard`; `/aim train overall` responde `unknown-drill`. La sugerencia de formatos lista todas
+las longitudes de `formats`, incluidas las pares que `allow-even-formats` luego rechaza.
+
+## Comandos de staff
+
+Todo lo de abajo necesita `exyliaaimtrainer.admin`.
+
+| Comando | Qué hace |
+|---|---|
+| `/aimtraineradmin` | Abre el menú de administración: arenas, duelos en curso, jugadores, recarga. Solo jugadores. |
+| `/aimtraineradmin reload` | Recarga todos los archivos. También desde la consola, y desde el botón del menú. |
+
+La recarga ejecuta cinco pasos con nombre:
+
+| Paso | Qué hace |
+|---|---|
+| `configs` | Vuelve a leer `config.yml`, `messages.yml` y `scoreboards.yml`, y aplica el prefijo y el interruptor de debug. |
+| `scoring` | Reconstruye el modelo de puntuación desde `scoring`. |
+| `scoreboards` | Redibuja cada sidebar en pantalla con las líneas nuevas. |
+| `hotbar` | Reescribe `menus/hotbar.yml` desde el jar y lo compila de nuevo. |
+| `menus` | Actualiza y compila cada pantalla. También corre cuando se recarga ExyliaLib. |
+
+La línea de éxito dice cuántos pasos corrieron y en cuántos milisegundos; un fallo te pide mirar la
+consola. Un ejercicio que ya está en marcha conserva los números con los que empezó; el siguiente lee el
+archivo nuevo.
+
+La recarga **no** toca las arenas ni los datos de jugador. Ambos viven en la base de datos, no en un
+archivo.
+
+<Callout type="note" title="No hay nada más que escribir">
+Las arenas se crean, renombran, posicionan, activan y borran desde las pantallas de arena. Los duelos en
+curso se cancelan, los ejercicios se detienen y las estadísticas de jugador se reinician desde sus propias
+pantallas. Ver [Arenas](/docs/exyliaaimtrainer/arenas) y [Menús](/docs/exyliaaimtrainer/menus). Lo único
+que sigue siendo un comando es `reload`, porque la consola tiene que poder ejecutarlo.
+</Callout>

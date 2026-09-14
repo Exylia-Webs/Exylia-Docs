@@ -1,0 +1,266 @@
+---
+title: "HUD"
+description: "The sidebar, the boss bar, the experience bar, hit feedback, sounds and particles: what each shows, where it is configured, and what a player can switch off."
+---
+
+Everything around a run is drawn with packets: the server's own scoreboard, experience and inventory
+are never touched. Five channels, configured in three places.
+
+| Channel | Configured in | A player can switch it off |
+|---|---|---|
+| Sidebar | `scoreboards.yml` | Yes — **Sidebar** |
+| Boss bar | `config.yml` → `hud.boss-bar` | Yes — **Boss bar** |
+| Experience bar | `config.yml` → `hud.experience-bar` | No |
+| Titles, action bars and sounds | `config.yml` → `feedback` | Action bar and sounds — **Hit feedback** and **Hit sounds** |
+| Hit particles | `config.yml` → `hud.hit-particle` | Yes — **Hit particles** |
+
+The hotbar buttons are part of the HUD too; they are a menu file and are described on
+[Menus](/docs/exyliaaimtrainer/menus).
+
+## Sidebar
+
+`scoreboards.yml` defines two sidebars: `training`, shown during a solo session, and `match`, shown to
+a duellist. It is shown when the player enters either, and rebuilt each time a solo run starts. Outside
+both, the plugin shows nothing, and whatever board a lobby plugin had underneath comes back on its own.
+
+```yaml title="plugins/ExyliaAimTrainer/scoreboards.yml"
+training:
+  enabled: true
+  title:
+    - "{primary}&lAIM TRAINER"
+  lines:
+    - ""
+    - "{secondary}Drill:"
+    - " {letters_black}▎ {letters}%aim_drill% {muted}· {info}×%aim_difficulty%"
+    - " {letters_black}▎ {letters}Time {letters_black}» {info}%aim_time_left%"
+    - ""
+    - "{secondary}Live:"
+    - " {letters_black}▎ {letters}Score {letters_black}» {highlight}%aim_score%"
+    - " {letters_black}▎ {letters}Hits {letters_black}» {success}%aim_hits% {muted}· {error}%aim_misses%"
+    - " {letters_black}▎ {letters}Accuracy {letters_black}» {info}%aim_accuracy%%"
+    - " {letters_black}▎ {letters}Streak {letters_black}» {highlight}%aim_streak%"
+    - " {letters_black}▎ {letters}Last {letters_black}» %aim_grade%"
+    - ""
+    - "{muted}{server-ip}"
+  update:
+    interval: 10
+    smart: true
+    cache: true
+match:
+  enabled: true
+  title:
+    - "{primary}&lAIM TRAINER"
+  lines:
+    - ""
+    - "{secondary}Duel: {muted}· {letters}%aim_format%"
+    - " {letters_black}▎ {letters}vs {highlight}%aim_opponent%"
+    - " {letters_black}▎ {letters}Round {letters_black}» {info}%aim_round%"
+    - " {letters_black}▎ {letters}Series {letters_black}» {success}%aim_series%"
+    - " {letters_black}▎ {letters}%aim_match_state%"
+    - ""
+    - "{secondary}Round:"
+    - " {letters_black}▎ {letters}Time {letters_black}» {info}%aim_time_left%"
+    - " {letters_black}▎ {letters}You {letters_black}» {highlight}%aim_score% {muted}· {letters}%aim_hits% hits"
+    - " {letters_black}▎ {letters}Them {letters_black}» {highlight}%aim_opponent_score% {muted}· {letters}%aim_opponent_hits% hits"
+    - " {letters_black}▎ {letters}Accuracy {letters_black}» {info}%aim_accuracy%%"
+    - ""
+    - "{muted}{server-ip}"
+  update:
+    interval: 10
+    smart: true
+    cache: true
+```
+
+| Key | Default | What it does |
+|---|---|---|
+| `enabled` | `true` | `false` keeps the section written but shows no board for that context. |
+| `title` | one line | A list. With several entries they animate: each refresh shows the next. |
+| `lines` | see above | The lines, top first. At most 15; extra lines are dropped. |
+| `update.interval` | `10` | **Ticks** between refreshes. 20 ticks is one second. |
+| `update.smart` | `true` | Sends only the lines that changed instead of the whole board. |
+| `update.cache` | `true` | Kept for older files: parsed text is cached by ExyliaLib for every plugin at once. |
+
+The full key reference is the library's [Sidebars](/docs/exylialib/display) section.
+
+### What the lines can say
+
+Nothing is pushed into a board. The library renders it on its own interval and asks the placeholders,
+so a line is any text carrying this plugin's `%aim_<name>%` placeholders, and any other placeholder
+ExyliaLib resolves works too. This file is read by the plugin itself, so the names go without the plugin
+name in front; the full list, in the form other plugins read them, is on
+[Placeholders](/docs/exyliaaimtrainer/placeholders).
+
+<Callout type="warning" title="Between two runs, some lines read the lifetime numbers">
+`%aim_hits%`, `%aim_misses%`, `%aim_shots%` and `%aim_accuracy%` mean the running run while one runs and
+the player's **lifetime** totals otherwise — and there is no running run during the countdown, while
+resting after a drill, or between two rounds of a duel. In those moments the default *Hits* and
+*Accuracy* lines show lifetime numbers, while *Score* and *Streak* read `0` and *Last* reads `—`. Write
+the lines with that in mind, or use `%aim_phase%` to tell the moments apart.
+</Callout>
+
+### The player's switch
+
+A player who turns **Sidebar** off in their settings loses the board at once, and gets it back at once
+when they turn it on again. The board also stays hidden in every later session until they do.
+
+## Boss bar
+
+Shown when the countdown of a run begins, with the drill's whole duration on it, and redrawn while the
+run goes. Its progress is the time left. Once the run ends it stays as the run left it until the
+player leaves or the next run begins.
+
+```yaml title="plugins/ExyliaAimTrainer/config.yml"
+hud:
+  boss-bar:
+    enabled: true
+    text: "{primary}&l%drill% {muted}· {letters}%time% {muted}· {success}%hits% {letters}hits {muted}· {info}%accuracy%% {muted}· {highlight}%score% pts"
+    colour: PURPLE
+    overlay: PROGRESS
+    refresh-ticks: 5
+```
+
+| Key | Default | What it does |
+|---|---|---|
+| `enabled` | `true` | `false` shows no boss bar to anybody. |
+| `text` | see above | The bar's line. |
+| `colour` | `PURPLE` | `PINK`, `BLUE`, `RED`, `GREEN`, `YELLOW`, `PURPLE` or `WHITE`. |
+| `overlay` | `PROGRESS` | `PROGRESS`, `NOTCHED_6`, `NOTCHED_10`, `NOTCHED_12` or `NOTCHED_20`. |
+| `refresh-ticks` | `5` | Ticks between two redraws. At least 1. |
+
+The text knows its own values, filled in on every redraw; they are not global placeholders.
+
+| Value | What it is |
+|---|---|
+| `%drill%` | The drill's display name |
+| `%time%` | Seconds left, rounded up: `30`, `1:30` |
+| `%hits%` | Hits so far |
+| `%misses%` | Misses so far |
+| `%accuracy%` | Accuracy with no decimals, without the `%` sign: `87` |
+| `%score%` | The live score |
+| `%streak%` | Hits in a row |
+| `%opponent_score%` | The opponent's live score in a duel; `0` in solo training |
+
+## Experience bar
+
+With `hud.experience-bar: true` (the default), the level shows the seconds left and the bar empties as
+the run goes. It is one packet a second; the server's real experience is never changed, and it is sent
+again the moment the player leaves. There is no per-player switch.
+
+For a REACTION drill the time is the drill's cap, since the run ends on its attempts.
+
+## Hit feedback
+
+Every event of a run plays an entry of `feedback` in `config.yml`. Each entry is an ExyliaLib effect
+with any of a title, an action bar, a boss bar, a sound, a particle and a firework; a section that is
+left out does nothing. The fields are on the library's [Effects](/docs/exylialib/effects) page.
+
+```yaml title="plugins/ExyliaAimTrainer/config.yml (excerpt)"
+feedback:
+  perfect:
+    effect:
+      action-bar:
+        text: "{success}⚡ PERFECT {muted}· {letters}%time%s {muted}· {info}x%streak%"
+        duration: 1.5
+      sound:
+        name: ENTITY_EXPERIENCE_ORB_PICKUP
+        volume: 0.7
+        pitch: 1.8
+    chat: ""
+  miss:
+    action-bar:
+      text: "{error}✘ MISS {muted}· {letters}%accuracy%% accuracy"
+      duration: 1.5
+    sound:
+      name: ENTITY_PLAYER_ATTACK_NODAMAGE
+      volume: 1.0
+      pitch: 1.0
+```
+
+### During a run
+
+These are the ones a player's **Hit feedback** and **Hit sounds** switches reach: turning one off plays
+the same effect with its action bar, or its sound, blanked. A title is never blanked.
+
+| Entry | When | Default |
+|---|---|---|
+| `perfect` | A hit graded PERFECT | Action bar `⚡ PERFECT · %time%s · x%streak%`, experience-orb sound at pitch 1.8 |
+| `excellent` | A hit graded EXCELLENT | `✦ EXCELLENT`, pitch 1.5 |
+| `good` | A hit graded GOOD | `✔ GOOD`, pitch 1.2 |
+| `ok` | A hit graded OK | `• OK`, pitch 1.0 |
+| `slow` | A hit graded SLOW | `▼ SLOW`, pitch 0.7 |
+| `miss` | A click that hit nothing | `✘ MISS · %accuracy%% accuracy`, `ENTITY_PLAYER_ATTACK_NODAMAGE` |
+| `expired` | A FLICK target that ran out of time | `⌛ EXPIRED · %accuracy%% accuracy`, `BLOCK_NOTE_BLOCK_SNARE` |
+| `false-start` | A REACTION click before the light | `✘ TOO EARLY · wait for the light`, `ENTITY_VILLAGER_NO` |
+| `armed` | A REACTION target lighting up | Sound only, `BLOCK_NOTE_BLOCK_PLING` |
+| `rushed` | A COMBO hit inside the attack cooldown | `✘ RUSHED · wait for the cooldown`, `ENTITY_PLAYER_ATTACK_WEAK` |
+
+The five grade entries have a second field, `chat`: a chat line sent with the effect, empty by default.
+It is not affected by the player's switches. How a hit is graded is on
+[Scoring](/docs/exyliaaimtrainer/scoring).
+
+The grade entries, `miss`, `expired` and `rushed` know these values:
+
+| Value | What it is |
+|---|---|
+| `%grade%` | The grade in capitals: `PERFECT`. Empty outside a grade entry. |
+| `%time%` | The graded time in seconds, two decimals: `0.42`. `0.00` outside a grade entry. |
+| `%hits%` | Hits so far |
+| `%streak%` | Hits in a row |
+| `%combo%` | The current combo |
+| `%accuracy%` | Accuracy with no decimals, without the `%` sign |
+
+The first hit of a run has no previous hit to be timed against, so it has no grade: it plays only the
+sound of the `good` entry, and only if the player has hit sounds on.
+
+### Around a run
+
+These play the same for everybody, whatever the player switched off.
+
+| Entry | When | Default |
+|---|---|---|
+| `countdown` | Each second of the countdown; `%time%` is the seconds left | Title `%time%` / *Left click the targets*, action bar *Starting in %time%s*, `BLOCK_NOTE_BLOCK_HAT` |
+| `go` | The first target is live | Title `GO`, `BLOCK_NOTE_BLOCK_PLING` |
+| `session-complete` | A solo drill ran its course | Title `TIME` / *Punch to play again*, `UI_TOAST_CHALLENGE_COMPLETE` |
+| `personal-best` | The run beat the player's best rating; knows `%rating%` | Title `NEW BEST` / *Rating %rating%*, `ENTITY_PLAYER_LEVELUP` |
+| `match-found` | Both duellists have arrived in the arena | Title `MATCH FOUND` / *Teleporting…* |
+| `round-won` | A duel round won | Title `ROUND WON`, `ENTITY_PLAYER_LEVELUP` |
+| `round-lost` | A duel round lost | Title `ROUND LOST`, `BLOCK_NOTE_BLOCK_BASS` |
+| `round-draw` | A duel round drawn and replayed | Title `DRAW` / *Same score — replaying*, action bar *Round replayed* |
+| `match-won` | The duel won | Title `VICTORY` / *Match won*, `UI_TOAST_CHALLENGE_COMPLETE` |
+| `match-lost` | The duel lost | Title `DEFEAT` / *Match lost*, `ENTITY_WITHER_HURT` |
+
+## Hit particles
+
+```yaml title="plugins/ExyliaAimTrainer/config.yml"
+hud:
+  hit-particle: "ELECTRIC_SPARK|8|0.15|0.15|0.15|0.05"
+```
+
+Drawn where a target was hit, to the player who hit it and nobody else. The line is
+`NAME|count|dx|dy|dz|speed`; an empty string draws nothing for anybody. A player with **Hit particles**
+off sees none.
+
+## When a switch takes effect
+
+| Setting | Settings key | Takes effect |
+|---|---|---|
+| Sidebar | `sidebar` | At once |
+| Boss bar | `boss_bar` | From the next run, or the next round of a duel |
+| Hit feedback | `action_bar` | From the next run, or the next round |
+| Hit sounds | `hit_sounds` | From the next run, or the next round |
+| Hit particles | `particles` | From the next run, or the next round |
+
+A change made in the middle of a session also sends the `settings.applies-next-drill` line. The
+switches are stored on the profile, so they survive restarts. The names shown on the settings screen
+live in `messages.yml` under `menu.toggles`.
+
+<Callout type="note" title="Standing still is not a setting">
+Nobody walks during a run: the plugin drops the client's own movement for as long as the HUD is up, for
+every player. There is no toggle for it.
+</Callout>
+
+## Reloading
+
+`/aimtraineradmin reload` re-reads the three files and rebuilds the sidebar of every player in a session
+or a duel. The boss bar picks up a new `text` at its next redraw; its colour and overlay apply from the
+next run.

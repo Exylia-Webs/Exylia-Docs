@@ -1,0 +1,209 @@
+---
+title: "Duelos"
+description: "Retos directos, qué disparan los dos jugadores, formatos al mejor de, cómo se decide una ronda, qué se guarda y cuándo."
+---
+
+Un duelo siempre es contra un rival elegido: no hay cola ni emparejamiento. Dos jugadores juegan el mismo
+ejercicio desde el mismo spawn de la misma arena, a la vez, y la ronda es para la puntuación más alta. Los
+dos motores se construyen con las mismas reglas y la misma semilla aleatoria, así que los objetivos
+aparecen en los mismos sitios y en el mismo orden en las dos pantallas.
+
+Ninguno ve al otro. Cada duelista está en un grupo de aislamiento propio, porque un rival plantado en la
+línea de tiro sería un objetivo que no lo es.
+
+## Enviar una solicitud
+
+Dos formas de entrar:
+
+- `/aim duel <player> [drill] [bestOf]`. El ejercicio por defecto es el **primero de `config.yml`**, no
+  `training.default-drill`; el formato por defecto es `match.default-format`. Un ejercicio desconocido
+  responde "Unknown drill `<drill>`."; un formato no ofrecido, "BO`<n>` is not an offered format."
+- `/aim duel` a secas, o **Duel** en `/aim`, abre el selector de rival.
+
+El selector muestra a todos los conectados que puedes ver salvo tú, primero los libres, cada uno con su
+rating, precisión, victorias, derrotas y porcentaje de victorias. Un jugador ocupado sigue en la lista, en
+gris, con el motivo y sin clic. La lista se refresca cada segundo mientras está abierta, así que quien
+entra en una arena deja de estar a tu alcance.
+
+Hacer clic en un jugador abre la pantalla de duelo: su cabeza y su historial, el selector de formato (solo
+los ofrecidos) y los ejercicios, catorce por página. Hacer clic en un ejercicio envía la solicitud. El
+formato queda guardado en tu perfil para la próxima vez.
+
+La solicitud se rechaza, con un mensaje, cuando:
+
+| Situación | Mensaje |
+|---|---|
+| El objetivo eres tú | You cannot duel yourself. |
+| PacketEvents no está disponible | Targets need PacketEvents, which this server does not have. |
+| Ya estás en un ejercicio o un duelo | Finish what you are doing first. |
+| Otro plugin te tiene | You are busy in `<plugin>`. |
+| Otro plugin desaconseja tomarte | Not right now: `<reason>`. |
+| Al objetivo lo tiene cualquier plugin, este incluido | `<target>` is busy right now. |
+| El plugin del objetivo lo desaconseja | `<target>` is `<reason>`. |
+
+Un plugin que escuche `AimDuelRequestEvent` también puede cancelar la solicitud antes de que se envíe; ver
+[API](/docs/exyliaaimtrainer/api).
+
+## La solicitud
+
+El objetivo recibe un bloque centrado con el retador, el ejercicio, el formato y los segundos restantes,
+con botones clicables **Accept** y **Decline** que ejecutan `/aim accept` y `/aim deny`. El retador lee
+"Duel request sent to `<target>`."
+
+- Se guarda una solicitud por objetivo. Una más nueva sustituye a la anterior sin avisar a quien la envió.
+- Una solicitud caduca a los `match.duel-request-expiry` segundos (`30` por defecto, nunca menos de 1). Se
+  avisa a los dos cuando caduca.
+- `/aim deny` avisa a los dos de que se rechazó.
+- Si el objetivo se desconecta, la solicitud dirigida a él se descarta en silencio; al retador no se le
+  avisa.
+
+<Callout type="note" title="Mientras la solicitud está abierta">
+Ninguno de los dos tiene todavía un reclamo, así que este plugin avisa a los demás plugins de Exylia de
+que ambos están "answering a duel request". Es un consejo que respetan, no un bloqueo: ver
+[Compatibilidad](/docs/exyliaaimtrainer/compatibilidad).
+</Callout>
+
+## Aceptar
+
+`/aim accept` vuelve a comprobar a los dos — cualquiera pudo meterse en algo mientras la solicitud
+esperaba — y ambos leen "Duel accepted." Después el duelo necesita una arena:
+
+- **Una arena lista con sitio.** Se elige la que aloja a menos jugadores, contando un duelo como dos,
+  dentro de `arena.max-players-per-arena`. Si no hay ninguna, los dos leen "No arena is ready. Ask an
+  administrator." y no empieza nada. Ver [Arenas](/docs/exyliaaimtrainer/arenas).
+- **Las arenas cargadas.** Justo después de arrancar, hasta que las arenas se han leído de la base de
+  datos, un duelo aceptado no hace nada.
+
+Los dos jugadores se reclaman antes de mover nada. Si falla el segundo reclamo se deshace el primero —
+inventario incluido — y no se teletransporta a nadie. Después ambos leen "Duel against `<opponent>` is
+starting…", se les teletransporta al spawn de la arena, se les vacía y se les pone en aventura al llegar,
+y ven el efecto `match-found`.
+
+## Qué disparan los dos
+
+Las reglas de un duelo se fijan **cuando se envía la solicitud**, a partir del retador:
+
+| Qué | En un duelo |
+|---|---|
+| El ejercicio | El elegido, con su duración, objetivos, dispersión y movimiento. |
+| Tamaño y distancia | Con `match.use-preferences: false` (por defecto), el ejercicio tal cual: tamaño y distancia a ×1 para los dos. Con `true`, el tamaño y la distancia **del retador**, para los dos. |
+| Color y estilo del objetivo | Los del retador, para los dos. |
+| La semilla aleatoria | Una sola, así que las dos secuencias son idénticas. |
+
+<Callout type="warning" title="use-preferences no da a cada uno los suyos">
+El comentario de `use-preferences` en `config.yml` dice que `true` mantiene el tamaño y la distancia de
+cada jugador. No es así: los dos comparten las reglas construidas con los ajustes del retador. Déjalo en
+`false` para batirse con el ejercicio tal como está escrito.
+</Callout>
+
+Las elecciones de HUD de cada jugador — sidebar, boss bar, feedback de acierto, sonidos, partículas —
+siguen siendo suyas y se leen al empezar cada ronda. Ver [Ajustes](/docs/exyliaaimtrainer/ajustes).
+
+## Formatos
+
+```yaml title="plugins/ExyliaAimTrainer/config.yml"
+match:
+  formats: [1, 3, 5]
+  default-format: 3
+  allow-even-formats: false
+  use-preferences: false
+  round-delay: 3.0
+  result-delay: 5.0
+  duel-request-expiry: 30.0
+```
+
+| Clave | Por defecto | Qué hace |
+|---|---|---|
+| `formats` | `[1, 3, 5]` | Las longitudes al mejor de que se ofrecen, en el selector y en el comando. Vale cualquier longitud positiva. Una lista vacía ofrece `3`. |
+| `default-format` | `3` | La longitud usada si no se elige ninguna. |
+| `allow-even-formats` | `false` | Las longitudes pares de `formats` solo se ofrecen si esto es `true`. |
+| `use-preferences` | `false` | Ver arriba. |
+| `round-delay` | `3.0` | Segundos entre el final de una ronda y la siguiente cuenta atrás. |
+| `result-delay` | `5.0` | Segundos que el resultado sigue en pantalla, en la arena, antes de devolver a los dos. `0` los devuelve al momento. |
+| `duel-request-expiry` | `30.0` | Segundos que una solicitud sigue abierta. |
+
+Un al mejor de `n` lo gana el primero en llegar a `n/2 + 1` rondas: dos en un BO3, tres en un BO5, una en
+un BO1. La serie también termina cuando se han ganado `n` rondas, que es lo que necesita una longitud par:
+un BO2 que va 1–1 es para quien ganó la segunda ronda.
+
+<Callout type="note" title="Una serie par no se repite">
+El comentario de `allow-even-formats` dice que una serie par empatada se repite una vez como desempate. No
+es así: la serie termina en su última ronda y se la lleva quien ganó esa ronda.
+</Callout>
+
+## Una ronda
+
+<Steps>
+  <Step title="Curar y contar">
+    Los dos jugadores se curan a vida y comida completas, se les quitan el fuego y la absorción, se monta
+    el HUD y se envía "Round X of Y · `<drill>`". La cuenta atrás dura `training.countdown` segundos, la
+    misma que un ejercicio.
+  </Step>
+  <Step title="Golpear para empezar">
+    Golpear al aire durante la cuenta atrás te marca como listo: lees "Ready. Waiting for `<opponent>`…"
+    y el rival lee "`<tú>` is ready. Punch to start now." Cuando los dos lo han hecho, la ronda empieza al
+    instante. Uno solo no puede saltarla y llevarse el primer objetivo mientras el otro sigue leyendo un
+    número.
+  </Step>
+  <Step title="El ejercicio">
+    Los dos motores arrancan juntos y dibujan los mismos objetivos. La boss bar puede mostrar la
+    puntuación en vivo del rival con `%opponent_score%`. Ver [HUD](/docs/exyliaaimtrainer/hud).
+  </Step>
+  <Step title="Terminan los dos">
+    No se decide nada hasta que **los dos** motores han terminado: la misma duración, o el mismo número de
+    intentos de reacción. En un ejercicio por tiempo es el mismo tick; en uno de reacción espera a las
+    manos más lentas.
+  </Step>
+</Steps>
+
+## Cómo se decide una ronda
+
+Por orden, hasta que uno difiera:
+
+1. La **puntuación** más alta.
+2. La mejor **precisión**.
+3. Más **aciertos**.
+
+Un empate total es un **empate**: suena el efecto `round-draw` ("DRAW", "Same score — replaying") y la
+ronda se repite con el mismo número. El intento empatado se guarda, pero la serie no avanza. **Tres empates
+seguidos cancelan el duelo**: rondas idénticas significan que nadie está disparando.
+
+Tras cada ronda los dos ven el efecto `round-won`, `round-lost` o `round-draw`, la línea de chat
+correspondiente y un resumen de ronda: el ganador, tus puntos, aciertos y precisión, los puntos del rival y
+cómo va la serie. Pasan `round-delay` segundos y empieza la cuenta atrás de la siguiente.
+
+## El final
+
+Cuando uno llega a las rondas necesarias, ambos ven `match-won` ("VICTORY") o `match-lost` ("DEFEAT") y el
+resultado se **guarda al momento**: el historial de duelos de los dos perfiles y una fila de historial por
+jugador. Después se envía el resumen del duelo — el marcador, el formato, el ejercicio, tus aciertos y
+precisión sumando todas las rondas, la duración —, los jugadores siguen en la arena `result-delay`
+segundos y a los dos se les restaura y devuelve. Guardar primero significa que un servidor que se apaga
+durante la pausa no pierde nada.
+
+Ya de vuelta, un jugador cuyo duelo terminó hace menos de un minuto recibe la **pantalla de resultado**:
+VICTORY o DEFEAT, las rondas, puntos, aciertos y precisión de los dos, el formato, el ejercicio y la
+duración. Su botón **Rematch**, mientras el rival siga conectado, le envía una solicitud nueva con los
+mismos ajustes — mismo ejercicio, formato y semilla, así que la misma secuencia de objetivos. La solicitud
+pasa por todas las comprobaciones de una nueva.
+
+Ver [Estadísticas](/docs/exyliaaimtrainer/estadisticas) para lo que guarda el historial.
+
+## Abandono y cancelación
+
+| Final | Lo provoca | ¿Se guarda? |
+|---|---|---|
+| **Abandono** — gana el rival | `/aim leave`, un botón **Leave**, desconectarse, cambiar de mundo, un teletransporte que no hizo el plugin, una muerte causada por otro plugin, otro plugin reclamando al jugador. Quien sale lee "You forfeited the duel.", el ganador "`<opponent>` left. You win by forfeit." | Sí, como un resultado normal, en cualquier punto de la serie. |
+| **Cancelación** — no gana nadie | Un administrador que lo cancela, su arena desactivada o borrada, el plugin deshabilitándose, tres empates seguidos, un fallo al teletransportar o al guardar un inventario. Los dos leen "The duel was cancelled." | No. |
+
+Un duelo cancelado no tiene pantalla de resultado. Los dos finales disparan `AimMatchEndEvent`, con una
+marca que dice cuál fue.
+
+## Dentro de un duelo
+
+Todo lo que se bloquea durante un ejercicio se bloquea durante un duelo — daño, hambre, tirar y recoger,
+bloques, contacto con jugadores de fuera, comandos fuera de `training.allowed-commands` — y la congelación
+del movimiento dura toda la ronda. Está en [Entrenamiento](/docs/exyliaaimtrainer/entrenamiento), porque
+las mismas protecciones cubren los dos.
+
+Con `chat.isolation: true`, los dos duelistas están en grupos distintos y tampoco leen el chat del otro.

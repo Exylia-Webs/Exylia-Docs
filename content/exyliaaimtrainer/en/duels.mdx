@@ -1,0 +1,205 @@
+---
+title: "Duels"
+description: "Direct challenges, what both players shoot, best-of formats, how a round is decided, what is stored and when."
+---
+
+A duel is always a chosen opponent: there is no queue and no matchmaking. Two players play the same drill
+from the same spawn of the same arena, at the same time, and a round goes to the higher score. Both
+engines are built from the same rules and the same random seed, so the targets appear in the same places,
+in the same order, on both screens.
+
+Neither sees the other. Each duellist sits in an isolation group of their own, because an opponent
+standing in the line of fire would be a target that is not one.
+
+## Sending a request
+
+Two ways in:
+
+- `/aim duel <player> [drill] [bestOf]`. The drill defaults to the **first drill in `config.yml`**, not
+  to `training.default-drill`; the format defaults to `match.default-format`. An unknown drill reads
+  "Unknown drill `<drill>`."; a format that is not offered reads "BO`<n>` is not an offered format."
+- `/aim duel` alone, or **Duel** in `/aim`, opens the opponent picker.
+
+The picker lists everyone online you can see except yourself, free players first, each with their
+rating, accuracy, wins, losses and win rate. A busy player stays on the list, greyed, with the reason
+and no click. The list refreshes every second while it is open, so somebody who walks into an arena
+drops out of reach.
+
+Clicking a player opens the duel screen: their head and record, the format picker (only the formats
+offered), and the drills, fourteen to a page. Clicking a drill sends the request. The format is
+remembered on your profile for next time.
+
+The request is refused, with a message, when:
+
+| Situation | Message |
+|---|---|
+| The target is yourself | You cannot duel yourself. |
+| PacketEvents is not available | Targets need PacketEvents, which this server does not have. |
+| You are already in a drill or a duel | Finish what you are doing first. |
+| Another plugin holds you | You are busy in `<plugin>`. |
+| Another plugin advises against taking you | Not right now: `<reason>`. |
+| The target is held by any plugin, this one included | `<target>` is busy right now. |
+| The target's plugin advises against it | `<target>` is `<reason>`. |
+
+A plugin listening to `AimDuelRequestEvent` can also cancel the request before it is sent; see
+[API](/docs/exyliaaimtrainer/api).
+
+## The request
+
+The target receives a centred block naming the challenger, the drill, the format and the seconds left,
+with clickable **Accept** and **Decline** buttons that run `/aim accept` and `/aim deny`. The challenger
+reads "Duel request sent to `<target>`."
+
+- One request per target is kept. A newer one replaces the old without a word to its sender.
+- A request expires after `match.duel-request-expiry` seconds (`30` by default, never under 1). Both
+  sides are told when it does.
+- `/aim deny` tells both sides the request was declined.
+- A target who quits drops the request aimed at them silently; the challenger is not told.
+
+<Callout type="note" title="While a request is open">
+Neither side holds a claim yet, so this plugin tells the other Exylia plugins that both players are
+"answering a duel request". That is advice they honour, not a lock: see
+[Compatibility](/docs/exyliaaimtrainer/compatibility).
+</Callout>
+
+## Accepting
+
+`/aim accept` checks both sides again — either may have walked into something while the request sat open
+— and both read "Duel accepted." Then the duel needs an arena:
+
+- **A ready arena with room.** The one hosting the fewest players is picked, a duel counting as two, within
+  `arena.max-players-per-arena`. With none, both players read "No arena is ready. Ask an administrator."
+  and nothing starts. See [Arenas](/docs/exyliaaimtrainer/arenas).
+- **The arenas loaded.** Right after a start, until the arenas have been read from the database, an
+  accepted duel does nothing at all.
+
+Both players are claimed before anything moves. If the second claim fails, the first is undone —
+inventory included — and nobody is teleported. Then both read "Duel against `<opponent>` is starting…",
+are teleported to the arena's spawn, emptied and put in adventure on arrival, and see the `match-found`
+effect.
+
+## What both players shoot
+
+The rules of a duel are fixed **when the request is sent**, from the challenger:
+
+| What | In a duel |
+|---|---|
+| The drill | The one picked, with its own duration, targets, spread and motion. |
+| Size and distance | With `match.use-preferences: false` (the default), the drill as written: size and distance at ×1 for both. With `true`, **the challenger's** size and distance, for both. |
+| Target colour and style | The challenger's, for both. |
+| The random seed | One seed, so both sequences are identical. |
+
+<Callout type="warning" title="use-preferences does not give each player their own">
+The comment on `use-preferences` in `config.yml` says `true` keeps each player's own size and distance.
+It does not: both players share the rules built from the challenger's settings. Leave it at `false` to
+duel on the drill as written.
+</Callout>
+
+Each player's HUD choices — sidebar, boss bar, hit feedback, sounds, particles — stay their own and are
+read at the start of every round. See [Settings](/docs/exyliaaimtrainer/settings).
+
+## Formats
+
+```yaml title="plugins/ExyliaAimTrainer/config.yml"
+match:
+  formats: [1, 3, 5]
+  default-format: 3
+  allow-even-formats: false
+  use-preferences: false
+  round-delay: 3.0
+  result-delay: 5.0
+  duel-request-expiry: 30.0
+```
+
+| Key | Default | What it does |
+|---|---|---|
+| `formats` | `[1, 3, 5]` | The best-of lengths offered, in the picker and on the command. Any positive length works. An empty list offers `3`. |
+| `default-format` | `3` | The length used when none is chosen. |
+| `allow-even-formats` | `false` | Even lengths in `formats` are only offered when this is `true`. |
+| `use-preferences` | `false` | See above. |
+| `round-delay` | `3.0` | Seconds between a round ending and the next countdown. |
+| `result-delay` | `5.0` | Seconds the result stays on screen, in the arena, before both are sent back. `0` sends them at once. |
+| `duel-request-expiry` | `30.0` | Seconds a request stays open. |
+
+A best-of `n` is won by the first side to `n/2 + 1` rounds: two for a BO3, three for a BO5, one for a BO1.
+The series also ends once `n` rounds have been won, which is what an even length needs: a BO2 that stands
+1–1 goes to whoever won the second round.
+
+<Callout type="note" title="An even series is not replayed">
+The comment on `allow-even-formats` says a tied even series is replayed once as a decider. It is not: the
+series ends on its last round and that round's winner takes it.
+</Callout>
+
+## A round
+
+<Steps>
+  <Step title="Heal and count down">
+    Both players are healed to full health and food, fire and absorption are cleared, the HUD is set up,
+    and "Round X of Y · `<drill>`" is sent. The countdown is `training.countdown` seconds, the same one a
+    drill uses.
+  </Step>
+  <Step title="Punch to start">
+    Punching the air during the countdown readies you: you read "Ready. Waiting for `<opponent>`…" and
+    they read "`<you>` is ready. Punch to start now." When both have, the round starts at once. One side
+    cannot skip alone and get the first target while the other is still reading a number.
+  </Step>
+  <Step title="The drill">
+    Both engines start together and draw the same targets. The boss bar can show the opponent's live score
+    through `%opponent_score%`. See [HUD](/docs/exyliaaimtrainer/hud).
+  </Step>
+  <Step title="Both finish">
+    Nothing is decided until **both** engines have run their course: the same duration, or the same number
+    of reaction attempts. For a timed drill that is the same tick; for a reaction drill it waits for the
+    slower hands.
+  </Step>
+</Steps>
+
+## How a round is decided
+
+In order, until one differs:
+
+1. The higher **score**.
+2. The better **accuracy**.
+3. More **hits**.
+
+A full tie is a **draw**: the `round-draw` effect plays ("DRAW", "Same score — replaying") and the round is
+replayed under the same number. The drawn attempt is kept but the series does not move. **Three draws in a
+row cancel the duel**: identical rounds mean nobody is shooting.
+
+After every round both players see the `round-won`, `round-lost` or `round-draw` effect, the matching chat
+line and a round summary: the winner, your points, hits and accuracy, the opponent's points and the series
+so far. Then `round-delay` seconds pass and the next round counts down.
+
+## The end
+
+When a side reaches the rounds to win, both see `match-won` ("VICTORY") or `match-lost` ("DEFEAT") and the
+result is **stored at once**: both profiles' duel records and one history row per player. Then the duel
+summary is sent — the score, the format, the drill, your hits and accuracy across all rounds, the duration
+— the players stay in the arena for `result-delay` seconds, and both are restored and sent back. Storing
+first means a server that stops during the pause loses nothing.
+
+Once back, a player whose duel ended less than a minute ago gets the **result screen**: VICTORY or DEFEAT,
+both players' rounds, points, hits and accuracy, the format, the drill and the duration. Its **Rematch**
+button, while the opponent is still online, sends a new request to them with the same settings — the same
+drill, format and seed, so the same target sequence. The request goes through every check a new one does.
+
+See [Statistics](/docs/exyliaaimtrainer/stats) for what the record holds.
+
+## Forfeit and cancel
+
+| Ending | Caused by | Stored? |
+|---|---|---|
+| **Forfeit** — the opponent wins | `/aim leave`, a **Leave** button, quitting, changing world, a teleport the plugin did not make, a death from another plugin, another plugin taking the player back. The leaver reads "You forfeited the duel.", the winner "`<opponent>` left. You win by forfeit." | Yes, as a normal result, at any point of the series. |
+| **Cancel** — nobody wins | An administrator cancelling it, its arena being disabled or deleted, the plugin disabling, three draws in a row, a teleport or an inventory save failing. Both read "The duel was cancelled." | No. |
+
+A cancelled duel has no result screen. Both endings fire `AimMatchEndEvent`, with a flag that says which.
+
+## Inside a duel
+
+Everything that is blocked during a drill is blocked during a duel — damage, hunger, drops, pickups,
+blocks, contact with players outside, commands outside `training.allowed-commands` — and the movement
+freeze holds for the whole round. That is on [Training](/docs/exyliaaimtrainer/training), because the same
+protections cover both.
+
+With `chat.isolation: true`, the two duellists are in separate groups and do not read each other's chat
+either.

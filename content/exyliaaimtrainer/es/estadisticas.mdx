@@ -1,0 +1,198 @@
+---
+title: "Estadísticas"
+description: "El perfil, los récords por ejercicio, el historial de sesiones y de duelos, y las tablas construidas encima."
+---
+
+Cuatro tablas guardan lo que ha hecho un jugador. Cada una responde a una pregunta distinta y ninguna
+se reconstruye a partir de otra, que es lo que permite podar sin riesgo las dos de historial.
+
+| Tabla | Una fila por | Responde |
+|---|---|---|
+| `aim_profiles` | Jugador | Los números de por vida, el récord de duelos, el rating global y los ajustes del jugador |
+| `aim_records` | Jugador **y** ejercicio | Los mejores resultados, que es lo que ordena la tabla de un ejercicio |
+| `aim_sessions` | Ronda en solitario terminada | El historial de sesiones que el jugador consulta |
+| `aim_matches` | Participante por duelo | El historial de duelos |
+
+La quinta tabla, `aim_arenas`, guarda las arenas y se explica en [Arenas](/docs/exyliaaimtrainer/arenas).
+
+## El perfil
+
+La fila se carga cuando el jugador entra, se escribe en cada cambio y otra vez cuando sale. Un jugador
+cuya fila aún se está cargando juega con los ajustes por defecto.
+
+| Campo | Lo mueve |
+|---|---|
+| Sesiones | Cada ronda en solitario guardada. Los duelos no cuentan aquí. |
+| Impactos totales, disparos totales, precisión | Rondas en solitario **y** duelos. Un disparo es un impacto o un fallo; un objetivo que expira no es ninguno de los dos. La precisión se guarda como porcentaje para que la tabla global pueda ordenar por ella. |
+| Tiempo total entrenado | Rondas en solitario y duelos. |
+| Flick más rápido, reacción más rápida | El menor tiempo distinto de cero, de rondas en solitario y de duelos por igual. |
+| Rating global | Solo rondas en solitario: sube lo que la ronda haya subido el mejor rating del jugador en su ejercicio. |
+| Duelos, victorias, derrotas, porcentaje de victorias | Un duelo decidido. |
+| Rondas, rondas ganadas, rondas perdidas | Un duelo decidido, a partir del marcador final de la serie. |
+| Racha actual, mejor racha | Racha de duelos ganados: sube uno al ganar, vuelve a cero al perder. |
+| Tamaño, distancia, color, estilo, los cinco interruptores | La pantalla de [ajustes](/docs/exyliaaimtrainer/ajustes). |
+| Último ejercicio, último formato | Lo último elegido en un menú, para que los selectores abran donde el jugador los dejó. |
+
+La fila del perfil también lleva una columna `freeze`. Siempre se escribe como `true` y nada la lee;
+se conserva para que una tabla existente no necesite migración.
+
+`/aim profile`, o `/aim stats`, abre la pantalla del perfil: rating, precisión, sesiones y duelos en la
+cabeza; impactos, disparos, flick y reacción más rápidos y tiempo entrenado; duelos jugados, victorias,
+derrotas, porcentaje de victorias y rondas; la racha de duelos actual y la mejor; y botones a
+**Récords**, **Sesiones**, **Historial de duelos** y **Tablas**. `/aim profile <jugador>` abre el de otro,
+leído de la base de datos si está desconectado. El nombre tiene que conocerlo la caché de jugadores de
+ExyliaLib; si no, el comando responde `player-not-found`.
+
+## Récords
+
+Una fila por jugador y ejercicio, con clave `uuid:drill`. Una ronda se fusiona con su fila cuando **hizo
+algo**: un impacto, un fallo, un objetivo expirado, una salida en falso o un solo tick de seguimiento
+evaluado. Una ronda que terminó durante la cuenta atrás no guarda nada.
+
+Una ronda cuenta tanto si se completó como si no. Salir a mitad, desconectarse, que ExyliaPracticeCore
+reclame al jugador o pulsar **Jugar otra vez** a mitad guardan la ronda hasta donde llegó.
+
+| Campo | Regla de fusión |
+|---|---|
+| `sessions` | Más uno |
+| `bestRating` | El mayor. El rating es la puntuación por la dificultad; ver [Puntuación](/docs/exyliaaimtrainer/puntuacion). |
+| `ratingSize`, `ratingDistance` | Los multiplicadores de tamaño y distancia que tenía el jugador, **solo** cuando se superó el rating |
+| `bestScore` | La mayor |
+| `bestAccuracy` | La mayor, contando solo rondas con al menos `leaderboard.accuracy-min-shots` disparos |
+| `bestStreak` | La mayor. Una racha son impactos seguidos; un fallo, un objetivo expirado o una salida en falso la cortan. |
+| `mostHits` | El mayor |
+| `bestCombo` | El mayor. Solo un ejercicio COMBO lo construye. |
+| `bestReactionMillis` | La menor reacción individual distinta de cero. Solo un ejercicio REACTION la fija. |
+| `bestFlickMillis` | El menor tiempo distinto de cero entre dos impactos |
+| `bestOnTarget` | El mayor porcentaje de la ronda sobre el objetivo. Solo un ejercicio TRACK lo fija. |
+| `totalHits`, `totalShots`, `totalTimeMillis` | Se suman |
+
+Cuando el rating supera al mejor anterior, la diferencia se suma al rating global del perfil, la
+pantalla de resultado y el chat lo anuncian como récord personal, y se descartan las tablas en caché
+para que el jugador se vea en la tabla que acaba de escalar.
+
+<Callout type="note" title="Los duelos no fijan récords">
+Un duelo mueve el perfil — el récord de duelos, los impactos, disparos y tiempo de por vida y los
+tiempos más rápidos — y escribe dos filas de historial. Nunca toca `aim_records`, así que no puede meter
+a nadie en la tabla de un ejercicio ni subir su rating global.
+</Callout>
+
+La pantalla de **Récords**, a la que se llega desde el perfil, lista cada fila del jugador en el orden en
+que aparecen los ejercicios en `config.yml`; la fila de un ejercicio que ya no está en el archivo va al
+final. Cada fila muestra el mejor rating con el tamaño y la distancia con que se consiguió, el resto de
+mejores resultados, y las sesiones, precisión y tiempo de por vida en ese ejercicio.
+
+## Tablas de clasificación
+
+Hay una tabla por **ejercicio**, ordenada por una de siete categorías, y una tabla **global**.
+
+| Categoría | Ordena por | Nombre por defecto |
+|---|---|---|
+| `rating` | `bestRating`, de mayor a menor | Rating |
+| `score` | `bestScore`, de mayor a menor | Best score |
+| `accuracy` | `bestAccuracy`, de mayor a menor | Accuracy |
+| `streak` | `bestStreak`, de mayor a menor | Best streak |
+| `hits` | `mostHits`, de mayor a menor | Most hits |
+| `reaction` | `bestReactionMillis`, de **menor** a mayor | Fastest reaction |
+| `combo` | `bestCombo`, de mayor a menor | Best combo |
+
+Los nombres y los iconos están en `messages.yml`, bajo `menu.categories`.
+
+Un jugador aparece **una vez** por tabla de ejercicio, porque los récords son una fila por jugador y
+ejercicio. Un cero nunca ocupa un puesto: una reacción sin fijar, un combo en un ejercicio que no tiene,
+una precisión de rondas por debajo del mínimo de disparos. Por eso la tabla `reaction` de un ejercicio
+de flick y la tabla `combo` de todo lo que no sea una pelea se quedan vacías.
+
+<Callout type="tip" title="El rating es la justa">
+Solo `rating` compara a dos jugadores que configuraron sus objetivos de forma distinta: lleva la
+dificultad del tamaño y la distancia con que jugó cada uno. Las demás categorías son mejores resultados
+en bruto. Cada fila muestra el tamaño y la distancia con que se consiguió su **rating**, sea cual sea la
+categoría por la que se ordena la tabla.
+</Callout>
+
+### La tabla global
+
+Todos los jugadores por la suma de su mejor rating en cada ejercicio, leída de `aim_profiles`. Se ordena
+por `rating` o por `accuracy` (la precisión de por vida) y nada más: la fila de categorías de esa tabla
+ofrece esas dos, y pedir otra muestra la de rating.
+
+### Abrir una tabla
+
+`/aim leaderboard`, o `/aim top`, abre el selector de tablas: primero la global y después cada ejercicio
+en el orden de la configuración. `/aim leaderboard <ejercicio>` abre la tabla de ese ejercicio ordenada
+por `rating`, y `/aim leaderboard <ejercicio> <categoría>` por esa categoría; `overall` sirve como
+ejercicio. Un ejercicio desconocido abre el selector en lugar de una tabla vacía, y una categoría
+desconocida vuelve a `rating`. Dentro, los botones de categoría reordenan la tabla abierta sin
+cerrarla, y las tres primeras filas llevan medalla.
+
+Las mismas tablas se leen desde PlaceholderAPI, como
+`%exyliaaimtrainer_aim_top_<drill>_<category>_<n>%` y su `_value`. Ver
+[Placeholders](/docs/exyliaaimtrainer/placeholders).
+
+### La caché
+
+```yaml title="plugins/ExyliaAimTrainer/config.yml"
+leaderboard:
+  entries: 10
+  cache-seconds: 300
+  accuracy-min-shots: 20
+```
+
+| Clave | Por defecto | Qué hace |
+|---|---|---|
+| `entries` | `10` | Filas por tabla. |
+| `cache-seconds` | `300` | Cuánto se conserva una tabla antes de volver a preguntar a la base de datos. Cualquier valor menor que 5 cuenta como 5. Se lee al arrancar el plugin: una recarga no lo cambia. |
+| `accuracy-min-shots` | `20` | Disparos que necesita una ronda para que su precisión pueda ser un récord. Diez de diez no es un récord. |
+
+Cada tabla guarda dos copias: una fresca, que caduca a los `cache-seconds`, y la última que se leyó
+jamás. Un menú espera a una lectura fresca; un placeholder muestra la última copia mientras la lectura
+fresca se hace en segundo plano, así que un holograma nunca vuelve a *Loading…* una vez que ha mostrado
+una tabla.
+
+Las copias frescas se descartan cuando una ronda supera un rating y cuando se reinicia a un jugador. Una
+ronda que solo mejora otro récord — precisión, impactos, una racha — no las descarta: esa tabla se pone
+al día dentro de `cache-seconds`.
+
+## Historial
+
+Dos listas, cada una accesible desde la otra: **Sesiones** (`/aim sessions`) e **Historial de duelos**
+(`/aim history`). Las dos muestran primero las filas más recientes.
+
+Una fila de **sesión** es una ronda en solitario guardada: el ejercicio y su tipo, la puntuación, el
+rating y la dificultad, impactos, fallos, precisión, centrado, mejor racha y combo, el flick y la
+reacción medios, el tiempo sobre el objetivo, la duración, el ping medio y la fecha. Una ronda que fijó
+un récord personal se dibuja con una estrella.
+
+Un **duelo** escribe dos filas en `aim_matches`, una por participante, para que "mis duelos" sea una
+consulta de una sola columna. Cada una lleva el rival, si el jugador ganó, el ejercicio, el formato, las
+rondas a favor y en contra, los puntos a favor y en contra, los impactos, la precisión, la duración y
+cuándo terminó. Solo un duelo con ganador las escribe; un duelo cancelado no escribe nada.
+
+```yaml title="plugins/ExyliaAimTrainer/config.yml"
+history:
+  entries: 20
+  retention-days: 30
+  prune-interval-minutes: 60
+```
+
+| Clave | Por defecto | Qué hace |
+|---|---|---|
+| `entries` | `20` | Filas mostradas en cada una de las dos listas. |
+| `retention-days` | `30` | Se borran las filas de sesiones y de duelos más antiguas que esto. `0` lo conserva todo. |
+| `prune-interval-minutes` | `60` | Cada cuánto se ejecuta la poda. Se lee al arrancar el plugin. La primera pasada de duelos es un minuto después del arranque, la de sesiones noventa segundos después. |
+
+Una pasada mira las 500 filas más antiguas de su tabla y borra las que pasan del límite, así que un
+atraso se vacía en varias pasadas en lugar de en una transacción larga.
+
+## Reiniciar a un jugador
+
+Desde `/aimtraineradmin` → **Players**, tras una confirmación. Un reinicio:
+
+- deja el perfil a cero — números de por vida, récord de duelos y rating global — **conservando** los
+  ajustes del jugador y sus últimas elecciones;
+- borra todos los récords del jugador, así que sale de todas las tablas de ejercicio;
+- borra su historial de sesiones;
+- descarta la caché de las tablas.
+
+Sus filas de `aim_matches` **no** se borran: el historial de duelos sigue listando los duelos pasados
+hasta que la retención los elimine, aunque la confirmación diga *"Every record, session and duel"*.

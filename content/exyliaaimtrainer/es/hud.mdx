@@ -1,0 +1,270 @@
+---
+title: "HUD"
+description: "El sidebar, la barra de jefe, la barra de experiencia, el feedback de impactos, los sonidos y las partículas: qué muestra cada uno, dónde se configura y qué puede apagar un jugador."
+---
+
+Todo lo que rodea a una ronda se dibuja con paquetes: el scoreboard, la experiencia y el inventario
+reales del servidor nunca se tocan. Cinco canales, configurados en tres sitios.
+
+| Canal | Se configura en | Un jugador puede apagarlo |
+|---|---|---|
+| Sidebar | `scoreboards.yml` | Sí — **Sidebar** |
+| Barra de jefe | `config.yml` → `hud.boss-bar` | Sí — **Boss bar** |
+| Barra de experiencia | `config.yml` → `hud.experience-bar` | No |
+| Títulos, action bars y sonidos | `config.yml` → `feedback` | Action bar y sonidos — **Hit feedback** y **Hit sounds** |
+| Partículas de impacto | `config.yml` → `hud.hit-particle` | Sí — **Hit particles** |
+
+Los botones de la hotbar también forman parte del HUD; son un archivo de menú y se describen en
+[Menús](/docs/exyliaaimtrainer/menus).
+
+## Sidebar
+
+`scoreboards.yml` define dos sidebars: `training`, que se muestra durante una sesión en solitario, y
+`match`, que ve quien está en un duelo. Se muestra cuando el jugador entra en cualquiera de los dos y se
+reconstruye cada vez que empieza una ronda en solitario. Fuera de ambos, el plugin no muestra nada, y el tablero que
+tuviera debajo un plugin de lobby vuelve solo.
+
+```yaml title="plugins/ExyliaAimTrainer/scoreboards.yml"
+training:
+  enabled: true
+  title:
+    - "{primary}&lAIM TRAINER"
+  lines:
+    - ""
+    - "{secondary}Drill:"
+    - " {letters_black}▎ {letters}%aim_drill% {muted}· {info}×%aim_difficulty%"
+    - " {letters_black}▎ {letters}Time {letters_black}» {info}%aim_time_left%"
+    - ""
+    - "{secondary}Live:"
+    - " {letters_black}▎ {letters}Score {letters_black}» {highlight}%aim_score%"
+    - " {letters_black}▎ {letters}Hits {letters_black}» {success}%aim_hits% {muted}· {error}%aim_misses%"
+    - " {letters_black}▎ {letters}Accuracy {letters_black}» {info}%aim_accuracy%%"
+    - " {letters_black}▎ {letters}Streak {letters_black}» {highlight}%aim_streak%"
+    - " {letters_black}▎ {letters}Last {letters_black}» %aim_grade%"
+    - ""
+    - "{muted}{server-ip}"
+  update:
+    interval: 10
+    smart: true
+    cache: true
+match:
+  enabled: true
+  title:
+    - "{primary}&lAIM TRAINER"
+  lines:
+    - ""
+    - "{secondary}Duel: {muted}· {letters}%aim_format%"
+    - " {letters_black}▎ {letters}vs {highlight}%aim_opponent%"
+    - " {letters_black}▎ {letters}Round {letters_black}» {info}%aim_round%"
+    - " {letters_black}▎ {letters}Series {letters_black}» {success}%aim_series%"
+    - " {letters_black}▎ {letters}%aim_match_state%"
+    - ""
+    - "{secondary}Round:"
+    - " {letters_black}▎ {letters}Time {letters_black}» {info}%aim_time_left%"
+    - " {letters_black}▎ {letters}You {letters_black}» {highlight}%aim_score% {muted}· {letters}%aim_hits% hits"
+    - " {letters_black}▎ {letters}Them {letters_black}» {highlight}%aim_opponent_score% {muted}· {letters}%aim_opponent_hits% hits"
+    - " {letters_black}▎ {letters}Accuracy {letters_black}» {info}%aim_accuracy%%"
+    - ""
+    - "{muted}{server-ip}"
+  update:
+    interval: 10
+    smart: true
+    cache: true
+```
+
+| Clave | Por defecto | Qué hace |
+|---|---|---|
+| `enabled` | `true` | `false` deja la sección escrita pero no muestra tablero en ese contexto. |
+| `title` | una línea | Una lista. Con varias entradas se anima: cada refresco muestra la siguiente. |
+| `lines` | ver arriba | Las líneas, de arriba abajo. Como máximo 15; las demás se descartan. |
+| `update.interval` | `10` | **Ticks** entre refrescos. 20 ticks son un segundo. |
+| `update.smart` | `true` | Envía solo las líneas que cambiaron en lugar del tablero entero. |
+| `update.cache` | `true` | Se conserva por los archivos antiguos: ExyliaLib cachea el texto parseado para todos los plugins a la vez. |
+
+La referencia completa de claves está en la sección de [Sidebars](/docs/exylialib/pantalla) de la librería.
+
+### Qué pueden decir las líneas
+
+A un tablero no se le empuja nada. La librería lo dibuja con su propio intervalo y pregunta a los
+placeholders, así que una línea es cualquier texto con los placeholders `%aim_<nombre>%` de este plugin,
+y cualquier otro placeholder que resuelva ExyliaLib también funciona. Este archivo lo lee el propio
+plugin, así que los nombres van sin el nombre del plugin delante; la lista completa, en la forma en que
+la leen otros plugins, está en [Placeholders](/docs/exyliaaimtrainer/placeholders).
+
+<Callout type="warning" title="Entre dos rondas, algunas líneas leen los números de por vida">
+`%aim_hits%`, `%aim_misses%`, `%aim_shots%` y `%aim_accuracy%` significan la ronda en curso mientras hay
+una y los totales **de por vida** del jugador en otro caso — y no hay ronda en curso durante la cuenta
+atrás, mientras el jugador descansa tras un ejercicio ni entre dos rondas de un duelo. En esos momentos
+las líneas *Hits* y *Accuracy* por defecto muestran números de por vida, mientras *Score* y *Streak*
+leen `0` y *Last* lee `—`. Escribe las líneas teniéndolo en cuenta, o usa `%aim_phase%` para distinguir
+los momentos.
+</Callout>
+
+### El interruptor del jugador
+
+Un jugador que apaga **Sidebar** en sus ajustes pierde el tablero al instante, y lo recupera al instante
+cuando lo vuelve a encender. Hasta entonces el tablero sigue oculto en todas sus sesiones siguientes.
+
+## Barra de jefe
+
+Aparece cuando empieza la cuenta atrás de una ronda, con toda la duración del ejercicio, y se redibuja
+mientras la ronda avanza. Su progreso es el tiempo restante. Cuando la ronda termina se queda como la
+dejó hasta que el jugador sale o empieza la siguiente.
+
+```yaml title="plugins/ExyliaAimTrainer/config.yml"
+hud:
+  boss-bar:
+    enabled: true
+    text: "{primary}&l%drill% {muted}· {letters}%time% {muted}· {success}%hits% {letters}hits {muted}· {info}%accuracy%% {muted}· {highlight}%score% pts"
+    colour: PURPLE
+    overlay: PROGRESS
+    refresh-ticks: 5
+```
+
+| Clave | Por defecto | Qué hace |
+|---|---|---|
+| `enabled` | `true` | `false` no muestra barra de jefe a nadie. |
+| `text` | ver arriba | La línea de la barra. |
+| `colour` | `PURPLE` | `PINK`, `BLUE`, `RED`, `GREEN`, `YELLOW`, `PURPLE` o `WHITE`. |
+| `overlay` | `PROGRESS` | `PROGRESS`, `NOTCHED_6`, `NOTCHED_10`, `NOTCHED_12` o `NOTCHED_20`. |
+| `refresh-ticks` | `5` | Ticks entre dos redibujados. Como mínimo 1. |
+
+El texto conoce sus propios valores, que se rellenan en cada redibujado; no son placeholders globales.
+
+| Valor | Qué es |
+|---|---|
+| `%drill%` | El nombre visible del ejercicio |
+| `%time%` | Segundos restantes, redondeados hacia arriba: `30`, `1:30` |
+| `%hits%` | Impactos hasta ahora |
+| `%misses%` | Fallos hasta ahora |
+| `%accuracy%` | Precisión sin decimales y sin el signo `%`: `87` |
+| `%score%` | La puntuación en vivo |
+| `%streak%` | Impactos seguidos |
+| `%opponent_score%` | La puntuación en vivo del rival en un duelo; `0` en entrenamiento en solitario |
+
+## Barra de experiencia
+
+Con `hud.experience-bar: true` (por defecto), el nivel muestra los segundos restantes y la barra se vacía
+según avanza la ronda. Es un paquete por segundo; la experiencia real del servidor nunca cambia, y se
+vuelve a enviar en cuanto el jugador sale. No hay interruptor por jugador.
+
+En un ejercicio REACTION el tiempo es el tope del ejercicio, porque la ronda termina con sus intentos.
+
+## Feedback de impactos
+
+Cada suceso de una ronda reproduce una entrada de `feedback` en `config.yml`. Cada entrada es un efecto
+de ExyliaLib con cualquiera de estos: un título, una action bar, una barra de jefe, un sonido, una
+partícula y un fuego artificial; una sección que no se escribe no hace nada. Los campos están en la
+página de [Efectos](/docs/exylialib/efectos) de la librería.
+
+```yaml title="plugins/ExyliaAimTrainer/config.yml (extracto)"
+feedback:
+  perfect:
+    effect:
+      action-bar:
+        text: "{success}⚡ PERFECT {muted}· {letters}%time%s {muted}· {info}x%streak%"
+        duration: 1.5
+      sound:
+        name: ENTITY_EXPERIENCE_ORB_PICKUP
+        volume: 0.7
+        pitch: 1.8
+    chat: ""
+  miss:
+    action-bar:
+      text: "{error}✘ MISS {muted}· {letters}%accuracy%% accuracy"
+      duration: 1.5
+    sound:
+      name: ENTITY_PLAYER_ATTACK_NODAMAGE
+      volume: 1.0
+      pitch: 1.0
+```
+
+### Durante una ronda
+
+A estas llegan los interruptores **Hit feedback** y **Hit sounds** del jugador: apagar uno reproduce el
+mismo efecto con su action bar, o su sonido, en blanco. Un título nunca se deja en blanco.
+
+| Entrada | Cuándo | Por defecto |
+|---|---|---|
+| `perfect` | Un impacto calificado PERFECT | Action bar `⚡ PERFECT · %time%s · x%streak%`, sonido de orbe de experiencia con tono 1.8 |
+| `excellent` | Un impacto calificado EXCELLENT | `✦ EXCELLENT`, tono 1.5 |
+| `good` | Un impacto calificado GOOD | `✔ GOOD`, tono 1.2 |
+| `ok` | Un impacto calificado OK | `• OK`, tono 1.0 |
+| `slow` | Un impacto calificado SLOW | `▼ SLOW`, tono 0.7 |
+| `miss` | Un clic que no dio a nada | `✘ MISS · %accuracy%% accuracy`, `ENTITY_PLAYER_ATTACK_NODAMAGE` |
+| `expired` | Un objetivo FLICK al que se le acabó el tiempo | `⌛ EXPIRED · %accuracy%% accuracy`, `BLOCK_NOTE_BLOCK_SNARE` |
+| `false-start` | Un clic REACTION antes de la luz | `✘ TOO EARLY · wait for the light`, `ENTITY_VILLAGER_NO` |
+| `armed` | Un objetivo REACTION que se enciende | Solo sonido, `BLOCK_NOTE_BLOCK_PLING` |
+| `rushed` | Un impacto COMBO dentro del cooldown de ataque | `✘ RUSHED · wait for the cooldown`, `ENTITY_PLAYER_ATTACK_WEAK` |
+
+Las cinco entradas de calificación tienen un segundo campo, `chat`: una línea de chat que se envía con el
+efecto, vacía por defecto. No le afectan los interruptores del jugador. Cómo se califica un impacto está
+en [Puntuación](/docs/exyliaaimtrainer/puntuacion).
+
+Las entradas de calificación, `miss`, `expired` y `rushed` conocen estos valores:
+
+| Valor | Qué es |
+|---|---|
+| `%grade%` | La calificación en mayúsculas: `PERFECT`. Vacío fuera de una entrada de calificación. |
+| `%time%` | El tiempo calificado en segundos, con dos decimales: `0.42`. `0.00` fuera de una entrada de calificación. |
+| `%hits%` | Impactos hasta ahora |
+| `%streak%` | Impactos seguidos |
+| `%combo%` | El combo actual |
+| `%accuracy%` | Precisión sin decimales y sin el signo `%` |
+
+El primer impacto de una ronda no tiene un impacto anterior contra el que medirse, así que no tiene
+calificación: reproduce solo el sonido de la entrada `good`, y solo si el jugador tiene los sonidos de
+impacto encendidos.
+
+### Alrededor de una ronda
+
+Estas suenan igual para todos, apague lo que apague el jugador.
+
+| Entrada | Cuándo | Por defecto |
+|---|---|---|
+| `countdown` | Cada segundo de la cuenta atrás; `%time%` son los segundos restantes | Título `%time%` / *Left click the targets*, action bar *Starting in %time%s*, `BLOCK_NOTE_BLOCK_HAT` |
+| `go` | El primer objetivo está activo | Título `GO`, `BLOCK_NOTE_BLOCK_PLING` |
+| `session-complete` | Un ejercicio en solitario llegó al final | Título `TIME` / *Punch to play again*, `UI_TOAST_CHALLENGE_COMPLETE` |
+| `personal-best` | La ronda superó el mejor rating del jugador; conoce `%rating%` | Título `NEW BEST` / *Rating %rating%*, `ENTITY_PLAYER_LEVELUP` |
+| `match-found` | Los dos duelistas han llegado a la arena | Título `MATCH FOUND` / *Teleporting…* |
+| `round-won` | Ronda de duelo ganada | Título `ROUND WON`, `ENTITY_PLAYER_LEVELUP` |
+| `round-lost` | Ronda de duelo perdida | Título `ROUND LOST`, `BLOCK_NOTE_BLOCK_BASS` |
+| `round-draw` | Ronda de duelo empatada y repetida | Título `DRAW` / *Same score — replaying*, action bar *Round replayed* |
+| `match-won` | Duelo ganado | Título `VICTORY` / *Match won*, `UI_TOAST_CHALLENGE_COMPLETE` |
+| `match-lost` | Duelo perdido | Título `DEFEAT` / *Match lost*, `ENTITY_WITHER_HURT` |
+
+## Partículas de impacto
+
+```yaml title="plugins/ExyliaAimTrainer/config.yml"
+hud:
+  hit-particle: "ELECTRIC_SPARK|8|0.15|0.15|0.15|0.05"
+```
+
+Se dibujan donde se golpeó un objetivo, solo para el jugador que lo golpeó. La línea es
+`NOMBRE|cantidad|dx|dy|dz|velocidad`; una cadena vacía no dibuja nada para nadie. Un jugador con
+**Hit particles** apagado no ve ninguna.
+
+## Cuándo surte efecto un interruptor
+
+| Ajuste | Clave del ajuste | Surte efecto |
+|---|---|---|
+| Sidebar | `sidebar` | Al instante |
+| Boss bar | `boss_bar` | Desde la siguiente ronda, o la siguiente ronda de un duelo |
+| Hit feedback | `action_bar` | Desde la siguiente ronda |
+| Hit sounds | `hit_sounds` | Desde la siguiente ronda |
+| Hit particles | `particles` | Desde la siguiente ronda |
+
+Un cambio hecho en mitad de una sesión además envía la línea `settings.applies-next-drill`. Los
+interruptores se guardan en el perfil, así que sobreviven a los reinicios. Los nombres que muestra la
+pantalla de ajustes están en `messages.yml`, bajo `menu.toggles`.
+
+<Callout type="note" title="Quedarse quieto no es un ajuste">
+Nadie camina durante una ronda: el plugin descarta el movimiento propio del cliente mientras el HUD está
+puesto, para todos los jugadores. No hay interruptor para eso.
+</Callout>
+
+## Recargar
+
+`/aimtraineradmin reload` vuelve a leer los tres archivos y reconstruye el sidebar de cada jugador que
+esté en una sesión o en un duelo. La barra de jefe toma un `text` nuevo en su siguiente redibujado; su
+color y su overlay se aplican desde la siguiente ronda.

@@ -1,0 +1,277 @@
+---
+title: "Puntuación"
+description: "La puntuación de cada tipo, la dificultad de los ajustes de un jugador, el rating que ordenan las tablas y los cinco grados que recibe un golpe."
+---
+
+Una sesión produce tres números distintos, y cada uno responde a una pregunta distinta.
+
+| Número | Qué dice | Para qué se usa |
+|---|---|---|
+| **Puntuación** (score) | Lo bien que se jugó el ejercicio, en la moneda propia del ejercicio. | Decidir una ronda de duelo. La tabla `score`. |
+| **Dificultad** | Lo difícil que los ajustes del jugador hicieron el ejercicio. | Multiplicar la puntuación. |
+| **Rating** | La puntuación por la dificultad. | Récords personales, la tabla `rating` y la tabla general. |
+
+Un golpe recibe además un **grado**, de `PERFECT` a `SLOW`, que es solo feedback: nunca cambia una
+puntuación.
+
+## La puntuación
+
+Todo lo ajustable vive bajo `scoring`:
+
+```yaml title="plugins/ExyliaAimTrainer/config.yml"
+scoring:
+  hit-points: 10
+  miss-penalty: 4
+  expire-penalty: 6
+  false-start-penalty-millis: 150
+  reaction-reference-millis: 250
+  reaction-scale: 1000
+  tracking-scale: 10
+  combo-points: 5
+  size-exponent: 1.0
+  distance-exponent: 0.75
+  min-difficulty: 0.25
+  max-difficulty: 6.0
+```
+
+### `FLICK`: puntos por minuto
+
+```text
+puntos     = aciertos × hit-points − fallos × miss-penalty − caducados × expire-penalty
+puntuación = puntos × 60 / segundos jugados
+```
+
+Por minuto, así un ejercicio de 30 segundos y uno de 60 se comparan. Unos puntos en cero o por debajo
+puntúan `0`. Los menús escriben la puntuación con `pts/min`.
+
+Sesenta aciertos y seis fallos en 30 segundos: 600 − 24 = 576 puntos, por 60 / 30, **1152**.
+
+### `COMBO`: puntos por minuto, más combos
+
+```text
+puntos     = aciertos × hit-points − fallos × miss-penalty + golpes de combo × combo-points
+puntuación = puntos × 60 / segundos jugados
+```
+
+Un **golpe de combo** es un acierto que llegó dentro de la `combo-window` del ejercicio tras el acierto
+anterior. Los golpes precipitados son fallos. Cuarenta aciertos, cuatro fallos y treinta golpes de combo en
+30 segundos: 400 − 16 + 150 = 534, por 2, **1068**.
+
+### `REACTION`: la media contra una referencia
+
+```text
+media      = (suma de reacciones + salidas en falso × false-start-penalty-millis) / reacciones respondidas
+puntuación = reaction-scale × reaction-reference-millis / media
+```
+
+Una media de exactamente `reaction-reference-millis` puntúa `reaction-scale`: 250 ms son 1000. Más rápido es
+más, más lento es menos. Sin nada respondido se puntúa `0`. Los menús escriben la puntuación con `pts`.
+
+Diez reacciones con una media de 250 ms puntúan **1000**. Las mismas diez con una salida en falso:
+(2500 + 150) / 10 = 265 ms, **943**.
+
+### `TRACK`: tiempo sobre el objetivo
+
+```text
+puntuación = porcentaje de ticks sobre el objetivo × tracking-scale
+```
+
+Sobre el objetivo el 62.5% de la sesión: **625**. Los menús escriben la puntuación con `pts`.
+
+<Callout type="note" title="Segundos jugados, no segundos configurados">
+La puntuación por minuto divide por lo que duró realmente la partida. Un ejercicio completado duró su
+`duration`. Una partida cortada — el jugador se fue, repitió o lo sacaron para una partida de practice — se
+guarda igualmente, puntuada sobre el tiempo que duró.
+</Callout>
+
+## Dificultad
+
+```text
+dificultad = weight × (1 / multiplicador de tamaño) ^ size-exponent × (multiplicador de distancia) ^ distance-exponent
+```
+
+Limitada a `min-difficulty..max-difficulty` y redondeada a dos decimales. `weight` es el del ejercicio; los
+dos multiplicadores son los [ajustes](/docs/exyliaaimtrainer/ajustes) del jugador. Un multiplicador por
+debajo de `0.05` cuenta como `0.05`.
+
+Con los exponentes por defecto, un objetivo más pequeño vale exactamente su inverso y uno más lejano algo
+menos que su distancia:
+
+| Tamaño | Distancia | Dificultad con peso 1.0 |
+|---|---|---|
+| ×1.00 | ×1.00 | 1.00 |
+| ×0.50 | ×1.00 | 2.00 |
+| ×1.00 | ×2.00 | 1.68 |
+| ×0.50 | ×2.00 | 3.36 |
+| ×2.50 | ×1.00 | 0.40 |
+| ×1.00 | ×0.25 | 0.35 |
+| ×0.10 | ×1.00 | 6.00 (limitado desde 10) |
+
+El peso del ejercicio multiplica todo antes del límite: `precision`, con peso 1.6 y objetivos a mitad de
+tamaño, es 3.20.
+
+En un duelo ambos jugadores juegan las mismas reglas, así que su dificultad es la misma. Con
+`match.use-preferences` desactivado, que es lo por defecto, es solo el peso del ejercicio. Ver
+[Duelos](/docs/exyliaaimtrainer/duelos).
+
+## Rating
+
+```text
+rating = puntuación × dificultad, redondeado, nunca por debajo de 0
+```
+
+El rating es el único número que compara a dos jugadores que configuraron sus objetivos de forma distinta:
+quien dispara a objetivos a mitad de tamaño al doble de distancia supera a quien dispara a objetivos grandes
+de cerca con la misma puntuación, y nadie sube haciendo sus objetivos fáciles.
+
+Cuando el rating de una sesión supera el mejor del jugador en ese ejercicio, es un **récord personal**: el
+récord lo guarda, junto con el tamaño y la distancia con los que se logró, y lo que subió se suma al
+**rating general** del jugador, la suma de su mejor rating en cada ejercicio. Cada otro mejor del récord —
+puntuación, precisión de tiro, racha, aciertos, combo, reacción — se guarda por su cuenta, haga lo que haga el
+rating. Las tablas y sus categorías están en [Estadísticas](/docs/exyliaaimtrainer/estadisticas).
+
+## Grados
+
+Un golpe se califica contra umbrales bajo `performance`. Un umbral es el tiempo más lento, en segundos, que
+aún consigue el grado, incluido; cualquier cosa más lenta que `ok` es `SLOW`.
+
+```yaml title="plugins/ExyliaAimTrainer/config.yml"
+performance:
+  flick:
+    perfect: 0.3
+    excellent: 0.45
+    good: 0.65
+    ok: 0.9
+  reaction:
+    perfect: 0.2
+    excellent: 0.26
+    good: 0.33
+    ok: 0.42
+```
+
+| Grado | `flick` | `reaction` |
+|---|---|---|
+| `PERFECT` | 0.30 s | 0.20 s |
+| `EXCELLENT` | 0.45 s | 0.26 s |
+| `GOOD` | 0.65 s | 0.33 s |
+| `OK` | 0.90 s | 0.42 s |
+| `SLOW` | más lento | más lento |
+
+Qué se mide depende del tipo:
+
+| Tipo | Se mide | Umbrales |
+|---|---|---|
+| `FLICK` | Desde el acierto anterior hasta este. El primer acierto de una partida no tiene nada que medir y no se califica. | `flick` |
+| `COMBO` | Desde el golpe anterior que conectó hasta este. El primero no se califica. | `flick` |
+| `REACTION` | Desde la luz hasta el golpe, menos el ping del jugador. | `reaction` |
+| `TRACK` | Nada: el tracking no tiene golpes que calificar. | — |
+
+Un grado cuenta para los totales de grados de la pantalla de resultado y dispara el feedback de abajo. No
+toca la puntuación, el rating ni las tablas.
+
+## Ping, fallos y lo demás
+
+### Corrección por ping
+
+Una reacción se corrige con el ping del jugador: la luz tardó medio viaje de ida y vuelta en llegarle y el
+clic medio viaje en volver, así que se quitan ambas mitades y dos jugadores con conexiones distintas se
+califican por sus manos. El ping se lee al empezar la partida y de nuevo cada segundo. Una reacción corregida
+nunca baja de 1 ms.
+
+Los objetivos móviles se juzgan igual. Las comprobaciones propias del plugin sobre un objetivo que hace
+strafe o un luchador — el rayo que lanza tras un swing, la precisión de un golpe y cada comprobación de
+tracking — prueban el objetivo donde lo dibujaba el cliente del jugador cuando salió la mira: el plugin
+guarda cada posición que envió y rebobina el ping más los dos ticks en los que el cliente suaviza un
+movimiento. El tracking perdona medio tick a cada lado por jitter.
+
+### Fallos y precisión de tiro
+
+```text
+accuracy = aciertos / (aciertos + fallos)
+```
+
+Un **fallo** es cualquiera de:
+
+- Un swing que no dio a ninguno de los objetivos del jugador. Antes de darlo por fallo, el plugin lanza su
+  propio rayo por la mira, así un cliente cuyo alcance nunca creció sigue haciendo clic donde mira.
+- En un ejercicio `ordered`, un golpe a un objetivo que no está encendido.
+- En una pelea de 1.9, un golpe precipitado.
+
+Un fallo resta `miss-penalty`, rompe la racha y termina el combo. Un swing en un ejercicio `TRACK` no es
+ninguna de las dos cosas.
+
+Un objetivo **caducado** resta `expire-penalty` y rompe la racha, pero no es un tiro y no cambia la
+precisión de tiro. Una **salida en falso** suma `false-start-penalty-millis` a la media de reacción y rompe
+la racha, y tampoco es un tiro.
+
+### Golpes precipitados
+
+Con `attack-cooldown: true`, un golpe se juzga por lo cargado que estaba el swing, igual que el juego juzga
+un crítico, un barrido o un knockback con sprint:
+
+```text
+cooldown = 20 / velocidad de ataque del ítem en la mano   (ticks)
+carga    = min(1, (ticks desde el último swing + 0.5) / cooldown)
+precipitado = carga ≤ 0.9
+```
+
+| Arma | Cooldown | Ticks que necesita un swing |
+|---|---|---|
+| Cualquier espada | 12.5 ticks | 11 |
+| Hacha de diamante | 20 ticks | 18 |
+
+Cada swing, conecte o no, y cada cambio de hueco en la mano reinicia la cuenta. El primer swing de una
+partida nunca es precipitado. Un golpe precipitado es un fallo: cuenta contra la precisión de tiro, resta
+`miss-penalty`, no empuja nada y termina el combo.
+
+### Precisión
+
+Cada acierto se mide también por lo centrado que fue: el rayo propio del plugin desde los ojos a través del
+objetivo, con 1 en el centro exacto y 0 en un borde, tomando la peor de las dos direcciones sobre la cara que
+tocó. La **precisión** de la partida es la media, como porcentaje. Un acierto que el rayo del plugin no tocó
+— la mira se movió en los pocos milisegundos antes de que llegara el clic — se deja fuera en lugar de
+contarse como un borde.
+
+La precisión se muestra en la pantalla de resultado. No forma parte de la puntuación ni del rating.
+
+## Feedback
+
+Cómo se ve y suena un golpe es un efecto de ExyliaLib bajo `feedback`. Cada grado tiene un `effect` y una
+línea de `chat`, vacía para ninguna. Por defecto un grado no muestra título, escribe la action bar de abajo
+durante 1.5 segundos y reproduce `ENTITY_EXPERIENCE_ORB_PICKUP` a volumen 0.7 con un tono que baja con el
+grado:
+
+| Grado | Action bar | Tono |
+|---|---|---|
+| `perfect` | `{success}⚡ PERFECT {muted}· {letters}%time%s {muted}· {info}x%streak%` | 1.8 |
+| `excellent` | `{success_light}✦ EXCELLENT {muted}· {letters}%time%s {muted}· {info}x%streak%` | 1.5 |
+| `good` | `{info}✔ GOOD {muted}· {letters}%time%s {muted}· {info}x%streak%` | 1.2 |
+| `ok` | `{warning}• OK {muted}· {letters}%time%s {muted}· {info}x%streak%` | 1.0 |
+| `slow` | `{error}▼ SLOW {muted}· {letters}%time%s {muted}· {info}x%streak%` | 0.7 |
+
+Un primer acierto sin calificar reproduce solo el sonido de `good`, y solo para un jugador con los sonidos de
+golpe activados.
+
+| Sección | Cuándo | Por defecto |
+|---|---|---|
+| `miss` | Un clic que no dio a nada | Action bar `{error}✘ MISS {muted}· {letters}%accuracy%% accuracy`, sonido `ENTITY_PLAYER_ATTACK_NODAMAGE` 1.0 · 1.0 |
+| `expired` | Un objetivo `FLICK` se quedó sin tiempo | Action bar `{warning}⌛ EXPIRED {muted}· {letters}%accuracy%% accuracy`, sonido `BLOCK_NOTE_BLOCK_SNARE` 0.6 · 0.7 |
+| `false-start` | Un clic en `REACTION` antes de la luz | Action bar `{error}✘ TOO EARLY {muted}· {letters}wait for the light`, sonido `ENTITY_VILLAGER_NO` 0.8 · 0.9 |
+| `armed` | Un objetivo `REACTION` se encendió | Sonido `BLOCK_NOTE_BLOCK_PLING` 1.0 · 1.8 |
+| `rushed` | Un golpe `COMBO` dentro del cooldown | Action bar `{error}✘ RUSHED {muted}· {letters}wait for the cooldown`, sonido `ENTITY_PLAYER_ATTACK_WEAK` 1.0 · 1.0 |
+
+Los valores de sonido son `volumen · tono`. Estos textos, y las líneas de chat de los grados, conocen seis
+placeholders:
+
+| Placeholder | Valor |
+|---|---|
+| `%grade%` | El nombre del grado, vacío si no hay. |
+| `%time%` | El tiempo de flick o de reacción en segundos, dos decimales, sin unidad. |
+| `%hits%` | Aciertos hasta ahora. |
+| `%streak%` | Aciertos seguidos. |
+| `%combo%` | El combo actual. |
+| `%accuracy%` | La precisión de tiro hasta ahora, como número entero. |
+
+Un jugador que desactivó **Hit feedback** o **Hit sounds** en sus ajustes recibe estos efectos sin la action
+bar o sin el sonido; ver [Ajustes](/docs/exyliaaimtrainer/ajustes#los-interruptores). La cuenta atrás y los
+momentos de sesión y de duelo están en [Configuración](/docs/exyliaaimtrainer/configuracion).

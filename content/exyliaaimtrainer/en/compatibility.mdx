@@ -1,0 +1,145 @@
+---
+title: "Compatibility"
+description: "How the plugin shares players with the rest of the Exylia ecosystem, trains queued practice players, isolates chat, and what it needs from the server."
+---
+
+A player belongs to one Exylia mode at a time, and ExyliaLib owns that fact. This plugin reads it
+before anything starts and writes it while a player is inside.
+
+## One player, one activity
+
+Starting a drill or a duel takes a **claim** through ExyliaLib's
+[`Sessions`](/docs/exylialib/players#one-player-one-activity), of kind `TRAINING` or `MATCH`.
+ExyliaPracticeCore, ExyliaFFA, ExyliaSandBox, ExyliaEvents and anything else built on the library see
+the player as taken for as long as the claim lasts. The claim is taken before the player is moved, and
+released last on the way out, once they are home and their inventory is back — so no other mode can
+dress them while their things are still on the way.
+
+The question is asked in two halves, on every entry point:
+
+| Half | What it means | What the player reads |
+|---|---|---|
+| **Claim** | Another plugin holds the player: an event, an FFA arena, a practice match. | "You are busy in %plugin%.", naming that plugin. |
+| **Advice** | Nobody holds the player, but their plugin says they are mid-something, such as Practice's "in a party". | "Not right now: %reason%.", in that plugin's own words. |
+
+Advice is not a veto: a plugin that must have the player is unaffected. It is what stops a duel request
+from reaching somebody halfway through a kit editor. When the other side of a request is the one taken,
+the challenger reads "%target% is busy right now." or "%target% is %reason%." instead.
+
+This plugin offers advice of its own: while a duel request is **open on either side**, both players
+are reported as "answering a duel request". Neither holds a claim yet, and taking one of them away is how
+the other ends up waiting for an answer that can no longer come.
+
+If another plugin later asks for a player this one holds, the library tells this plugin to let go: a
+drill ends as `CANCELLED` and its numbers are still stored, a duel is forfeited.
+
+## The opponent picker
+
+The **Duel** screen lists everyone online except the viewer and the players they cannot see, so a
+vanished staff member is not on it. Free players come first, alphabetically; a busy player stays on the
+list below every free one and cannot be clicked, with the reason on the row: "Busy right now" for a
+claim, or the advising plugin's own words. The list is re-read every second while the window is open,
+so somebody who just stepped into an arena drops out of reach without the screen being reopened.
+
+## ExyliaPracticeCore
+
+A player waiting in a practice queue is held by practice, so an ordinary claim would refuse them. With
+`practice.train-while-queued` on — the default — practice **lends** them instead:
+
+<Steps>
+  <Step title="The player starts a drill while queued">
+    Practice hands the claim over and keeps their place in the queue. If practice will not lend them
+    right now, they read "Practice cannot lend you right now." and nothing starts.
+  </Step>
+  <Step title="Matchmaking keeps running">
+    The drill plays exactly as it would for anyone else.
+  </Step>
+  <Step title="A match is found">
+    Practice asks for the player back. The drill ends there, the run is stored, the player reads "A
+    practice match was found. Good luck!", and practice takes them to their match.
+  </Step>
+</Steps>
+
+With `practice.train-while-queued` off, a queued player is treated like any other held player and
+cannot start a drill.
+
+Joining a queue also sends the **Train while you wait** prompt, when `practice.queue-prompt` is on
+(default) and the player is not already in a drill or a duel. `practice.ranked-only` limits the prompt to
+ranked queues, where the wait is usually longer; it is off by default. The prompt's button runs `/aim`,
+which opens the main menu.
+
+Sidebars stack in the library. This plugin stops only its own board, through its own handle, so the
+practice lobby board comes back on its own when a player leaves a drill or a duel.
+
+## Chat
+
+With `chat.isolation` on — the default — a drill's or a duel's chat stays inside it, by the same rule
+that decides who sees whom:
+
+- A player in a **drill** reads nobody and is read by nobody.
+- The two players of a **duel** read each other and nobody else.
+- Everybody outside a drill or a duel reads everybody else outside, as before.
+
+It is applied through ExyliaLib's [chat module](/docs/exylialib/chat), which takes the refused
+receivers off each message before the server delivers it; the chat plugin's format stays as it was. It
+covers chat and only chat: private messages, broadcasts, join and quit lines are not touched, and
+`/msg`, `/r`, `/tell` and `/w` are in `training.allowed-commands` by default. It needs a chat plugin that
+lets the server deliver the message, as Paper's own chat and renderer-based chat plugins do.
+
+Set `chat.isolation: false` to leave chat exactly as the server's chat plugin delivers it. The value is
+read on every message, so a reload toggles it.
+
+## Isolation and protection
+
+Every player in a drill or a duel belongs to one group, and two players see each other only when they
+are in the same group or neither is in one. The visual half is a packet rule ExyliaLib applies to every
+outbound packet; the gameplay half is enforced by listeners, because hiding alone would still let a
+hidden player be hit.
+
+While a player is in a group: all damage to them is cancelled, they cannot damage anyone, drop or pick
+up items, break or place blocks, or lose hunger, interactions with players of another group are refused,
+and they do not collide with anyone.
+
+<Callout type="warning" title="If the library's packet layer is unavailable">
+Isolation falls back to `hidePlayer` and `showPlayer`, and the console says so once: "PacketEvents is
+missing: session isolation falls back to hidePlayer". The rule is the same, only applied more coarsely.
+Targets, however, are packets and cannot fall back: no drill starts at all.
+</Callout>
+
+## Per-world inventory plugins
+
+An arena is usually a world of its own, and plugins such as Multiverse-Inventories or PerWorldInventory
+write whatever a player holds into the world they leave and load the new world's inventory over the
+top. The plugin is ordered around that: the inventory is **saved** before the teleport but only
+**emptied** once the player stands in the arena, and on the way out the player is **sent home first**
+and restored on arrival. Nothing the per-world plugin records ends up holding an empty inventory or a
+duplicate.
+
+## After a crash
+
+Entering a drill or a duel saves the player's inventory and game mode before anything is cleared. If
+the server dies meanwhile, the snapshot is still there: on the player's next join it is restored, and
+they are sent to `arena.return-location` when one is set, or back to where the oldest snapshot says they
+were before any of this started. Nobody wakes up inside an arena with an empty inventory.
+
+If another plugin kills a player inside a session — nothing here deals damage — the inventory is kept,
+the drops are cleared, the console logs `<player> died inside an aim session; inventory kept`, and the
+player is taken out of the session.
+
+## What the server needs
+
+| Plugin | Role |
+|---|---|
+| `ExyliaLib` | Configuration, menus, database, placeholders, effects, sessions, snapshots, teleports, overlays and chat rules. The Lukittu loader installs it, which is why `plugin.yml` lists it as soft. |
+| `packetevents` | Declared as a hard dependency: the server does not load the plugin without it. It draws the targets, reads the clicks and rotations that judge them, and draws the isolation. |
+| `PlaceholderAPI` | Optional. Publishes the placeholders outside the plugin under the `exyliaaimtrainer` identifier. See [Placeholders](/docs/exyliaaimtrainer/placeholders). |
+| `ExyliaPracticeCore` | Optional. Training while queued, as above. Without it nothing else changes. |
+
+Folia is supported: everything that touches a player runs on that player's thread, the start of a duel
+runs at its arena, and profile, record and history writes run off the main thread.
+
+## What is not here
+
+- **No duel queue.** A duel is always a chosen opponent: `/aim duel <player>` or a click in the picker.
+- **No cross-server play.** Servers sharing a database share arenas, profiles, records and history,
+  but a drill or a duel happens on the server the player is on.

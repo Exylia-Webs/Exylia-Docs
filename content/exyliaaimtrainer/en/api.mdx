@@ -1,0 +1,313 @@
+---
+title: "API"
+description: "Read drills, arenas, sessions, duels and boards, start or stop either, open the player's screens, and listen for every hit and every round."
+badge: "dev"
+---
+
+`AimTrainerService` is how another plugin finds out whether this one has hold of a player, reads a
+drill session or a duel, asks the database for a profile or a board, starts or stops either, and opens
+the player's own screens from an NPC or a hub item.
+
+```java
+ExyliaAPI.get(AimTrainerService.class).ifPresent(aim ->
+    aim.activityOf(player.getUniqueId())
+       .ifPresent(activity -> event.setCancelled(true)));
+```
+
+<Callout type="note" title="Adding it to your project">
+The artifact, the repository and the `plugin.yml` line are the same for every Exylia plugin and live
+on the [public API page](/docs/exylialib/api).
+</Callout>
+
+<Callout type="warning" title="v1.153.0 or newer">
+The `net.exylia.lib.api.aimtrainer` package first ships in ExyliaLib `v1.153.0`. An older tag compiles
+everything else in the artifact and simply does not have these classes, so name at least that version:
+
+```groovy
+compileOnly 'com.github.DiGround-s.ExyliaLib:exylia-api:v1.153.0'
+```
+</Callout>
+
+## What most integrations actually want
+
+`activityOf(UUID)` is the one question worth asking before anything else. A player in a drill or a duel
+has had their inventory and their location taken by this plugin, so teleporting them, giving them items
+or opening a menu for them will be undone or will break their session.
+
+Everything that returns a value copies what it found out of the plugin's live registries, so an
+`AimMatch` is the duel as it *was* rather than as it is. The actions run exactly what the player's own
+command runs — the checks, the claims and the messages they see — and return whether the plugin
+accepted the request, not how it turned out. What happened arrives as an event.
+
+<Callout type="warning" title="Threads">
+Call the actions from the main thread, or on Folia from the thread that owns the player in question.
+The `CompletableFuture` methods go to the database and are safe from anywhere, and so are the six menu
+openers.
+</Callout>
+
+## What the server offers
+
+| Method | What it does |
+|---|---|
+| `List<AimDrill> drills()` | The drills this server has configured, in menu order. |
+| `Optional<AimDrill> drill(String drillId)` | One drill, or empty when there is none by that id. |
+| `List<AimArena> arenas()` | Every arena. |
+| `Optional<AimArena> arena(String arenaId)` | One arena, or empty when there is none by that id. |
+
+Drills are configuration rather than code, so the set differs between servers and an id that works on
+one is not guaranteed on another — check before offering one. The id is matched exactly as written in
+`config.yml`; an arena id is trimmed and lower-cased first.
+
+Arenas are read from the database after the plugin enables, so `arenas()` can be empty for the first
+moments of a boot even on a server that has several. Many players share one arena at a time, so the list
+is not a list of free space either: `AimArena.isReady()` says which of them can host anything at all.
+
+## What a player is doing
+
+| Method | What it does |
+|---|---|
+| `Optional<AimActivity> activityOf(UUID)` | What this plugin is doing with a player. Empty means it has no hold on them. |
+| `Optional<AimMatch> matchOf(UUID)` | The duel a player is in, or empty when they are in none. |
+| `Optional<AimMatch> match(UUID matchId)` | One duel by its id, or empty once it has been cleaned up. |
+| `List<AimMatch> matches()` | Every duel running right now. |
+| `int playersIn(String arenaId)` | How many players an arena hosts right now: one per drill session and two per running duel. A load figure, and the same one the arena cap is measured against. |
+| `Optional<AimTrainingSession> training(UUID)` | The drill session a player is in, or empty when they are not training. |
+| `List<AimTrainingSession> trainingSessions()` | Every drill session running right now. |
+| `Optional<UUID> pendingDuelFor(UUID)` | Who has challenged a player and is still waiting for an answer, or empty when nobody is. |
+
+A player resting in the arena after a drill, with the summary on screen, is still `TRAINING`: the
+session only ends when they leave or the rest runs out. `AimTrainingSession.phase()` tells the two
+apart.
+
+A player has at most one request waiting for them. A newer challenge replaces the older one, so
+`pendingDuelFor` names whoever asked last.
+
+## Records
+
+| Method | What it does |
+|---|---|
+| `Optional<AimProfile> profile(UUID)` | The profile cached for somebody online. Empty for an offline player, and also while their load is still in flight. |
+| `CompletableFuture<AimProfile> loadProfile(UUID)` | The profile, from the database when it is not in memory. A player who has never played gets a fresh, empty one with a blank name rather than nothing. |
+| `AimPreferences preferences(UUID)` | A player's settings, or the server defaults while their row is loading. |
+| `CompletableFuture<List<AimMatchRecord>> history(UUID)` | A player's last duels, newest first, as many as `history.entries`. |
+| `CompletableFuture<List<AimSessionRecord>> sessions(UUID)` | A player's last drill sessions, newest first, as many as `history.entries`. |
+| `CompletableFuture<List<AimRecord>> records(UUID)` | A player's best results, one row per drill they have played, in no particular order. |
+| `CompletableFuture<List<AimRecord>> leaderboard(String drillId, AimRecordCategory category)` | One drill's board, one row per player. |
+| `CompletableFuture<List<AimProfile>> overallLeaderboard()` | Everybody by the sum of their best ratings across every drill. |
+
+`profile` being empty during a load is deliberate: a caller on the server thread should degrade rather
+than wait, and one that can wait should ask `loadProfile` instead.
+
+Both boards are served from a cache kept for `leaderboard.cache-seconds` — five minutes by default, never
+less than five seconds — so a redraw is cheap and a cold board is one query rather than one per viewer.
+Concurrent callers share the query already in flight. Storing a new best **rating** drops the cache, so a
+player who just set one sees themselves on the board; a better score or accuracy that did not raise the
+rating waits for the cache to expire. A board holds `leaderboard.entries` rows and never places a zero.
+
+## Actions
+
+| Method | What it does |
+|---|---|
+| `boolean startTraining(Player, String drillId)` | Puts a player into a drill, in the ready arena hosting the fewest players. |
+| `boolean duel(Player from, Player to, String drillId, int bestOf)` | Sends a challenge. The target still has to accept, and the challenge expires on its own after `match.duel-request-expiry` seconds. |
+| `boolean acceptDuel(Player)` | Accepts the challenge waiting for a player. |
+| `boolean denyDuel(Player)` | Turns down the challenge waiting for a player. |
+| `boolean forfeit(UUID)` | Gives a duel up on somebody's behalf, handing the series to their opponent. |
+| `boolean cancelMatch(UUID matchId)` | Stops a duel with no winner, stores nothing and returns both players. |
+| `boolean leave(Player)` | Takes a player out of whatever this plugin has them in: leaving a duel is a forfeit, leaving a drill ends the session. |
+
+A `false` from `startTraining` is a refusal the player has already been told about: an unknown drill,
+PacketEvents missing, no ready arena with room under `arena.max-players-per-arena`, being busy already,
+another plugin holding them or advising against it. A player waiting in an ExyliaPracticeCore queue is
+borrowed rather than refused, as [Compatibility](/docs/exyliaaimtrainer/compatibility) describes.
+
+`duel` tells the sender why it refused — themselves as the target, PacketEvents missing, either side
+busy or held — with two exceptions worth knowing:
+
+- An unknown `drillId` returns `false` and **nobody is told anything**. Check it with `drill(...)` first.
+- `bestOf` is **not** checked against `match.formats` or `allow-even-formats`, which the `/aim duel`
+  command does check. Any positive length is played as written; zero or less becomes a best-of-1. Offer
+  only the lengths the server lists if you want to match what players can pick themselves.
+
+The size and distance a duel is played at follow `match.use-preferences`: off, the default, both sides
+play the drill as written; on, the **sender's** settings apply to both.
+
+`acceptDuel` returning `true` means the request was taken and handed to match creation, not that a duel
+is running. Creation can still fail afterwards: with no ready arena both players are told so, and in the
+first moments after a boot, before the arenas are in memory, the accept goes nowhere without a word.
+Wait for `AimMatchStartEvent` rather than trusting the boolean.
+
+`forfeit` and `cancelMatch` return `true` when there was a duel to act on; the work itself runs on the
+arena's thread a moment later.
+
+## Menus
+
+| Method | Opens |
+|---|---|
+| `void openMenu(Player)` | The main menu. |
+| `void openDrills(Player)` | The drill picker. |
+| `void openSettings(Player)` | The player's own size, distance, colour, style and HUD settings. |
+| `void openDuel(Player player, Player target)` | The duel setup screen against `target`. |
+| `void openProfile(Player viewer, UUID target)` | Somebody's profile, shown to `viewer`. |
+| `void openLeaderboard(Player viewer, String drillId, AimRecordCategory category)` | One drill's board, sorted by `category`. |
+
+These are safe from any thread and **check no permission**: an NPC that opens the settings screen opens
+it for everybody, whatever `exyliaaimtrainer.settings` says. Gate it yourself when that matters.
+
+## Types
+
+Everything here is an immutable record or an enum, and every collection inside one is a copy.
+
+| Type | What it is |
+|---|---|
+| `AimDrill` | A drill as configured: `id`, `displayName`, `kind`, `weight`, `duration`, `targets`, `size`, `height`, `distanceMin`, `distanceMax`, `lifetime`, `ordered` and `moving`. The numbers are the drill's own, before any player's settings. |
+| `AimArena` | A place to shoot from: `id`, `displayName`, `enabled` and the one `spawn` as `Optional<Location>`. `isReady()` is enabled, with a spawn, in a world that is loaded. |
+| `AimTrainingSession` | One player's drill session: `id`, `player`, `rules`, `arenaId`, `startedAt` and `phase`. |
+| `AimRules` | What one session was played by: the drill after the player's settings. |
+| `AimPerformance` | How a session, a round or one side of a duel went. |
+| `AimMatch` | One duel as it was when you asked: both players and names, the rounds each has won (`scoreA`, `scoreB`), `drillId`, `bestOf`, `roundsToWin`, `roundsPlayed` with draws included, `state`, an `Optional` winner and three timestamps. |
+| `AimRound` | One played round: `number`, its clock, an `Optional` winner and an `AimPerformance` per player. |
+| `AimProfile` | A player's lifetime numbers and duel record. |
+| `AimRecord` | A player's bests for one drill. |
+| `AimSessionRecord` | One finished drill session as the history keeps it, with `personalBest` saying whether it raised the best rating. |
+| `AimMatchRecord` | One participant's view of one finished duel, with both names frozen as they were. |
+| `AimPreferences` | What a player chose about their own targets and their own screen. |
+| `AimActivity` | `TRAINING` or `MATCH`. There is no constant for "nothing" — absence is the empty `Optional` from `activityOf`. |
+| `AimSessionPhase` | `COUNTDOWN`, `RUNNING` or `RESTING`. |
+| `AimMatchState` | `WAITING`, `STARTING`, `ACTIVE`, `ROUND_END`, `ENDING`, `FINISHED`. A duel only moves forward. |
+| `AimDrillKind` | `FLICK`, `REACTION`, `TRACK` or `COMBO`. |
+| `AimGrade` | `PERFECT`, `EXCELLENT`, `GOOD`, `OK`, `SLOW`, best first. |
+| `AimRecordCategory` | What a drill's board sorts by. |
+
+A few of these carry something that is not obvious from the field names.
+
+**`AimRules`** holds the target `width` and `height` as drawn, the two distances after the distance
+setting, the `sizeMultiplier` and `distanceMultiplier` that produced them, the `difficulty`, and the
+`seed`. The difficulty is the drill's weight, times `(1 / size multiplier)` to `scoring.size-exponent`,
+times the distance multiplier to `scoring.distance-exponent`, clamped between `min-difficulty` and
+`max-difficulty` and rounded to two decimals — see [Scoring](/docs/exyliaaimtrainer/scoring). In a duel
+both multipliers are `1.0` unless `match.use-preferences` is on. `seed` is what gives both sides of a
+duel the same targets in the same places in the same order.
+
+**`AimPerformance`** counts `hits`, `misses` (clicks that hit nothing, a rushed swing, or an unlit
+target), `expired` flick targets, `falseStarts` and `shots`, with `accuracy` from 0 to 100. It keeps the
+`bestStreak`, the average and best flick, the average and best reaction — already corrected for ping —
+`onTargetPercent` and `longestLockMillis` for tracking, `bestCombo` and `comboHits` for a fight,
+`precisionPercent` for how central the hits landed, `averagePing`, `durationMillis`, and the `score`,
+`rating` and `difficulty`. `grades` counts hits per grade, and only graded hits are in it: the first hit
+of a session has no previous one to time, and tracking has no hits at all. A best of zero means nothing
+was measured rather than an instantaneous result — the distinction to make before dividing by anything.
+
+**`AimRecord`** keeps a best per column — `bestRating`, `bestScore`, `bestAccuracy`, `bestStreak`,
+`mostHits`, `bestCombo`, `bestReactionMillis`, `bestFlickMillis`, `bestOnTarget` — plus the totals and
+`ratingSize` / `ratingDistance`, the settings the best rating was set with. `bestAccuracy` only counts
+sessions of at least `leaderboard.accuracy-min-shots` shots, twenty by default.
+
+**`AimProfile.totalRating`** is the sum of the player's best rating in every drill, and is what the
+overall board ranks. It moves by the gain each time a best rating rises. Duels never touch it, nor any
+`AimRecord`: only drill sessions set records.
+
+**`AimRecordCategory`** is `RATING`, `SCORE`, `ACCURACY`, `STREAK`, `HITS`, `REACTION` and `COMBO`. Only
+`RATING` compares two players who set their targets up differently; the rest are raw bests. `REACTION`
+is the one board where the smallest number comes first.
+
+**`AimPreferences.freeze`** is always `true`. Nobody walks during a drill, whatever the stored row says:
+it is no longer a choice, and the field is there so the record keeps its shape.
+
+## Events
+
+Seven events, in `net.exylia.lib.api.aimtrainer.event`. All of them extend `AimTrainerEvent`, all are
+synchronous and fire on the thread that owns the player they are about — on Folia, that player's region
+thread, and for the duel events the arena's.
+
+Every event that names a duel carries an `AimMatch`, and that is a snapshot: the live match belongs to
+this plugin's own classloader and its own thread, so a handle to it would be neither visible to the
+plugin holding one nor safe to read. Call `match(UUID)` when you need the current state.
+
+| Event | Fires when | Carries |
+|---|---|---|
+| `AimDuelRequestEvent` | A challenge passed the plugin's own checks and is about to be sent. **Cancellable.** | `from()`, `to()`, `drillId()`, `bestOf()` |
+| `AimTrainingStartEvent` | A drill was accepted and the player claimed; they are about to be moved. | `player()`, `rules()` |
+| `AimTrainingEndEvent` | A run is over; the numbers are final and about to be stored. | `player()`, `rules()`, `performance()`, `reason()` |
+| `AimTargetHitEvent` | A target was hit, in a drill or in a duel. | `player()`, `millis()`, `grade()`, `reaction()`, `inMatch()` |
+| `AimMatchStartEvent` | Both players arrived in the arena; the first round's countdown starts next. | `match()` |
+| `AimRoundEndEvent` | A round was scored. | `match()`, `round()` |
+| `AimMatchEndEvent` | The duel is decided or cancelled. | `match()`, `winner()`, `cancelled()` |
+
+`AimTrainerEvent` itself is the abstract base. It is never fired and has no handler list of its own, so
+it is not something to register a listener for — it is there so a helper can take any of the seven.
+
+### AimDuelRequestEvent is the one gate
+
+It fires after the sender has passed every check the plugin makes — not themselves, PacketEvents present,
+neither side busy nor held by another plugin — and before the request is stored or anybody hears of it.
+Cancelling it sends nothing: no line to the sender, no request to the target, and `duel(...)` returns
+`false`. Telling the sender why is yours to do. A rematch from the result screen goes through the same
+path and fires it too. Accepting a request fires nothing of its own.
+
+Nothing else here can be cancelled. Every other event reports something that has already been decided,
+so receiving one is a guarantee that it happened.
+
+### When a drill starts and ends
+
+`AimTrainingStartEvent` fires once per session, when it is accepted. Replaying the drill — a punch while
+resting, or the hotbar's replay button — starts a new run in the same session and does not fire it again.
+Neither does changing drill from the drill list: the session keeps its `id` and arena, and `rules()` on
+the next events names the new drill.
+
+`AimTrainingEndEvent` fires for a run that was actually going, never for a countdown or a rest:
+
+| `reason()` | When |
+|---|---|
+| `COMPLETED` | The drill ran its course. The player stays in the arena resting; the rest running out ends the session without a second event. |
+| `LEFT` | The player left with `/aim leave`, the leave button, or `leave(Player)`. |
+| `CANCELLED` | The player was taken out while still online: an administrator stopped the session, they died, left the arena by a teleport this plugin did not make — an ender pearl included — or changed world, another plugin reclaimed them, or the server is stopping. |
+| `DISCONNECTED` | The player quit. |
+| `MATCH_FOUND` | ExyliaPracticeCore found them a match while they trained. |
+
+A run cut short by a replay or a drill change is stored like any other, under the drill it was, but fires
+no end event: Play again or Change drill used mid-run are the only ways a run ends silently. An empty run — no hit, miss, expired target or false
+start, and not one tracked tick — fires its event but is not stored.
+
+### AimTargetHitEvent
+
+`millis()` is the flick time since the previous hit, or the reaction time when `reaction()` is `true`.
+For the first hit of a run there is no previous one: `millis()` is negative and `grade()` is `null`. A
+reaction time is already corrected for the player's ping.
+
+It fires for `FLICK`, `REACTION` and `COMBO` hits. `TRACK` has no hits to report — tracking is measured
+every tick, not per click — and in a fight neither a rushed swing nor a hit on a target still red from the
+last one fires anything, because neither counts.
+
+### Rounds and the end of a duel
+
+`AimRoundEndEvent` fires as soon as both players have finished the round, **before** the winner's round is
+added to the series: `match().scoreA()` and `scoreB()` still read what they were before this round, while
+`roundsPlayed()` already includes it. Read the round's own `winner()` for who took it.
+
+An empty `round().winner()` is a draw — the same score, the same accuracy and the same hits. A draw is
+replayed under the same round number, and three in a row cancel the duel.
+
+`AimMatchEndEvent` with `cancelled()` `false` is a decided duel, a forfeit included, and `winner()` is set.
+It fires *before* profiles and history are written, which happens asynchronously afterwards — read the
+winner from the event, not from the profiles. With `cancelled()` `true`, `winner()` is `null` and nothing
+is stored at all: an administrator or `cancelMatch` stopped it, three draws in a row, a player could not be
+moved into the arena, or the server is stopping.
+
+```java
+@EventHandler
+public void onHit(AimTargetHitEvent event) {
+    if (event.grade() == AimGrade.PERFECT && !event.inMatch()) {
+        reward(event.player(), event.millis());
+    }
+}
+```
+
+## What it does not expose
+
+No arena editor, no writes to drills, scoring or any other configuration, no statistics reset, and no way
+to edit a profile, a record or a player's settings. A duel is built by `duel(...)` from a drill id and a
+length rather than by handing the plugin a rules object of your own.
+
+If an integration genuinely needs something that is not here, ask on
+[Discord](https://discord.exylia.net) — a method added to a service is a minor release.

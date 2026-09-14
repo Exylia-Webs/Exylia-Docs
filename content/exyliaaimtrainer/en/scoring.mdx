@@ -1,0 +1,270 @@
+---
+title: "Scoring"
+description: "The score of each kind, the difficulty of a player's settings, the rating the boards rank, and the five grades a hit is given."
+---
+
+A session produces three different numbers, and each one answers a different question.
+
+| Number | What it says | Used for |
+|---|---|---|
+| **Score** | How well the drill was played, in the drill's own currency. | Deciding a duel round. The `score` board. |
+| **Difficulty** | How hard the player's settings made the drill. | Multiplying the score. |
+| **Rating** | The score times the difficulty. | Personal bests, the `rating` board and the overall board. |
+
+A hit also gets a **grade**, `PERFECT` to `SLOW`, which is feedback only: it never changes a score.
+
+## The score
+
+Everything tunable lives under `scoring`:
+
+```yaml title="plugins/ExyliaAimTrainer/config.yml"
+scoring:
+  hit-points: 10
+  miss-penalty: 4
+  expire-penalty: 6
+  false-start-penalty-millis: 150
+  reaction-reference-millis: 250
+  reaction-scale: 1000
+  tracking-scale: 10
+  combo-points: 5
+  size-exponent: 1.0
+  distance-exponent: 0.75
+  min-difficulty: 0.25
+  max-difficulty: 6.0
+```
+
+### `FLICK`: points per minute
+
+```text
+points = hits × hit-points − misses × miss-penalty − expired × expire-penalty
+score  = points × 60 / seconds played
+```
+
+Per minute, so a 30-second drill and a 60-second one compare. Points at or below zero score `0`. Menus
+write the score with `pts/min`.
+
+Sixty hits and six misses in 30 seconds: 600 − 24 = 576 points, times 60 / 30, **1152**.
+
+### `COMBO`: points per minute, plus combos
+
+```text
+points = hits × hit-points − misses × miss-penalty + combo hits × combo-points
+score  = points × 60 / seconds played
+```
+
+A **combo hit** is a hit that came within the drill's `combo-window` of the previous hit. Rushed hits are
+misses. Forty hits, four misses and thirty combo hits in 30 seconds: 400 − 16 + 150 = 534, times 2,
+**1068**.
+
+### `REACTION`: the average against a reference
+
+```text
+average = (sum of reactions + false starts × false-start-penalty-millis) / reactions answered
+score   = reaction-scale × reaction-reference-millis / average
+```
+
+An average of exactly `reaction-reference-millis` scores `reaction-scale`: 250 ms is 1000. Faster is more,
+slower is less. Nothing answered scores `0`. Menus write the score with `pts`.
+
+Ten reactions averaging 250 ms score **1000**. The same ten with one false start: (2500 + 150) / 10 =
+265 ms, **943**.
+
+### `TRACK`: time on target
+
+```text
+score = percent of ticks on target × tracking-scale
+```
+
+On target 62.5% of the session: **625**. Menus write the score with `pts`.
+
+<Callout type="note" title="Seconds played, not seconds configured">
+The per-minute score divides by the time the run actually lasted. A completed drill lasted its
+`duration`. A run cut short — the player left, replayed or was pulled into a practice match — is still
+stored, scored over the time it ran.
+</Callout>
+
+## Difficulty
+
+```text
+difficulty = weight × (1 / size multiplier) ^ size-exponent × (distance multiplier) ^ distance-exponent
+```
+
+Clamped to `min-difficulty..max-difficulty` and rounded to two decimals. `weight` is the drill's; the two
+multipliers are the player's [settings](/docs/exyliaaimtrainer/settings). A multiplier below `0.05` counts
+as `0.05`.
+
+With the default exponents, a smaller target is worth exactly its inverse and a farther one a little less
+than its distance:
+
+| Size | Distance | Difficulty at weight 1.0 |
+|---|---|---|
+| ×1.00 | ×1.00 | 1.00 |
+| ×0.50 | ×1.00 | 2.00 |
+| ×1.00 | ×2.00 | 1.68 |
+| ×0.50 | ×2.00 | 3.36 |
+| ×2.50 | ×1.00 | 0.40 |
+| ×1.00 | ×0.25 | 0.35 |
+| ×0.10 | ×1.00 | 6.00 (clamped from 10) |
+
+The drill's weight multiplies the whole thing before the clamp: `precision` at weight 1.6 with half-size
+targets is 3.20.
+
+In a duel both players play the same rules, so their difficulty is the same. With `match.use-preferences`
+off, which is the default, it is the drill's weight alone. See [Duels](/docs/exyliaaimtrainer/duels).
+
+## Rating
+
+```text
+rating = score × difficulty, rounded, never below 0
+```
+
+The rating is the one number that compares two players who set their targets up differently: a player who
+shoots half-size targets at twice the distance outranks one who shoots big ones up close with the same
+score, and nobody climbs by making their targets easy.
+
+When a session's rating beats the player's best for that drill, it is a **personal best**: the record keeps
+it, together with the size and distance it was set at, and what it rose by is added to the player's
+**overall rating**, the sum of their best rating in every drill. Every other best on the record — score,
+accuracy, streak, hits, combo, reaction — is kept on its own, whatever the rating did. The boards and their
+categories are on [Statistics](/docs/exyliaaimtrainer/stats).
+
+## Grades
+
+A hit is graded against thresholds under `performance`. A threshold is the slowest time, in seconds, that
+still earns the grade, inclusive; anything slower than `ok` is `SLOW`.
+
+```yaml title="plugins/ExyliaAimTrainer/config.yml"
+performance:
+  flick:
+    perfect: 0.3
+    excellent: 0.45
+    good: 0.65
+    ok: 0.9
+  reaction:
+    perfect: 0.2
+    excellent: 0.26
+    good: 0.33
+    ok: 0.42
+```
+
+| Grade | `flick` | `reaction` |
+|---|---|---|
+| `PERFECT` | 0.30 s | 0.20 s |
+| `EXCELLENT` | 0.45 s | 0.26 s |
+| `GOOD` | 0.65 s | 0.33 s |
+| `OK` | 0.90 s | 0.42 s |
+| `SLOW` | slower | slower |
+
+What is timed depends on the kind:
+
+| Kind | Timed | Thresholds |
+|---|---|---|
+| `FLICK` | From the previous hit to this one. The first hit of a run has nothing to time and is not graded. | `flick` |
+| `COMBO` | From the previous hit that landed to this one. The first is not graded. | `flick` |
+| `REACTION` | From the light to the hit, minus the player's ping. | `reaction` |
+| `TRACK` | Nothing: tracking has no hits to grade. | — |
+
+A grade counts towards the grade totals on the result screen and drives the feedback below. It does not
+touch the score, the rating or the boards.
+
+## Ping, misses and the rest
+
+### Ping correction
+
+A reaction is corrected by the player's ping: the light took half a round trip to reach them and the click
+half a round trip to come back, so both halves are taken off and two players on different connections are
+graded on their hands. The ping is read when the run starts and again every second. A corrected reaction
+is never below 1 ms.
+
+Moving targets are judged the same way. The plugin's own checks on a strafing target or a fighter — the ray
+it casts behind a swing, the precision of a hit, and every tracking check — test the target where the
+player's client was drawing it when the aim left it: the plugin keeps every position it sent and rewinds by
+the ping plus the two ticks the client eases a move over. Tracking forgives half a tick either side for
+jitter.
+
+### Misses and accuracy
+
+```text
+accuracy = hits / (hits + misses)
+```
+
+A **miss** is any of:
+
+- A swing that hit none of the player's targets. Before calling it a miss, the plugin casts its own ray
+  through the crosshair, so a client whose reach never grew still clicks where it looks.
+- In an `ordered` drill, a hit on a target that is not lit.
+- In a 1.9 fight, a rushed hit.
+
+A miss costs `miss-penalty`, breaks the streak and ends the combo. A swing in a `TRACK` drill is neither.
+
+An **expired** target costs `expire-penalty` and breaks the streak, but is not a shot and does not change
+the accuracy. A **false start** adds `false-start-penalty-millis` to the reaction average and breaks the
+streak, and is not a shot either.
+
+### Rushed hits
+
+With `attack-cooldown: true`, a hit is judged by how charged the swing was, the way the game judges a crit,
+a sweep or a sprint knockback:
+
+```text
+cooldown = 20 / attack speed of the item in hand   (ticks)
+charge   = min(1, (ticks since the last swing + 0.5) / cooldown)
+rushed   = charge ≤ 0.9
+```
+
+| Weapon | Cooldown | Ticks a swing needs |
+|---|---|---|
+| Any sword | 12.5 ticks | 11 |
+| Diamond axe | 20 ticks | 18 |
+
+Every swing, hit or not, and every change of held slot starts the count over. The first swing of a run is
+never rushed. A rushed hit is a miss: it counts against accuracy, costs `miss-penalty`, knocks nothing back
+and ends the combo.
+
+### Precision
+
+Every hit is also measured for how central it was: the plugin's own ray from the eyes through the target,
+scored 1 dead centre and 0 at an edge, taking the worse of the two directions across the face it hit. The
+run's **precision** is the average, as a percentage. A hit the plugin's ray missed — the crosshair moved in
+the few milliseconds before the click arrived — is left out rather than scored as an edge.
+
+Precision is shown on the result screen. It is not part of the score or the rating.
+
+## Feedback
+
+What a hit looks and sounds like is an ExyliaLib effect under `feedback`. Each grade has an `effect` and a
+`chat` line, empty for none. By default a grade shows no title, writes the action bar below for 1.5 seconds,
+and plays `ENTITY_EXPERIENCE_ORB_PICKUP` at volume 0.7 with a pitch that drops with the grade:
+
+| Grade | Action bar | Pitch |
+|---|---|---|
+| `perfect` | `{success}⚡ PERFECT {muted}· {letters}%time%s {muted}· {info}x%streak%` | 1.8 |
+| `excellent` | `{success_light}✦ EXCELLENT {muted}· {letters}%time%s {muted}· {info}x%streak%` | 1.5 |
+| `good` | `{info}✔ GOOD {muted}· {letters}%time%s {muted}· {info}x%streak%` | 1.2 |
+| `ok` | `{warning}• OK {muted}· {letters}%time%s {muted}· {info}x%streak%` | 1.0 |
+| `slow` | `{error}▼ SLOW {muted}· {letters}%time%s {muted}· {info}x%streak%` | 0.7 |
+
+An ungraded first hit plays only the `good` sound, and only for a player with hit sounds on.
+
+| Section | When | Default |
+|---|---|---|
+| `miss` | A click that hit nothing | Action bar `{error}✘ MISS {muted}· {letters}%accuracy%% accuracy`, sound `ENTITY_PLAYER_ATTACK_NODAMAGE` 1.0 · 1.0 |
+| `expired` | A `FLICK` target ran out of time | Action bar `{warning}⌛ EXPIRED {muted}· {letters}%accuracy%% accuracy`, sound `BLOCK_NOTE_BLOCK_SNARE` 0.6 · 0.7 |
+| `false-start` | A `REACTION` click before the light | Action bar `{error}✘ TOO EARLY {muted}· {letters}wait for the light`, sound `ENTITY_VILLAGER_NO` 0.8 · 0.9 |
+| `armed` | A `REACTION` target lit up | Sound `BLOCK_NOTE_BLOCK_PLING` 1.0 · 1.8 |
+| `rushed` | A `COMBO` hit inside the cooldown | Action bar `{error}✘ RUSHED {muted}· {letters}wait for the cooldown`, sound `ENTITY_PLAYER_ATTACK_WEAK` 1.0 · 1.0 |
+
+Sound values are `volume · pitch`. These texts, and the grade chat lines, know six placeholders:
+
+| Placeholder | Value |
+|---|---|
+| `%grade%` | The grade name, empty when there is none. |
+| `%time%` | The flick or reaction time in seconds, two decimals, no unit. |
+| `%hits%` | Hits so far. |
+| `%streak%` | Hits in a row. |
+| `%combo%` | The current combo. |
+| `%accuracy%` | Accuracy so far, as a whole number. |
+
+A player who turned **Hit feedback** or **Hit sounds** off in their settings gets these effects without the
+action bar or without the sound; see [Settings](/docs/exyliaaimtrainer/settings#the-toggles). The countdown,
+the session and duel moments are documented on [Configuration](/docs/exyliaaimtrainer/configuration).

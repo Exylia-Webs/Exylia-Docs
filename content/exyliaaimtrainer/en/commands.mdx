@@ -1,0 +1,109 @@
+---
+title: "Commands"
+description: "The player command with its subcommands, the staff command, what each optional argument defaults to and why a command is refused."
+---
+
+Two roots that never overlap. `/aim` is the player's door and opens the main menu; `/aimtraineradmin`
+is the staff door and opens the admin menu. `/aimtrainer` and `/at` are aliases of the first, `/aimadmin`
+of the second.
+
+## Player commands
+
+| Command | Permission | What it does |
+|---|---|---|
+| `/aim` | — | Opens the main menu. |
+| `/aim train [drill]` | `exyliaaimtrainer.train` | Starts a drill. Without a name, the default one. |
+| `/aim drills` | `exyliaaimtrainer.train` | Opens the drill picker. |
+| `/aim settings` | `exyliaaimtrainer.settings` | Opens your settings: target size, distance, colour, style and what the screen shows. |
+| `/aim duel [player] [drill] [bestOf]` | `exyliaaimtrainer.duel` | Without a player, opens the opponent picker. With one, sends the request straight away. |
+| `/aim accept` | `exyliaaimtrainer.duel` | Accepts the pending duel request. |
+| `/aim deny` | `exyliaaimtrainer.duel` | Declines it. |
+| `/aim profile [player]` | `exyliaaimtrainer.profile` | Opens a profile: yours, or somebody else's. `/aim stats` is an alias. |
+| `/aim leaderboard [drill] [category]` | `exyliaaimtrainer.leaderboard` | Without a drill, the board picker; with one, that drill's board. `/aim top` is an alias. |
+| `/aim history` | `exyliaaimtrainer.history` | Your recent duels. |
+| `/aim sessions` | `exyliaaimtrainer.history` | Your recent drills. |
+| `/aim leave` | `exyliaaimtrainer.leave` | Leaves the drill. Inside a duel it is a **forfeit**: the opponent wins. `/aim stop` is an alias. |
+
+Every one of them is for players. From the console, `/aim` and its subcommands answer with the
+`player-only` line.
+
+### What the optional arguments default to
+
+| Argument | Default | Refused when |
+|---|---|---|
+| `drill` (train) | `training.default-drill` (`gridshot`). If that id is not a configured drill, the first drill in `drills`. | The id is not a configured drill: `unknown-drill`. |
+| `drill` (duel) | The **first drill listed in `drills`** — not `training.default-drill`. | The id is not a configured drill: `unknown-drill`. |
+| `bestOf` | `match.default-format` (`3`) | The length is not in `match.formats`, or it is even and `allow-even-formats` is off: `unknown-format`. The default is checked the same way, so a `default-format` missing from `formats` refuses every duel sent without one. |
+| `drill` (leaderboard) | — | An unknown id opens the board picker instead of an empty board. `overall` opens the overall board. |
+| `category` | `rating` | Never: an unknown category falls back to `rating`. On the overall board only `rating` and `accuracy` exist; anything else is `rating`. |
+| `player` (profile) | You | See below. |
+
+`/aim profile <player>` works for players the server already knows without a lookup: online, known to
+ExyliaLib's player directory, or in the server's user cache. Their numbers are read from the database
+when they are not loaded. A name that would need a lookup answers with `player-not-found`, which by
+default reads that the player is not online.
+
+`/aim duel <player>` takes an online player.
+
+### Why a drill or a duel does not start
+
+`/aim train` checks, in this order, and answers with the first line that applies:
+
+| Line | Section | When |
+|---|---|---|
+| `unknown-drill` | `training` | The drill does not exist. |
+| `no-packets` | `common` | PacketEvents is missing, so targets cannot be drawn. |
+| `no-arena` | `common` | No arena is ready, or every ready one is at `arena.max-players-per-arena`. |
+| `busy` | `common` | You are already in a drill or a duel. |
+| `cannot-borrow` | `practice` | You are waiting in an ExyliaPracticeCore queue and practice will not lend you, or `practice.train-while-queued` is off. |
+| `busy-elsewhere`, `busy-advice` | `common` | Another Exylia plugin holds you, or advises against taking you. |
+
+`/aim duel <player>` refuses with `self-duel`, `no-packets`, `busy` (you are already in something),
+`target-busy` or `target-not-ready`. Another plugin can also cancel `AimDuelRequestEvent`, in which case
+nothing is said. There is one pending request per challenged player: a newer request replaces the older
+one. `/aim accept` answers `no-pending` when there is nothing open or it has expired, and
+`player-not-found` when the challenger has left; both sides are checked again before the duel is created.
+
+### While in a drill or a duel
+
+Only the commands in `training.allowed-commands` run: `aim`, `aimtrainer`, `at`, `msg`, `r`, `tell` and `w`
+by default. Anything else is cancelled with `command-blocked`. A `plugin:command` prefix is stripped before
+the check. There is no permission that bypasses the list, and `/aimtraineradmin` is not on it: a member of
+staff inside a drill has to leave first, or be added to the list.
+
+Tab completion suggests the configured drills, the lengths in `match.formats` and the seven leaderboard
+categories. The drill suggestion also offers `overall`, which only means something to `/aim leaderboard`;
+`/aim train overall` answers `unknown-drill`. The format suggestion lists every length in `formats`,
+including even ones that `allow-even-formats` then refuses.
+
+## Staff commands
+
+Everything below needs `exyliaaimtrainer.admin`.
+
+| Command | What it does |
+|---|---|
+| `/aimtraineradmin` | Opens the admin menu: arenas, running duels, players, reload. Players only. |
+| `/aimtraineradmin reload` | Reloads every file. Also from the console, and from the menu's button. |
+
+Reload runs five named steps:
+
+| Step | What it does |
+|---|---|
+| `configs` | Reads `config.yml`, `messages.yml` and `scoreboards.yml` again, then applies the prefix and the debug switch. |
+| `scoring` | Rebuilds the scoring model from `scoring`. |
+| `scoreboards` | Redraws every sidebar on screen from the new lines. |
+| `hotbar` | Rewrites `menus/hotbar.yml` from the jar and compiles it again. |
+| `menus` | Refreshes and compiles every screen. Also runs when ExyliaLib itself is reloaded. |
+
+The success line reports how many steps ran and in how many milliseconds; a failure asks you to check the
+console. A drill that is already running keeps the numbers it started with; the next one reads the new
+file.
+
+Reload does **not** touch arenas or player data. Both live in the database, not in a file.
+
+<Callout type="note" title="There is nothing else to type">
+Arenas are created, renamed, positioned, enabled and deleted from the arena screens. Running duels are
+cancelled, drills stopped and player statistics reset from their own screens. See
+[Arenas](/docs/exyliaaimtrainer/arenas) and [Menus](/docs/exyliaaimtrainer/menus). The one thing that
+stays a command is `reload`, because the console has to be able to run it.
+</Callout>

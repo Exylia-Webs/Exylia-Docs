@@ -1,0 +1,191 @@
+---
+title: "Preguntas frecuentes"
+description: "Las preguntas que más se repiten."
+---
+
+## El plugin no arranca
+
+`packetevents` es una dependencia obligatoria: sin él el servidor nunca carga el plugin. `ExyliaLib` figura
+como opcional solo para que el loader pueda instalarlo, pero el plugin lo necesita para funcionar. Comprueba
+que ambos están en `plugins/`.
+
+## "Targets need PacketEvents, which this server does not have."
+
+Un objetivo es un par de entidades de paquetes que el servidor nunca tiene, así que sin PacketEvents cargado
+no hay nada que dibujar y todo ejercicio y toda petición de duelo se rechaza con esa línea. La consola lo
+avisa al arrancar: *"PacketEvents is missing: targets cannot be drawn and no drill can start"*.
+
+## "No arena is ready. Ask an administrator."
+
+Tanto los ejercicios como los duelos necesitan una arena, y no se entrena donde está el jugador. Una arena
+está lista cuando está **activada**, tiene su **spawn** fijado y ese spawn está en un mundo cargado. Abre
+`/aimtraineradmin`, Arenas: una fila marcada como incompleta carece de alguna de esas cosas.
+
+La misma línea aparece cuando todas las arenas listas están llenas. `arena.max-players-per-arena` limita lo
+que aloja una arena, contando uno por ejercicio y dos por duelo; `0`, el valor por defecto, es sin límite.
+Cada ejercicio y cada duelo va a la arena lista que menos jugadores aloja en ese momento, así que una segunda
+arena reparte la carga.
+
+Los duelos tampoco pueden empezar en los primeros instantes tras el arranque, antes de leer las arenas de la
+base de datos: la consola imprime `Loaded N arenas and M drills` cuando ya están.
+
+## "Finish what you are doing first."
+
+El jugador ya está en un ejercicio o en un duelo. "You are busy in `<plugin>`" significa que otro plugin de
+Exylia lo tiene —una arena de FFA, un evento, una partida de practice— y "Not right now: `<reason>`"
+significa que nadie lo tiene pero un plugin lo desaconseja, con sus propias palabras.
+
+## Un jugador no puede retar a alguien
+
+"`<name>` is busy right now" significa que otro plugin, o este, tiene a ese jugador. "`<name>` is
+`<reason>`" significa que nadie lo tiene pero un plugin lo desaconseja: el motivo de este plugin es
+"answering a duel request", que da mientras haya una petición abierta en cualquiera de sus dos lados.
+
+Un jugador solo puede tener una petición esperándole; un reto más nuevo sustituye al anterior. Las
+peticiones caducan tras `match.duel-request-expiry`, treinta segundos por defecto, y se avisa a ambos lados.
+
+## Los aciertos se sienten raros o dependen del ping
+
+El cliente es quien apunta. Cada objetivo lleva un hitbox que el cliente comprueba con su propio raycast, a
+sus propios FPS, y avisa del que acertó —la misma prueba que usa un golpe de PvP—, así que un objetivo se
+acierta donde el jugador lo ve. Un golpe que no avisa de ningún hitbox se comprueba contra el rayo del propio
+servidor a través de la mira antes de contarlo como fallo.
+
+La latencia se compensa donde de otro modo le costaría al jugador:
+
+- A los tiempos de **reacción** se les resta el ping del jugador: la luz tardó medio viaje de ida y vuelta en
+  llegarle y el clic medio viaje en volver.
+- Los **objetivos en movimiento** —flicks que hacen strafe, seguimiento y combates— se juzgan donde el
+  cliente los dibujaba cuando salió el clic o la mira: el servidor guarda cada posición que envió y rebobina
+  el ping más los dos ticks con que el cliente suaviza un movimiento.
+- El **seguimiento** lee la mira de los paquetes de rotación según llegan y perdona medio tick a cada lado
+  por el jitter, no un objetivo más ancho.
+
+## ¿Por qué no sirve de nada spamear clics?
+
+Cada golpe que no da en nada es un fallo. En un ejercicio de flick un fallo cuesta `scoring.miss-penalty`
+puntos (4) frente a los `hit-points` (10) de un acierto, y baja la precisión.
+
+En un combate, un golpe a un objetivo aún rojo del anterior —diez ticks, como en el juego— no hace nada, en
+ejercicios 1.8 y 1.9 por igual, así que spamear en un combate 1.8 no acierta más que hacer clics limpios. En
+un ejercicio 1.9 (`attack-cooldown: true`) cada golpe, acierte o falle, y cada cambio de slot reinicia el
+cooldown, y un acierto con un golpe cargado al 90% o menos es **apresurado** y cuenta como fallo.
+
+## ¿Qué diferencia hay entre puntuación y rating?
+
+La **puntuación** es el número propio del ejercicio: puntos por minuto en flicks y combates, una puntuación
+de reacción en los de reacción, tiempo sobre el objetivo en el seguimiento. Decide las rondas de duelo,
+donde ambos juegan el mismo ejercicio.
+
+El **rating** es la puntuación por la **dificultad** de los ajustes con que se jugó: el `weight` del
+ejercicio, por lo que vale un objetivo más pequeño, por lo que vale uno más lejano, acotado entre
+`scoring.min-difficulty` (0.25) y `max-difficulty` (6.0). El rating es lo que ordenan las tablas por defecto
+y lo que suma la tabla general, así que nadie sube poniéndose objetivos fáciles. Ver
+[Puntuación](/docs/exyliaaimtrainer/puntuacion).
+
+## ¿Pueden los jugadores caminar durante un ejercicio?
+
+No. Todo jugador queda inmóvil durante el ejercicio, que mide sus manos y no sus piernas. Dentro de un
+ejercicio o un duelo solo puede usar los comandos de `training.allowed-commands`: por defecto `aim`,
+`aimtrainer`, `at`, `msg`, `r`, `tell` y `w`. Una perla de ender, un teletransporte de otro plugin o un
+cambio de mundo lo saca de la sesión.
+
+## Un jugador se queda en la arena al terminar el ejercicio
+
+Es el descanso: `training.rest-seconds`, cinco por defecto. El resumen está en pantalla, dar un puñetazo al
+aire repite el ejercicio con los ajustes que tenga el jugador en ese momento, **Change drill** elige otro, y
+cuando se acaba el tiempo un jugador inactivo vuelve a casa. Quien abrió los ajustes o la lista de
+ejercicios todavía está decidiendo, y la espera vuelve a empezar. Pon `0` para mandar a los jugadores a
+casa en cuanto termine un ejercicio.
+
+## ¿Cómo añado un ejercicio?
+
+Escribe un bloque nuevo bajo `drills` en `config.yml` y ejecuta `/aimtraineradmin reload`. Un ejercicio es
+un `kind` —`FLICK`, `REACTION`, `TRACK` o `COMBO`— y un conjunto de números; nada en el código conoce los de
+serie por su nombre, así que uno nuevo recibe los mismos menús, récords y tablas. Ver
+[Ejercicios](/docs/exyliaaimtrainer/ejercicios).
+
+Los récords y las tablas van por el id del ejercicio. Renombrar una clave empieza ese ejercicio de cero con
+tablas vacías, y las filas de historial de un ejercicio eliminado muestran su id donde antes iba el nombre.
+
+## Los duelos parecen injustos cuando los jugadores usan ajustes distintos
+
+Por defecto no los usan. Con `match.use-preferences: false` ambos juegan el ejercicio tal como está escrito,
+y comparten una semilla, así que los mismos objetivos aparecen en los mismos sitios y en el mismo orden en
+las dos pantallas. Activarlo aplica a ambos jugadores el tamaño y la distancia del retador.
+
+## ¿Qué es un empate y por qué se canceló un duelo?
+
+Una ronda la gana la puntuación más alta, luego la mejor precisión, luego más aciertos. Igualados en los
+tres es un empate: nadie suma, y la ronda se repite con el mismo número. Tres empates seguidos significan que
+ninguno de los dos está disparando, y el duelo se cancela sin guardar nada.
+
+## ¿Puedo ofrecer un al mejor de 2 o de 4?
+
+Pon la longitud en `match.formats` y `match.allow-even-formats: true`. Una serie par puede terminar igualada
+una vez jugadas todas las rondas; cuando pasa, el ganador de la última ronda se lleva el duelo.
+
+## Un jugador no aparece en la tabla
+
+Una tabla nunca coloca un cero, y hay una fila por jugador. Una precisión solo cuenta desde sesiones de al
+menos `leaderboard.accuracy-min-shots` disparos, veinte por defecto. Los duelos no fijan ningún récord: solo
+las sesiones de ejercicio llegan a las tablas y al rating general.
+
+La tabla se guarda en caché `leaderboard.cache-seconds`, cinco minutos por defecto. Superar un mejor rating
+vacía la caché al momento, así que quien acaba de conseguirlo se ve; una mejor precisión o racha sin mejor
+rating espera a que la caché caduque.
+
+## ¿Cómo reinicio las estadísticas de un jugador?
+
+`/aimtraineradmin`, Players, luego el jugador y el botón de reinicio, tras una confirmación. La lista solo
+muestra jugadores conectados. El reinicio borra el perfil —números de toda la vida, rating general e
+historial de duelos, conservando sus ajustes—, todos sus récords de ejercicio y su historial de sesiones.
+
+<Callout type="note" title="El historial de duelos no se borra">
+La confirmación dice "every record, session and duel", pero las filas del historial de duelos se quedan. Las
+victorias y derrotas del jugador vuelven a cero; la lista de duelos pasados conserva sus entradas hasta que
+caducan según `history.retention-days`.
+</Callout>
+
+## ¿Pueden entrenar los jugadores en cola de ExyliaPracticeCore?
+
+Sí, con `practice.train-while-queued` activado, que es el valor por defecto. El jugador conserva su sitio en
+la cola y, en cuanto se encuentra partida, el ejercicio termina y va a ella. `practice.queue-prompt` ofrece
+los ejercicios por chat cuando alguien entra en una cola, y `practice.ranked-only` limita ese aviso a las
+colas ranked. Ver [Compatibilidad](/docs/exyliaaimtrainer/compatibilidad).
+
+## Los jugadores en un ejercicio no ven el chat del servidor
+
+Es `chat.isolation`, activado por defecto: quien está en un ejercicio o un duelo lee ese y nada más, y el
+resto del servidor no lee nada de él. Pon `false` para dejar el chat tal como lo entrega el plugin de chat
+del servidor.
+
+## Mis cambios en el menú de la hotbar desaparecen
+
+`menus/hotbar.yml` se escribe desde el jar en cada arranque y en cada recarga, encima de lo que haya. Los
+demás menús de jugador siguen a la versión mientras no los hayas tocado; uno editado se conserva y la versión
+nueva queda al lado como archivo `.new`. `menus/admin/` se reescribe en cada arranque. Ver
+[Menús](/docs/exyliaaimtrainer/menus).
+
+## Mis placeholders de PlaceholderAPI aparecen sin resolver
+
+El nombre del grupo forma parte del placeholder. Por PlaceholderAPI es `%exyliaaimtrainer_aim_wins%`, nunca
+`%exyliaaimtrainer_wins%`; el más corto `%aim_wins%` es el nombre que se escribe dentro de los archivos del
+propio plugin, que el plugin lee por sí mismo. Ver [Placeholders](/docs/exyliaaimtrainer/placeholders).
+
+## ¿Dónde están las arenas y las estadísticas?
+
+En la base de datos, no en YAML: `aim_arenas`, `aim_profiles`, `aim_records`, `aim_sessions` y
+`aim_matches`. H2 por defecto; apunta `database.yml` a MySQL, MariaDB, PostgreSQL o MongoDB para
+compartirlas entre servidores. Las filas del historial de sesiones y duelos con más de
+`history.retention-days` (30) días se borran cada `prune-interval-minutes` (60); `0` días lo conserva todo.
+La recarga no toca nada de esto.
+
+## ¿Funciona en Folia?
+
+Sí, declara soporte para Folia, y cada evento que dispara se ejecuta en el hilo dueño del jugador o de la
+arena de la que trata.
+
+## ¿Dónde consigo soporte?
+
+En el [Discord de Exylia](https://discord.exylia.net).

@@ -429,6 +429,48 @@ const TOTEMTRAINER_NAV: NavGroup[] = [
   },
 ];
 
+const AIMTRAINER_NAV: NavGroup[] = [
+  {
+    label: { en: "Getting started", es: "Empezar" },
+    pages: [
+      page("introduction", "introduction", "introduccion"),
+      page("installation", "installation", "instalacion"),
+      page("first-steps", "first-steps", "primeros-pasos"),
+    ],
+  },
+  {
+    label: { en: "Configuring", es: "Configurar" },
+    pages: [
+      page("drills", "drills", "ejercicios"),
+      page("scoring", "scoring", "puntuacion"),
+      page("settings", "settings", "ajustes"),
+      page("duels", "duels", "duelos"),
+      page("arenas", "arenas", "arenas"),
+    ],
+  },
+  {
+    label: { en: "Systems", es: "Sistemas" },
+    pages: [
+      page("training", "training", "entrenamiento"),
+      page("stats", "stats", "estadisticas"),
+      page("hud", "hud", "hud"),
+      page("compatibility", "compatibility", "compatibilidad"),
+    ],
+  },
+  {
+    label: { en: "Reference", es: "Referencia" },
+    pages: [
+      page("commands", "commands", "comandos"),
+      page("permissions", "permissions", "permisos"),
+      page("placeholders", "placeholders", "placeholders"),
+      page("configuration", "configuration", "configuracion"),
+      page("menus", "menus", "menus"),
+      page("api", "api", "api"),
+      page("faq", "faq", "faq"),
+    ],
+  },
+];
+
 const CLANS_NAV: NavGroup[] = [
   {
     label: { en: "Getting started", es: "Empezar" },
@@ -1209,6 +1251,28 @@ export const plugins: Plugin[] = [
       { en: "Network", es: "Red" },
       { en: "Folia", es: "Folia" },
     ],
+  {
+    id: "exyliaaimtrainer",
+    name: "ExyliaAimTrainer",
+    tagline: { en: "Aim drills and best-of aim duels", es: "Ejercicios de puntería y duelos al mejor de" },
+    summary: {
+      en: "Packet targets every player sees alone: flick, reaction, tracking and combo drills tuned from the config, target size and distance chosen per player and weighed into a rating, best-of duels on the same target sequence, a board per drill plus an overall one, and an admin surface that is only menus.",
+      es: "Objetivos por paquetes que cada jugador ve solo: ejercicios de flick, reacción, tracking y combo ajustados desde la configuración, tamaño y distancia de objetivo elegidos por cada jugador y pesados en un rating, duelos al mejor de sobre la misma secuencia de objetivos, una tabla por ejercicio y otra general, y una administración que es solo menús.",
+    },
+    version: "1.0.0",
+    status: "stable",
+    category: { en: "Gamemode", es: "Modo de juego" },
+    minecraft: "1.21.4+",
+    banner: "https://s3.exylia.net/exylia-plugins/public/static/images/plugins/aim-trainer/ExyliaAimTrainerBanner.webp",
+    purchase: "https://builtbybit.com/resources/exyliaaimtrainer.126052/",
+    tags: [
+      { en: "Aim", es: "Puntería" },
+      { en: "Duels", es: "Duelos" },
+      { en: "Leaderboards", es: "Tablas" },
+      { en: "Folia", es: "Folia" },
+    ],
+    nav: AIMTRAINER_NAV,
+  },
     nav: STAFF_NAV,
   },
 ];

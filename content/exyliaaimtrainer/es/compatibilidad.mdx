@@ -1,0 +1,149 @@
+---
+title: "Compatibilidad"
+description: "Cómo comparte el plugin a los jugadores con el resto del ecosistema Exylia, entrena a jugadores en cola de práctica, aísla el chat y qué necesita del servidor."
+---
+
+Un jugador pertenece a un solo modo de Exylia a la vez, y ese dato es de ExyliaLib. Este plugin lo lee
+antes de que empiece nada y lo escribe mientras el jugador está dentro.
+
+## Un jugador, una actividad
+
+Empezar un ejercicio o un duelo toma un **claim** a través de
+[`Sessions`](/docs/exylialib/jugadores#un-jugador-una-actividad) de ExyliaLib, de tipo `TRAINING` o
+`MATCH`. ExyliaPracticeCore, ExyliaFFA, ExyliaSandBox, ExyliaEvents y cualquier otro plugin construido
+sobre la librería ven al jugador como ocupado mientras dure el claim. El claim se toma antes de mover al
+jugador y se libera lo último al salir, cuando ya está en casa y tiene su inventario de vuelta, para que
+ningún otro modo pueda equiparlo mientras sus cosas siguen en camino.
+
+La pregunta se hace en dos mitades, en cada punto de entrada:
+
+| Mitad | Qué significa | Qué lee el jugador |
+|---|---|---|
+| **Claim** | Otro plugin tiene al jugador: un evento, una arena de FFA, una partida de práctica. | "You are busy in %plugin%.", nombrando a ese plugin. |
+| **Consejo** | Nadie tiene al jugador, pero su plugin dice que está a mitad de algo, como el "in a party" de Practice. | "Not right now: %reason%.", con las palabras de ese plugin. |
+
+El consejo no es un veto: un plugin que necesita al jugador no se ve afectado. Es lo que impide que una
+petición de duelo le llegue a alguien a mitad de un editor de kits. Cuando el ocupado es el otro lado de
+la petición, quien reta lee "%target% is busy right now." o "%target% is %reason%.".
+
+Este plugin ofrece su propio consejo: mientras una petición de duelo está **abierta en cualquiera de los
+dos lados**, ambos jugadores figuran como "answering a duel request". Ninguno tiene claim todavía, y
+llevarse a uno de ellos es la forma de que el otro acabe esperando una respuesta que ya no puede llegar.
+
+Si otro plugin pide más tarde a un jugador que este tiene, la librería le dice a este plugin que lo
+suelte: un ejercicio termina como `CANCELLED` y sus números se guardan igualmente, un duelo se pierde por
+abandono.
+
+## El selector de rivales
+
+La pantalla **Duel** lista a todos los conectados salvo quien mira y los jugadores que no puede ver, así
+que un miembro del staff en vanish no aparece. Primero van los jugadores libres, por orden alfabético; un
+jugador ocupado sigue en la lista por debajo de todos los libres y no se puede pulsar, con el motivo en
+la fila: "Busy right now" para un claim, o las palabras del plugin que aconseja. La lista se vuelve a
+leer cada segundo mientras la ventana está abierta, así que alguien que acaba de entrar en una arena deja
+de estar al alcance sin reabrir la pantalla.
+
+## ExyliaPracticeCore
+
+Un jugador que espera en una cola de práctica lo tiene práctica, así que un claim normal lo rechazaría.
+Con `practice.train-while-queued` activado —por defecto— práctica lo **presta**:
+
+<Steps>
+  <Step title="El jugador empieza un ejercicio en cola">
+    Práctica cede el claim y le guarda el sitio en la cola. Si práctica no puede prestarlo en ese
+    momento, lee "Practice cannot lend you right now." y no empieza nada.
+  </Step>
+  <Step title="El emparejamiento sigue">
+    El ejercicio se juega exactamente igual que para cualquier otro.
+  </Step>
+  <Step title="Se encuentra una partida">
+    Práctica pide al jugador de vuelta. El ejercicio termina ahí, la partida se guarda, el jugador lee "A
+    practice match was found. Good luck!" y práctica lo lleva a su partida.
+  </Step>
+</Steps>
+
+Con `practice.train-while-queued` desactivado, un jugador en cola se trata como cualquier otro jugador
+ocupado y no puede empezar un ejercicio.
+
+Entrar en una cola también envía el aviso **Train while you wait**, cuando `practice.queue-prompt` está
+activado (por defecto) y el jugador no está ya en un ejercicio o un duelo. `practice.ranked-only` limita
+el aviso a las colas ranked, donde la espera suele ser más larga; está desactivado por defecto. El botón
+del aviso ejecuta `/aim`, que abre el menú principal.
+
+Las sidebars se apilan en la librería. Este plugin solo detiene su propio tablero, a través de su propio
+handle, así que el tablero del lobby de práctica vuelve solo cuando un jugador sale de un ejercicio o un
+duelo.
+
+## Chat
+
+Con `chat.isolation` activado —por defecto— el chat de un ejercicio o de un duelo se queda dentro, con la
+misma regla que decide quién ve a quién:
+
+- Un jugador en un **ejercicio** no lee a nadie y nadie lo lee.
+- Los dos jugadores de un **duelo** se leen entre ellos y a nadie más.
+- Todos los que están fuera de un ejercicio o un duelo se leen entre sí, como siempre.
+
+Se aplica a través del [módulo de chat](/docs/exylialib/chat) de ExyliaLib, que quita los receptores
+rechazados de cada mensaje antes de que el servidor lo entregue; el formato del plugin de chat queda como
+estaba. Cubre el chat y solo el chat: los mensajes privados, los anuncios y las líneas de entrada y
+salida no se tocan, y `/msg`, `/r`, `/tell` y `/w` están en `training.allowed-commands` por defecto.
+Necesita un plugin de chat que deje al servidor entregar el mensaje, como hacen el chat de Paper y los
+plugins de chat basados en renderer.
+
+Pon `chat.isolation: false` para dejar el chat exactamente como lo entrega el plugin de chat del
+servidor. El valor se lee en cada mensaje, así que una recarga lo cambia.
+
+## Aislamiento y protección
+
+Cada jugador en un ejercicio o un duelo pertenece a un grupo, y dos jugadores se ven solo cuando están en
+el mismo grupo o ninguno está en uno. La mitad visual es una regla de paquetes que ExyliaLib aplica a
+cada paquete saliente; la mitad de juego la hacen cumplir los listeners, porque ocultar sin más seguiría
+dejando golpear a un jugador oculto.
+
+Mientras un jugador está en un grupo: se cancela todo el daño que recibe, no puede dañar a nadie, ni
+soltar o recoger objetos, ni romper o colocar bloques, ni perder hambre; se rechazan las interacciones con
+jugadores de otro grupo, y no colisiona con nadie.
+
+<Callout type="warning" title="Si la capa de paquetes de la librería no está disponible">
+El aislamiento recurre a `hidePlayer` y `showPlayer`, y la consola lo dice una vez: "PacketEvents is
+missing: session isolation falls back to hidePlayer". La regla es la misma, solo que aplicada de forma
+más tosca. Los objetivos, en cambio, son paquetes y no tienen alternativa: no empieza ningún ejercicio.
+</Callout>
+
+## Plugins de inventario por mundo
+
+Una arena suele ser un mundo propio, y plugins como Multiverse-Inventories o PerWorldInventory escriben
+lo que lleva el jugador en el mundo que deja y cargan encima el inventario del mundo nuevo. El plugin
+está ordenado en torno a eso: el inventario se **guarda** antes del teletransporte pero solo se **vacía**
+cuando el jugador ya está en la arena, y al salir el jugador **vuelve a casa primero** y se restaura al
+llegar. Nada de lo que registra el plugin por mundo acaba con un inventario vacío ni duplicado.
+
+## Tras un crash
+
+Entrar en un ejercicio o un duelo guarda el inventario y el modo de juego del jugador antes de vaciar
+nada. Si el servidor cae entretanto, el snapshot sigue ahí: en la siguiente entrada del jugador se
+restaura, y se le envía a `arena.return-location` si está definido, o de vuelta a donde el snapshot más
+antiguo dice que estaba antes de todo esto. Nadie despierta dentro de una arena con el inventario vacío.
+
+Si otro plugin mata a un jugador dentro de una sesión —aquí nada hace daño—, se conserva el inventario,
+se vacían los drops, la consola registra `<player> died inside an aim session; inventory kept` y el
+jugador sale de la sesión.
+
+## Qué necesita el servidor
+
+| Plugin | Papel |
+|---|---|
+| `ExyliaLib` | Configuración, menús, base de datos, placeholders, efectos, sesiones, snapshots, teletransportes, overlays y reglas de chat. La instala el loader de Lukittu, por eso `plugin.yml` la pone como soft. |
+| `packetevents` | Declarada como dependencia obligatoria: el servidor no carga el plugin sin ella. Dibuja los objetivos, lee los clics y las rotaciones que los juzgan, y dibuja el aislamiento. |
+| `PlaceholderAPI` | Opcional. Publica los placeholders fuera del plugin con el identificador `exyliaaimtrainer`. Consulta [Placeholders](/docs/exyliaaimtrainer/placeholders). |
+| `ExyliaPracticeCore` | Opcional. Entrenar en cola, como se describe arriba. Sin él no cambia nada más. |
+
+Folia es compatible: todo lo que toca a un jugador corre en el hilo de ese jugador, el inicio de un duelo
+corre en su arena, y las escrituras de perfiles, récords e historial van fuera del hilo principal.
+
+## Qué no hay aquí
+
+- **Sin cola de duelos.** Un duelo siempre es contra un rival elegido: `/aim duel <player>` o un clic en
+  el selector.
+- **Sin juego entre servidores.** Los servidores que comparten base de datos comparten arenas, perfiles,
+  récords e historial, pero un ejercicio o un duelo ocurre en el servidor donde está el jugador.

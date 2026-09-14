@@ -15,6 +15,7 @@ scripts/doc-drift.sh exyliaevents # just one
 
 | Docs | Repository | Version documented | Reviewed through | State |
 |---|---|---|---|---|
+| `exyliaaimtrainer` | `ExyliaAimTrainer` | 1.0.0 | `8d66717` 2026-09-14 | Current — first full documentation, nineteen pages, including the drill change from the drill list, summary and hotbar and the five-second idle rest: the four drill kinds and the sixteen shipped drills with every key, score, difficulty and rating, the grades, the player settings, duels on the challenger's rules and one seed, arenas from the admin menu, the session lifecycle and isolation, per-drill and overall boards, the HUD, the practice-queue borrow, the menus and `aimtrainer:` actions, and `AimTrainerService` (needs `exylia-api` `v1.153.0`). Written against the source, not the README or the config comments: several disagree (see below). |
 | `exyliaarmorskin` | `ExyliaArmorSkin` | 1.0.0 | `c608783` 2026-09-03 | Current — wardrobe, per-piece permissions, twenty animated skins, the four body-aware animation types and the trim-metal cycle. |
 | `exyliaarmortrims` | `ExyliaArmorTrims` | 1.1.0 | `1d83e8f` 2026-09-03 | Current — the cosmetic gate is a library contract, documented in the library’s Cosmetic rules page rather than per plugin. |
 | `exyliaarrows` | `ExyliaArrows` | 1.0.5 | `2a7335b` 2026-09-03 | Current — rewritten for the 120 display-driven effects, the three triggers, tokens, the menu and the `arrows-effects` flag. |
@@ -122,6 +123,46 @@ that moved; a rule a player can feel; a limit an owner can hit.
   say once why the two differ.
 
 ### What ExyliaSandBox does that the docs call out rather than promise
+### Where ExyliaAimTrainer's own notes disagree with its code
+
+The pages follow the code. The README and `docs/ARCHITECTURE.md` were used only where the source
+confirmed them.
+
+- **Standing still is not a setting.** The README and the architecture notes describe it as the player's
+  choice; `HudService.show` always freezes, `Preferences` has five toggles, and the profile's `freeze`
+  column is legacy. `AimPreferences.freeze` always returns `true`.
+- **Sixteen drills ship, not eleven.** `GlobalDefaults.defaultDrills()`; `DrillKind`'s javadoc still says
+  three kinds.
+- **`match.use-preferences`** claims each player keeps their own size and distance. Both sides play rules
+  built once from the challenger's preferences, colour and style included; a rematch reuses them, seed and all.
+- **`match.allow-even-formats`** claims a tied even series is replayed as a decider. Whoever wins the last
+  round takes it. Three draws in a row give the duel up (`MatchRunner.DRAW_LIMIT`).
+- **A drill needs a ready arena.** The architecture notes and `TrainingSession.arenaId`'s javadoc say it
+  runs where the player stands; `TrainingService.start` refuses.
+- **`menus/hotbar.yml` is not editable** — overwritten from the jar on every start and reload — and
+  `menus/admin/` is refreshed on every reload too, not only on start. `AimMenus`' comment about a `.new`
+  file describes nothing the library does.
+- **The reset confirmation says "every record, session and duel"**; `aim_matches` rows stay.
+- **README placeholders** read `%exyliaaim_<name>%`, which never resolves: the group `aim` is part of every
+  name. The pages write `%exyliaaimtrainer_aim_<name>%`.
+- **README's ExyliaLib floor** (1.153.0) is below what the menus need (`refreshVersionedDirectory`, 1.156.1;
+  `BundledFiles`, 1.158.0). The pages name no floor for the plugin.
+
+Behaviour documented in place rather than promised: an accepted duel before the arenas load never starts
+and says nothing; `/aim duel <player>` without a drill plays the first drill in the file, not
+`default-drill`; a `default-format` missing from `formats` refuses every duel sent without a length; tab
+completion offers `overall` and even lengths that are then refused; no `admin_*` or player menu action checks
+a permission node; `admin_session_stop` has no confirmation and ignores duels; `max-players-per-arena` is
+checked before arrival, so a duel can put an arena one over; a board only drops its cache when a run beats the
+best rating; `leaderboard.cache-seconds` and `history.prune-interval-minutes` need a restart; COMBO keeps three
+blocks of reach while the fighter closes only to the scaled distance, so a distance multiplier past about ×1.10
+at size ×1.00 keeps it out of reach (derived from the code, not tested in game); `menu.reason-self` and
+`menu.difficulty-label` are written and never read; the practice prompt's *OPEN DRILLS* button opens `/aim`.
+
+API: `duel()` with an unknown drill returns `false` silently and never validates `bestOf`;
+`AimRoundEndEvent` fires before the round's win is counted; a replay stores the cut-short run without an end
+event and fires no new start event.
+
 
 Both are behaviour, not roadmap. The pages describe what the code does.
 

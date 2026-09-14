@@ -1,0 +1,128 @@
+---
+title: "Arenas"
+description: "What an arena is, how it is created from the admin menu, where the targets appear, how one is picked, and the rest of the staff screens."
+---
+
+An arena is a place with **one spawn**. It is never locked: any number of drills and duels run in the
+same arena at once, every player in it is isolated from every other, and each sees only their own
+targets. The direction the spawn faces is where the targets appear. The arena knows nothing about who is
+inside it beyond a count.
+
+Arenas live in the database, in `aim_arenas`, not in a YAML file. Every server pointing at the same
+database shares them, and a reload does not touch them.
+
+<Callout type="warning" title="No arena, nothing to play">
+A drill and a duel both need a ready arena. With none, a drill reads "No arena is ready. Ask an
+administrator." before the player is touched, and so do both sides of an accepted duel. There is no
+training where the player stands.
+</Callout>
+
+## Creating an arena
+
+Everything happens in `/aimtraineradmin` → **Arenas**. There is nothing to type on a command line beyond
+`reload`.
+
+<Steps>
+  <Step title="Create">
+    Click **New arena** and type an **id** when asked, such as `aim1`. It is refused if an arena already
+    uses it, and stored lowercased. The arena appears enabled, with no spawn, named after the id as you
+    typed it, and the chat says "Arena `<id>` created. Set its spawn next."
+  </Step>
+  <Step title="Name it">
+    On the arena screen, **Display name** opens a text input: up to 64 characters, colours allowed. This
+    is what players read; the id stays as it was.
+  </Step>
+  <Step title="Set the spawn">
+    Click **Spawn**, then stand where it goes, **facing the open space where the targets should appear**.
+    The setup wizard stores your position and your facing, and the chat says "Spawn of `<id>` set. Face
+    where the targets should appear."
+  </Step>
+  <Step title="Check it is ready">
+    The summary item shows the arena as ready once it is enabled and its spawn is in a loaded world. The
+    arena list marks each one **READY** or **INCOMPLETE**.
+  </Step>
+</Steps>
+
+## Where the targets appear
+
+A player is frozen on the spawn, so every drill is laid out around the spawn's position and facing.
+
+- Flick targets are placed around the eyes, within the drill's horizontal spread either side of that
+  facing and its range of elevations, never in the floor.
+- A tracking target strafes in an arc in front of the player; a fighter circles round them and closes in.
+- A target is placed at the drill's distance **times the player's distance setting**. The shipped
+  `precision` drill reaches 12 blocks, and a player may push the distance to ×3.00, so leave a clear
+  space of well over thirty blocks in front of the spawn if you keep those defaults.
+
+Drills and settings are on [Drills](/docs/exyliaaimtrainer/drills) and
+[Settings](/docs/exyliaaimtrainer/settings).
+
+## Enabled, disabled, deleted
+
+| Action | Effect |
+|---|---|
+| **Disable** | No new drill or duel is sent there. Every drill running in it is stopped and its player sent home; every duel running in it is cancelled. The chat says "Arena `<id>` disabled. Sessions there were stopped." |
+| **Enable** | The arena is offered again, once its spawn is set. |
+| **Delete** | Behind a confirmation screen. Stops every drill and duel running in it the same way, then removes the row. |
+
+A duel stopped this way is cancelled: both players are sent back and nothing is stored. A drill stopped
+this way is stored like any run cut short. See [Training](/docs/exyliaaimtrainer/training).
+
+## How an arena is picked
+
+When a drill or a duel starts, the plugin takes the **ready** arena hosting the **fewest players**: one per
+drill, two per duel. Ten players training at once therefore spread across the arenas instead of stacking
+on the first one.
+
+```yaml title="plugins/ExyliaAimTrainer/config.yml"
+arena:
+  max-players-per-arena: 0
+  return-location: ""
+```
+
+| Key | Default | What it does |
+|---|---|---|
+| `max-players-per-arena` | `0` | Players one arena may host at once, drills and duels counted together. `0` is unlimited. An arena at its cap is skipped. |
+| `return-location` | `""` | Where a player is sent after leaving, as `world,x,y,z` or `world,x,y,z,yaw,pitch`. Empty sends them back to where they came from. |
+
+The cap is compared with the count before the newcomers arrive, so an arena one player below its cap still
+takes a duel and ends one over it.
+
+With `return-location` empty, a player goes back to the exact spot they started from. If that spot is
+unknown, they go to their world's spawn.
+
+<Callout type="note" title="Right after a start">
+Arenas are read from the database asynchronously once the plugin enables; the console prints
+"Loaded `<n>` arenas and `<m>` drills" when they are in. Until then there is no ready arena to pick: a drill
+is refused with the no-arena line, and an accepted duel does nothing.
+</Callout>
+
+## The rest of the admin menu
+
+The main screen shows how many arenas exist and how many are ready, the duels and drills running, and the
+players online.
+
+| Screen | What it does |
+|---|---|
+| **Arenas** | The list above, sorted by id, each with its id, enabled state, spawn and current load of duels and drills. |
+| **Running duels** | Every duel in progress with its players, series score, round, format, drill, arena and state. Clicking one cancels it behind a confirmation: both players are sent back and nothing is stored. |
+| **Players** | Everyone online, sorted by name, with their rating, accuracy, sessions, wins, losses and state. A free player: click to reset their statistics. A busy player: **left click** stops their drill, **right click** resets their statistics. Both resets go through a confirmation. |
+| **Reload** | Runs the same reload as `/aimtraineradmin reload` and reopens the menu. |
+
+<Callout type="note" title="Stopping a player stops a drill">
+The left click on a busy player stops a **drill** only. A player in a duel is left where they are; cancel
+the duel from **Running duels** instead.
+</Callout>
+
+<Callout type="warning" title="What a reset clears, and what it keeps">
+Resetting a player sets their profile back to zero, deletes every drill record they hold — the drill boards
+are read from those records — and deletes their session history. Their **duel history rows are kept**,
+although the confirmation screen says "Every record, session and duel". The duel record on the profile —
+wins, losses — is zeroed with the rest. The player's settings and their last drill and format are kept.
+</Callout>
+
+## The admin menu files
+
+The admin screens in `menus/admin/` are **rewritten from the jar on every start and every reload**, so a
+button added in a release reaches servers that already have the folder. Nothing an owner is meant to edit
+lives there. How the player-facing menus are updated is on [Menus](/docs/exyliaaimtrainer/menus).

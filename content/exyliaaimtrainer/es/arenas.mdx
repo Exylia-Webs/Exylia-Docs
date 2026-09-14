@@ -1,0 +1,132 @@
+---
+title: "Arenas"
+description: "Qué es una arena, cómo se crea desde el menú de administración, dónde aparecen los objetivos, cómo se elige una y el resto de pantallas de staff."
+---
+
+Una arena es un lugar con **un solo spawn**. Nunca se bloquea: en la misma arena corren a la vez cualquier
+número de ejercicios y duelos, cada jugador está aislado de todos los demás y cada uno ve solo sus propios
+objetivos. Hacia donde mira el spawn es donde aparecen los objetivos. La arena no sabe nada de quién está
+dentro más allá de un recuento.
+
+Las arenas viven en la base de datos, en `aim_arenas`, no en un archivo YAML. Todos los servidores que
+apuntan a la misma base de datos las comparten, y una recarga no las toca.
+
+<Callout type="warning" title="Sin arena no hay nada que jugar">
+Tanto un ejercicio como un duelo necesitan una arena lista. Sin ninguna, un ejercicio responde "No arena is
+ready. Ask an administrator." antes de tocar al jugador, y lo mismo leen los dos lados de un duelo
+aceptado. No se entrena donde está el jugador.
+</Callout>
+
+## Crear una arena
+
+Todo se hace en `/aimtraineradmin` → **Arenas**. No hay nada que escribir en la línea de comandos salvo
+`reload`.
+
+<Steps>
+  <Step title="Crear">
+    Pulsa **New arena** y escribe un **id** cuando lo pida, como `aim1`. Se rechaza si otra arena ya lo
+    usa, y se guarda en minúsculas. La arena aparece activada, sin spawn, con el nombre del id tal como lo
+    escribiste, y el chat dice "Arena `<id>` created. Set its spawn next."
+  </Step>
+  <Step title="Ponerle nombre">
+    En la pantalla de la arena, **Display name** abre un campo de texto: hasta 64 caracteres, colores
+    permitidos. Es lo que leen los jugadores; el id no cambia.
+  </Step>
+  <Step title="Poner el spawn">
+    Pulsa **Spawn** y colócate donde va, **mirando al espacio abierto donde deben aparecer los
+    objetivos**. El asistente guarda tu posición y hacia dónde miras, y el chat dice "Spawn of `<id>` set.
+    Face where the targets should appear."
+  </Step>
+  <Step title="Comprobar que está lista">
+    El ítem de resumen marca la arena como lista cuando está activada y su spawn está en un mundo cargado.
+    La lista de arenas marca cada una como **READY** o **INCOMPLETE**.
+  </Step>
+</Steps>
+
+## Dónde aparecen los objetivos
+
+El jugador queda congelado en el spawn, así que cada ejercicio se dispone alrededor de la posición y la
+orientación del spawn.
+
+- Los objetivos de flick se colocan alrededor de los ojos, dentro de la dispersión horizontal del
+  ejercicio a cada lado de esa orientación y de su rango de elevaciones, nunca dentro del suelo.
+- Un objetivo de tracking hace strafe en un arco delante del jugador; un rival de combo gira a su
+  alrededor y se acerca.
+- Un objetivo se coloca a la distancia del ejercicio **por el ajuste de distancia del jugador**. El
+  ejercicio `precision` de serie llega a 12 bloques y un jugador puede subir la distancia a ×3.00, así que
+  deja libre bastante más de treinta bloques delante del spawn si mantienes esos valores.
+
+Los ejercicios y los ajustes están en [Ejercicios](/docs/exyliaaimtrainer/ejercicios) y
+[Ajustes](/docs/exyliaaimtrainer/ajustes).
+
+## Activada, desactivada, borrada
+
+| Acción | Efecto |
+|---|---|
+| **Desactivar** | No se envía ningún ejercicio ni duelo nuevo allí. Todo ejercicio en curso se detiene y su jugador vuelve a casa; todo duelo en curso se cancela. El chat dice "Arena `<id>` disabled. Sessions there were stopped." |
+| **Activar** | La arena vuelve a ofrecerse, en cuanto tenga el spawn puesto. |
+| **Borrar** | Tras una pantalla de confirmación. Detiene de la misma forma todo ejercicio y duelo en curso y después elimina la fila. |
+
+Un duelo detenido así se cancela: los dos jugadores vuelven y no se guarda nada. Un ejercicio detenido así
+se guarda como cualquier partida cortada. Ver [Entrenamiento](/docs/exyliaaimtrainer/entrenamiento).
+
+## Cómo se elige una arena
+
+Cuando empieza un ejercicio o un duelo, el plugin toma la arena **lista** que aloja a **menos jugadores**:
+uno por ejercicio, dos por duelo. Diez jugadores entrenando a la vez se reparten así entre las arenas en
+lugar de amontonarse en la primera.
+
+```yaml title="plugins/ExyliaAimTrainer/config.yml"
+arena:
+  max-players-per-arena: 0
+  return-location: ""
+```
+
+| Clave | Por defecto | Qué hace |
+|---|---|---|
+| `max-players-per-arena` | `0` | Jugadores que una arena puede alojar a la vez, contando juntos ejercicios y duelos. `0` es ilimitado. Una arena en su tope se salta. |
+| `return-location` | `""` | Adónde se manda a un jugador al salir, como `world,x,y,z` o `world,x,y,z,yaw,pitch`. Vacío lo devuelve a donde estaba. |
+
+El tope se compara con el recuento antes de que lleguen los nuevos, así que una arena a un jugador de su
+tope todavía acepta un duelo y queda uno por encima.
+
+Con `return-location` vacío, el jugador vuelve al punto exacto del que salió. Si ese punto se desconoce,
+va al spawn de su mundo.
+
+<Callout type="note" title="Justo después de arrancar">
+Las arenas se leen de la base de datos de forma asíncrona cuando el plugin se habilita; la consola imprime
+"Loaded `<n>` arenas and `<m>` drills" cuando están cargadas. Hasta entonces no hay ninguna arena lista
+que elegir: un ejercicio se rechaza con la línea de sin arena, y un duelo aceptado no hace nada.
+</Callout>
+
+## El resto del menú de administración
+
+La pantalla principal muestra cuántas arenas hay y cuántas están listas, los duelos y ejercicios en curso
+y los jugadores conectados.
+
+| Pantalla | Qué hace |
+|---|---|
+| **Arenas** | La lista de arriba, ordenada por id, cada una con su id, si está activada, su spawn y la carga actual de duelos y ejercicios. |
+| **Running duels** | Cada duelo en curso con sus jugadores, marcador de la serie, ronda, formato, ejercicio, arena y estado. Hacer clic en uno lo cancela tras una confirmación: los dos jugadores vuelven y no se guarda nada. |
+| **Players** | Todos los conectados, por nombre, con su rating, precisión, sesiones, victorias, derrotas y estado. Un jugador libre: clic para reiniciar sus estadísticas. Uno ocupado: **clic izquierdo** detiene su ejercicio, **clic derecho** reinicia sus estadísticas. Los dos reinicios pasan por una confirmación. |
+| **Reload** | Ejecuta la misma recarga que `/aimtraineradmin reload` y vuelve a abrir el menú. |
+
+<Callout type="note" title="Detener a un jugador detiene un ejercicio">
+El clic izquierdo sobre un jugador ocupado solo detiene un **ejercicio**. A un jugador en un duelo no se le
+toca; cancela el duelo desde **Running duels**.
+</Callout>
+
+<Callout type="warning" title="Qué borra un reinicio y qué conserva">
+Reiniciar a un jugador pone su perfil a cero, borra todos sus récords de ejercicio — las tablas de cada
+ejercicio se leen de ellos — y borra su historial de sesiones. Sus **filas del historial de duelos se
+conservan**, aunque la pantalla de confirmación diga "Every record, session and duel". El historial de
+duelos del perfil — victorias, derrotas — se pone a cero con lo demás. Se conservan sus ajustes y su
+último ejercicio y formato.
+</Callout>
+
+## Los archivos del menú de administración
+
+Las pantallas de `menus/admin/` se **reescriben desde el jar en cada arranque y en cada recarga**, para que
+un botón añadido en una versión llegue a los servidores que ya tienen la carpeta. Ahí no hay nada pensado
+para que lo edite el dueño. Cómo se actualizan los menús de jugador está en
+[Menús](/docs/exyliaaimtrainer/menus).

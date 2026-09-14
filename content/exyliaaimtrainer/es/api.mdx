@@ -1,0 +1,325 @@
+---
+title: "API"
+description: "Lee ejercicios, arenas, sesiones, duelos y tablas, inicia o detén cualquiera, abre las pantallas del jugador y escucha cada acierto y cada ronda."
+badge: "dev"
+---
+
+`AimTrainerService` es cómo otro plugin averigua si este tiene a un jugador, lee una sesión de ejercicio o
+un duelo, pide a la base de datos un perfil o una tabla, inicia o detiene cualquiera de los dos y abre las
+pantallas del propio jugador desde un NPC o un ítem del lobby.
+
+```java
+ExyliaAPI.get(AimTrainerService.class).ifPresent(aim ->
+    aim.activityOf(player.getUniqueId())
+       .ifPresent(activity -> event.setCancelled(true)));
+```
+
+<Callout type="note" title="Añadirla a tu proyecto">
+El artefacto, el repositorio y la línea de `plugin.yml` son los mismos para todos los plugins de Exylia y
+están en la [página de la API pública](/docs/exylialib/api).
+</Callout>
+
+<Callout type="warning" title="v1.153.0 o posterior">
+El paquete `net.exylia.lib.api.aimtrainer` aparece por primera vez en ExyliaLib `v1.153.0`. Una etiqueta
+anterior compila todo lo demás del artefacto y sencillamente no tiene estas clases, así que indica al menos
+esa versión:
+
+```groovy
+compileOnly 'com.github.DiGround-s.ExyliaLib:exylia-api:v1.153.0'
+```
+</Callout>
+
+## Lo que casi toda integración quiere
+
+`activityOf(UUID)` es la pregunta que vale la pena hacer antes que ninguna otra. Un jugador en un ejercicio
+o en un duelo tiene su inventario y su ubicación en manos de este plugin, así que teletransportarlo, darle
+ítems o abrirle un menú se deshará o romperá su sesión.
+
+Todo lo que devuelve un valor copia lo que encontró de los registros vivos del plugin, así que un
+`AimMatch` es el duelo tal como *era* y no tal como es. Las acciones ejecutan exactamente lo que ejecuta el
+comando del propio jugador —las comprobaciones, los claims y los mensajes que ve— y devuelven si el plugin
+aceptó la petición, no cómo terminó. Lo que pasó llega como evento.
+
+<Callout type="warning" title="Hilos">
+Llama a las acciones desde el hilo principal o, en Folia, desde el hilo dueño del jugador en cuestión. Los
+métodos `CompletableFuture` van a la base de datos y son seguros desde cualquier sitio, igual que los seis
+métodos que abren menús.
+</Callout>
+
+## Lo que ofrece el servidor
+
+| Método | Qué hace |
+|---|---|
+| `List<AimDrill> drills()` | Los ejercicios configurados en este servidor, en el orden del menú. |
+| `Optional<AimDrill> drill(String drillId)` | Un ejercicio, o vacío si no hay ninguno con ese id. |
+| `List<AimArena> arenas()` | Todas las arenas. |
+| `Optional<AimArena> arena(String arenaId)` | Una arena, o vacío si no hay ninguna con ese id. |
+
+Los ejercicios son configuración, no código, así que el conjunto cambia entre servidores y un id que
+funciona en uno no está garantizado en otro: compruébalo antes de ofrecerlo. El id se compara exactamente
+como está escrito en `config.yml`; el de una arena se recorta y se pasa a minúsculas antes.
+
+Las arenas se leen de la base de datos después de que el plugin arranca, así que `arenas()` puede estar
+vacía los primeros instantes de un arranque aunque el servidor tenga varias. Muchos jugadores comparten una
+arena a la vez, así que la lista tampoco es una lista de espacio libre: `AimArena.isReady()` dice cuáles
+pueden alojar algo.
+
+## Qué está haciendo un jugador
+
+| Método | Qué hace |
+|---|---|
+| `Optional<AimActivity> activityOf(UUID)` | Qué hace este plugin con un jugador. Vacío significa que no lo tiene. |
+| `Optional<AimMatch> matchOf(UUID)` | El duelo en el que está un jugador, o vacío si no está en ninguno. |
+| `Optional<AimMatch> match(UUID matchId)` | Un duelo por su id, o vacío una vez limpiado. |
+| `List<AimMatch> matches()` | Todos los duelos en curso ahora mismo. |
+| `int playersIn(String arenaId)` | Cuántos jugadores aloja una arena ahora: uno por sesión de ejercicio y dos por duelo en curso. Una cifra de carga, la misma contra la que se mide el tope de la arena. |
+| `Optional<AimTrainingSession> training(UUID)` | La sesión de ejercicio de un jugador, o vacío si no está entrenando. |
+| `List<AimTrainingSession> trainingSessions()` | Todas las sesiones de ejercicio en curso. |
+| `Optional<UUID> pendingDuelFor(UUID)` | Quién ha retado a un jugador y sigue esperando respuesta, o vacío si nadie. |
+
+Un jugador que descansa en la arena tras un ejercicio, con el resumen en pantalla, sigue en `TRAINING`: la
+sesión solo termina cuando sale o se acaba el descanso. `AimTrainingSession.phase()` distingue ambos casos.
+
+Un jugador tiene como mucho una petición esperándole. Un reto más nuevo sustituye al anterior, así que
+`pendingDuelFor` nombra a quien retó el último.
+
+## Registros
+
+| Método | Qué hace |
+|---|---|
+| `Optional<AimProfile> profile(UUID)` | El perfil en caché de alguien conectado. Vacío para un jugador desconectado, y también mientras su carga sigue en curso. |
+| `CompletableFuture<AimProfile> loadProfile(UUID)` | El perfil, desde la base de datos si no está en memoria. Un jugador que nunca ha jugado recibe uno nuevo y vacío, con el nombre en blanco, en lugar de nada. |
+| `AimPreferences preferences(UUID)` | Los ajustes de un jugador, o los valores por defecto del servidor mientras su fila carga. |
+| `CompletableFuture<List<AimMatchRecord>> history(UUID)` | Los últimos duelos de un jugador, del más reciente al más antiguo, hasta `history.entries`. |
+| `CompletableFuture<List<AimSessionRecord>> sessions(UUID)` | Las últimas sesiones de ejercicio de un jugador, de la más reciente a la más antigua, hasta `history.entries`. |
+| `CompletableFuture<List<AimRecord>> records(UUID)` | Los mejores resultados de un jugador, una fila por ejercicio jugado, sin un orden concreto. |
+| `CompletableFuture<List<AimRecord>> leaderboard(String drillId, AimRecordCategory category)` | La tabla de un ejercicio, una fila por jugador. |
+| `CompletableFuture<List<AimProfile>> overallLeaderboard()` | Todos por la suma de sus mejores ratings en cada ejercicio. |
+
+Que `profile` esté vacío durante una carga es deliberado: quien llama desde el hilo del servidor debería
+degradar en lugar de esperar, y quien puede esperar debería pedir `loadProfile`.
+
+Ambas tablas se sirven desde una caché que dura `leaderboard.cache-seconds` —cinco minutos por defecto,
+nunca menos de cinco segundos—, así que redibujar es barato y una tabla fría es una consulta, no una por
+cada espectador. Las llamadas concurrentes comparten la consulta que ya está en marcha. Guardar un nuevo
+mejor **rating** vacía la caché, así que quien acaba de conseguirlo se ve en la tabla; una mejor puntuación
+o precisión que no subió el rating espera a que la caché caduque. Una tabla tiene `leaderboard.entries`
+filas y nunca coloca un cero.
+
+## Acciones
+
+| Método | Qué hace |
+|---|---|
+| `boolean startTraining(Player, String drillId)` | Mete a un jugador en un ejercicio, en la arena lista que menos jugadores aloja. |
+| `boolean duel(Player from, Player to, String drillId, int bestOf)` | Envía un reto. El retado aún tiene que aceptar, y el reto caduca solo tras `match.duel-request-expiry` segundos. |
+| `boolean acceptDuel(Player)` | Acepta el reto que espera a un jugador. |
+| `boolean denyDuel(Player)` | Rechaza el reto que espera a un jugador. |
+| `boolean forfeit(UUID)` | Abandona un duelo en nombre de alguien y entrega la serie a su rival. |
+| `boolean cancelMatch(UUID matchId)` | Detiene un duelo sin ganador, no guarda nada y devuelve a ambos jugadores. |
+| `boolean leave(Player)` | Saca a un jugador de aquello en lo que este plugin lo tenga: salir de un duelo es rendirse, salir de un ejercicio termina la sesión. |
+
+Un `false` de `startTraining` es un rechazo del que el jugador ya fue avisado: un ejercicio desconocido,
+PacketEvents ausente, ninguna arena lista con hueco bajo `arena.max-players-per-arena`, estar ya ocupado, u
+otro plugin que lo tiene o desaconseja tomarlo. Un jugador en una cola de ExyliaPracticeCore se toma
+prestado en lugar de rechazarse, como describe [Compatibilidad](/docs/exyliaaimtrainer/compatibilidad).
+
+`duel` le dice al retador por qué se negó —retarse a sí mismo, PacketEvents ausente, cualquiera de los dos
+ocupado o retenido— con dos excepciones que conviene conocer:
+
+- Un `drillId` desconocido devuelve `false` y **no se avisa a nadie**. Compruébalo antes con `drill(...)`.
+- `bestOf` **no** se comprueba contra `match.formats` ni `allow-even-formats`, cosa que el comando
+  `/aim duel` sí hace. Cualquier longitud positiva se juega tal cual; cero o menos se convierte en un
+  al mejor de 1. Ofrece solo las longitudes que lista el servidor si quieres coincidir con lo que los
+  jugadores pueden elegir.
+
+El tamaño y la distancia con que se juega un duelo siguen a `match.use-preferences`: desactivado, por
+defecto, ambos juegan el ejercicio tal como está escrito; activado, se aplican a ambos los ajustes **del
+retador**.
+
+Que `acceptDuel` devuelva `true` significa que la petición se tomó y pasó a la creación del duelo, no que
+haya un duelo en curso. La creación aún puede fallar: sin arena lista se avisa a ambos, y en los primeros
+instantes tras un arranque, antes de que las arenas estén en memoria, la aceptación no lleva a nada y nadie
+dice nada. Espera a `AimMatchStartEvent` en lugar de fiarte del booleano.
+
+`forfeit` y `cancelMatch` devuelven `true` cuando había un duelo sobre el que actuar; el trabajo en sí se
+ejecuta en el hilo de la arena un instante después.
+
+## Menús
+
+| Método | Abre |
+|---|---|
+| `void openMenu(Player)` | El menú principal. |
+| `void openDrills(Player)` | El selector de ejercicios. |
+| `void openSettings(Player)` | Los ajustes propios de tamaño, distancia, color, estilo y HUD. |
+| `void openDuel(Player player, Player target)` | La pantalla para preparar un duelo contra `target`. |
+| `void openProfile(Player viewer, UUID target)` | El perfil de alguien, mostrado a `viewer`. |
+| `void openLeaderboard(Player viewer, String drillId, AimRecordCategory category)` | La tabla de un ejercicio, ordenada por `category`. |
+
+Son seguros desde cualquier hilo y **no comprueban ningún permiso**: un NPC que abre la pantalla de ajustes
+la abre para todos, diga lo que diga `exyliaaimtrainer.settings`. Pon tú el filtro cuando importe.
+
+## Tipos
+
+Todo aquí es un record o un enum inmutable, y cada colección que contiene es una copia.
+
+| Tipo | Qué es |
+|---|---|
+| `AimDrill` | Un ejercicio tal como está configurado: `id`, `displayName`, `kind`, `weight`, `duration`, `targets`, `size`, `height`, `distanceMin`, `distanceMax`, `lifetime`, `ordered` y `moving`. Los números son los del ejercicio, antes de los ajustes de ningún jugador. |
+| `AimArena` | Un lugar desde el que disparar: `id`, `displayName`, `enabled` y el único `spawn` como `Optional<Location>`. `isReady()` es activada, con spawn, en un mundo cargado. |
+| `AimTrainingSession` | La sesión de ejercicio de un jugador: `id`, `player`, `rules`, `arenaId`, `startedAt` y `phase`. |
+| `AimRules` | Con qué reglas se jugó una sesión: el ejercicio después de los ajustes del jugador. |
+| `AimPerformance` | Cómo fue una sesión, una ronda o un lado de un duelo. |
+| `AimMatch` | Un duelo tal como estaba cuando preguntaste: ambos jugadores y nombres, las rondas que ha ganado cada uno (`scoreA`, `scoreB`), `drillId`, `bestOf`, `roundsToWin`, `roundsPlayed` con empates incluidos, `state`, un ganador `Optional` y tres marcas de tiempo. |
+| `AimRound` | Una ronda jugada: `number`, su reloj, un ganador `Optional` y un `AimPerformance` por jugador. |
+| `AimProfile` | Los números de toda la vida de un jugador y su historial de duelos. |
+| `AimRecord` | Los mejores resultados de un jugador en un ejercicio. |
+| `AimSessionRecord` | Una sesión de ejercicio terminada tal como la guarda el historial, con `personalBest` indicando si subió el mejor rating. |
+| `AimMatchRecord` | La vista de un participante de un duelo terminado, con ambos nombres congelados como eran. |
+| `AimPreferences` | Lo que un jugador eligió sobre sus propios objetivos y su propia pantalla. |
+| `AimActivity` | `TRAINING` o `MATCH`. No hay constante para "nada": la ausencia es el `Optional` vacío de `activityOf`. |
+| `AimSessionPhase` | `COUNTDOWN`, `RUNNING` o `RESTING`. |
+| `AimMatchState` | `WAITING`, `STARTING`, `ACTIVE`, `ROUND_END`, `ENDING`, `FINISHED`. Un duelo solo avanza. |
+| `AimDrillKind` | `FLICK`, `REACTION`, `TRACK` o `COMBO`. |
+| `AimGrade` | `PERFECT`, `EXCELLENT`, `GOOD`, `OK`, `SLOW`, de mejor a peor. |
+| `AimRecordCategory` | Por qué se ordena la tabla de un ejercicio. |
+
+Algunos llevan algo que no es obvio por el nombre de los campos.
+
+**`AimRules`** guarda el `width` y el `height` del objetivo tal como se dibuja, las dos distancias tras el
+ajuste de distancia, los `sizeMultiplier` y `distanceMultiplier` que las produjeron, la `difficulty` y la
+`seed`. La dificultad es el peso del ejercicio, por `(1 / multiplicador de tamaño)` elevado a
+`scoring.size-exponent`, por el multiplicador de distancia elevado a `scoring.distance-exponent`, acotada
+entre `min-difficulty` y `max-difficulty` y redondeada a dos decimales; ver
+[Puntuación](/docs/exyliaaimtrainer/puntuacion). En un duelo ambos multiplicadores son `1.0` salvo que
+`match.use-preferences` esté activado. `seed` es lo que da a ambos lados de un duelo los mismos objetivos en
+los mismos sitios y en el mismo orden.
+
+**`AimPerformance`** cuenta `hits`, `misses` (clics que no dieron en nada, un golpe apresurado o un objetivo
+apagado), objetivos `expired`, `falseStarts` y `shots`, con `accuracy` de 0 a 100. Guarda la `bestStreak`,
+el flick medio y el mejor, la reacción media y la mejor —ya corregidas por el ping—, `onTargetPercent` y
+`longestLockMillis` para el seguimiento, `bestCombo` y `comboHits` para un combate, `precisionPercent` para
+lo centrados que cayeron los aciertos, `averagePing`, `durationMillis`, y la `score`, el `rating` y la
+`difficulty`. `grades` cuenta aciertos por grado, y solo están los calificados: el primer acierto de una
+sesión no tiene uno anterior contra el que medirse, y el seguimiento no tiene aciertos. Un mejor de cero
+significa que no se midió nada, no un resultado instantáneo: la distinción que hay que hacer antes de
+dividir por nada.
+
+**`AimRecord`** guarda un mejor por columna —`bestRating`, `bestScore`, `bestAccuracy`, `bestStreak`,
+`mostHits`, `bestCombo`, `bestReactionMillis`, `bestFlickMillis`, `bestOnTarget`—, los totales y
+`ratingSize` / `ratingDistance`, los ajustes con que se consiguió el mejor rating. `bestAccuracy` solo
+cuenta sesiones de al menos `leaderboard.accuracy-min-shots` disparos, veinte por defecto.
+
+**`AimProfile.totalRating`** es la suma del mejor rating del jugador en cada ejercicio, y es lo que ordena
+la tabla general. Sube por la ganancia cada vez que mejora un rating. Los duelos nunca lo tocan, ni tampoco
+ningún `AimRecord`: solo las sesiones de ejercicio fijan récords.
+
+**`AimRecordCategory`** es `RATING`, `SCORE`, `ACCURACY`, `STREAK`, `HITS`, `REACTION` y `COMBO`. Solo
+`RATING` compara a dos jugadores que configuraron sus objetivos de forma distinta; el resto son mejores en
+bruto. `REACTION` es la única tabla donde el número más pequeño va primero.
+
+**`AimPreferences.freeze`** es siempre `true`. Nadie camina durante un ejercicio, diga lo que diga la fila
+guardada: ya no es una elección, y el campo sigue ahí para que el record conserve su forma.
+
+## Eventos
+
+Siete eventos, en `net.exylia.lib.api.aimtrainer.event`. Todos extienden `AimTrainerEvent`, todos son
+síncronos y se disparan en el hilo dueño del jugador del que tratan: en Folia, el hilo de región de ese
+jugador, y para los eventos de duelo, el de la arena.
+
+Cada evento que nombra un duelo lleva un `AimMatch`, y es una instantánea: el duelo vivo pertenece al
+classloader y al hilo de este plugin, así que una referencia a él no sería visible para el plugin que la
+tuviera ni segura de leer. Llama a `match(UUID)` cuando necesites el estado actual.
+
+| Evento | Se dispara cuando | Lleva |
+|---|---|---|
+| `AimDuelRequestEvent` | Un reto pasó las comprobaciones del plugin y está a punto de enviarse. **Cancelable.** | `from()`, `to()`, `drillId()`, `bestOf()` |
+| `AimTrainingStartEvent` | Se aceptó un ejercicio y se tomó al jugador; está a punto de moverse. | `player()`, `rules()` |
+| `AimTrainingEndEvent` | Una ronda de ejercicio terminó; los números son finales y están a punto de guardarse. | `player()`, `rules()`, `performance()`, `reason()` |
+| `AimTargetHitEvent` | Se acertó un objetivo, en un ejercicio o en un duelo. | `player()`, `millis()`, `grade()`, `reaction()`, `inMatch()` |
+| `AimMatchStartEvent` | Ambos jugadores llegaron a la arena; la cuenta atrás de la primera ronda empieza a continuación. | `match()` |
+| `AimRoundEndEvent` | Se puntuó una ronda. | `match()`, `round()` |
+| `AimMatchEndEvent` | El duelo se decidió o se canceló. | `match()`, `winner()`, `cancelled()` |
+
+`AimTrainerEvent` en sí es la base abstracta. Nunca se dispara y no tiene lista de handlers propia, así que
+no es algo para lo que registrar un listener: está ahí para que un helper pueda recibir cualquiera de los
+siete.
+
+### AimDuelRequestEvent es la única compuerta
+
+Se dispara cuando el retador ya pasó todas las comprobaciones del plugin —no retarse a sí mismo,
+PacketEvents presente, ninguno de los dos ocupado ni retenido por otro plugin— y antes de que la petición
+se guarde o nadie se entere. Cancelarlo no envía nada: ninguna línea al retador, ninguna petición al
+retado, y `duel(...)` devuelve `false`. Decirle al retador por qué te toca a ti. Una revancha desde la
+pantalla de resultado sigue el mismo camino y también lo dispara. Aceptar una petición no dispara nada
+propio.
+
+Nada más aquí se puede cancelar. Todos los demás eventos informan de algo ya decidido, así que recibir uno
+garantiza que ocurrió.
+
+### Cuándo empieza y termina un ejercicio
+
+`AimTrainingStartEvent` se dispara una vez por sesión, cuando se acepta. Repetir el ejercicio —un puñetazo
+mientras descansa o el botón de repetir de la hotbar— empieza una nueva ronda en la misma sesión y no lo
+vuelve a disparar. Tampoco lo hace cambiar de ejercicio desde la lista: la sesión conserva su `id` y su
+arena, y `rules()` en los siguientes eventos nombra el ejercicio nuevo.
+
+`AimTrainingEndEvent` se dispara para una ronda que estaba realmente en marcha, nunca para una cuenta atrás
+ni un descanso:
+
+| `reason()` | Cuándo |
+|---|---|
+| `COMPLETED` | El ejercicio llegó a su fin. El jugador se queda descansando en la arena; que el descanso se acabe termina la sesión sin un segundo evento. |
+| `LEFT` | El jugador salió con `/aim leave`, el botón de salir o `leave(Player)`. |
+| `CANCELLED` | Se sacó al jugador mientras seguía conectado: un administrador detuvo la sesión, murió, salió de la arena con un teletransporte que no hizo este plugin —una perla de ender incluida— o cambió de mundo, otro plugin lo reclamó, o el servidor se está deteniendo. |
+| `DISCONNECTED` | El jugador se desconectó. |
+| `MATCH_FOUND` | ExyliaPracticeCore le encontró una partida mientras entrenaba. |
+
+Una ronda cortada por una repetición o un cambio de ejercicio se guarda como cualquier otra, bajo el
+ejercicio que era, pero no dispara evento de fin: Play again o Change drill a mitad de ronda son las únicas
+formas en que una ronda termina en silencio.
+Una ronda vacía —ni acierto, ni fallo, ni objetivo caducado, ni salida en falso, ni un solo tick de
+seguimiento— dispara su evento pero no se guarda.
+
+### AimTargetHitEvent
+
+`millis()` es el tiempo de flick desde el acierto anterior, o el tiempo de reacción cuando `reaction()` es
+`true`. Para el primer acierto de una ronda no hay uno anterior: `millis()` es negativo y `grade()` es
+`null`. Un tiempo de reacción ya está corregido por el ping del jugador.
+
+Se dispara para aciertos de `FLICK`, `REACTION` y `COMBO`. `TRACK` no tiene aciertos que informar —el
+seguimiento se mide cada tick, no por clic— y en un combate ni un golpe apresurado ni un golpe a un
+objetivo aún rojo del anterior disparan nada, porque ninguno cuenta.
+
+### Rondas y el final de un duelo
+
+`AimRoundEndEvent` se dispara en cuanto ambos jugadores terminan la ronda, **antes** de sumar la ronda al
+ganador en la serie: `match().scoreA()` y `scoreB()` todavía leen lo que tenían antes de esta ronda,
+mientras que `roundsPlayed()` ya la incluye. Lee el `winner()` de la propia ronda para saber quién la ganó.
+
+Un `round().winner()` vacío es un empate: la misma puntuación, la misma precisión y los mismos aciertos. Un
+empate se repite con el mismo número de ronda, y tres seguidos cancelan el duelo.
+
+`AimMatchEndEvent` con `cancelled()` en `false` es un duelo decidido, rendición incluida, y `winner()` está
+fijado. Se dispara *antes* de escribir perfiles e historial, que ocurre de forma asíncrona después: lee el
+ganador del evento, no de los perfiles. Con `cancelled()` en `true`, `winner()` es `null` y no se guarda
+nada: lo detuvo un administrador o `cancelMatch`, hubo tres empates seguidos, no se pudo mover a un jugador
+a la arena, o el servidor se está deteniendo.
+
+```java
+@EventHandler
+public void onHit(AimTargetHitEvent event) {
+    if (event.grade() == AimGrade.PERFECT && !event.inMatch()) {
+        reward(event.player(), event.millis());
+    }
+}
+```
+
+## Lo que no expone
+
+Ni editor de arenas, ni escritura sobre ejercicios, puntuación o cualquier otra configuración, ni reinicio
+de estadísticas, ni forma de editar un perfil, un récord o los ajustes de un jugador. Un duelo se construye
+con `duel(...)` a partir de un id de ejercicio y una longitud, no entregando al plugin un objeto de reglas
+propio.
+
+Si una integración necesita de verdad algo que no está aquí, pregunta en
+[Discord](https://discord.exylia.net): un método añadido a un servicio es una versión menor.

@@ -1,0 +1,148 @@
+---
+title: "Installation"
+description: "Dependencies, first boot, the files the plugin generates and which of them it keeps rewriting."
+---
+
+## Before you start
+
+ExyliaAimTrainer needs two plugins in `plugins/` **before** the first boot.
+
+| Plugin | What for |
+|---|---|
+| `ExyliaLib` | Configuration, menus, database, placeholders, effects, sidebars, overlays, inventory snapshots and player claims. |
+| `packetevents` | The targets themselves, and the isolation that keeps players in different sessions from seeing each other. Declared as a hard dependency; without it the plugin does not load. |
+
+Optional:
+
+- **PlaceholderAPI** — to use the plugin's placeholders outside it. Everything else works without it.
+- **ExyliaPracticeCore** — lets a player waiting in a practice queue train until their match is found.
+  See [Compatibility](/docs/exyliaaimtrainer/compatibility).
+
+<Callout type="note" title="ExyliaLib is listed as soft">
+`plugin.yml` names ExyliaLib under `softdepend` on purpose: the loader that installs ExyliaLib is the
+one that has to load first for that install to happen. The plugin still needs it to run.
+</Callout>
+
+## Installing
+
+<Steps>
+  <Step title="Drop in the jars">
+    Copy `ExyliaAimTrainer.jar` and its dependencies into the server's `plugins/` folder.
+  </Step>
+  <Step title="Start the server">
+    The first boot generates the configuration files, the menus and the database tables.
+  </Step>
+  <Step title="Check the console">
+    You should see `ExyliaAimTrainer enabled` and, once the arenas are read, `Loaded 0 arenas and 16
+    drills`. Arenas are read in the background; until that second line appears, no drill and no duel
+    can be sent anywhere.
+  </Step>
+  <Step title="Open the panel">
+    With the `exyliaaimtrainer.admin` permission, run `/aimtraineradmin` to open the admin menu and
+    create a first arena. Nothing starts without one. See
+    [First steps](/docs/exyliaaimtrainer/first-steps).
+  </Step>
+</Steps>
+
+<Callout type="warning" title="If the packet layer is not there">
+When ExyliaLib cannot reach PacketEvents the console warns
+`PacketEvents is missing: targets cannot be drawn and no drill can start`, and every drill or duel
+request is answered with "Targets need PacketEvents, which this server does not have." The rest of the
+plugin — menus, profiles, boards — keeps running.
+</Callout>
+
+## Generated files
+
+All of them live in `plugins/ExyliaAimTrainer/`.
+
+| File | Contents |
+|---|---|
+| `config.yml` | Training, every drill, the settings players pick from, scoring, grades, feedback, the HUD, duels, the practice integration, boards, history, arenas, chat isolation and `debug`. |
+| `messages.yml` | Every line the plugin sends, grouped by system. |
+| `scoreboards.yml` | The two sidebars: one for a drill, one for a duel. |
+| `menus/` | The player screens — `main`, `drills`, `settings`, `opponents`, `duel`, `profile`, `records`, `history`, `sessions`, `leaderboard_drills`, `leaderboard`, `result`, `drill_result` — the in-drill `hotbar.yml`, and the `admin/` folder. |
+| `database.yml` | Database engine, written by ExyliaLib. H2 by default, embedded, nothing to install. |
+
+A menu file that fails to parse is reported in the console as
+`Menu "<id>" (<path>) did not load and will not open`, and that one screen does not open; the rest of
+the plugin keeps running.
+
+## Which menu files are yours
+
+The `menus/` folder follows three rules, and only one of them keeps your edits.
+
+| Files | What happens to them |
+|---|---|
+| `menus/admin/` | Deleted and replaced from the jar on **every start and every menu reload** — `/aimtraineradmin reload`, the reload button, and a reload of ExyliaLib itself. |
+| `menus/hotbar.yml` | Overwritten from the jar on **every start and every reload**, the same way. |
+| Every other file under `menus/` | Yours. Installed once and then updated around your edits. |
+
+<Callout type="warning" title="Do not edit the admin screens or the hotbar">
+Anything changed in `menus/admin/` or `menus/hotbar.yml` is gone at the next start or reload. That is
+deliberate: a button added in a release reaches servers that already have the files. Nothing an owner
+is meant to edit lives there.
+</Callout>
+
+The thirteen player screens are kept up to date by ExyliaLib, which remembers the defaults you last
+reviewed in `.defaults/files/` inside the plugin folder:
+
+- **A missing file** is written — unless it was installed before and you deleted it, in which case it
+  stays deleted. To get a shipped screen back, delete both the file and its copy under
+  `.defaults/files/menus/`.
+- **A key new in a release** is added to your file at once, comments included.
+- **A default that changed** on a key still at the value you last had is left alone and listed in
+  `/exylialib updates`, where you apply it or keep yours.
+- **Anything you changed or deleted** is never touched.
+
+## Database
+
+By default the plugin uses **H2**: a file inside the plugin folder, with no server, no installation
+and no maintenance. It is perfectly fine for a single server.
+
+To share data across servers, edit `database.yml`:
+
+```yaml title="plugins/ExyliaAimTrainer/database.yml"
+database:
+  type: mysql
+  settings:
+    max-pool-size: 0
+  mysql:
+    host: 127.0.0.1
+    port: 3306
+    database: minecraft
+    username: root
+    password: ""
+```
+
+Supported engines: `h2`, `mysql`, `mariadb`, `postgresql` and `mongodb`. Only the block matching
+`type` is read. The file is ExyliaLib's; its full reference is in the
+[library's database page](/docs/exylialib/database).
+
+<Callout type="note" title="Arenas are not in a file">
+Arenas, profiles, records and history live in the database, not in YAML, in five tables:
+
+| Table | One row per |
+|---|---|
+| `aim_arenas` | arena |
+| `aim_profiles` | player: lifetime numbers, duel record, overall rating and their settings |
+| `aim_records` | player and drill: the bests on every board |
+| `aim_sessions` | finished drill |
+| `aim_matches` | participant of a finished duel |
+
+Arenas are created and edited from `/aimtraineradmin`, which is what lets several servers share one set
+by pointing at the same database.
+</Callout>
+
+Nothing waits on the database while the plugin enables. Every read and write is asynchronous, a
+profile is loaded when its player joins, and a profile that finishes loading after its player already
+left is dropped.
+
+## Updating
+
+Replace the jar and restart. Your edits to `config.yml`, `messages.yml`, `scoreboards.yml` and the
+player menus are kept.
+
+`config.yml` carries a version, and a release that changes a shipped default moves only the values
+still at the old one: a drill whose duration you changed keeps it, a drill you added is never touched,
+and a sound you picked stays picked. `menus/admin/` and `menus/hotbar.yml` are replaced, as above, and
+arenas and statistics live in the database.
