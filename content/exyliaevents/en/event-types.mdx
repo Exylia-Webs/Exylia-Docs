@@ -1,9 +1,9 @@
 ---
 title: "Event types"
-description: "The forty-nine registered types, what each one is, and the settings that matter with their defaults."
+description: "The fifty-one registered types, what each one is, and the settings that matter with their defaults."
 ---
 
-Forty-nine types are registered: forty-two games and seven team variants of some of them. The type is
+Fifty-one types are registered: forty-three games and eight team variants of some of them. The type is
 chosen when the configuration is created and cannot be changed afterwards.
 
 ## The catalogue
@@ -37,6 +37,7 @@ chosen when the configuration is created and cannot be changed afterwards.
 | `infection` | Infection | Infection / Tag | — |
 | `kingkong` | King Kong | Chase | — |
 | `hideseek` | Hide and Seek | Chase | — |
+| `morphhunt` | Block Morph Hunt | Chase | — |
 | `murdermystery` | Murder Mystery | Social deduction | — |
 | `bridge` | The Bridge | Team Objective | Yes |
 | `ctf` | Capture the Flag | Team Objective | Yes |
@@ -59,6 +60,7 @@ chosen when the configuration is created and cannot be changed afterwards.
 | `lms_teams` | LMS Teams | Team Elimination | Yes |
 | `gemcrawler_teams` | Gem Crawler Teams | Team Collection | Yes |
 | `thimble_teams` | Thimble Teams | Team Precision | Yes |
+| `koth_teams` | King of the Hill Teams | Team Zone control | Yes |
 
 ## Settings every type shares
 
@@ -69,6 +71,8 @@ chosen when the configuration is created and cannot be changed afterwards.
 | `min-players` | `2` | Players needed before the countdown begins. |
 | `max-players` | `32` | How many fit. |
 | `grace-period` | `5` where the type has one | Seconds at the start with no damage. |
+| `bounds-border` | `true` | Draws the arena bounds as a wall — see [Arenas · The arena border](/docs/exyliaevents/arenas#the-arena-border). |
+| `music-enabled` | `true` | Whether this event plays music. Toggled from the setup screen — see [On-screen and audio · Music](/docs/exyliaevents/visuals#music). |
 
 Team types also get `team-selector-enabled`, on by default, and `team-count`.
 
@@ -136,8 +140,8 @@ built from that block.
 | `wind-charges` | `1` |
 | `wind-burst-level` | `2` |
 | `launch-power` | `1.6` |
-| `miss-kills-macer` | `false` |
-| `mace-hit-eliminates` | `false` |
+| `miss-kills-macer` | `true` |
+| `mace-hit-eliminates` | `true` |
 | `modifiers-enabled` | `true` |
 | `modifier-chance-single` | `49` |
 | `modifier-chance-double` | `25` |
@@ -146,6 +150,11 @@ built from that block.
 A spinning mace picks a hunter, who has `round-duration` seconds to smash somebody off the platform.
 Leaving the arena bounds is being eliminated, so the fall needs no rule of its own. Every round runs
 through four phases: spinning, hunting, settling — while whoever was launched comes down — and paused.
+
+A round lasts its whole clock rather than ending at the first smash. With `mace-hit-eliminates` on, a
+smash takes its victim out on the spot instead of waiting for the fall; with `miss-kills-macer` on, a
+hunter who has landed nothing when the clock runs out explodes and is out. Both are on by default, and
+a modifier can change the second for its round.
 
 **The hunted may fight back.** During the hunt a blow lands with its knockback and nobody takes damage
 from it, so being pushed towards the edge is something a player can answer. Outside the hunt every hit
@@ -245,7 +254,11 @@ Musical chairs: fewer seats than players, music of random length, and a rush whe
 | `double-jump-power` | `1.0` |
 
 The floor vanishes behind you. Double jumps are limited, which is what stops the game being solved by
-hovering.
+hovering. `block-break-delay` is in ticks.
+
+Only the block under the middle of a player goes, which leaves a trail one block wide however they
+are aligned. A player hanging off a ledge by the edge of their hitbox loses the nearest block they are
+still standing on instead, so sneaking on a rim is not a way to stand still.
 
 ### Spleef and Splegg
 
@@ -269,19 +282,29 @@ The floor floods upwards, faster as it goes.
 
 | Setting | Default |
 |---|---|
-| `initial-anvil-rate` | `20` |
-| `min-anvil-rate` | `3` |
-| `rate-decrease-interval` | `10` |
-| `rate-decrease-amount` | `2` |
-| `anvils-per-wave` | `1` |
-| `anvils-increase-interval` | `15` |
-| `target-anvils` | `true` |
-| `target-anvil-interval` | `2` |
+| `initial-anvils-per-second` | `12` |
+| `max-anvils-per-second` | `45` |
+| `rate-increase-interval` | `12` |
+| `rate-increase-amount` | `4` |
+| `tracking-anvil-interval` | `2` |
+| `spawn-height` | `24` |
+| `max-live-anvils` | `300` |
 | `break-ground-blocks` | `true` |
 | `anvil-damage` | `true` |
 
-Anvils fall, faster and in greater numbers over time. With `target-anvils` on, some of them aim at
-players instead of falling at random.
+A storm of anvils over the whole arena, aimed at nobody: every anvil picks its own column at random
+inside the bounds. It starts at `initial-anvils-per-second`, spread evenly across the second, and every
+`rate-increase-interval` seconds it rises by `rate-increase-amount` up to `max-anvils-per-second`. Each
+step is a difficulty level, announced to the event.
+
+On top of the storm, one anvil falls down every living player's own column every
+`tracking-anvil-interval` seconds, from the same height as the rain, so a player at the keyboard walks
+out from under it and one who is not does not. That interval never scales with the difficulty; `0`
+turns it off.
+
+Anvils appear `spawn-height` blocks above the bottom of the bounds — never above their top and never
+fewer than four — and `max-live-anvils` caps how many are falling at once. Nothing falls during the
+grace period.
 
 ### Glass Bridge
 
@@ -293,10 +316,12 @@ Markers: **bridge glass** (area) and **finish platform** (area).
 | `max-players` | `24` |
 | `grace-period` | `5` |
 | `pvp` | `false` |
+| `collisions` | `false` |
 
 Rows of glass panels in pairs: in every pair one holds and one shatters. The panels are found by
 scanning the bridge marker and grouping the glass into rows, so the builder only has to build the
-bridge. A shattered panel stays shattered, and those behind learn from the fall.
+bridge. A shattered panel stays shattered, and those behind learn from the fall. With `collisions` off,
+players do not push each other off a panel.
 
 ## Reflexes
 
@@ -313,7 +338,7 @@ Marker: **finish line** (area).
 | `green-max` | `8` |
 | `red-min` | `2` |
 | `red-max` | `5` |
-| `red-grace-ticks` | `8` |
+| `red-grace-ticks` | `10` |
 
 Run on green, freeze on red. Moving on red is out; reaching the finish is safe. Each light lasts a
 random time inside its range, and red allows `red-grace-ticks` ticks so a step that landed late
@@ -340,8 +365,10 @@ OITC adds `arrow-limit` `1` — one arrow, one kill, and you pick it back up.
 | `kills-to-win` | `20` |
 | `respawn-delay` | `2` |
 | `grace-period` | `5` |
+| `shot-cooldown` | `10` |
 
 Free for all with respawns: one snowball kills, ammo never runs out, and nothing else hurts anybody.
+Snowballs come one at a time, `shot-cooldown` ticks apart — half a second by default.
 First to the kill target wins, or the top scorer when the clock runs out.
 
 ### Quake
@@ -396,6 +423,15 @@ Marker: **hill** (area), one to four of them.
 Standing on the hill alone scores; sharing it scores for nobody. Mark several hills and each one pays
 its own king.
 
+### King of the Hill Teams
+
+Marker: **hill** (area), one to four of them.
+
+`koth_teams` is King of the Hill played by teams, with the same settings plus `team-count` `2`, and
+`points-to-win` raised to `300` because a hill pays the whole team. A hill held by one team alone pays
+that team `points-per-second` every second; a single enemy on it stops it paying anybody. Every hill
+counts on its own, so a team holding two scores twice as fast.
+
 ### Gem Crawler
 
 `gem-spawn-interval` `5`, `win-gems` `10`, `win-countdown` `10`, `respawn-delay` `3`. Gems appear,
@@ -434,13 +470,89 @@ starts from their own point, so it needs **one spawn point per player**.
 | `seeker-percentage` | `20` |
 | `hiding-time` | `30` |
 | `seeker-speed` | `2` |
+| `seeker-glow` | `true` |
 | `glow-last-seconds` | `45` |
+| `glow-flash-interval` | `10` |
+| `glow-flash-count` | `3` |
+| `glow-flash-ticks` | `10` |
 | `found-become-seekers` | `true` |
 | `allow-interact` | `true` |
 
-Seekers wait blinded at spawn while everybody hides. A hit either turns the hider into a seeker or
-takes them out, depending on `found-become-seekers`. For the last `glow-last-seconds` seconds the
-hiders glow, so the game cannot be won by standing in a corner.
+Seekers wait blinded at spawn while everybody hides. Blindness is the client's to honour, so each
+seeker is also walled in by a shell of blocks only their own client is sent, until they are released.
+Released seekers get a stick, Speed at level `seeker-speed` and, with `seeker-glow`, an outline through
+walls, so a hider always knows where they are.
+
+A hit either turns the hider into a seeker or takes them out, depending on `found-become-seekers`.
+Players do not push each other, and names are hidden for the whole game — see
+[On-screen and audio · Nametags](/docs/exyliaevents/visuals#nametags).
+
+**The last stretch flashes.** Once `glow-last-seconds` seconds are left, every hider still hidden
+blinks every `glow-flash-interval` seconds: `glow-flash-count` blinks per flash, each one on and then
+off for `glow-flash-ticks` ticks. It shows roughly where to look without lighting anybody up for the
+rest of the round. `0` in `glow-last-seconds` or `glow-flash-count` turns it off.
+
+The hiders nobody found by the end of the clock win. A round that ends with nobody still hidden has no
+winner.
+
+### Block Morph Hunt
+
+| Setting | Default |
+|---|---|
+| `duration` | `300` |
+| `min-players` | `3` |
+| `seeker-percentage` | `20` |
+| `hiding-time` | `40` |
+| `seeker-speed` | `1` |
+| `seeker-glow` | `true` |
+| `glow-last-seconds` | `45` |
+| `glow-flash-interval` | `10` |
+| `glow-flash-count` | `3` |
+| `glow-flash-ticks` | `10` |
+| `solidify-time` | `3` |
+| `morph-cooldown` | `5` |
+| `taunt-interval` | `30` |
+| `taunt-points` | `1` |
+| `taunt-cooldown` | `10` |
+| `speed-cost` | `3` |
+| `blind-cost` | `6` |
+| `miss-damage` | `2` |
+| `found-become-seekers` | `true` |
+| `allow-interact` | `true` |
+
+Hide and Seek where the hiders are props. It plays by the same rules — the blinded start, the seekers'
+stick and glow, the flashing last stretch, the win for whoever stays hidden — and the settings the two
+share mean the same thing. Its screen is `menus/admin/morphhunt_settings.yml`.
+
+**Becoming a block.** A hider starts as the block under their feet, or oak planks when that one cannot
+be copied, and walks around as it with their body hidden from everybody. They copy another block of
+the map by right-clicking it with the wand from up to five blocks away, or by sneaking and
+right-clicking it, at most once every `morph-cooldown` seconds. Air, liquids, signs, barriers, light,
+fire and portals cannot be copied.
+
+**Settling into the grid.** A prop that stands still for `solidify-time` seconds becomes a block in the
+cell it stands in — aligned, lit and solid like the map around it — for everybody but the prop, who can
+still walk out of it. Any real movement melts it back. A cell settles only when it is free: passable,
+not lava, not taken by another prop and with no other player inside it. Water settles like air.
+
+**Finding them.** A seeker hits a moving prop directly, and a settled one by swinging at it within
+normal block reach with nothing solid in between. A swing that lands on a real block instead costs the
+seeker `miss-damage` health; one that would kill them puts their health back and stuns them, blind and
+slowed, for three seconds. Finding a prop heals the seeker to full. `0` turns the penalty off.
+
+**Taunts and powers.** Every `taunt-interval` seconds after the hiding time, every prop makes a sound
+with a burst of notes where it is; `0` turns it off. Props also carry four items:
+
+| Item | What it does |
+|---|---|
+| Wand (blaze rod) | Copies the block it points at. |
+| Taunt (note block) | Plays a taunt and earns `taunt-points`, once every `taunt-cooldown` seconds. |
+| Speed (sugar) | Speed II for five seconds, for `speed-cost` points. |
+| Blind (ink sac) | Blinds every seeker for three seconds, for `blind-cost` points. |
+
+Taunts and powers only work once the seekers are released. The prop's form and points are on the
+sidebar and the action bar, and the items' names and lore live in the `morphhunt` section of
+`messages.yml`.
 
 ## Social deduction
 
@@ -464,8 +576,9 @@ Marker: **gold spawn** (block), up to 32 and none of them required.
 
 One murderer with a knife, one detective with a bow, everybody else an innocent. Innocents collect the
 gold that appears to earn a bow of their own; shooting an innocent costs the shooter their life, and a
-fallen detective leaves their bow where they died. The murderer wins by killing everyone, the
-innocents by killing the murderer or outlasting the clock.
+fallen detective leaves their bow where they died. The murderer picks gold up too, to keep it from the
+innocents, but never earns a bow with it. The murderer wins by killing everyone, the innocents by
+killing the murderer or outlasting the clock.
 
 ## Team objective
 
@@ -552,10 +665,15 @@ Marker: **court** (area), **one per team**.
 | `team-count` | `2` |
 | `rounds-to-win` | `3` |
 | `round-delay` | `5` |
+| `ammo` | `1` |
+| `refill-seconds` | `5` |
 | `grace-period` | `5` |
 
 Each team keeps to its own court and throws snowballs at the other side. A hit takes a player out for
 the round; the team with nobody left loses it. Cross the line and you are put back where you belong.
+
+Every player holds `ammo` snowballs. Once they hold fewer, the stack is topped back up after
+`refill-seconds` seconds — one ball and a wait make each throw a decision. Raise both for a blizzard.
 
 ### Sheep Wars
 
@@ -566,7 +684,7 @@ the round; the team with nobody left loses it. Cross the line and you are put ba
 | `team-count` | `2` |
 | `starting-sheep` | `2` |
 | `sheep-interval` | `8` |
-| `throw-power` | `1.6` |
+| `throw-power` | `2.8` |
 | `explosion-power` | `3.0` |
 | `effect-radius` | `4.0` |
 | `grace-period` | `5` |
@@ -653,8 +771,9 @@ Marker: **answer zone** (area), **exactly four**.
 | `spare-last-round` | `true` |
 
 A question is read out and the four zones on the arena are the four answers. The wrong zone, or no
-zone at all, costs a life. The questions live in `trivia-questions.yml` and can be written, translated
-or replaced wholesale — see [Configuration](/docs/exyliaevents/configuration#trivia-questionsyml).
+zone at all, costs a life. Players do not push each other, so nobody is shoved out of the right zone.
+The questions live in `trivia-questions.yml` and can be written, translated or replaced wholesale — see
+[Configuration](/docs/exyliaevents/configuration#trivia-questionsyml).
 
 ### Race
 
@@ -670,10 +789,16 @@ Markers: **checkpoint** (area), one to thirty-two of them, and **finish line** (
 | `grace-period` | `5` |
 | `elytra` | `false` |
 | `boat` | `false` |
+| `boat-collisions` | `false` |
 
 Checkpoints are taken in the order they were set, and the finish only counts after the last checkpoint
 of the lap. Falling out of the arena puts a racer back at their last checkpoint rather than out of the
 race. The race ends once `finishers` racers have finished.
+
+Racers start on a grid. With more racers than spawn points, the extra ones line up in rows two and a
+half blocks behind each point, along the direction it faces; a row that would land in a wall uses the
+point itself. With `boat` on, `boat-collisions` decides whether boats bump into each other and into
+racers on foot.
 
 ## Tournaments and building
 
@@ -707,10 +832,11 @@ Only the shared settings. Checkpoints and the finish are pressure plates in the 
 
 ## Team variants
 
-Seven types exist in a team version: Top Killer, OITC, Quake, CS:GO, LMS, Gem Crawler and Thimble.
-They keep their solo settings and add the team layer described in
+Eight types exist in a team version: Top Killer, OITC, Quake, CS:GO, LMS, Gem Crawler, Thimble and
+King of the Hill. They keep their solo settings — Top Killer Teams and OITC Teams raise `kills-to-win`
+to `25`, King of the Hill Teams raises `points-to-win` to `300` — and add the team layer described in
 [Teams and kits](/docs/exyliaevents/teams-and-kits).
 
 On top of those, six games are team games in their own right with no solo version: The Bridge, Capture
-the Flag, Domination, Dodgeball, Sheep Wars and Splatoon. Thirteen types in all split players into
+the Flag, Domination, Dodgeball, Sheep Wars and Splatoon. Fourteen types in all split players into
 teams.

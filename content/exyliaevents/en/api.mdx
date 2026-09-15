@@ -1,11 +1,12 @@
 ---
 title: "API"
-description: "Read what is running, what is configured and what a player has done, and move players in and out of an event."
+description: "Read what is running, what is configured and what a player has done, move players in and out of an event, and follow its lifecycle."
 badge: "dev"
 ---
 
 `EventsService` is how another plugin finds out whether a player is inside a minigame, what is running
-or startable right now, and how it puts somebody in or takes them out.
+or startable right now, and how it puts somebody in or takes them out. Six Bukkit events report the
+life of every run as it happens.
 
 ```java
 ExyliaAPI.get(EventsService.class).ifPresent(events ->
@@ -13,12 +14,9 @@ ExyliaAPI.get(EventsService.class).ifPresent(events ->
           .ifPresent(event -> player.sendMessage("Playing " + event.displayName())));
 ```
 
-<Callout type="danger" title="This plugin publishes no Bukkit events">
-Despite the name, there is nothing in `net.exylia.lib.api.events.event` to listen for — the package
-does not exist. `GameEvent` is a **snapshot record of one running minigame**, not an
-`org.bukkit.event.Event`, and you never receive one from a listener: you ask the service for it. If you
-came here looking for a hook that fires when a minigame starts or ends, there is not one; poll
-`runningEvents()` or read a player's state when you need it.
+<Callout type="note" title="Needs exylia-api v1.133.0">
+`forceStart`, `openMenu` and the lifecycle events arrived in `v1.133.0`. An older artifact has none of
+them.
 </Callout>
 
 <Callout type="note" title="Adding it to your project">
@@ -92,12 +90,90 @@ to them.
 | `boolean spectate(Player, String eventId)` | Puts a player into a running event as a spectator. |
 | `Optional<GameEvent> start(String configId)` | Starts a new run of a configured event, or empty when it was refused. |
 | `boolean forceEnd(String eventId)` | Ends a running event now, without a winner. |
+| `boolean forceStart(String eventId)` | Begins play in a run now, without waiting out its countdown. `true` when play began. |
 
 `start` is refused when the definition is disabled, incompletely set up, or already running: one
 configuration hosts one run at a time, because the arena is part of the configuration.
 
 `forceEnd` is the administrative stop — players are given their inventories back and sent home, and
 nothing is paid out. Use it for a moderation call or a shutdown, not to finish a game.
+
+`forceStart` is the administrative start, for a host who does not want to wait: the minimum player
+count is not checked, only that somebody is in the run. It is refused when the run is already being
+played or ending, or when nobody is in it yet.
+
+## Menus
+
+| Method | What it does |
+|---|---|
+| `void openMenu(Player)` | Opens the events menu for a player, the one `/events` opens. |
+
+The screen a lobby NPC or a hotbar item wants: the running events, a way into them and the player's
+own record, drawn from the server's own menu files. Call it on the thread that owns the player, as an
+interaction handler already is.
+
+## Lifecycle events
+
+Six Bukkit events in `net.exylia.lib.api.events.event` follow a run from its start to its end. Each
+carries a `GameEvent` snapshot or an `EventDefinition`, never the live game. Two can be cancelled, and
+both fire before anything has been taken from anybody.
+
+| Event | When | Cancellable |
+|---|---|---|
+| `GameStartEvent` | A run of a configuration is about to open. `getDefinition()`, `getStarter()`. | Yes |
+| `GamePlayerJoinEvent` | A player is about to join a run to play it. `getPlayer()`, `getEvent()`. | Yes |
+| `GameBeginEvent` | The countdown is over: the players are in the arena and the clock is running. `getEvent()`. | No |
+| `GamePlayerEliminateEvent` | A player is out of the game and stays in the event to watch. `getPlayer()`, `getEvent()`. | No |
+| `GamePlayerLeaveEvent` | A player has left the run, playing or watching. `getPlayer()`, `getEvent()`. | No |
+| `GameEndEvent` | The run is over. `getEvent()`, `getWinners()`, `getReason()`. | No |
+
+```java
+@EventHandler
+public void onStart(GameStartEvent event) {
+    if (maintenance) {
+        event.setCancelled(true);
+        event.getStarter().ifPresent(p -> p.sendMessage("Events are paused for maintenance."));
+    }
+}
+```
+
+**`GameStartEvent`** fires once every check has passed — enabled, set up, this server's to play, not
+already running, within the limits — and before the run exists. Every start comes through it: a
+command, the admin menu, the timetable, the random scheduler, a request from another server and
+`start(String)` alike, which makes it the one place to hold events back. A cancelled start leaves no
+run, no broadcast, no slot taken in the limits and no cooldown. `getStarter()` is empty for a schedule
+or an API call. The plugin cannot know why you refused, so tell the starter yourself.
+
+**`GamePlayerJoinEvent`** fires once the run has room and the player is free, in an allowed world and
+signed up where the event asks for it, before their claim is taken, their inventory saved or they are
+teleported. Only joins to play are asked: spectating and an admin forcing a player in go around it,
+and `/events join` follows a refused join by letting the player watch instead, a cancelled one
+included. `getEvent()` does not count them yet.
+
+**`GamePlayerEliminateEvent`** fires before the game checks whether that leaves a winner, and
+`getEvent()` already counts them out. A death the game respawns them from is not an elimination, and
+neither is finishing a course.
+
+**`GamePlayerLeaveEvent`** covers a leave command, a menu, another plugin, the API and disconnecting.
+Being eliminated is not leaving, and neither is the run ending — that is `GameEndEvent`'s to report.
+
+**`GameEndEvent`** fires once per run, before anybody is sent home, so `getEvent()` still lists
+everybody. `getReason()` is a `GameEndReason`:
+
+| Constant | Meaning |
+|---|---|
+| `FINISHED` | Played to a result — winners or not — and announced. |
+| `STOPPED` | Stopped before a result: by an admin, a shutdown, a waiting event nobody joined in time, or the last player walking out before it began. Nobody wins one. |
+
+`getWinners()` holds more than one UUID for a team game or a shared result, is empty for a stopped
+run, and its players need not still be online. When the last player's leave stops a run, that run's
+`GameEndEvent` arrives before their `GamePlayerLeaveEvent`.
+
+<Callout type="warning" title="Not always the main thread">
+Joins and leaves fire on the thread that owns the player; a start, a begin and an end fire on the
+thread that asked for them, or the global thread when the clock or a schedule did. On Folia none of
+those is a single main thread, so schedule anything that touches the wider world.
+</Callout>
 
 ## Types
 
@@ -107,6 +183,7 @@ nothing is paid out. Use it for a moderation call or a shutdown, not to finish a
 | `EventDefinition` | One configured event: `id`, `displayName`, `type`, `enabled`. |
 | `EventStats` | One player's counters: `kills`, `deaths`, `wins`, `gamesPlayed`. |
 | `GameState` | Where a running event is in its life. |
+| `GameEndReason` | Why a run ended, carried by `GameEndEvent`. |
 
 ### GameEvent
 
@@ -156,7 +233,7 @@ played.
 
 ## What it does not expose
 
-No Bukkit events, as above. No arena editor, no spawn or reward writes, no per-minigame settings, no
+No arena editor, no spawn or reward writes, no per-minigame settings, no
 gauntlet or inscription management, and no way to write a statistic. The registry that decides whether
 a player is already busy elsewhere is internal too — from outside, ask each plugin's own service, which
 for this one is `isInEvent`.

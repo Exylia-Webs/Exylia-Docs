@@ -1,11 +1,12 @@
 ---
 title: "API"
-description: "Leer qué está corriendo, qué está configurado y qué hizo un jugador, y meter o sacar gente de un evento."
+description: "Leer qué está corriendo, qué está configurado y qué hizo un jugador, meter o sacar gente de un evento, y seguir su ciclo de vida."
 badge: "dev"
 ---
 
 `EventsService` es con lo que otro plugin averigua si un jugador está dentro de un minijuego, qué está
-corriendo o se puede arrancar ahora mismo, y con lo que mete o saca a alguien.
+corriendo o se puede arrancar ahora mismo, y con lo que mete o saca a alguien. Seis eventos de Bukkit
+cuentan la vida de cada partida a medida que pasa.
 
 ```java
 ExyliaAPI.get(EventsService.class).ifPresent(events ->
@@ -13,12 +14,9 @@ ExyliaAPI.get(EventsService.class).ifPresent(events ->
           .ifPresent(event -> player.sendMessage("Playing " + event.displayName())));
 ```
 
-<Callout type="danger" title="Este plugin no publica ningún evento de Bukkit">
-A pesar del nombre, no hay nada que escuchar en `net.exylia.lib.api.events.event`: ese paquete no
-existe. `GameEvent` es una **foto de un minijuego en curso**, no un `org.bukkit.event.Event`, y nunca te
-llega desde un listener: se lo pides al service. Si viniste buscando un hook que se dispare cuando
-arranca o termina un minijuego, no lo hay; consultá `runningEvents()` o leé el estado de un jugador
-cuando lo necesites.
+<Callout type="note" title="Necesita exylia-api v1.133.0">
+`forceStart`, `openMenu` y los eventos del ciclo de vida llegaron en `v1.133.0`. Un artefacto anterior
+no tiene ninguno.
 </Callout>
 
 <Callout type="note" title="Agregarlo a tu proyecto">
@@ -92,6 +90,7 @@ reserva del jugador y los mensajes que ve. Un `false` es una negativa que ya se 
 | `boolean spectate(Player, String eventId)` | Mete a un jugador en un evento en curso como espectador. |
 | `Optional<GameEvent> start(String configId)` | Arranca una partida nueva de un evento configurado, o vacío si fue rechazada. |
 | `boolean forceEnd(String eventId)` | Termina un evento en curso ahora mismo, sin ganador. |
+| `boolean forceStart(String eventId)` | Empieza el juego de una partida ya, sin esperar la cuenta atrás. `true` si arrancó. |
 
 `start` se rechaza cuando la definición está deshabilitada, incompleta o ya corriendo: una configuración
 aloja una partida por vez, porque la arena es parte de la configuración.
@@ -99,6 +98,84 @@ aloja una partida por vez, porque la arena es parte de la configuración.
 `forceEnd` es el corte administrativo: a los jugadores se les devuelve el inventario y se los manda a
 casa, y no se paga nada. Usalo para una decisión de moderación o un apagado, no para terminar una
 partida.
+
+`forceStart` es el arranque administrativo, para un anfitrión que no quiere esperar: no mira el mínimo
+de jugadores, solo que haya alguien en la partida. Se rechaza si la partida ya se está jugando o
+terminando, o si todavía no hay nadie adentro.
+
+## Menús
+
+| Método | Qué hace |
+|---|---|
+| `void openMenu(Player)` | Abre a un jugador el menú de eventos, el mismo que abre `/events`. |
+
+La pantalla que quiere un NPC de lobby o un objeto de la hotbar: los eventos en curso, la forma de
+entrar y el historial del propio jugador, dibujada con los archivos de menú del servidor. Llamalo desde
+el hilo dueño del jugador, como ya lo es un handler de interacción.
+
+## Eventos del ciclo de vida
+
+Seis eventos de Bukkit en `net.exylia.lib.api.events.event` siguen una partida desde que arranca hasta
+que termina. Cada uno lleva una foto `GameEvent` o una `EventDefinition`, nunca el juego vivo. Dos se
+pueden cancelar, y los dos se disparan antes de quitarle nada a nadie.
+
+| Evento | Cuándo | Cancelable |
+|---|---|---|
+| `GameStartEvent` | Una partida de una configuración está por abrirse. `getDefinition()`, `getStarter()`. | Sí |
+| `GamePlayerJoinEvent` | Un jugador está por entrar a una partida para jugarla. `getPlayer()`, `getEvent()`. | Sí |
+| `GameBeginEvent` | Terminó la cuenta atrás: los jugadores están en la arena y corre el reloj. `getEvent()`. | No |
+| `GamePlayerEliminateEvent` | Un jugador quedó fuera del juego y se queda en el evento mirando. `getPlayer()`, `getEvent()`. | No |
+| `GamePlayerLeaveEvent` | Un jugador salió de la partida, jugando o mirando. `getPlayer()`, `getEvent()`. | No |
+| `GameEndEvent` | La partida terminó. `getEvent()`, `getWinners()`, `getReason()`. | No |
+
+```java
+@EventHandler
+public void onStart(GameStartEvent event) {
+    if (maintenance) {
+        event.setCancelled(true);
+        event.getStarter().ifPresent(p -> p.sendMessage("Events are paused for maintenance."));
+    }
+}
+```
+
+**`GameStartEvent`** se dispara cuando pasaron todos los chequeos — habilitada, armada, de este
+servidor, sin estar ya corriendo, dentro de los límites — y antes de que exista la partida. Todo
+arranque pasa por acá: un comando, el menú de admin, el horario, el programador aleatorio, un pedido de
+otro servidor y `start(String)` por igual, así que es el único lugar para frenar eventos. Un arranque
+cancelado no deja partida, ni anuncio, ni hueco ocupado en los límites, ni cooldown. `getStarter()`
+viene vacío para un horario o una llamada de API. El plugin no puede saber por qué lo rechazaste, así
+que avisale vos a quien lo lanzó.
+
+**`GamePlayerJoinEvent`** se dispara cuando la partida tiene lugar y el jugador está libre, en un mundo
+permitido e inscripto donde el evento lo pide, antes de reservarlo, guardar su inventario o
+teletransportarlo. Solo se pregunta por entradas para jugar: espectar y que un admin fuerce a un
+jugador adentro no pasan por acá, y `/events join` sigue a una entrada rechazada dejando que el jugador
+mire, cancelada incluida. `getEvent()` todavía no lo cuenta.
+
+**`GamePlayerEliminateEvent`** se dispara antes de que el juego mire si eso deja un ganador, y
+`getEvent()` ya lo cuenta fuera. Una muerte de la que el juego lo hace reaparecer no es una
+eliminación, y terminar un recorrido tampoco.
+
+**`GamePlayerLeaveEvent`** cubre un comando de salida, un menú, otro plugin, la API y desconectarse.
+Quedar eliminado no es salir, y que termine la partida tampoco — eso lo informa `GameEndEvent`.
+
+**`GameEndEvent`** se dispara una vez por partida, antes de mandar a nadie a casa, así que `getEvent()`
+todavía los lista a todos. `getReason()` es un `GameEndReason`:
+
+| Constante | Significado |
+|---|---|
+| `FINISHED` | Jugada hasta un resultado — con ganadores o sin ellos — y anunciada. |
+| `STOPPED` | Detenida antes de un resultado: por un admin, un apagado, un evento en espera al que nadie entró a tiempo, o el último jugador saliendo antes de empezar. Nadie la gana. |
+
+`getWinners()` tiene más de un UUID en un juego por equipos o un resultado compartido, viene vacío en
+una partida detenida, y sus jugadores no tienen por qué seguir conectados. Cuando la salida del último
+jugador detiene una partida, su `GameEndEvent` llega antes que su `GamePlayerLeaveEvent`.
+
+<Callout type="warning" title="No siempre en el hilo principal">
+Las entradas y salidas se disparan en el hilo dueño del jugador; un arranque, un comienzo y un final,
+en el hilo que los pidió, o en el hilo global cuando fue el reloj o un horario. En Folia ninguno de
+esos es un único hilo principal, así que programá todo lo que toque el resto del mundo.
+</Callout>
 
 ## Tipos
 
@@ -108,6 +185,7 @@ partida.
 | `EventDefinition` | Un evento configurado: `id`, `displayName`, `type`, `enabled`. |
 | `EventStats` | Los contadores de un jugador: `kills`, `deaths`, `wins`, `gamesPlayed`. |
 | `GameState` | En qué punto de su vida está un evento en curso. |
+| `GameEndReason` | Por qué terminó una partida, lo lleva `GameEndEvent`. |
 
 ### GameEvent
 
@@ -159,7 +237,7 @@ jugando.
 
 ## Lo que no expone
 
-Ningún evento de Bukkit, como se dijo arriba. Nada de editor de arenas, escrituras de spawns o
+Nada de editor de arenas, escrituras de spawns o
 recompensas, ajustes por minijuego, manejo de gauntlets o inscripciones, ni forma de escribir una
 estadística. El registro que decide si un jugador ya está ocupado en otro lado también es interno —
 desde afuera se le pregunta al service de cada plugin, que para este es `isInEvent`.
