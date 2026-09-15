@@ -116,12 +116,12 @@ that moved; a rule a player can feel; a limit an owner can hit.
 - Placeholder tables list the whole placeholder, not just its tail: every name is written complete,
   with its `%` signs and its full prefix, and each one gets its own row and its own description. Never
   a bare suffix, never two names sharing a row, never a group standing in for the placeholders under it.
-- One identifier per plugin, and it is the long one. Several plugins publish a second, shorter
-  PlaceholderAPI identifier through `Placeholders.identifier(...)` — `ecc`, `practice`, `exyliatotem`.
-  They keep working; the documentation does not mention them. A plugin whose registered names carry a
-  short group prefix (`staff_`, `totem_`, `classes_`) is a different case: the reference page writes the
-  PlaceholderAPI form, and the pages that document that plugin's own YAML keep the registered name and
-  say once why the two differ.
+- One identifier per plugin: its own name. ExyliaLib removed `Placeholders.identifier(...)`, so the
+  short `practice`, `survivalcore`, `exyliaaim` and `exyliatotem` identifiers no longer exist. A plugin
+  whose registered names carry a short group prefix (`staff_`, `classes_`) is a different case: the
+  reference page writes the PlaceholderAPI form, and the pages that document that plugin's own YAML keep
+  the registered name and say once why the two differ. ExyliaAimTrainer and ExyliaTotemTrainer register
+  under their plugin name, so both forms are one: `%exyliaaimtrainer_<name>%`, `%exyliatotemtrainer_<name>%`.
 
 ### Where ExyliaAimTrainer's own notes disagree with its code
 
@@ -143,8 +143,9 @@ confirmed them.
   `menus/admin/` is refreshed on every reload too, not only on start. `AimMenus`' comment about a `.new`
   file describes nothing the library does.
 - **The reset confirmation says "every record, session and duel"**; `aim_matches` rows stay.
-- **README placeholders** read `%exyliaaim_<name>%`, which never resolves: the group `aim` is part of every
-  name. The pages write `%exyliaaimtrainer_aim_<name>%`.
+- **Placeholders** were renamed after 1.0.1: the group is now the plugin name, so every name is
+  `%exyliaaimtrainer_<name>%` everywhere. The old `%exyliaaimtrainer_aim_<name>%` and `%aim_<name>%` no
+  longer resolve; the pages and the README agree.
 - **README's ExyliaLib floor** (1.153.0) is below what the menus need (`refreshVersionedDirectory`, 1.156.1;
   `BundledFiles`, 1.158.0). The pages name no floor for the plugin.
 
