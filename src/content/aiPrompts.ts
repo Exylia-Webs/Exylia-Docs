@@ -11,8 +11,8 @@
  * invents a parameter produces a file the console rejects line by line.
  */
 
-/** The part of the language that is the same in every plugin. */
-const SEQUENCE_DSL = `## The step language
+/** The part of the language every effect uses, whichever plugin plays it. */
+const DSL_HEAD = `## The step language
 
 A step is one YAML string: a token in brackets, then what it is drawn with, then parameters
 separated by \`;\`.
@@ -31,7 +31,7 @@ A shape line draws DISPLAY ENTITIES when it carries \`as:\`, and PARTICLES when 
 
 CIRCLE SPHERE DOME CUBE LINE RIBBON SCATTER BEAM SPIRAL DOUBLE_HELIX TORNADO STAR CAGE DISC
 VORTEX WAVE CROSS GALAXY TORUS BURST PYRAMID RING_PULSE WINGS ARCH CLAW, plus DISPLAY for a
-single object at the anchor and PIXELS for a picture or a word.
+single object at the anchor.
 
 Each shape's own parameters:
 
@@ -59,7 +59,6 @@ Each shape's own parameters:
     RIBBON                  radius points waves amplitude
     SCATTER                 radius height points seed floor
     DISPLAY                 (none)
-    PIXELS                  art or word, pixel pick depth — below
 
 Every shape also understands:
 
@@ -88,9 +87,10 @@ Every shape also understands:
     face_out   faces away from the centre
     glow       an outline colour
     light      0 to 15. Use light:15 for anything that must read at night
-    model billboard hold   the display's own model, billboard mode and hold time
+    model billboard hold   the display's own model, billboard mode and hold time`;
 
-### PIXELS — a picture or a word out of blocks
+/** A picture or a word out of blocks. A scene uses it; a blow has no room for one. */
+const DSL_PIXELS = `### PIXELS — a picture or a word out of blocks
 
     '[PIXELS] RED_CONCRETE;as:block;word:SLAP;pixel:0.12;face:true;y:2.7;ease:out;life:0.25;size:0.02;size_to:0.12;light:15'
 
@@ -103,9 +103,10 @@ Every shape also understands:
     depth      moves it towards whoever it faces
     face:true  turns it to whoever did it, which keeps a word the right way round
 
-Everything under Moving a display applies to it.
+Everything under Moving a display applies to it.`;
 
-### Repeating any step
+/** What is left of the language once the shapes are written. */
+const DSL_TAIL = `### Repeating any step
 
     repeat     how many times the line plays
     every      seconds between plays. Defaults to 0.15
@@ -125,8 +126,10 @@ Everything under Moving a display applies to it.
     [TITLE] title;subtitle;in;stay;out    times in seconds
     [ACTION_BAR] text
     [MESSAGE] text
-    [COMMAND] give {player} …             {player} {world} {x} {y} {z}
-    [RAGDOLL] {victim}                    the body itself, choreographed, below
+    [COMMAND] give {player} …             {player} {world} {x} {y} {z}`;
+
+/** The two steps that leave a body behind. A kill is about one; a blow is not. */
+const DSL_BODIES = `    [RAGDOLL] {victim}                    the body itself, choreographed, below
     [NPC] {victim}                        a whole fake player, below
 
 ### [NPC] — a body
@@ -208,9 +211,10 @@ swoon heart arabesque
 
 The older poses still work — pose:burst spread knocked vortex balloon helicopter plane flatten
 melt sign thrown — but write new bodies with keys:. Time whatever lands on the body — the slap, the
-anvil, the blade — so its [DELAY] lines add up to the second its frame arrives.
+anvil, the blade — so its [DELAY] lines add up to the second its frame arrives.`;
 
-## Three rules that save an afternoon
+/** The three rules, the palette and what a bad line does. */
+const DSL_FOOT = `## Three rules that save an afternoon
 
 1. \`ease:in\` aims a slam and \`ease:out\` settles one.
 2. \`gravity:\` is ADDED to a movement that already descends, so a fall of eight blocks plus
@@ -232,6 +236,12 @@ A step that cannot be read is dropped and reported to the console with the line 
 an unknown token, a particle that does not exist, a shape that produced no points, a parameter the
 token does not understand. The rest of the effect still plays. So never invent a parameter or a
 shape: only what is listed above exists.`;
+
+/** Everything, for an effect that is a scene. */
+const SEQUENCE_DSL = [DSL_HEAD, DSL_PIXELS, `${DSL_TAIL}\n${DSL_BODIES}`, DSL_FOOT].join("\n\n");
+
+/** What fits a single blow: no pictures out of blocks, no bodies left on the floor. */
+const HIT_DSL = [DSL_HEAD, DSL_TAIL, DSL_FOOT].join("\n\n");
 
 const OUTPUT_RULES = `## What to answer with
 
@@ -424,10 +434,7 @@ UNDER SIX TENTHS OF A SECOND end to end. That is the budget, not a coincidence: 
 about 0.5, sizes small, \`life\` at 0.2–0.5, and use at most one sound. Anything longer reads as lag,
 not as an effect.
 
-None of the shipped hit effects uses \`[NPC]\` or \`[RAGDOLL]\` — a body left behind on every blow is
-a kill effect, not a hit effect — but both steps exist if you want one.
-
-${SEQUENCE_DSL}
+${HIT_DSL}
 
 ## Three effects that ship, in full
 
