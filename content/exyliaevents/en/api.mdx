@@ -175,6 +175,50 @@ thread that asked for them, or the global thread when the clock or a schedule di
 those is a single main thread, so schedule anything that touches the wider world.
 </Callout>
 
+## Registering your own minigame
+
+A plugin outside the suite can add a minigame that behaves like a built-in one: an admin configures
+arenas of it in the same menus, and it is validated, scheduled, protected, scored and paid out by the
+same code.
+
+<Callout type="note" title="Needs exylia-api v1.7.0">
+`registerMinigame` and the `net.exylia.lib.api.events.custom` package arrived in `exylia-api`
+`v1.7.0` (ExyliaLib 1.186.0). An older artifact has none of it.
+</Callout>
+
+```java
+// plugin.yml: depend: [ ExyliaLib, ExyliaEvents ]
+ExyliaAPI.get(EventsService.class).ifPresent(events ->
+    events.registerMinigame(this, SkyfallMinigame.DEFINITION));
+```
+
+`depend` rather than `softdepend`, so your plugin enables after ExyliaEvents and the service is there
+to register with. There is nothing to unregister: a plugin disabling takes its minigames with it and
+any run still going is ended first, while the arenas an admin configured stay in the database and come
+back with the minigame. Registration is refused, with the reason in the console, when the id is
+already taken, so prefix it with your plugin's name.
+
+A minigame crosses as data rather than a subclass, because every built-in one extends a class inside
+ExyliaEvents' own classloader that no other plugin can reach.
+
+| You write | ExyliaEvents does |
+|---|---|
+| `MinigameDefinition` — id, name, icon, settings, markers, scoreboard | the admin setup flow, the arena menus, the stored defaults, the validation |
+| `MinigameHandler` — start, tick, eliminate, win | the lobby, the countdown, the teleports, the inventories, the kits, the spectator seat, the arena protection, the statistics, the rewards, the cross-server announcement |
+
+Declared settings become the defaults a fresh arena is created with and a generated settings screen
+under the id the admin menus already open; a server owner who wants to restyle it writes
+`menus/admin/<your-id>_settings.yml` and that file wins. Declared markers appear on the arena setup
+screen, block enabling an arena that is missing a required one, and tell the handler when a player
+walks in or out. A fresh handler is built for every run, so several arenas of the same minigame can
+play at once, and every callback has a default.
+
+Teams are not supported yet: a definition describes a free-for-all, and the team selector and
+per-team spawns the built-in team variants use are not reachable from here.
+
+The full guide, with a worked example, is
+[custom-minigames.md](https://github.com/DiGround-s/ExyliaLib/blob/main/docs/custom-minigames.md).
+
 ## Types
 
 | Type | What it is |
@@ -233,8 +277,8 @@ played.
 
 ## What it does not expose
 
-No arena editor, no spawn or reward writes, no per-minigame settings, no
-gauntlet or inscription management, and no way to write a statistic. The registry that decides whether
+No arena editor, no spawn or reward writes, no reading or writing the settings of a minigame you did
+not declare, no gauntlet or inscription management, and no way to write a statistic. The registry that decides whether
 a player is already busy elsewhere is internal too — from outside, ask each plugin's own service, which
 for this one is `isInEvent`.
 

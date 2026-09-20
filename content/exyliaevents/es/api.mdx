@@ -177,6 +177,51 @@ en el hilo que los pidió, o en el hilo global cuando fue el reloj o un horario.
 esos es un único hilo principal, así que programá todo lo que toque el resto del mundo.
 </Callout>
 
+## Registrar tu propio minijuego
+
+Un plugin de afuera de la suite puede agregar un minijuego que se comporta como uno de los que vienen
+incluidos: un admin configura arenas de él en los mismos menús, y lo valida, agenda, protege, puntúa y
+paga el mismo código.
+
+<Callout type="note" title="Necesita exylia-api v1.7.0">
+`registerMinigame` y el paquete `net.exylia.lib.api.events.custom` llegaron en `exylia-api` `v1.7.0`
+(ExyliaLib 1.186.0). Un artefacto anterior no tiene nada de eso.
+</Callout>
+
+```java
+// plugin.yml: depend: [ ExyliaLib, ExyliaEvents ]
+ExyliaAPI.get(EventsService.class).ifPresent(events ->
+    events.registerMinigame(this, SkyfallMinigame.DEFINITION));
+```
+
+`depend` y no `softdepend`, así tu plugin enciende después de ExyliaEvents y el service está para
+registrarse. No hay nada que desregistrar: un plugin que se apaga se lleva sus minijuegos, y una
+partida en curso se termina primero, mientras que las arenas que configuró un admin quedan en la base
+de datos y vuelven con el minijuego. El registro se rechaza, con el motivo en la consola, cuando el id
+ya está tomado, así que ponle de prefijo el nombre de tu plugin.
+
+Un minijuego cruza como datos y no como subclase, porque cada uno de los incluidos extiende una clase
+del classloader propio de ExyliaEvents que ningún otro plugin alcanza.
+
+| Vos escribís | ExyliaEvents hace |
+|---|---|
+| `MinigameDefinition` — id, nombre, ícono, ajustes, marcadores, scoreboard | el flujo de setup del admin, los menús de arena, los valores por defecto guardados, la validación |
+| `MinigameHandler` — start, tick, eliminación, victoria | el lobby, la cuenta atrás, los teleports, los inventarios, los kits, el asiento de espectador, la protección de la arena, las estadísticas, las recompensas, el aviso entre servidores |
+
+Los ajustes declarados pasan a ser los valores con los que se crea una arena nueva y una pantalla de
+ajustes generada bajo el id que los menús de admin ya abren; un dueño de servidor que quiera
+reestilarla escribe `menus/admin/<tu-id>_settings.yml` y ese archivo gana. Los marcadores declarados
+aparecen en la pantalla de setup de la arena, impiden habilitar una arena a la que le falta uno
+obligatorio, y le avisan al handler cuando un jugador entra o sale. Se construye un handler nuevo por
+cada partida, así que varias arenas del mismo minijuego pueden jugarse a la vez, y cada callback tiene
+un valor por defecto.
+
+Los equipos todavía no están soportados: una definición describe un todos contra todos, y el selector
+de equipos y los spawns por equipo que usan las variantes incluidas no se alcanzan desde acá.
+
+La guía completa, con un ejemplo trabajado, es
+[custom-minigames.md](https://github.com/DiGround-s/ExyliaLib/blob/main/docs/custom-minigames.md).
+
 ## Tipos
 
 | Tipo | Qué es |
@@ -237,8 +282,8 @@ jugando.
 
 ## Lo que no expone
 
-Nada de editor de arenas, escrituras de spawns o
-recompensas, ajustes por minijuego, manejo de gauntlets o inscripciones, ni forma de escribir una
+Nada de editor de arenas, escrituras de spawns o recompensas, leer o escribir los ajustes de un
+minijuego que no declaraste, manejo de gauntlets o inscripciones, ni forma de escribir una
 estadística. El registro que decide si un jugador ya está ocupado en otro lado también es interno —
 desde afuera se le pregunta al service de cada plugin, que para este es `isInEvent`.
 
