@@ -16,6 +16,7 @@ scripts/doc-drift.sh exyliaevents # just one
 | Docs | Repository | Version documented | Reviewed through | State |
 |---|---|---|---|---|
 | `exyliaaimtrainer` | `ExyliaAimTrainer` | 1.0.1 | `1217ced` 2026-09-15 | Current — reviewed again for 1.0.1: punching the air no longer replays a finished drill (the summary and the hotbar do, and the rest hint is gone from chat and from the `session-complete` title), and the server-wide `training_count`, `match_count` and `playing_count`, and accuracy in a tracking drill reading time on target (`7376386`). First full documentation, nineteen pages, including the drill change from the drill list, summary and hotbar and the five-second idle rest: the four drill kinds and the sixteen shipped drills with every key, score, difficulty and rating, the grades, the player settings, duels on the challenger's rules and one seed, arenas from the admin menu, the session lifecycle and isolation, per-drill and overall boards, the HUD, the practice-queue borrow, the menus and `aimtrainer:` actions, and `AimTrainerService` (needs `exylia-api` `v1.153.0`). Written against the source, not the README or the config comments: several disagree (see below). |
+| `exyliaanalytics` | `ExyliaAnalytics` | 1.1.0 | `4a0f759` 2026-09-23 (web `582685c`) | Beta — first full documentation, twenty-one pages, written against the agent at `4a0f759` and the Exylia Analytics web platform (`~/Web/Exylia-Analytics`) at `582685c`. The agent: the one loader jar for Paper/Spigot 1.17+, Folia and Velocity, `loader.yml`, role detection, the four `config.yml` keys, the data folder, device-code linking, every event with its sender and fields, the queue/spool/backoff and every ingest answer, a privacy page listing what leaves the server and what never does (and IP hashing/encryption on arrival), the economy sources and dedup rules (ExyliaLib, the Vault/VaultUnlocked pass-through proxy, PlayerPoints, ExcellentEconomy, balance snapshots, ExyliaLib holdings), the integrations, `/analytics` and `/analyticsv` with the status readout, remote config (intervals, bounds, nine modules, revision refetch) and the API. The dashboard: pages, filters and server-filter semantics, charts, Overview, live feed, command palette, annotations, growth/retention/acquisition/campaign definitions, players and profiles, sessions, servers (status, pause, revoke, proxy mapping) and performance, moderation, ranks, placeholders, events and funnels, Tebex revenue and creator codes, the AI analyst, members, roles and every permission, settings. Left out on purpose: the platform admin panel, AI provider and deployment configuration, the ingest's operations. Written against the code; the discrepancies and broken behaviour are listed below. |
 | `exyliaarmorskin` | `ExyliaArmorSkin` | 1.0.0 | `c608783` 2026-09-03 | Current — wardrobe, per-piece permissions, twenty animated skins, the four body-aware animation types and the trim-metal cycle. |
 | `exyliaarmortrims` | `ExyliaArmorTrims` | 1.1.0 | `1d83e8f` 2026-09-03 | Current — the cosmetic gate is a library contract, documented in the library’s Cosmetic rules page rather than per plugin. |
 | `exyliaarrows` | `ExyliaArrows` | 1.0.5 | `2a7335b` 2026-09-03 | Current — rewritten for the 120 display-driven effects, the three triggers, tokens, the menu and the `arrows-effects` flag. |
@@ -58,6 +59,7 @@ ExyliaLib `befa514` — release tag `v1.113.0`, the tag JitPack builds and the o
 | Updated | `exyliasurvivalcore` on 2026-09-14 for the rtp, kit-gift, crate-key, rank-cost, bounty, mine-break and six menu-opener methods and four new events, naming `v1.133.0`. The hub's "What is not there" no longer says menu openers are left out. |
 | Updated | `exyliaevents` on 2026-09-20 for `registerMinigame` and the `net.exylia.lib.api.events.custom` package, naming `v1.7.0`. The hub's service table notes the sub-package; the page's "What it does not expose" no longer claims per-minigame settings are out of reach. |
 | Not documented | ExyliaBetCore, ExyliaSpecialsV3, ExyliaPearls and ExyliaTotems all publish a service, but have no documentation set on this site at all. They are absent from the hub's service table for that reason. |
+| Separate artifact | `exyliaanalytics` has an API page of its own that is **not** part of `exylia-api`: `net.exylia.analytics.api.ExyliaAnalytics` (`track`, `economy`, `supply`, `available`) ships inside `Exylia-Analytics-Loader.jar`, is published to no Maven repository, and is compiled against as a local `compileOnly` file. It is absent from the hub's service table for that reason. |
 
 The source of truth for these pages is
 `~/Java/Exylia/ExyliaLib/exylia-api/src/main/java/net/exylia/lib/api/`, not the plugin repositories:
@@ -124,6 +126,42 @@ Found while writing that set at `f7b0ba8`. The pages describe what the code does
 - `ExyliaEmotes.java:450-451`: says an edited menu gets the new version beside it as `.new`. ExyliaLib's
   `BundledFiles` keeps the old file as `<name>.v<old version>` when `menu-version` rises, and otherwise
   leaves an edited file alone.
+
+### Discrepancies and broken behaviour in ExyliaAnalytics
+
+Found while writing that set, at agent `4a0f759` and web `582685c`. The pages describe what the code does.
+
+- **Session starts from Spigot are rejected.** `PaperAgent.java:495-513` returns a `null` protocol when
+  neither ViaVersion nor Paper's `getProtocolVersion()` answers, which is every plain Spigot server
+  without ViaVersion. The ingest requires a number (`apps/ingest/src/protocol.ts:70`), so every
+  `session.start` of a standalone Spigot server is dropped, and it reports no network sessions. A null
+  `ip` (`PaperAgent.java:483`) would be dropped the same way (`protocol.ts:68`).
+- **A resumed server never resumes on its own.** While paused, `Agent.emit` drops everything
+  (`Agent.java:207`), so no batch is sent and no `configRevision` comes back; the config is only fetched
+  when `configStale` (`Agent.java:432`). Resuming from the dashboard needs `/analytics reload` or a
+  restart. The first start after it is then annotated as a crash, since the paused run sent no
+  `server.stop` (`apps/ingest/src/lifecycle.ts`).
+- **The Vault proxy misses plugins that cache the economy on enable.** `EconomySources.start` schedules
+  the first wrap for the next tick (`EconomySources.java:136`), after every plugin has enabled. README
+  says "cached Vault's economy before the agent started"; in practice it is before the first tick.
+- **Stale Folia comment.** `PaperAgent.java:64-65` says Folia is not supported in v1; `plugin.yml`
+  declares `folia-supported: true` and `Schedulers` runs on the global region. The join/quit maps in
+  `PaperAgent` (`online`, `sessions`, `hostnames`, `locales`, `kicked`, lines 86-91) are plain
+  `HashMap`/`HashSet` written from region threads on Folia, which is not thread-safe.
+- **Heartbeats slow down with lag.** `PaperAgent.sample` counts one "second" per 20 ticks
+  (`PaperAgent.java:405`); below about 6.7 TPS three heartbeat intervals exceed the silence threshold and
+  the ingest closes the server's sessions as timed out while it is running.
+- **Custom property keys over 48 characters and placeholder names over 64** are accepted by the agent
+  (`Agent.customProps`, `LocalConfig`) and rejected by the ingest (`protocol.ts:123,129`), dropping the
+  whole event there.
+- **"Over its plan quota".** The agent's 403 message (`Agent.java:522`) and `docs/protocol.md` mention a
+  plan quota; the ingest only answers 403 for a suspended workspace (`routes/agent.ts`). There are no
+  plans or quotas in the web code.
+- **CoinsEngine.** `docs/protocol.md`, `docs/metrics.md` and the web's Economy empty state name
+  CoinsEngine; the agent hooks ExcellentEconomy (`su.nightexpress.excellenteconomy`), CoinsEngine's
+  successor, and not CoinsEngine's own classes.
+- **README "TODO before the first release"** still lists the whole real-server test pass, hence the Beta
+  status in the registry.
 
 ## How a review goes
 

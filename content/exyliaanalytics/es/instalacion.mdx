@@ -1,0 +1,113 @@
+---
+title: "Instalación"
+description: "El jar del loader en un servidor, un proxy o una red entera, la clave de licencia, los archivos que escribe el agente y cómo decide su papel."
+---
+
+## El jar
+
+ExyliaAnalytics se distribuye como un solo archivo, `Exylia-Analytics-Loader.jar`. Contiene el loader de
+Paper y el de Velocity uno al lado del otro, y cada plataforma lee solo su propio descriptor, así que
+**el mismo archivo va en un proxy y en un servidor**. El loader comprueba tu licencia y después descarga
+el agente.
+
+## Instalar en un servidor
+
+<Steps>
+  <Step title="Coloca el jar">
+    `Exylia-Analytics-Loader.jar` en `plugins/`. No hace falta nada más.
+  </Step>
+  <Step title="Pon la clave de licencia">
+    Arranca el servidor una vez. El loader escribe `loader.yml` en la carpeta del plugin y se detiene
+    con *"Your license key is not currently set in the loader.yml file"*. Pon ahí tu clave — se entrega
+    en el [Discord de Exylia](https://discord.exylia.net) — y arranca de nuevo.
+  </Step>
+  <Step title="Deja que arranque">
+    El agente escribe `config.yml` y una carpeta `data/` y, como aún no está vinculado, muestra un
+    código de vinculación en la consola.
+  </Step>
+  <Step title="Vincúlalo">
+    Introduce ese código en el panel. Ver [Vincular un servidor](/docs/exyliaanalytics/vinculacion).
+  </Step>
+</Steps>
+
+El servidor necesita HTTPS saliente hacia `analytics-ingest.exylia.net`. Nunca escucha en un puerto.
+
+## Instalar en una red
+
+Instala el mismo jar en el **proxy Velocity y en cada backend**, y vincula cada uno. Cada instalación es
+su propio servidor en el panel, con su propio código y su propio token.
+
+<Steps>
+  <Step title="Primero el proxy">
+    El proxy es el único que ve quién se conectó, desde qué hostname y país, con qué cliente. Sin él,
+    una red no tiene sesiones y la mayor parte del panel se queda vacía.
+  </Step>
+  <Step title="Después cada backend">
+    Cada backend informa de quién estuvo en él, cuánto tiempo, el tiempo AFK, TPS y MSPT, la economía y
+    los placeholders. Vincúlalos todos al **mismo espacio de trabajo** que el proxy.
+  </Step>
+  <Step title="Confirma el mapeo del proxy">
+    El proxy envía su lista de servidores. En **Servidores → Mapeo del proxy** el panel sugiere qué
+    backend es cada entrada, por puerto; confirma cada una. Ver
+    [Servidores y rendimiento](/docs/exyliaanalytics/servidores#mapeo-del-proxy).
+  </Step>
+</Steps>
+
+<Callout type="warning" title="BungeeCord y Waterfall">
+No hay agente para BungeeCord ni Waterfall. Los backends detrás de uno se siguen detectando como backends
+(por `settings.bungeecord` en `spigot.yml`), pero sin agente en el proxy nadie informa de las sesiones
+de red. Forzar `mode: standalone` en los backends hace que cada uno abra sus propias sesiones, a costa de
+que cambiar de servidor cuente como una sesión nueva.
+</Callout>
+
+## El papel del servidor
+
+Al iniciar, el agente decide qué es:
+
+| Detectado | Cuándo |
+|---|---|
+| `proxy` | Se ejecuta en Velocity. Siempre. |
+| `backend` | Paper o Spigot con el reenvío de Velocity activado (`proxies.velocity.enabled` en `paper-global.yml`, o `velocity-support` en Paper 1.17–1.18), o `settings.bungeecord: true` en `spigot.yml`. |
+| `standalone` | Cualquier otro caso. |
+
+`mode` en [`config.yml`](/docs/exyliaanalytics/configuracion) anula la detección en Paper y Spigot, y
+solo se aplica tras reiniciar. El papel aparece en la página Servidores como el tipo del servidor
+(`standalone` se muestra como *independiente*), y `/analytics status` lo muestra.
+
+## Archivos
+
+Paper y Spigot guardan todo en `plugins/ExyliaAnalytics/`, Velocity en `plugins/exyliaanalytics/`.
+
+| Archivo | Contenido |
+|---|---|
+| `loader.yml` | La clave de licencia, que lee el loader. |
+| `config.yml` | Los pocos ajustes que el servidor decide antes de poder llegar al panel: el papel, los valores de PlaceholderAPI, el envoltorio de Vault y el registro de depuración. Ver [Configuración](/docs/exyliaanalytics/configuracion). |
+| `data/credentials.json` | El token del servidor y el espacio de trabajo al que pertenece, escrito cuando se aprueba una vinculación. En Linux solo lo puede leer el usuario del servidor. |
+| `data/remote-config.json` | Los últimos ajustes que envió el panel, para que el agente empiece a recoger antes de que la red esté disponible. |
+| `data/spool/` | Lotes de eventos pendientes de entrega, un archivo `.json.gz` cada uno. |
+
+<Callout type="danger" title="No compartas credentials.json">
+El token se guarda fuera de `config.yml` a propósito, porque las configuraciones acaban en capturas y en
+tickets de soporte. Quien tenga `credentials.json` puede enviar eventos a tu espacio de trabajo como ese
+servidor hasta que lo revoques.
+</Callout>
+
+## Copiar la carpeta de un servidor
+
+Una carpeta `plugins/` copiada se lleva `data/credentials.json` con ella, y dos servidores acaban
+enviando con un mismo token. El ingest solo deja que un proceso en marcha tenga un token: el segundo es
+rechazado, registra una vez *"Another running server holds this token (a copied plugin folder?)"* y
+guarda sus eventos en disco, reintentando cada minuto. `/analytics status` lo muestra como **Waiting**.
+
+En la copia, ejecuta `/analytics unlink` (o borra `data/credentials.json` con el servidor parado),
+después `/analytics link` y aprueba el nuevo código: pasa a ser un servidor propio.
+
+## Actualizar
+
+El loader descarga la versión actual del agente al arrancar, así que reiniciar es actualizar. El jar del
+loader solo hay que sustituirlo cuando una versión lo pide — por ejemplo, cuando la consola dice *"The
+installed loader is outdated: the economy API is disabled until it is updated"*, lo que significa que el
+loader es anterior a la API de economía que llaman los plugins.
+
+El panel marca una **actualización del agente** en cada gráfico temporal cuando un servidor arranca con
+una versión nueva.

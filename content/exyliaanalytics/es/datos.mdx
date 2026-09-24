@@ -1,0 +1,142 @@
+---
+title: "Datos recogidos"
+description: "Cada evento que envía el agente, qué lado lo envía, cuándo y los campos que lleva — y cómo se encolan, guardan y entregan los eventos."
+---
+
+El agente envía **hechos en bruto** y deja la interpretación al ingest: los hostnames se normalizan, los
+países se consultan y las sesiones se cosen con la presencia al otro lado, así que un arreglo nunca
+espera a que todos los servidores se actualicen. Esta página lista todo lo que envía. Lo que no envía
+nunca está en [Privacidad](/docs/exyliaanalytics/privacidad).
+
+**Lo envía** usa **P** para un proxy, **B** para un backend y **S** para un servidor independiente. Cada
+evento lleva además el momento en que ocurrió y, si trata de un jugador, su UUID.
+
+## Ciclo de vida del servidor
+
+Se envían digan lo que digan los módulos, siempre que el servidor esté vinculado y no esté pausado.
+
+| Evento | Lo envía | Cuándo | Datos |
+|---|---|---|---|
+| `server.start` | P B S | Cuando el agente empieza a recoger: al arrancar si está vinculado, justo tras vincularse y tras ser reanudado. | Plataforma y su versión, versión de Minecraft (ninguna en un proxy), versión de Java, versión del agente, papel, modo online, puerto, jugadores máximos. |
+| `server.stop` | P B S | En un apagado limpio, después de cerrar cada sesión y estancia abiertas. | — |
+| `server.heartbeat` | P B S | Cada intervalo de latido (60 s por defecto). | Jugadores en línea. |
+| `proxy.servers` | P | Al arrancar y cada vez que cambia la lista de servidores del proxy (se comprueba en cada latido). | El nombre y la dirección `host:puerto` de cada servidor registrado. |
+
+## Sesiones de red
+
+Las envía el proxy, o un servidor independiente. Un backend no abre sesiones. Módulo: **Sesiones**.
+
+| Evento | Cuándo | Datos |
+|---|---|---|
+| `session.start` | Un jugador se conecta (en Velocity tras el login, en Paper al entrar). | Un id de sesión, nombre de usuario, dirección IP, el hostname tal cual lo escribió el cliente, versión del protocolo, si es un jugador de Bedrock, y su grupo principal de LuckPerms. |
+| `session.client` | Cuando la marca o el idioma del cliente se conocen por primera vez o cambian. | Marca del cliente (Velocity; Paper 1.19.4 y posteriores) y/o idioma, como `es_es`. |
+| `session.switch` | Un jugador pasa a otro backend. Solo el proxy. | El servidor que dejó (ninguno en la primera conexión) y al que entró, con los nombres del proxy. |
+| `session.end` | Un jugador se desconecta, o el servidor se apaga. | Cómo terminó: `quit`, `kick` o `shutdown`. |
+
+- **Versión del protocolo.** En Velocity, la del propio cliente. En un servidor Paper independiente, la
+  respuesta de ViaVersion cuando está instalado (Paper daría su propia versión para todos los clientes);
+  si no, la de Paper.
+- **Bedrock.** Se pregunta a Floodgate cuando está instalado; si no, un UUID de la forma
+  `00000000-0000-0000-…` cuenta como Bedrock.
+- **Expulsión.** Una expulsión por un plugin o el staff y, en Velocity, un inicio de sesión de la misma
+  cuenta en otro lugar.
+- **Los jugadores ya conectados** cuando el agente empieza a recoger — tras vincularse o reanudarse —
+  abren su sesión en ese momento.
+
+## Presencia en un servidor
+
+La envían los backends y los servidores independientes. Módulos: **Sesiones** para entradas y salidas,
+**AFK** para el AFK.
+
+| Evento | Cuándo | Datos |
+|---|---|---|
+| `server.join` | Un jugador entra en este servidor. | — |
+| `server.leave` | Un jugador sale de él, o se apaga. | Cómo terminó (`quit`, `kick`, `shutdown`) y la actividad de la estancia: mensajes de chat, comandos, muertes y asesinatos de jugadores. |
+| `afk.start` | Un jugador no ha hecho nada durante el tiempo AFK (300 s por defecto). | — |
+| `afk.end` | Se mueve, mira alrededor, escribe, ejecuta un comando o interactúa de nuevo — o sale estando AFK. | — |
+
+Los contadores de actividad son **solo recuentos**. Un mensaje de chat cancelado por otro plugin no
+cuenta; una baja solo cuenta cuando quien mata es otro jugador.
+
+## Rendimiento
+
+| Evento | Lo envía | Cuándo | Datos |
+|---|---|---|---|
+| `server.metrics` | P B S | Cada intervalo de métricas (60 s por defecto). Módulo: **Rendimiento**. | TPS (medio y mínimo), MSPT (medio, p95 y máximo), CPU del proceso y de la máquina, heap usado y máximo, jugadores, entidades, chunks cargados. |
+
+Un proxy envía solo CPU, heap y jugadores. Lo que puede medir cada plataforma está en
+[Servidores y rendimiento](/docs/exyliaanalytics/servidores#lo-que-puede-medir-cada-plataforma).
+
+## Integraciones
+
+Cada una se usa solo si su plugin está instalado. Ver [Integraciones](/docs/exyliaanalytics/integraciones).
+
+| Evento | Lo envía | Módulo | Datos |
+|---|---|---|---|
+| `punishment.issue` | P B S | Sanciones | El jugador sancionado, el plugin, su id de entrada, el tipo (`ban`, `mute`, `kick`, `warn`), el UUID del miembro del staff (ninguno para la consola), el motivo, la duración (ninguna si es permanente) y si es un baneo de IP. |
+| `punishment.revoke` | P B S | Sanciones | El jugador, el plugin, el id de entrada, el tipo y quién la levantó. |
+| `vote.cast` | Quien ejecute NuVotifier | Votos | La web de votación tal como la nombra Votifier, el nombre de usuario que votó, y el UUID del jugador cuando está conectado a ese servidor. |
+| `rank.add` | P B S | Rangos | El grupo y cuándo caduca (ninguno si es permanente). También se envía cuando cambia la caducidad de un grupo temporal. |
+| `rank.remove` | P B S | Rangos | El grupo. |
+| `player.placeholders` | B S | Placeholders | Los valores de los placeholders indicados en `config.yml`, justo antes del `server.leave` del jugador. |
+
+## Economía
+
+Solo Paper y Spigot. Módulo: **Economía**. Cómo se encuentran las fuentes y por qué cada cambio se cuenta
+una vez está en [Economía](/docs/exyliaanalytics/economia).
+
+| Evento | Lo envía | Cuándo | Datos |
+|---|---|---|---|
+| `economy.flow` | B S | Una vez por minuto, uno por jugador, moneda y motivo que se movió. | Moneda, motivo, número de cambios, total ganado, total gastado, el saldo tras el último cambio (cuando la fuente lo sabe) y la duración de la ventana. |
+| `economy.balance` | B S | Al entrar y al salir, y cada 10 minutos para las monedas de ExyliaLib. | El saldo de un jugador en una moneda. |
+| `economy.supply` | B S | Cuando un plugin lo envía a través de la API. | Moneda, ámbito de almacenamiento, la suma de todos los saldos y cuántas cuentas tienen dinero. |
+
+## Eventos personalizados
+
+| Evento | Lo envía | Módulo | Datos |
+|---|---|---|---|
+| `custom` | Donde un plugin llame a la API | Eventos personalizados | El nombre del evento y hasta 16 propiedades. Ver la [API](/docs/exyliaanalytics/api). |
+
+## Cómo viajan los eventos
+
+<Steps>
+  <Step title="En cola en memoria">
+    Registrar un evento solo lo mete en una cola; el hilo del juego nunca espera al disco ni a la red. Un
+    evento cuyo módulo está desactivado, o cualquier evento mientras el servidor está sin vincular o
+    pausado, se descarta aquí. Por encima de 100.000 eventos en espera, los nuevos se descartan, con un
+    aviso, hasta que la cola se vacía.
+  </Step>
+  <Step title="Escritos en el spool">
+    Cada intervalo de envío (10 s por defecto), o en cuanto hay 500 eventos esperando, la cola se
+    convierte en uno o más lotes de como mucho 5.000 eventos y 1 MiB, comprimidos y escritos en
+    `data/spool/<batchId>.json.gz` antes del primer intento.
+  </Step>
+  <Step title="Entregados, del más antiguo al más nuevo">
+    Un hilo en segundo plano envía el spool en orden y borra cada lote cuando el ingest lo acepta. Un
+    lote reintentado es idéntico byte a byte y se guarda una sola vez.
+  </Step>
+</Steps>
+
+Qué pasa con cada respuesta:
+
+| Respuesta | Qué hace el agente |
+|---|---|
+| Aceptado | Borra el lote. Si cambiaron los ajustes del panel, los descarga. |
+| Mal formado | Lo registra y borra el lote: nunca podrá salir bien. |
+| Token revocado | Borra sus credenciales, su cola y su spool, y vuelve a estar sin vincular. |
+| Espacio de trabajo suspendido | Lo guarda todo y reintenta cada 15 minutos. |
+| Otro servidor tiene el token | Lo guarda todo, lo registra una vez y reintenta cada minuto. |
+| Lote demasiado grande | Lo parte en dos y envía cada mitad. |
+| Límite de peticiones, error del servidor, inalcanzable | Lo guarda todo y espera: 5 segundos, doblando hasta 5 minutos, ±20%, y nunca menos de lo que pida el ingest. |
+
+El spool tiene un límite de **50 MiB**. Cuando se llena se descarta el lote más antiguo con un aviso — solo
+ocurre tras mucho tiempo sin poder llegar al ingest.
+
+Al apagarse, el agente cierra cada sesión y estancia abiertas, envía `server.stop` e intenta durante
+**3 segundos** como máximo entregar lo que queda. Lo que no sale se queda en el spool y se envía en el
+siguiente arranque.
+
+El ingest también corrige relojes: cuando la hora de envío de un lote difiere de la del ingest en más de
+dos segundos, todas sus marcas de tiempo se desplazan esa diferencia. Descarta, uno a uno, los eventos que
+no puede usar: un tipo desconocido, un evento de jugador sin jugador, una hora anterior a 2025 o más de
+una hora en el futuro, o datos que rompen los límites de arriba.

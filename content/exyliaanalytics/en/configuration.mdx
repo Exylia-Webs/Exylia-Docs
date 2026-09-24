@@ -1,0 +1,70 @@
+---
+title: "Configuration"
+description: "Every key of config.yml with its default, and what lives in the data folder. Everything else is set from the dashboard."
+---
+
+The agent has one local file, `config.yml`, and it is short on purpose: it only holds what a server
+must decide **before** it can reach the dashboard. How often to send, what to collect and whether to
+collect at all are set per workspace in the dashboard — see
+[Remote configuration](/docs/exyliaanalytics/remote-config).
+
+## `config.yml`
+
+Written on first start in `plugins/ExyliaAnalytics/` (Velocity: `plugins/exyliaanalytics/`):
+
+```yaml
+# Exylia Analytics — https://analytics.exylia.net
+# Almost everything is configured from the dashboard; this file only holds
+# what the server must decide before it can reach it.
+
+mode: auto
+
+placeholders: []
+
+vault-wrapper: true
+
+debug: false
+```
+
+| Key | Default | Platforms | What it does |
+|---|---|---|---|
+| `mode` | `auto` | Paper, Spigot | The server's role: `auto`, `backend` or `standalone`. `auto` detects it (see [Installation](/docs/exyliaanalytics/installation#the-servers-role)); any other value is treated as `auto`. A proxy is always `proxy`, whatever this says. **Needs a restart.** |
+| `placeholders` | `[]` | Paper, Spigot | PlaceholderAPI placeholders whose values are sent each time a player leaves this server. Up to 16; more are ignored, and a repeat counts once. Written with or without the `%` signs. |
+| `vault-wrapper` | `true` | Paper, Spigot | Whether the agent stands in front of the Vault and VaultUnlocked economies to see which plugin creates or destroys money. Every call passes through untouched. Turn it off if an economy plugin misbehaves with it. See [Economy](/docs/exyliaanalytics/economy#the-vault-proxy). Read when an economy registers, so in practice **needs a restart**. |
+| `debug` | `false` | All | Logs every request to the ingest (`[debug] POST /v1/events … -> 200`), and every custom event dropped for breaking the limits. |
+
+`placeholders` is written either as a list or inline:
+
+```yaml
+placeholders:
+  - '%vault_eco_balance%'
+  - '%statistic_mob_kills%'
+```
+
+```yaml
+placeholders: [vault_eco_balance, statistic_mob_kills]
+```
+
+<Callout type="note" title="A small reader, not a YAML library">
+The file is read line by line, so the agent needs neither platform's YAML library. Keep each key on its
+own line at the top level, as written above. Quotes are optional, anything after `#` is a comment, and
+unknown keys are ignored.
+</Callout>
+
+`/analytics reload` re-reads the file: the placeholder list and `debug` apply at once, `mode` and
+`vault-wrapper` after a restart. It also makes the agent fetch the dashboard's settings again.
+
+## The data folder
+
+Nothing in `data/` is meant to be edited by hand.
+
+| Path | Contents |
+|---|---|
+| `data/credentials.json` | The server's token, its server and workspace ids, and the workspace name. Written when a link is approved, deleted by `/analytics unlink` and when the token is revoked. |
+| `data/remote-config.json` | The last settings the dashboard sent. Used on start until fresh ones arrive; an unreadable copy is ignored with a warning. |
+| `data/spool/*.json.gz` | Batches waiting for delivery, oldest first by name. Capped at 50 MiB. |
+
+## `loader.yml`
+
+Written by the loader, not the agent: it holds your licence key. The agent does not start until the key
+is set.

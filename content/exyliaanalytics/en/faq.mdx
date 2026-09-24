@@ -1,0 +1,112 @@
+---
+title: "FAQ and troubleshooting"
+description: "The questions that come up most: no code in the console, an unreachable ingest, empty charts, a copied server, Folia, an outdated loader and more."
+---
+
+## The console never prints a link code
+
+- **The licence key is missing.** The loader stops before the agent starts and says so. Set the key in
+  `loader.yml` and restart.
+- **The server is already linked.** `data/credentials.json` exists, perhaps copied from another server.
+  `/analytics status` shows the workspace; `/analytics unlink` then `/analytics link` if it is the wrong
+  one.
+- **The ingest cannot be reached.** The console says *"Could not request a link code (…); retrying"*.
+  See the next question.
+- **The code expired.** A code lives ten minutes. `/analytics link` for a new one.
+
+## "Could not reach Exylia Analytics"
+
+The server cannot open an HTTPS connection to `analytics-ingest.exylia.net`. Usual causes: a host that
+blocks outgoing traffic, a firewall allowing only some ports, or a DNS failure. Nothing is lost in the
+meantime: events wait in `data/spool/` (up to 50 MiB) and go out oldest first once the connection is
+back. `/analytics status` shows the next retry under **Last send**.
+
+## The code is refused on the link page
+
+*"That code is unknown, expired or already used."* Codes are single-use and live ten minutes; typing it
+with a confusable character is also a miss — codes never contain `0`, `O`, `1`, `I` or `L`. If the
+workspace you want is not in the list, your role cannot manage servers there.
+
+## The server is linked but the charts are empty
+
+| Check | Where |
+|---|---|
+| The server reports | **Servers**: status **Online**, a recent heartbeat. |
+| It is not paused | **Servers**: not **Disabled**. `/analytics status` would say *Disabled from the dashboard*. |
+| The range has data | Pick a longer range. Most charts need at least a full day of sessions. |
+| A network has its proxy | Without a linked Velocity proxy nobody reports sessions, so players, retention and acquisition stay empty. Backends alone only fill Performance, Economy and Placeholders. |
+| The module is on | **Settings → Agent**. With Sessions off almost everything is empty. |
+| You can see the page | Your role may not include it. |
+
+## Economy shows nothing
+
+The Economy module must be on and the server must be Paper or Spigot. Then `/analytics status` lists the
+sources it hooked on the **Economy** line. With only a Vault economy, check the **Vault** line: the proxy
+may be off in `config.yml`, or the economy may hold the highest priority itself. Plugins that kept the
+economy they found while enabling are not seen — see [Economy](/docs/exyliaanalytics/economy#the-vault-proxy).
+
+## I resumed a server and it still collects nothing
+
+A paused agent sends nothing and so never hears it was resumed. Run `/analytics reload` on it (or
+`/analyticsv reload` on the proxy), or restart it.
+
+## "Another running server holds this token"
+
+Two processes send with the same token, almost always because a plugin folder was copied with
+`data/credentials.json` inside. The ingest accepts one and refuses the other, which keeps its events
+and retries every minute. On the copy, `/analytics unlink` then `/analytics link` and approve the new
+code. After a crash the old process is given up on once it has been quiet for three heartbeats, so a
+restarted server takes its token back on its own.
+
+## "The installed loader is outdated"
+
+The loader jar predates the economy API. Custom events still work; the economy API is off until you
+replace `Exylia-Analytics-Loader.jar` with a current one. Updates to the agent itself arrive with a
+plain restart.
+
+## Does it run on Folia?
+
+Yes. The agent runs on the global region and every event it listens to still counts. What Folia changes:
+
+- TPS and MSPT describe the global region, which keeps its own pace whatever the world regions do, so
+  they read as idle.
+- Entity and chunk counts are not reported: Folia refuses them from the global region.
+
+## Does it run on Spigot?
+
+Yes, from 1.17. Spigot has no tick-duration event, so Performance shows TPS without MSPT. Client brands
+need Paper 1.19.4 or newer.
+
+## Is BungeeCord or Waterfall supported?
+
+Not as a proxy: there is no agent for them. Backends behind one are detected as backends and report
+presence, performance and the economy, but nobody reports the network sessions most pages are built on.
+See [Installation](/docs/exyliaanalytics/installation#installing-on-a-network).
+
+## Why are playtime and AFK different?
+
+Playtime is time connected **minus** AFK time. A player counts as AFK after the AFK time set in
+**Settings → Agent** (five minutes by default) with no movement, looking around, chat, command or
+interaction.
+
+## A server shows Silent while it is running
+
+It missed three heartbeats. Heartbeats are counted in the agent's one-second samples, which a Paper
+server takes every 20 ticks: a server lagging below roughly 7 TPS for several minutes stretches them out
+far enough to be taken for silent, and its open sessions are closed as timed out. It turns Online again
+with its next heartbeat.
+
+## Can players opt out?
+
+The agent has no per-player switch. What it collects about a player is listed on
+[Privacy](/docs/exyliaanalytics/privacy); modules turn whole kinds of data off for everyone.
+
+## Does it slow the server down?
+
+Collecting an event is a queue insert on the game thread. Compressing, writing to disk and sending run
+on one background thread; economy balance reads run on another, and holdings are counted by ExyliaLib on
+the thread that owns each player. The agent never waits on the network from a game thread.
+
+## Where do I get help?
+
+On the [Exylia Discord](https://discord.exylia.net). Licences are handled there too.

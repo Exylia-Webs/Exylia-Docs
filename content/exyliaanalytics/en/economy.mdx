@@ -1,0 +1,122 @@
+---
+title: "Economy"
+description: "Where the agent finds money moving — ExyliaLib, Vault, VaultUnlocked, PlayerPoints, ExcellentEconomy and the API — how each change is counted once, and what the Economy page makes of it."
+---
+
+The economy report answers one question: *is money piling up faster than people play?* To answer it the
+agent needs two things from every currency on a server: **what moved** (money created and destroyed,
+and why) and **what exists** (the money supply). This page covers where the agent gets both, and the
+dashboard page that reads them.
+
+Economy is Paper and Spigot only; a proxy moves no money. Everything here is dropped at the agent when
+the **Economy** module is off.
+
+## The sources
+
+Each balance change is counted **once**, from the first source that sees it:
+
+| Source | Currencies | Reason recorded |
+|---|---|---|
+| ExyliaLib's balance change event | Every ExyliaLib currency, by its id. | The transaction's own reason, such as `shop:sell` or `pay:tax`. |
+| A pass-through proxy in front of Vault | `vault` | `vault:` and the plugin that called Vault, such as `vault:shopguiplus`. |
+| The same in front of VaultUnlocked | `vault` for the default currency, otherwise the named currency | `vault:` and the plugin that called it. |
+| PlayerPoints' change event | `playerpoints` | `playerpoints` |
+| ExcellentEconomy's change event | Each currency by id; the primary one is `vault` while ExcellentEconomy is the Vault economy. | `excellenteconomy` |
+| [`ExyliaAnalytics.economy(...)`](/docs/exyliaanalytics/api#reporting-the-economy) | Whatever the plugin names. | Whatever the plugin says. |
+
+Currency ids are lowercased and cut to 32 characters, reasons to 64. A change of zero is ignored.
+
+### The Vault proxy
+
+Vault gives no event when money moves, so the agent stands in front of it: it registers its own
+economy at the highest priority, forwards **every call untouched** to the real one, and once a deposit
+or withdrawal has succeeded, records it with the plugin that made the call — the first plugin on the
+call stack that is not Vault, VaultUnlocked, ExyliaLib or the agent. Nothing it does can change the
+result of a payment or make one fail.
+
+The proxy is **not** installed when:
+
+- `vault-wrapper: false` in `config.yml`;
+- ExyliaSurvivalCore is the Vault economy — it already reports every change through ExyliaLib;
+- the economy plugin registered itself at the highest priority first, so the proxy would sit unused.
+
+`/analytics status` says which of these applies on the **Vault** and **VaultUnlocked** lines.
+
+<Callout type="warning" title="Plugins that keep the economy they found at startup">
+The proxy goes in on the **first server tick**, after every plugin has enabled. A plugin that looked up
+Vault's economy while enabling and kept it calls the real economy directly, and its payments are not
+seen. The agent re-checks whenever an economy registers or unregisters.
+</Callout>
+
+### Counting each change once
+
+A server can run several of these at once, and they call each other: ExyliaLib's `vault` currency goes
+through Vault, VaultUnlocked answers through its own interface, and an economy fires its own event
+while Vault is moving the money. The rules:
+
+- A change that happens **inside** a proxied Vault call is the same change: every event fired during it
+  is ignored, and the outer Vault call is the one recorded.
+- ExyliaLib's `vault` currency is dropped when Vault is already covered — by the proxy, by
+  ExyliaSurvivalCore, or by ExcellentEconomy's own event.
+- ExyliaLib's `points` currency is dropped when PlayerPoints is hooked.
+
+### What exists: supply and balances
+
+Changes alone cannot say how much money there is. Three sources can:
+
+| Source | What it reports | When |
+|---|---|---|
+| `ExyliaAnalytics.supply(...)` | The exact money supply: every balance summed and how many accounts hold money, per storage scope. | Whenever the plugin sends it. |
+| Balance reads | One player's balance: through Vault (unless ExyliaSurvivalCore serves it), PlayerPoints, and each ExcellentEconomy currency other than the one read through Vault. Read off the main thread. | On join and quit, at most once per player every **5 minutes**. |
+| ExyliaLib holdings | What a player holds in every ExyliaLib currency no source above already reports. | On join, on quit, and every **10 minutes** for everybody online. |
+
+The holdings matter for currencies that change **without a transaction**: an experience bar grows from
+a mob, a currency item is picked up off the floor. For those, counting what people carry is the only
+money supply there is. ExyliaLib takes each count on the thread that owns the player, and a count that
+arrives after the player left — reading as zero because the inventory is gone — is thrown away rather
+than recorded as an empty pocket. It needs an ExyliaLib recent enough to count off the player's thread;
+with an older one the status reads *ExyliaLib (flows only)*.
+
+### How it is sent
+
+Changes are summed per **player, currency and reason** and sent once a minute as one `economy.flow`
+each: how many changes, the total gained, the total spent, and the balance after the last one. A sell
+wand firing a thousand times a minute costs one event. At most 50,000 of those keys are held at once;
+past that, new ones wait for the next minute. On shutdown the last partial minute is sent with the
+rest.
+
+## The Economy page
+
+Pick a **currency**; the list shows how many players each one has. The server filter picks one game
+server or all of them.
+
+| Section | Shows |
+|---|---|
+| KPIs | Money supply, supply per active player, money created and destroyed, and the sink ratio. |
+| Economy verdict | Supply per active player over the last 8 full weeks with a fitted line: **Inflating** above +5% a week, **Deflating** below −5%, otherwise **Stable**. Needs at least 3 weeks of data. |
+| Money supply | Every holder's balance summed, per period. |
+| Supply per active player | Money supply ÷ players active in the trailing 30 days. Rising faster than play means inflation. |
+| Money created and destroyed | Per period, what each reason created (above the line) and destroyed (below). |
+| Sources and sinks | Every reason money moved for, largest net first: paid in, paid out, net, share, players, and whether it is a source, a sink or a transfer. Vault reasons show the calling plugin, marked *via Vault*. |
+| Who holds the money | Median balance, Gini, the share held by the richest 1% and 10%, and idle money — held by players away 30 days or more. |
+| New player progress | Median balance of new players 1, 7 and 30 days after their first session. |
+
+### Definitions
+
+| Metric | Definition |
+|---|---|
+| Money supply | Per period, each storage scope's latest `supply` report, summed over scopes. A period without a report is empty, never carried forward. |
+| Estimated money supply | For a currency nobody reports a supply for: the sum of every known player's latest balance (below zero counts as zero), carried forward between changes. Players not seen since tracking began are missing, so it trails the real supply; the page labels it **estimated** with the number of players behind it. |
+| Reason net | Money in − money out of one reason, over every player. A payment between players cancels inside its reason. |
+| Created / destroyed | The positive / negative reason nets. |
+| Sink ratio | Destroyed ÷ created. Below 1 money piles up; above 1 it drains. |
+| Source, sink, transfer | A transfer when the net is within 5% of the larger of its gross in and out; otherwise a source (positive) or a sink (negative). |
+| Latest known balance | A player's most recent balance from a change or a balance read. |
+| Gini | 0 when everyone holds the same, 1 when one player holds everything. |
+
+<Callout type="note" title="Shared or separate economies">
+Every server reports the same currency ids (`vault`, `playerpoints`), whether they share one economy or
+each run their own. Over all servers, a player's balance is the last one reported anywhere — right for
+a shared economy, and one of two balances for separate ones. Read separate economies one server at a
+time.
+</Callout>

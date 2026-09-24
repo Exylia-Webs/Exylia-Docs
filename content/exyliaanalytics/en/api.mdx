@@ -1,0 +1,214 @@
+---
+title: "API"
+description: "ExyliaAnalytics' own API: custom events with track, balance changes with economy and money supply with supply. How to compile against it, and every limit it enforces."
+badge: "dev"
+---
+
+Other plugins talk to the agent through one class, `net.exylia.analytics.api.ExyliaAnalytics`. It sends
+**custom events** to the Events and Funnels pages, and **balance changes** and **money supply** to the
+Economy page.
+
+```java
+ExyliaAnalytics.track(player.getUniqueId(), "crate_open", Map.of("crate", "legendary"));
+```
+
+<Callout type="note" title="Not part of exylia-api">
+This API is ExyliaAnalytics' own. It is not in ExyliaLib's `exylia-api` artifact and is not reached
+through `ExyliaAPI.get(...)`. It needs no ExyliaLib at all.
+</Callout>
+
+## Adding it to your build
+
+The API is not published to a Maven repository. It ships inside the loader jar —
+`Exylia-Analytics-Loader.jar`, the file server owners install — and that jar is what you compile
+against. Put a copy in your project, for example as `libs/Exylia-Analytics-Loader.jar`:
+
+```groovy title="build.gradle"
+dependencies {
+    compileOnly files('libs/Exylia-Analytics-Loader.jar')
+}
+```
+
+```kotlin title="build.gradle.kts"
+dependencies {
+    compileOnly(files("libs/Exylia-Analytics-Loader.jar"))
+}
+```
+
+For Maven, install the jar into your local repository once, then depend on it as `provided`:
+
+```bash
+mvn install:install-file -Dfile=libs/Exylia-Analytics-Loader.jar \
+    -DgroupId=net.exylia -DartifactId=exylia-analytics -Dversion=1.1.0 -Dpackaging=jar
+```
+
+```xml title="pom.xml"
+<dependency>
+    <groupId>net.exylia</groupId>
+    <artifactId>exylia-analytics</artifactId>
+    <version>1.1.0</version>
+    <scope>provided</scope>
+</dependency>
+```
+
+The coordinates in that command are your choice; nothing resolves them but your own machine.
+
+<Callout type="danger" title="compileOnly, never shaded">
+The class the agent listens on is the one inside the installed loader. A copy shaded into your jar is
+loaded by your plugin's classloader instead, is never connected to the agent, and every call on it
+silently does nothing.
+</Callout>
+
+## Declaring the plugin
+
+So the loader is enabled before you and its classes are visible to yours:
+
+```yaml title="plugin.yml"
+softdepend: [ ExyliaAnalytics ]
+```
+
+```json title="velocity-plugin.json"
+"dependencies": [ { "id": "exyliaanalytics", "optional": true } ]
+```
+
+Use `depend` (or `"optional": false`) only if your plugin cannot run without it.
+
+### When it is not installed
+
+With a soft dependency your plugin also loads on servers without ExyliaAnalytics, and there the class
+does not exist: the first line that touches it throws `NoClassDefFoundError`. Check once, and keep every
+call behind that check — a small class of your own that is only loaded when the plugin is there keeps
+the rest of your code free of it:
+
+```java
+public final class Analytics {
+
+    private static final boolean PRESENT =
+            Bukkit.getPluginManager().getPlugin("ExyliaAnalytics") != null;
+
+    public static void crateOpened(Player player, String crate) {
+        if (PRESENT) {
+            Tracking.crateOpened(player.getUniqueId(), crate);
+        }
+    }
+
+    /** Only loaded when PRESENT is true, so the API class is never resolved without it. */
+    private static final class Tracking {
+        static void crateOpened(UUID player, String crate) {
+            ExyliaAnalytics.track(player, "crate_open", Map.of("crate", crate));
+        }
+    }
+}
+```
+
+When the class **is** there, every method is safe to call at any moment: before the agent has started,
+while the server is not linked, paused or has the module off, the call simply does nothing.
+
+## Custom events
+
+```java
+public static void track(UUID player, String name, Map<String, ?> props)
+public static void track(String name, Map<String, ?> props)
+```
+
+The first form is an event done by a player; the second belongs to the server (a boss spawned, a season
+started) and carries no player. Both are safe from **any thread** and cost one validation and a queue
+insert.
+
+| Rule | Limit |
+|---|---|
+| Name | Lowercase letters, digits, `_` and `.`, 1 to 48 characters: `crate_open`, `quest.finished`. |
+| Properties | At most 16. `null` is the same as an empty map. |
+| Property keys | Not null, at most 48 characters. |
+| Property values | A `String` of up to 200 characters, a finite number, or a `Boolean`. Nothing else — not `null`, not an enum, not a list. |
+
+An event that breaks a rule is **dropped whole**, silently. With `debug: true` in `config.yml` the
+console says which one and why. The agent checks everything except the key length, which the ingest
+checks: a longer key drops the event there instead.
+
+On the dashboard, each property becomes a breakdown on the Events page, and the name can be a step of a
+funnel. Numbers and booleans are shown as values, so a property with thousands of distinct values (a
+UUID, a timestamp) makes a long, unhelpful list: keep properties to things you want to count by.
+
+```java
+ExyliaAnalytics.track(player.getUniqueId(), "duel.won", Map.of(
+        "kit", "nodebuff",
+        "ranked", true,
+        "hearts_left", 3.5));
+
+ExyliaAnalytics.track("koth.captured", Map.of("hill", "desert"));
+```
+
+## Reporting the economy
+
+An economy plugin that ExyliaLib, Vault or the built-in hooks do not already cover can report its own
+money. See [Economy](/docs/exyliaanalytics/economy) for what the dashboard does with it.
+
+<Callout type="warning" title="Do not report a change twice">
+Changes made through Vault, VaultUnlocked or ExyliaLib are already counted by the agent. Report through
+the API only what moves **outside** them — your own currency's storage — or the same money is counted
+twice.
+</Callout>
+
+### A balance change
+
+```java
+public static void economy(UUID player, String currency, BigDecimal delta, BigDecimal balanceAfter, String reason)
+```
+
+| Parameter | Meaning |
+|---|---|
+| `player` | Whose balance changed. Required. |
+| `currency` | The currency's id, such as `coins`. Lowercased, cut to 32 characters. Required. |
+| `delta` | Positive for money in, negative for money out, in the currency's own units. Zero is ignored. |
+| `balanceAfter` | The balance after the change, or `null` when you do not know it. |
+| `reason` | Why, shaped `<plugin or module>:<what>` in lowercase: `shop:buy`, `pay:tax`, `auctions:fee`. Cut to 64 characters; empty becomes `api`. |
+
+Call it for **every** change, from any thread. The agent sums changes per player, currency and reason
+and sends one row a minute, so a sell wand firing a thousand times costs the same as one sale. The call
+never throws into your code: a payment is never broken by analytics.
+
+### The money supply
+
+```java
+public static void supply(String currency, String scope, BigDecimal total, long holders)
+```
+
+| Parameter | Meaning |
+|---|---|
+| `currency` | The currency's id, as in `economy(...)`. |
+| `scope` | Where these balances are stored, up to 96 characters. Empty means the currency's id. |
+| `total` | Every balance in that scope, summed. |
+| `holders` | How many accounts hold money. Zero or more. |
+
+Send it now and then — every ten minutes or so is plenty. Each call is sent as it comes.
+
+The **scope** is what stops a shared balance table being counted twice. A currency shared by the whole
+network uses one scope that every server reports (`coins`); a currency kept per server uses one scope
+per server (`coins@survival`, `coins@skyblock`). The dashboard keeps the latest report of each scope and
+sums the scopes, never the servers.
+
+```java
+BigDecimal total = storage.sumAllBalances("coins");
+long holders = storage.countAccountsAbove("coins", BigDecimal.ZERO);
+ExyliaAnalytics.supply("coins", "coins", total, holders);
+```
+
+A currency that never gets a `supply(...)` still gets a money supply on the dashboard, **estimated**
+from the latest balances the agent has seen.
+
+## `available()`
+
+```java
+public static boolean available()
+```
+
+`true` once the agent is running on this server. It does **not** say the server is linked or that the
+module is on — calls are dropped quietly in those cases anyway, so there is rarely a reason to check it.
+
+## Outdated loaders
+
+The API classes live in the loader, not in the agent the loader downloads. A loader built before the
+economy API existed has only `track`; the agent then logs *"The installed loader is outdated: the
+economy API is disabled until it is updated"*, custom events keep working, and your plugin gets a
+`NoSuchMethodError` if it calls `economy(...)` or `supply(...)`. Replacing the loader jar fixes it.

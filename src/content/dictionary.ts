@@ -175,6 +175,10 @@ export const dict = {
       en: "Tools for the team that keeps the server clean.",
       es: "Herramientas para el equipo que mantiene el servidor limpio.",
     },
+    Analytics: {
+      en: "Measuring the server: players, performance and the economy.",
+      es: "Medir el servidor: jugadores, rendimiento y economía.",
+    },
     Library: {
       en: "The foundation the rest is written on.",
       es: "La base sobre la que está escrito el resto.",

@@ -1,0 +1,115 @@
+---
+title: "Preguntas frecuentes y problemas"
+description: "Las preguntas más habituales: la consola no muestra código, el ingest no responde, gráficos vacíos, un servidor copiado, Folia, un loader antiguo y más."
+---
+
+## La consola nunca muestra un código de vinculación
+
+- **Falta la clave de licencia.** El loader se detiene antes de que arranque el agente y lo dice. Pon la
+  clave en `loader.yml` y reinicia.
+- **El servidor ya está vinculado.** Existe `data/credentials.json`, quizá copiado de otro servidor.
+  `/analytics status` muestra el espacio de trabajo; `/analytics unlink` y después `/analytics link` si es
+  el equivocado.
+- **No se puede llegar al ingest.** La consola dice *"Could not request a link code (…); retrying"*. Ver la
+  siguiente pregunta.
+- **El código caducó.** Un código dura diez minutos. `/analytics link` para uno nuevo.
+
+## "Could not reach Exylia Analytics"
+
+El servidor no puede abrir una conexión HTTPS con `analytics-ingest.exylia.net`. Causas habituales: un
+hosting que bloquea el tráfico saliente, un cortafuegos que solo deja algunos puertos, o un fallo de DNS.
+Mientras tanto no se pierde nada: los eventos esperan en `data/spool/` (hasta 50 MiB) y salen, del más
+antiguo al más nuevo, cuando vuelve la conexión. `/analytics status` muestra el siguiente reintento en
+**Last send**.
+
+## La página de vinculación rechaza el código
+
+*"Ese código no existe, ha caducado o ya se usó."* Los códigos son de un solo uso y duran diez minutos;
+escribirlo con un carácter confundible también falla — los códigos nunca llevan `0`, `O`, `1`, `I` ni `L`.
+Si el espacio de trabajo que quieres no está en la lista, tu rol no puede gestionar servidores en él.
+
+## El servidor está vinculado pero los gráficos están vacíos
+
+| Comprueba | Dónde |
+|---|---|
+| Que el servidor envía datos | **Servidores**: estado **En línea**, un latido reciente. |
+| Que no está pausado | **Servidores**: no **Desactivado**. `/analytics status` diría *Disabled from the dashboard*. |
+| Que el rango tiene datos | Elige un rango más largo. La mayoría de los gráficos necesitan al menos un día completo de sesiones. |
+| Que la red tiene su proxy | Sin un proxy Velocity vinculado nadie envía sesiones, así que jugadores, retención y adquisición se quedan vacíos. Los backends solos llenan Rendimiento, Economía y Placeholders. |
+| Que el módulo está activado | **Ajustes → Agente**. Con Sesiones desactivado casi todo está vacío. |
+| Que puedes ver la página | Puede que tu rol no la incluya. |
+
+## Economía no muestra nada
+
+El módulo Economía tiene que estar activado y el servidor tiene que ser Paper o Spigot. Después,
+`/analytics status` lista en la línea **Economy** las fuentes que enganchó. Con solo una economía de Vault,
+mira la línea **Vault**: el proxy puede estar desactivado en `config.yml`, o la economía puede tener ella
+misma la prioridad más alta. Los plugins que se guardaron la economía que encontraron al activarse no se
+ven — ver [Economía](/docs/exyliaanalytics/economia#el-proxy-de-vault).
+
+## Reanudé un servidor y sigue sin recoger nada
+
+Un agente pausado no envía nada y por eso nunca se entera de que se reanudó. Ejecuta `/analytics reload`
+en él (o `/analyticsv reload` en el proxy), o reinícialo.
+
+## "Another running server holds this token"
+
+Dos procesos envían con el mismo token, casi siempre porque se copió una carpeta de plugins con
+`data/credentials.json` dentro. El ingest acepta uno y rechaza al otro, que guarda sus eventos y reintenta
+cada minuto. En la copia, `/analytics unlink` y después `/analytics link`, y aprueba el nuevo código. Tras
+una caída, el proceso antiguo se da por perdido cuando lleva tres latidos callado, así que un servidor
+reiniciado recupera su token solo.
+
+## "The installed loader is outdated"
+
+El jar del loader es anterior a la API de economía. Los eventos personalizados siguen funcionando; la API de
+economía está desactivada hasta que sustituyas `Exylia-Analytics-Loader.jar` por uno actual. Las
+actualizaciones del propio agente llegan con un simple reinicio.
+
+## ¿Funciona en Folia?
+
+Sí. El agente se ejecuta en la región global y cada evento que escucha sigue contando. Lo que cambia en
+Folia:
+
+- TPS y MSPT describen la región global, que lleva su propio ritmo haga lo que haga cada región del mundo,
+  así que se leen como si estuviera ocioso.
+- Los recuentos de entidades y chunks no se envían: Folia no los da desde la región global.
+
+## ¿Funciona en Spigot?
+
+Sí, desde 1.17. Spigot no tiene evento de duración del tick, así que Rendimiento muestra TPS sin MSPT. Las
+marcas de cliente necesitan Paper 1.19.4 o posterior.
+
+## ¿Son compatibles BungeeCord o Waterfall?
+
+No como proxy: no hay agente para ellos. Los backends detrás de uno se detectan como backends y envían
+presencia, rendimiento y economía, pero nadie envía las sesiones de red sobre las que se construye la
+mayoría de las páginas. Ver [Instalación](/docs/exyliaanalytics/instalacion#instalar-en-una-red).
+
+## ¿Por qué son distintos el tiempo de juego y el AFK?
+
+El tiempo de juego es el tiempo conectado **menos** el tiempo AFK. Un jugador cuenta como AFK tras el tiempo
+AFK fijado en **Ajustes → Agente** (cinco minutos por defecto) sin moverse, mirar alrededor, escribir,
+ejecutar comandos ni interactuar.
+
+## Un servidor aparece Sin señal mientras funciona
+
+Perdió tres latidos. Los latidos se cuentan en las muestras de un segundo del agente, que un servidor Paper
+toma cada 20 ticks: un servidor por debajo de unos 7 TPS durante varios minutos los estira lo bastante como
+para parecer sin señal, y sus sesiones abiertas se cierran por tiempo agotado. Vuelve a En línea con su
+siguiente latido.
+
+## ¿Pueden los jugadores excluirse?
+
+El agente no tiene un interruptor por jugador. Lo que recoge sobre un jugador está en
+[Privacidad](/docs/exyliaanalytics/privacidad); los módulos apagan tipos enteros de datos para todos.
+
+## ¿Ralentiza el servidor?
+
+Recoger un evento es una inserción en una cola en el hilo del juego. Comprimir, escribir en disco y enviar
+van en un hilo en segundo plano; la lectura de saldos va en otro, y lo que se tiene en ExyliaLib lo cuenta
+ExyliaLib en el hilo dueño de cada jugador. El agente nunca espera a la red desde un hilo del juego.
+
+## ¿Dónde pido ayuda?
+
+En el [Discord de Exylia](https://discord.exylia.net). Las licencias también se gestionan ahí.

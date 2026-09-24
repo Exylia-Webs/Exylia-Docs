@@ -1,0 +1,139 @@
+---
+title: "Collected data"
+description: "Every event the agent sends, which side sends it, when, and the fields it carries — plus how events are queued, spooled and delivered."
+---
+
+The agent reports **raw facts** and leaves the interpretation to the ingest: hostnames are normalised,
+countries looked up and sessions stitched to presence on the other side, so a fix never waits for every
+server to update. This page lists everything it sends. What it never sends is on
+[Privacy](/docs/exyliaanalytics/privacy).
+
+**Sent by** uses **P** for a proxy, **B** for a backend and **S** for a standalone server. Every event
+also carries the time it happened and, when it is about a player, the player's UUID.
+
+## Server lifecycle
+
+These are sent whatever the modules say, as long as the server is linked and not paused.
+
+| Event | Sent by | When | Data |
+|---|---|---|---|
+| `server.start` | P B S | When the agent starts collecting: on start once linked, right after linking, and after being resumed. | Platform and its version, Minecraft version (none on a proxy), Java version, agent version, role, online mode, port, max players. |
+| `server.stop` | P B S | On a clean shutdown, after every open session and stay is closed. | — |
+| `server.heartbeat` | P B S | Every heartbeat interval (60 s by default). | Players online. |
+| `proxy.servers` | P | On start and whenever the proxy's server list changes (checked every heartbeat). | Each registered server's name and `host:port` address. |
+
+## Network sessions
+
+Sent by the proxy, or by a standalone server. A backend does not open sessions. Module: **Sessions**.
+
+| Event | When | Data |
+|---|---|---|
+| `session.start` | A player connects (on Velocity after login, on Paper when they join). | A session id, username, IP address, hostname exactly as the client typed it, protocol version, whether they are a Bedrock player, and their LuckPerms primary group. |
+| `session.client` | When the client's brand or language first becomes known or changes. | Client brand (Velocity; Paper 1.19.4 and newer) and/or language, such as `es_es`. |
+| `session.switch` | A player moves to another backend. Proxy only. | The server they left (none on the first connection) and the one they joined, by the proxy's names. |
+| `session.end` | A player disconnects, or the server shuts down. | How it ended: `quit`, `kick` or `shutdown`. |
+
+- **Protocol version.** On Velocity, the client's own. On a standalone Paper server, ViaVersion's
+  answer when it is installed (Paper would report its own version for every client), otherwise
+  Paper's.
+- **Bedrock.** Asked of Floodgate when it is installed; otherwise a UUID of the form
+  `00000000-0000-0000-…` counts as Bedrock.
+- **Kick.** A kick by a plugin or staff, and on Velocity a login from the same account elsewhere.
+- **Players already online** when the agent starts collecting — after a link or a resume — get their
+  session opened then.
+
+## Presence on a server
+
+Sent by backends and standalone servers. Modules: **Sessions** for joins and leaves, **AFK** for AFK.
+
+| Event | When | Data |
+|---|---|---|
+| `server.join` | A player joins this server. | — |
+| `server.leave` | A player leaves it, or it shuts down. | How it ended (`quit`, `kick`, `shutdown`) and the stay's activity: chat messages, commands, deaths, and player kills. |
+| `afk.start` | A player has done nothing for the AFK time (300 s by default). | — |
+| `afk.end` | They move, look around, chat, run a command or interact again — or leave while AFK. | — |
+
+The activity counters are **counts only**. A chat message cancelled by another plugin is not counted;
+a kill counts only when the killer is another player.
+
+## Performance
+
+| Event | Sent by | When | Data |
+|---|---|---|---|
+| `server.metrics` | P B S | Every metrics interval (60 s by default). Module: **Performance**. | TPS (average and lowest), MSPT (average, p95 and highest), CPU of the process and of the machine, heap used and maximum, players, entities, loaded chunks. |
+
+A proxy sends only CPU, heap and players. What each server platform can measure is on
+[Servers and performance](/docs/exyliaanalytics/servers#what-each-platform-can-report).
+
+## Integrations
+
+Each one is used only when its plugin is installed. See [Integrations](/docs/exyliaanalytics/integrations).
+
+| Event | Sent by | Module | Data |
+|---|---|---|---|
+| `punishment.issue` | P B S | Punishments | The punished player, the plugin, its entry id, the kind (`ban`, `mute`, `kick`, `warn`), the staff member's UUID (none for the console), the reason, the duration (none when permanent) and whether it is an IP ban. |
+| `punishment.revoke` | P B S | Punishments | The player, plugin, entry id, kind and who lifted it. |
+| `vote.cast` | Whoever runs NuVotifier | Votes | The voting site as Votifier names it, the username that voted, and the player's UUID when they are online on that server. |
+| `rank.add` | P B S | Ranks | The group, and when it expires (none when permanent). Also sent when a temporary group's expiry changes. |
+| `rank.remove` | P B S | Ranks | The group. |
+| `player.placeholders` | B S | Placeholders | The values of the placeholders listed in `config.yml`, just before the player's `server.leave`. |
+
+## Economy
+
+Paper and Spigot only. Module: **Economy**. How the sources are found and why each change is counted
+once is on [Economy](/docs/exyliaanalytics/economy).
+
+| Event | Sent by | When | Data |
+|---|---|---|---|
+| `economy.flow` | B S | Once a minute, one per player, currency and reason that moved. | Currency, reason, number of changes, total gained, total spent, the balance after the last change (when the source knows it), and the window's length. |
+| `economy.balance` | B S | On join and quit, and every 10 minutes for ExyliaLib currencies. | One player's balance in one currency. |
+| `economy.supply` | B S | Whenever a plugin reports it through the API. | Currency, storage scope, the sum of every balance, and how many accounts hold money. |
+
+## Custom events
+
+| Event | Sent by | Module | Data |
+|---|---|---|---|
+| `custom` | Wherever a plugin calls the API | Custom events | The event's name and up to 16 properties. See the [API](/docs/exyliaanalytics/api). |
+
+## How events travel
+
+<Steps>
+  <Step title="Queued in memory">
+    Recording an event only puts it in a queue; the game thread never waits on disk or network. An
+    event whose module is off, or any event while the server is unlinked or paused, is dropped here.
+    Past 100,000 waiting events new ones are dropped, with one warning, until the queue drains.
+  </Step>
+  <Step title="Written to the spool">
+    Every send interval (10 s by default), or as soon as 500 events are waiting, the queue becomes one
+    or more batches of at most 5,000 events and 1 MiB, compressed and written to
+    `data/spool/<batchId>.json.gz` before the first attempt.
+  </Step>
+  <Step title="Delivered, oldest first">
+    One background thread sends the spool in order and deletes each batch once the ingest accepts it.
+    A retried batch is byte-for-byte the same and is stored only once.
+  </Step>
+</Steps>
+
+What happens on each answer:
+
+| Answer | What the agent does |
+|---|---|
+| Accepted | Deletes the batch. If the dashboard's settings changed, fetches them. |
+| Malformed | Logs it, deletes the batch: it can never succeed. |
+| Token revoked | Deletes its credentials, its queue and its spool, and goes back to unlinked. |
+| Workspace suspended | Keeps everything and tries again every 15 minutes. |
+| Another server holds the token | Keeps everything, logs it once, tries again every minute. |
+| Batch too large | Splits it in two and sends each half. |
+| Rate limited, server error, unreachable | Keeps everything and waits: 5 seconds, doubling up to 5 minutes, ±20%, and never less than the ingest asks. |
+
+The spool is capped at **50 MiB**. When it is full the oldest batch is dropped with a warning — that only
+happens after the ingest has been out of reach for a long time.
+
+On shutdown the agent closes every open session and stay, sends `server.stop`, and tries for up to
+**3 seconds** to deliver what is left. Whatever does not make it stays in the spool and goes out on the
+next start.
+
+The ingest also corrects clocks: when a batch's send time differs from the ingest's by more than two
+seconds, every timestamp in it is shifted by the difference. It drops, one by one, events it cannot
+use: an unknown type, a player event without a player, a time before 2025 or more than an hour ahead,
+or data that breaks the limits above.

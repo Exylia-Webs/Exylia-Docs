@@ -1,0 +1,112 @@
+---
+title: "Installation"
+description: "The loader jar on a server, a proxy or a whole network, the licence key, the files the agent writes and how it decides its role."
+---
+
+## The jar
+
+ExyliaAnalytics ships as one file, `Exylia-Analytics-Loader.jar`. It holds the Paper loader and the
+Velocity loader side by side, and each platform reads only its own descriptor, so **the same file goes
+on a proxy and on a server**. The loader checks your licence and then downloads the agent itself.
+
+## Installing on one server
+
+<Steps>
+  <Step title="Drop in the jar">
+    `Exylia-Analytics-Loader.jar` into `plugins/`. Nothing else is required.
+  </Step>
+  <Step title="Set the licence key">
+    Start the server once. The loader writes `loader.yml` in the plugin's folder and stops with
+    *"Your license key is not currently set in the loader.yml file"*. Put your key there — it is
+    handed out on the [Exylia Discord](https://discord.exylia.net) — and start again.
+  </Step>
+  <Step title="Let it start">
+    The agent writes `config.yml` and a `data/` folder, and, because it is not linked yet, prints a
+    link code in the console.
+  </Step>
+  <Step title="Link it">
+    Enter that code in the dashboard. See [Linking a server](/docs/exyliaanalytics/linking).
+  </Step>
+</Steps>
+
+The server needs outgoing HTTPS to `analytics-ingest.exylia.net`. It never listens on a port.
+
+## Installing on a network
+
+Install the same jar on the **Velocity proxy and on every backend**, then link each one. Every
+install is its own server in the dashboard with its own code and its own token.
+
+<Steps>
+  <Step title="The proxy first">
+    The proxy is the only one that sees who connected, from which hostname and country, with which
+    client. Without it a network has no sessions, and most of the dashboard stays empty.
+  </Step>
+  <Step title="Then every backend">
+    Each backend reports who was on it, for how long, AFK time, TPS and MSPT, the economy and
+    placeholders. Link all of them into the **same workspace** as the proxy.
+  </Step>
+  <Step title="Confirm the proxy mapping">
+    The proxy reports its server list. On **Servers → Proxy mapping** the dashboard suggests which
+    backend is which entry, by port; confirm each one. See
+    [Servers and performance](/docs/exyliaanalytics/servers#proxy-mapping).
+  </Step>
+</Steps>
+
+<Callout type="warning" title="BungeeCord and Waterfall">
+There is no agent for BungeeCord or Waterfall. Backends behind one are still detected as backends
+(from `settings.bungeecord` in `spigot.yml`), but with no proxy agent nobody reports network sessions.
+Forcing `mode: standalone` on the backends makes each of them open its own sessions, at the cost of a
+server switch counting as a new session.
+</Callout>
+
+## The server's role
+
+On start the agent decides what it is:
+
+| Detected | When |
+|---|---|
+| `proxy` | It runs on Velocity. Always. |
+| `backend` | Paper or Spigot with Velocity forwarding enabled (`proxies.velocity.enabled` in `paper-global.yml`, or `velocity-support` on Paper 1.17–1.18), or `settings.bungeecord: true` in `spigot.yml`. |
+| `standalone` | Anything else. |
+
+`mode` in [`config.yml`](/docs/exyliaanalytics/configuration) overrides the detection on Paper and
+Spigot, and only takes effect after a restart. The role appears on the Servers page as the server's
+type, and `/analytics status` prints it.
+
+## Files
+
+Paper and Spigot keep everything in `plugins/ExyliaAnalytics/`, Velocity in
+`plugins/exyliaanalytics/`.
+
+| File | Contents |
+|---|---|
+| `loader.yml` | The licence key, read by the loader. |
+| `config.yml` | The few settings the server decides before it can reach the dashboard: the role, PlaceholderAPI values, the Vault wrapper and debug logging. See [Configuration](/docs/exyliaanalytics/configuration). |
+| `data/credentials.json` | The server's token and the workspace it belongs to, written when a link is approved. On Linux it is readable by the server's user only. |
+| `data/remote-config.json` | The last settings the dashboard sent, so the agent starts collecting before the network is reachable. |
+| `data/spool/` | Batches of events waiting to be delivered, one `.json.gz` file each. |
+
+<Callout type="danger" title="Do not share credentials.json">
+The token is kept out of `config.yml` on purpose, because configs end up in screenshots and support
+tickets. Anyone holding `credentials.json` can send events into your workspace as that server until
+you revoke it.
+</Callout>
+
+## Copying a server folder
+
+A copied `plugins/` folder carries `data/credentials.json` with it, so two servers end up sending with
+one token. The ingest lets only one running process hold a token: the second one gets refused, logs
+*"Another running server holds this token (a copied plugin folder?)"* once, and keeps its events on
+disk, retrying every minute. `/analytics status` shows it as **Waiting**.
+
+On the copy, run `/analytics unlink` (or delete `data/credentials.json` while it is stopped), then
+`/analytics link` and approve the new code: it becomes a server of its own.
+
+## Updating
+
+The loader downloads the current release of the agent when it starts, so a restart is an update. The
+loader jar itself only needs replacing when a release asks for it — for instance when the console says
+*"The installed loader is outdated: the economy API is disabled until it is updated"*, which means
+the loader predates the economy API that plugins call.
+
+The dashboard marks an **agent update** on every time chart when a server starts with a new version.

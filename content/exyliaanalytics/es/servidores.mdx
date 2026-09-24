@@ -1,0 +1,118 @@
+---
+title: "Servidores y rendimiento"
+description: "La página Servidores — estado, renombrar, pausar, revocar y el mapeo del proxy — y la página Rendimiento con TPS, MSPT, CPU, memoria, disponibilidad, reinicios y caídas."
+---
+
+## Servidores
+
+Cada agente vinculado al espacio de trabajo, con:
+
+| Columna | Muestra |
+|---|---|
+| Nombre | Editable por los miembros que gestionan servidores, hasta 40 caracteres. |
+| Tipo | `proxy`, `backend` o `standalone` (se muestra *independiente*), tal como lo envió el agente en su último arranque. |
+| Software | Plataforma y versión de Minecraft, y la versión del agente. |
+| Estado | Ver abajo. |
+| Último latido | Hace cuánto dio señales de vida por última vez. |
+| En línea | Jugadores en él ahora mismo, mientras está en línea. |
+
+### Estado
+
+| Estado | Significado |
+|---|---|
+| En espera | Vinculado, pero aún no ha llegado ningún latido. |
+| En línea | Sus latidos están llegando. |
+| Sin señal | Perdió **tres latidos seguidos** (tres minutos con el intervalo por defecto). Sus sesiones y estancias abiertas se cierran en el último latido, como *Tiempo agotado*. |
+| Desactivado | Pausado desde esta página. |
+| Revocado | Su token ya no funciona. |
+
+Un servidor que se apaga limpiamente envía una parada antes de callarse, para que el panel distinga un
+reinicio de una caída: un arranque cuya ejecución anterior nunca envió esa parada se marca como
+**caída** en todos los gráficos.
+
+### Pausar y reanudar
+
+**Pausar** es un interruptor de emergencia para un servidor. El agente se entera con su siguiente lote,
+deja de recoger y deja de enviar; `/analytics status` muestra *"Disabled from the dashboard"*. Nada de lo
+que ve mientras está pausado se envía nunca.
+
+<Callout type="warning" title="Reanudar necesita que el servidor vuelva a preguntar">
+Un agente pausado no envía nada, así que nunca se entera de que se reanudó. Tras **Reanudar**, ejecuta
+`/analytics reload` en ese servidor (`/analyticsv reload` en el proxy) o reinícialo. Su primer arranque
+tras una pausa se marca en los gráficos como una caída, porque la ejecución pausada nunca envió una
+parada.
+</Callout>
+
+### Revocar
+
+**Revocar** retira un servidor para siempre. Su token deja de funcionar en 30 segundos; el agente se
+entera en su siguiente envío, registra *"This server's token was revoked"*, borra sus credenciales y lo
+que no había enviado, y vuelve a estar sin vincular. Lo que ya había enviado se queda en el espacio de
+trabajo. Para recuperarlo, vincúlalo de nuevo: pasa a ser un servidor nuevo.
+
+Renombrar, pausar, reanudar, revocar y el mapeo del proxy necesitan **Vincular, renombrar, desactivar y
+revocar servidores** (`manage_servers`).
+
+### Mapeo del proxy
+
+Un proxy envía su propia lista de servidores — el nombre y la dirección de cada entrada — al arrancar y
+cada vez que la lista cambia. Un backend no sabe cómo lo llama el proxy, así que el panel te pide que los
+emparejes una vez:
+
+- La tabla **Mapeo del proxy** lista cada backend con su puerto, y sugiere la entrada del proxy con el
+  mismo puerto, marcada como **Sugerido**.
+- No se guarda nada hasta que pulsas **Confirmar**. La asignación queda guardada y nunca se vuelve a
+  adivinar.
+- Una entrada sin backend confirmado aparece bajo la tabla: confirma una asignación o instala el agente
+  en ese servidor.
+
+La tabla solo aparece cuando el espacio tiene a la vez un proxy que envió su lista y al menos un backend.
+
+## Rendimiento
+
+¿Da abasto el hardware para los jugadores? Una fila por servidor, y gráficos para el servidor elegido en
+la barra de filtros.
+
+| Columna | Definición |
+|---|---|
+| Estado | Como en la página Servidores. |
+| Disponibilidad | Parte del rango cubierta por latidos. |
+| Reinicios | Arranques registrados en el rango. |
+| Caídas | Arranques no precedidos de una parada. |
+| TPS | Ticks por segundo de media. |
+| MSPT p95 | El 5% de ticks más lentos, en milisegundos. |
+| Minutos de lag | Minutos con MSPT p95 por encima de 50 ms. |
+| CPU | Parte de todos los núcleos que usó el proceso del servidor. |
+| Pico de heap | El máximo de heap de Java en uso. |
+| Pico de jugadores | El máximo de jugadores en línea a la vez. |
+
+| Gráfico | Muestra |
+|---|---|
+| Tiempo de tick | MSPT medio y p95, con la línea de 50 ms por encima de la cual un servidor no llega a 20 TPS. |
+| TPS | TPS medio y mínimo. |
+| Lag | Minutos por periodo por encima de 50 ms. |
+| Disponibilidad | Parte de cada periodo cubierta por latidos, con reinicios (↻) y caídas (✕). |
+| CPU | El proceso de este servidor frente a la máquina entera. |
+| Memoria | Heap de Java en uso frente al máximo. |
+| Jugadores en este servidor | Media y pico en línea. |
+| Entidades y chunks | Lo que el mundo pide a cada tick. |
+| Reinicios y caídas | Cada arranque del rango, etiquetado como reinicio, caída o actualización del agente. |
+
+### Lo que puede medir cada plataforma
+
+| Medida | Paper | Spigot | Folia | Velocity |
+|---|---|---|---|---|
+| TPS | ✓ | ✓ | Solo la región global | — |
+| MSPT | ✓ | — | Solo la región global | — |
+| CPU y heap | ✓ | ✓ | ✓ | ✓ |
+| Entidades y chunks | ✓ | ✓ | — | — |
+| Jugadores | ✓ | ✓ | ✓ | ✓ |
+
+El TPS lo mide el propio agente, a partir de lo que tardan de verdad 20 ticks. El MSPT viene del evento de
+fin de tick de Paper, que Spigot no tiene. En Folia el agente se ejecuta en la región global, que lleva su
+propio ritmo haga lo que haga cada región del mundo, así que su TPS y su MSPT se leen como si estuviera
+ocioso, y los recuentos de entidades y chunks no se envían.
+
+Las muestras se toman cada segundo y se resumen en una fila cada **intervalo de métricas** (60 segundos
+por defecto, se cambia en [Configuración remota](/docs/exyliaanalytics/configuracion-remota)). Las
+métricas en bruto se guardan 90 días; los rangos más antiguos leen resúmenes por hora y por día.

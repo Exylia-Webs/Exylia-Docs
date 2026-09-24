@@ -577,6 +577,51 @@ const EMOTES_NAV: NavGroup[] = [
   },
 ];
 
+const ANALYTICS_NAV: NavGroup[] = [
+  {
+    label: { en: "Getting started", es: "Empezar" },
+    pages: [
+      page("introduction", "introduction", "introduccion"),
+      page("installation", "installation", "instalacion"),
+      page("linking", "linking", "vinculacion"),
+    ],
+  },
+  {
+    label: { en: "The dashboard", es: "El panel" },
+    pages: [
+      page("dashboard", "dashboard", "panel"),
+      page("audience", "audience", "audiencia"),
+      page("players", "players", "jugadores"),
+      page("servers", "servers", "servidores"),
+      page("community", "community", "comunidad"),
+      page("events", "events", "eventos"),
+      page("revenue", "revenue", "ingresos"),
+      page("analyst", "analyst", "analista"),
+      page("team", "team", "equipo"),
+    ],
+  },
+  {
+    label: { en: "The agent", es: "El agente" },
+    pages: [
+      page("data", "data", "datos"),
+      page("privacy", "privacy", "privacidad"),
+      page("economy", "economy", "economia"),
+      page("integrations", "integrations", "integraciones"),
+      page("configuration", "configuration", "configuracion"),
+      page("remote-config", "remote-config", "configuracion-remota"),
+      page("commands", "commands", "comandos"),
+    ],
+  },
+  {
+    label: { en: "Developers", es: "Desarrolladores" },
+    pages: [page("api", "api", "api")],
+  },
+  {
+    label: { en: "Help", es: "Ayuda" },
+    pages: [page("faq", "faq", "faq")],
+  },
+];
+
 function effectsNav(extra: DocRef[] = []): NavGroup[] {
   return [
     {
@@ -1349,6 +1394,28 @@ export const plugins: Plugin[] = [
     ],
     nav: STAFF_NAV,
   },
+  {
+    id: "exyliaanalytics",
+    name: "ExyliaAnalytics",
+    tagline: { en: "The agent behind Exylia Analytics", es: "El agente de Exylia Analytics" },
+    summary: {
+      en: "One jar for Paper, Spigot, Folia and Velocity that reports sessions, AFK, performance, punishments, votes, ranks, PlaceholderAPI values and the economy to the Exylia Analytics dashboard: linked with a code, configured from the web, with no open port.",
+      es: "Un solo jar para Paper, Spigot, Folia y Velocity que envía sesiones, AFK, rendimiento, sanciones, votos, rangos, valores de PlaceholderAPI y la economía al panel de Exylia Analytics: se vincula con un código, se configura desde la web y no abre ningún puerto.",
+    },
+    version: "1.1.0",
+    status: "beta",
+    category: { en: "Analytics", es: "Analítica" },
+    minecraft: "1.17+",
+    banner: "https://s3.exylia.net/exylia-plugins/public/static/images/plugins/analytics/ExyliaAnalyticsBanner.webp",
+    tags: [
+      { en: "Dashboard", es: "Panel web" },
+      { en: "Network", es: "Red" },
+      { en: "Economy", es: "Economía" },
+      { en: "Velocity", es: "Velocity" },
+      { en: "Folia", es: "Folia" },
+    ],
+    nav: ANALYTICS_NAV,
+  },
 ];
 
 /**
@@ -1365,6 +1432,7 @@ export const CATEGORY_ORDER = [
   "Social",
   "Survival",
   "Moderation",
+  "Analytics",
   "Library",
 ] as const;
 

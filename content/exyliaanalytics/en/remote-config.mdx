@@ -1,0 +1,73 @@
+---
+title: "Remote configuration"
+description: "The settings every agent takes from the dashboard: send, heartbeat, metrics and AFK intervals, the nine modules, pausing, and how and when an agent picks a change up."
+---
+
+Almost everything about what the agent collects is decided in the dashboard, in **Settings → Agent**,
+for the whole workspace at once. Agents apply a change without a restart.
+
+## The intervals
+
+| Setting | Default | Allowed | What it does |
+|---|---|---|---|
+| Send every | 10 s | 5–300 s | How often the queue is written out and sent. A batch also goes out as soon as 500 events are waiting. |
+| Heartbeat every | 60 s | 15–600 s | How often each server reports that it is alive and how many players are on it. **Three missed heartbeats** mark a server silent and close its open sessions. |
+| Metrics every | 60 s | 10–600 s | How often TPS, MSPT, CPU and memory are summarised into one row. |
+| AFK after | 300 s | 30–3,600 s | How long a player has to do nothing to count as AFK: no movement, no looking around, no chat, no command, no interaction. |
+
+The heartbeat and metrics intervals are counted in the agent's own one-second samples. On a Paper server
+those are taken every 20 ticks, so a server lagging hard reports less often than the setting says.
+
+## The modules
+
+Each module is on by default. Turning one off makes every agent drop that data **before** it is queued:
+nothing of it is kept, spooled or sent.
+
+| Module | What it covers |
+|---|---|
+| Sessions | Network sessions (connect, client, switch, disconnect) and each server's joins and leaves, with their activity counters. |
+| AFK | AFK start and end. |
+| Performance | The periodic metrics: TPS, MSPT, CPU, memory, entities, chunks. |
+| Punishments | LiteBans, LibertyBans and AdvancedBan. |
+| Votes | NuVotifier votes. |
+| Ranks | LuckPerms rank changes. |
+| Placeholders | PlaceholderAPI values listed in each server's `config.yml`. |
+| Economy | Money created, destroyed and held, per currency — flows, balances and supply. |
+| Custom events | Events other plugins send through the API. |
+
+Server starts, stops, heartbeats and the proxy's server list are always sent: the dashboard needs them
+to know a server is there at all.
+
+<Callout type="warning" title="Turning Sessions off">
+Without Sessions there are no network sessions, so almost every analytics page stays empty: active
+players, retention, acquisition and playtime are all built from them.
+</Callout>
+
+## Pausing one server
+
+The workspace settings apply to every server. To stop **one** server, use **Servers → Pause**: the agent
+stops collecting and sending entirely until it is resumed. See
+[Servers](/docs/exyliaanalytics/servers#pause-and-resume) — including why a resumed server needs
+`/analytics reload` or a restart.
+
+## How an agent picks a change up
+
+<Steps>
+  <Step title="The dashboard bumps a revision">
+    Saving the agent settings, or pausing a server, raises that server's configuration revision.
+  </Step>
+  <Step title="The agent hears about it">
+    Every batch the ingest accepts is answered with the current revision. When it differs from the
+    agent's own, the agent fetches the settings again straight away.
+  </Step>
+  <Step title="And keeps a copy">
+    The fetched settings are saved to `data/remote-config.json`, so after a restart the agent collects
+    with them before it can reach the ingest.
+  </Step>
+</Steps>
+
+An agent also fetches its settings on every start, right after it is linked, and on
+`/analytics reload`. If the fetch fails it tries again every minute. A value the dashboard does not send
+keeps the agent's built-in default, which is the same as the dashboard's.
+
+The ingest itself takes up to 30 seconds to see a change, so allow for that plus one send interval.

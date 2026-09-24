@@ -1,0 +1,81 @@
+---
+title: "Privacy"
+description: "Exactly what leaves your server, what never does, how player addresses are handled on arrival, and how to turn collection down or off."
+---
+
+This page is for the question a player, a staff member or your own conscience will ask: *what does
+this plugin send, and where does it go?* Everything below is what the agent's code does, not a policy
+promise.
+
+## Where it goes
+
+To one place: `https://analytics-ingest.exylia.net`, over HTTPS. The agent opens no port, runs no web
+server and accepts no connection. Every request carries the server's token, a random id for the running
+process (made fresh on every start, never stored) and a `User-Agent` naming the agent version and
+platform.
+
+## What leaves the server
+
+| About | What is sent |
+|---|---|
+| The server | Platform and version, Minecraft version, Java version, agent version, role, online mode, port, max players, players online, and — from a proxy — the name and address of every registered backend. |
+| Performance | TPS, MSPT, CPU load of the process and of the machine, Java heap used and maximum, entity and loaded-chunk counts. |
+| A player's connection | UUID, username, **IP address**, the hostname they typed, client brand, client language, protocol version, whether they play Bedrock, and their LuckPerms primary group. Sent by the proxy or a standalone server only. |
+| A player's time | When they joined and left each server, why they left (quit, kick, shutdown), when they went AFK and came back. |
+| A player's activity | How many chat messages, commands, deaths and player kills they had during a stay. **Counts only.** |
+| Moderation | For each punishment: the player, the plugin and its entry id, the kind, the staff member's UUID, the **reason** as staff wrote it, the duration, and whether it is an IP ban. |
+| Votes | The voting site and the username that voted. |
+| Ranks | Each LuckPerms group a player gains or loses, and when it expires. |
+| Placeholders | The values of the placeholders **you** list in `config.yml`, and nothing when the list is empty. |
+| Economy | Per player, currency and reason, how much money came in and went out each minute and the balance after; balances read on join and quit; money supply totals other plugins report. |
+| Custom events | Whatever your own plugins pass to `ExyliaAnalytics.track(...)`. |
+
+The full field-by-field list is on [Collected data](/docs/exyliaanalytics/data).
+
+## What never leaves the server
+
+- **Chat messages and commands.** Only how many there were.
+- **Positions, worlds and movement.** Movement is watched only to tell whether a player is AFK; no
+  coordinate, world or direction is sent.
+- **Inventories and items.** The one exception is the amount of an ExyliaLib currency a player holds,
+  which for an item or experience currency is counted from their inventory or experience bar. Only the
+  number is sent.
+- **Anything from the console, logs, other plugins' files or the server's configuration**, beyond the
+  handful of server facts listed above.
+- **Placeholder values you did not list.**
+- **The IP address of a player on a backend.** A backend opens no session and sends no address; only
+  the proxy (or a standalone server) does.
+
+## What happens to an IP address
+
+The address travels only over TLS and is never logged by the ingest. On arrival:
+
+1. The country and network operator (ASN) are looked up **in memory** (IP geolocation by DB-IP).
+2. A keyed hash of the address is stored, with a secret unique to your workspace. It lets the dashboard
+   list accounts that joined from the same address, and cannot be turned back into the address.
+3. The address itself is stored **only** if the workspace chose **Encrypted address** in Settings, and
+   then only encrypted. Members need the **Player IP addresses** permission to see it.
+4. The raw event log keeps the session **without** the address.
+
+With the default **Hash only** setting, no plain or encrypted IP address is stored anywhere.
+
+## How long it is kept
+
+The raw event log, per-minute metrics and heartbeats are deleted after **90 days**. The tables behind
+the charts — sessions, stays, votes, punishments, ranks, placeholder values, economy — have no expiry,
+so long ranges stay possible.
+
+## Turning it down or off
+
+| To stop | Do |
+|---|---|
+| One kind of data, everywhere | Turn its module off in **Settings → Agent**. The agents stop collecting it with their next batch; nothing of it is queued. See [Remote configuration](/docs/exyliaanalytics/remote-config). |
+| Placeholder values on one server | Empty `placeholders:` in that server's `config.yml` and run `/analytics reload`. |
+| One server | **Servers → Pause**: it collects and sends nothing. **Revoke** ends it for good. |
+| Everything on a server, from the server | `/analytics unlink`: the token and anything not yet sent are deleted. Then remove the jar. |
+
+## The dashboard and the AI analyst
+
+Signing in with Discord reads your Discord name and avatar only. The AI analyst, when a dashboard offers
+it, sends a language model **aggregates**: totals, rates and server names. No player name, UUID or IP
+address is sent. See [AI analyst](/docs/exyliaanalytics/analyst).

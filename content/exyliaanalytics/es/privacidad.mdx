@@ -1,0 +1,82 @@
+---
+title: "Privacidad"
+description: "Exactamente qué sale de tu servidor, qué no sale nunca, cómo se tratan las direcciones de los jugadores al llegar, y cómo reducir o apagar la recogida."
+---
+
+Esta página es para la pregunta que te hará un jugador, un miembro del staff o tu propia conciencia: *¿qué
+envía este plugin, y adónde?* Todo lo que sigue es lo que hace el código del agente, no una promesa de
+política.
+
+## Adónde va
+
+A un único sitio: `https://analytics-ingest.exylia.net`, por HTTPS. El agente no abre puertos, no ejecuta
+servidor web y no acepta conexiones. Cada petición lleva el token del servidor, un id aleatorio del
+proceso en marcha (nuevo en cada arranque, nunca guardado) y un `User-Agent` con la versión del agente y
+la plataforma.
+
+## Qué sale del servidor
+
+| Sobre | Qué se envía |
+|---|---|
+| El servidor | Plataforma y versión, versión de Minecraft, versión de Java, versión del agente, papel, modo online, puerto, jugadores máximos, jugadores en línea y — desde un proxy — el nombre y la dirección de cada backend registrado. |
+| El rendimiento | TPS, MSPT, carga de CPU del proceso y de la máquina, heap de Java usado y máximo, recuentos de entidades y chunks cargados. |
+| La conexión de un jugador | UUID, nombre de usuario, **dirección IP**, el hostname que escribió, marca del cliente, idioma del cliente, versión del protocolo, si juega en Bedrock y su grupo principal de LuckPerms. Solo lo envía el proxy o un servidor independiente. |
+| El tiempo de un jugador | Cuándo entró y salió de cada servidor, por qué salió (quit, kick, shutdown), cuándo se quedó AFK y volvió. |
+| La actividad de un jugador | Cuántos mensajes de chat, comandos, muertes y asesinatos de jugadores tuvo en una estancia. **Solo recuentos.** |
+| Moderación | Por cada sanción: el jugador, el plugin y su id de entrada, el tipo, el UUID del miembro del staff, el **motivo** tal como lo escribió el staff, la duración y si es un baneo de IP. |
+| Votos | La web de votación y el nombre de usuario que votó. |
+| Rangos | Cada grupo de LuckPerms que un jugador gana o pierde, y cuándo caduca. |
+| Placeholders | Los valores de los placeholders que **tú** indicas en `config.yml`, y nada si la lista está vacía. |
+| Economía | Por jugador, moneda y motivo, cuánto dinero entró y salió cada minuto y el saldo resultante; saldos leídos al entrar y al salir; totales de masa monetaria que informan otros plugins. |
+| Eventos personalizados | Lo que tus propios plugins pasen a `ExyliaAnalytics.track(...)`. |
+
+La lista completa, campo por campo, está en [Datos recogidos](/docs/exyliaanalytics/datos).
+
+## Qué no sale nunca del servidor
+
+- **Mensajes de chat y comandos.** Solo cuántos hubo.
+- **Posiciones, mundos y movimiento.** El movimiento solo se observa para saber si un jugador está AFK; no
+  se envía ninguna coordenada, mundo ni dirección.
+- **Inventarios y objetos.** La única excepción es la cantidad de una moneda de ExyliaLib que tiene un
+  jugador, que para una moneda de objeto o de experiencia se cuenta de su inventario o su barra de
+  experiencia. Solo se envía el número.
+- **Nada de la consola, los logs, los archivos de otros plugins ni la configuración del servidor**, más
+  allá del puñado de datos del servidor listados arriba.
+- **Valores de placeholders que no indicaste.**
+- **La dirección IP de un jugador en un backend.** Un backend no abre sesiones ni envía direcciones; solo
+  el proxy (o un servidor independiente) lo hace.
+
+## Qué pasa con una dirección IP
+
+La dirección solo viaja por TLS y el ingest nunca la registra en sus logs. Al llegar:
+
+1. El país y el operador de red (ASN) se consultan **en memoria** (geolocalización de IP de DB-IP).
+2. Se guarda un hash con clave de la dirección, con un secreto único de tu espacio de trabajo. Permite al
+   panel listar cuentas que entraron desde la misma dirección, y no se puede convertir de vuelta en la
+   dirección.
+3. La dirección en sí se guarda **solo** si el espacio eligió **Dirección cifrada** en Ajustes, y entonces
+   solo cifrada. Los miembros necesitan el permiso **Direcciones IP de los jugadores** para verla.
+4. El registro de eventos en bruto guarda la sesión **sin** la dirección.
+
+Con el ajuste por defecto, **Solo hash**, no se guarda ninguna dirección IP, ni en claro ni cifrada.
+
+## Cuánto tiempo se guarda
+
+El registro de eventos en bruto, las métricas por minuto y los latidos se borran a los **90 días**. Las
+tablas detrás de los gráficos — sesiones, estancias, votos, sanciones, rangos, valores de placeholders,
+economía — no caducan, para que los rangos largos sigan siendo posibles.
+
+## Reducir o apagar la recogida
+
+| Para dejar de enviar | Haz |
+|---|---|
+| Un tipo de dato, en todas partes | Desactiva su módulo en **Ajustes → Agente**. Los agentes dejan de recogerlo con su siguiente lote; no se encola nada de él. Ver [Configuración remota](/docs/exyliaanalytics/configuracion-remota). |
+| Los valores de placeholders de un servidor | Vacía `placeholders:` en el `config.yml` de ese servidor y ejecuta `/analytics reload`. |
+| Un servidor | **Servidores → Pausar**: no recoge ni envía nada. **Revocar** lo termina para siempre. |
+| Todo en un servidor, desde el servidor | `/analytics unlink`: se borran el token y todo lo que no se había enviado. Después quita el jar. |
+
+## El panel y el Analista IA
+
+Entrar con Discord solo lee tu nombre y tu avatar de Discord. El Analista IA, cuando un panel lo ofrece,
+envía a un modelo de lenguaje **agregados**: totales, tasas y nombres de servidores. No se envía ningún
+nombre de jugador, UUID ni dirección IP. Ver [Analista IA](/docs/exyliaanalytics/analista).

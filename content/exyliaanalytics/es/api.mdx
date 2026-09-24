@@ -1,0 +1,218 @@
+---
+title: "API"
+description: "La API propia de ExyliaAnalytics: eventos personalizados con track, cambios de saldo con economy y masa monetaria con supply. Cómo compilar contra ella y cada límite que aplica."
+badge: "dev"
+---
+
+Otros plugins hablan con el agente a través de una clase, `net.exylia.analytics.api.ExyliaAnalytics`.
+Envía **eventos personalizados** a las páginas Eventos y Embudos, y **cambios de saldo** y **masa
+monetaria** a la página Economía.
+
+```java
+ExyliaAnalytics.track(player.getUniqueId(), "crate_open", Map.of("crate", "legendary"));
+```
+
+<Callout type="note" title="No forma parte de exylia-api">
+Esta API es propia de ExyliaAnalytics. No está en el artefacto `exylia-api` de ExyliaLib y no se obtiene
+con `ExyliaAPI.get(...)`. No necesita ExyliaLib para nada.
+</Callout>
+
+## Añadirla a tu proyecto
+
+La API no está publicada en ningún repositorio Maven. Va dentro del jar del loader —
+`Exylia-Analytics-Loader.jar`, el archivo que instalan los dueños de servidores — y es contra ese jar
+contra el que compilas. Pon una copia en tu proyecto, por ejemplo como `libs/Exylia-Analytics-Loader.jar`:
+
+```groovy title="build.gradle"
+dependencies {
+    compileOnly files('libs/Exylia-Analytics-Loader.jar')
+}
+```
+
+```kotlin title="build.gradle.kts"
+dependencies {
+    compileOnly(files("libs/Exylia-Analytics-Loader.jar"))
+}
+```
+
+Con Maven, instala el jar en tu repositorio local una vez y declara la dependencia como `provided`:
+
+```bash
+mvn install:install-file -Dfile=libs/Exylia-Analytics-Loader.jar \
+    -DgroupId=net.exylia -DartifactId=exylia-analytics -Dversion=1.1.0 -Dpackaging=jar
+```
+
+```xml title="pom.xml"
+<dependency>
+    <groupId>net.exylia</groupId>
+    <artifactId>exylia-analytics</artifactId>
+    <version>1.1.0</version>
+    <scope>provided</scope>
+</dependency>
+```
+
+Las coordenadas de ese comando las eliges tú; nada las resuelve salvo tu propia máquina.
+
+<Callout type="danger" title="compileOnly, nunca incluida en tu jar">
+La clase que escucha el agente es la que está dentro del loader instalado. Una copia metida en tu jar la
+carga el classloader de tu plugin, nunca se conecta al agente, y cada llamada sobre ella no hace nada, sin
+avisar.
+</Callout>
+
+## Declarar el plugin
+
+Para que el loader se active antes que tú y sus clases sean visibles para las tuyas:
+
+```yaml title="plugin.yml"
+softdepend: [ ExyliaAnalytics ]
+```
+
+```json title="velocity-plugin.json"
+"dependencies": [ { "id": "exyliaanalytics", "optional": true } ]
+```
+
+Usa `depend` (o `"optional": false`) solo si tu plugin no puede funcionar sin él.
+
+### Cuando no está instalado
+
+Con una dependencia blanda tu plugin también carga en servidores sin ExyliaAnalytics, y allí la clase no
+existe: la primera línea que la toca lanza `NoClassDefFoundError`. Compruébalo una vez y deja cada llamada
+detrás de esa comprobación — una clase propia pequeña que solo se carga cuando el plugin está presente
+mantiene el resto de tu código libre de ella:
+
+```java
+public final class Analytics {
+
+    private static final boolean PRESENT =
+            Bukkit.getPluginManager().getPlugin("ExyliaAnalytics") != null;
+
+    public static void crateOpened(Player player, String crate) {
+        if (PRESENT) {
+            Tracking.crateOpened(player.getUniqueId(), crate);
+        }
+    }
+
+    /** Only loaded when PRESENT is true, so the API class is never resolved without it. */
+    private static final class Tracking {
+        static void crateOpened(UUID player, String crate) {
+            ExyliaAnalytics.track(player, "crate_open", Map.of("crate", crate));
+        }
+    }
+}
+```
+
+Cuando la clase **sí** está, cada método se puede llamar en cualquier momento: antes de que arranque el
+agente, con el servidor sin vincular, pausado o con el módulo desactivado, la llamada simplemente no hace
+nada.
+
+## Eventos personalizados
+
+```java
+public static void track(UUID player, String name, Map<String, ?> props)
+public static void track(String name, Map<String, ?> props)
+```
+
+La primera forma es un evento hecho por un jugador; la segunda pertenece al servidor (apareció un jefe,
+empezó una temporada) y no lleva jugador. Las dos se pueden llamar desde **cualquier hilo** y cuestan una
+validación y una inserción en una cola.
+
+| Regla | Límite |
+|---|---|
+| Nombre | Letras minúsculas, dígitos, `_` y `.`, de 1 a 48 caracteres: `crate_open`, `quest.finished`. |
+| Propiedades | Como mucho 16. `null` equivale a un mapa vacío. |
+| Claves de propiedad | No nulas, como mucho 48 caracteres. |
+| Valores de propiedad | Un `String` de hasta 200 caracteres, un número finito o un `Boolean`. Nada más — ni `null`, ni un enum, ni una lista. |
+
+Un evento que rompe una regla se **descarta entero**, sin avisar. Con `debug: true` en `config.yml` la
+consola dice cuál y por qué. El agente lo comprueba todo salvo la longitud de las claves, que comprueba el
+ingest: una clave más larga descarta el evento allí.
+
+En el panel, cada propiedad se convierte en un desglose en la página Eventos, y el nombre puede ser un
+paso de un embudo. Los números y los booleanos se muestran como valores, así que una propiedad con miles de
+valores distintos (un UUID, una marca de tiempo) da una lista larga e inútil: usa propiedades por las que
+quieras contar.
+
+```java
+ExyliaAnalytics.track(player.getUniqueId(), "duel.won", Map.of(
+        "kit", "nodebuff",
+        "ranked", true,
+        "hearts_left", 3.5));
+
+ExyliaAnalytics.track("koth.captured", Map.of("hill", "desert"));
+```
+
+## Informar de la economía
+
+Un plugin de economía que ExyliaLib, Vault o los enganches propios del agente no cubren puede informar de
+su propio dinero. Ver [Economía](/docs/exyliaanalytics/economia) para lo que hace el panel con él.
+
+<Callout type="warning" title="No informes dos veces de un cambio">
+Los cambios hechos a través de Vault, VaultUnlocked o ExyliaLib ya los cuenta el agente. Informa por la API
+solo de lo que se mueve **fuera** de ellos — el almacenamiento de tu propia moneda —, o el mismo dinero se
+contará dos veces.
+</Callout>
+
+### Un cambio de saldo
+
+```java
+public static void economy(UUID player, String currency, BigDecimal delta, BigDecimal balanceAfter, String reason)
+```
+
+| Parámetro | Significado |
+|---|---|
+| `player` | De quién cambió el saldo. Obligatorio. |
+| `currency` | El id de la moneda, como `coins`. Se pasa a minúsculas y se corta a 32 caracteres. Obligatorio. |
+| `delta` | Positivo para dinero que entra, negativo para dinero que sale, en las unidades de la propia moneda. Cero se ignora. |
+| `balanceAfter` | El saldo tras el cambio, o `null` si no lo sabes. |
+| `reason` | Por qué, con la forma `<plugin o módulo>:<qué>` en minúsculas: `shop:buy`, `pay:tax`, `auctions:fee`. Se corta a 64 caracteres; vacío pasa a ser `api`. |
+
+Llámalo en **cada** cambio, desde cualquier hilo. El agente suma los cambios por jugador, moneda y motivo y
+envía una fila por minuto, así que una varita de venta que se dispara mil veces cuesta lo mismo que una
+venta. La llamada nunca lanza una excepción a tu código: la analítica nunca rompe un pago.
+
+### La masa monetaria
+
+```java
+public static void supply(String currency, String scope, BigDecimal total, long holders)
+```
+
+| Parámetro | Significado |
+|---|---|
+| `currency` | El id de la moneda, como en `economy(...)`. |
+| `scope` | Dónde se guardan estos saldos, hasta 96 caracteres. Vacío significa el id de la moneda. |
+| `total` | Todos los saldos de ese ámbito, sumados. |
+| `holders` | Cuántas cuentas tienen dinero. Cero o más. |
+
+Envíalo de vez en cuando — cada diez minutos o así basta. Cada llamada se envía tal cual llega.
+
+El **ámbito** es lo que evita que una tabla de saldos compartida se cuente dos veces. Una moneda compartida
+por toda la red usa un ámbito que envían todos los servidores (`coins`); una moneda guardada por servidor
+usa un ámbito por servidor (`coins@survival`, `coins@skyblock`). El panel se queda con el último informe de
+cada ámbito y suma los ámbitos, nunca los servidores.
+
+```java
+BigDecimal total = storage.sumAllBalances("coins");
+long holders = storage.countAccountsAbove("coins", BigDecimal.ZERO);
+ExyliaAnalytics.supply("coins", "coins", total, holders);
+```
+
+Una moneda que nunca recibe un `supply(...)` también tiene masa monetaria en el panel, **estimada** a
+partir de los últimos saldos que ha visto el agente.
+
+## `available()`
+
+```java
+public static boolean available()
+```
+
+`true` en cuanto el agente está en marcha en este servidor. **No** dice que el servidor esté vinculado ni
+que el módulo esté activado — en esos casos las llamadas se descartan en silencio de todos modos, así que
+rara vez hace falta comprobarlo.
+
+## Loaders antiguos
+
+Las clases de la API viven en el loader, no en el agente que descarga el loader. Un loader anterior a la
+API de economía solo tiene `track`; el agente registra entonces *"The installed loader is outdated: the
+economy API is disabled until it is updated"*, los eventos personalizados siguen funcionando, y tu plugin
+recibe un `NoSuchMethodError` si llama a `economy(...)` o `supply(...)`. Sustituir el jar del loader lo
+arregla.

@@ -1,0 +1,116 @@
+---
+title: "Servers and performance"
+description: "The Servers page — status, rename, pause, revoke and the proxy mapping — and the Performance page with TPS, MSPT, CPU, memory, uptime, restarts and crashes."
+---
+
+## Servers
+
+Every agent linked to the workspace, with:
+
+| Column | Shows |
+|---|---|
+| Name | Editable by members who manage servers, up to 40 characters. |
+| Type | `proxy`, `backend` or `standalone`, as the agent reported on its last start. |
+| Software | Platform and Minecraft version, and the agent version. |
+| Status | See below. |
+| Last heartbeat | How long ago the server last reported in. |
+| Online | Players on it right now, while it is online. |
+
+### Status
+
+| Status | Meaning |
+|---|---|
+| Waiting | Linked, but no heartbeat has arrived yet. |
+| Online | Its heartbeats are arriving. |
+| Silent | It missed **three heartbeats in a row** (three minutes with the default interval). Its open sessions and stays are closed at the last heartbeat, as *Timed out*. |
+| Disabled | Paused from this page. |
+| Revoked | Its token no longer works. |
+
+A server that stops cleanly sends a stop before going quiet, so the dashboard can tell a restart from a
+crash: a start whose previous run never sent that stop is marked as a **crash** on every chart.
+
+### Pause and resume
+
+**Pause** is a kill switch for one server. The agent learns it with its next batch, stops collecting
+and stops sending; `/analytics status` shows *"Disabled from the dashboard"*. Nothing it sees while
+paused is ever sent.
+
+<Callout type="warning" title="Resuming needs the server to ask again">
+A paused agent sends nothing, so it never hears that it was resumed. After **Resume**, run
+`/analytics reload` on that server (`/analyticsv reload` on the proxy) or restart it. Its first start
+after a pause is marked on the charts as a crash, since the paused run never sent a stop.
+</Callout>
+
+### Revoke
+
+**Revoke** retires a server for good. Its token stops working within 30 seconds; the agent is told on
+its next send, logs *"This server's token was revoked"*, deletes its credentials and whatever it had
+not sent, and goes back to unlinked. What it had already sent stays in the workspace. To bring it back,
+link it again: it becomes a new server.
+
+Rename, pause, resume, revoke and the proxy mapping need **Link, rename, disable and revoke servers**
+(`manage_servers`).
+
+### Proxy mapping
+
+A proxy reports its own server list — each entry's name and address — when it starts and whenever the
+list changes. A backend does not know what the proxy calls it, so the dashboard asks you to match them
+once:
+
+- The **Proxy mapping** table lists every backend with its port, and suggests the proxy entry with the
+  same port, marked **Suggested**.
+- Nothing is saved until you **Confirm**. The match is stored and never guessed again.
+- An entry with no confirmed backend is listed under the table: confirm a match, or install the agent
+  on that server.
+
+The table only appears once the workspace has both a proxy that reported its list and at least one
+backend.
+
+## Performance
+
+Is the hardware keeping up with the players? One row per server, then charts for the server picked in
+the filter bar.
+
+| Column | Definition |
+|---|---|
+| Status | As on the Servers page. |
+| Uptime | Share of the range covered by heartbeats. |
+| Restarts | Starts reported in the range. |
+| Crashes | Starts not preceded by a stop. |
+| TPS | Average ticks per second. |
+| MSPT p95 | The slowest 5% of ticks, in milliseconds. |
+| Lag minutes | Minutes with MSPT p95 above 50 ms. |
+| CPU | Share of all cores the server's process used. |
+| Peak heap | The most Java heap in use. |
+| Peak players | The most players online at once. |
+
+| Chart | Shows |
+|---|---|
+| Tick time | Average and p95 MSPT, with the 50 ms line above which a server falls behind 20 TPS. |
+| TPS | Average and lowest TPS. |
+| Lag | Minutes per period above 50 ms. |
+| Uptime | Share of each period covered by heartbeats, with restarts (↻) and crashes (✕). |
+| CPU | This server's process against the whole machine. |
+| Memory | Java heap in use against the maximum. |
+| Players on this server | Average and peak online. |
+| Entities and chunks | What the world asks of each tick. |
+| Restarts and crashes | Every start in the range, labelled restart, crash or agent update. |
+
+### What each platform can report
+
+| Measure | Paper | Spigot | Folia | Velocity |
+|---|---|---|---|---|
+| TPS | ✓ | ✓ | Global region only | — |
+| MSPT | ✓ | — | Global region only | — |
+| CPU and heap | ✓ | ✓ | ✓ | ✓ |
+| Entities and chunks | ✓ | ✓ | — | — |
+| Players | ✓ | ✓ | ✓ | ✓ |
+
+TPS is measured by the agent itself, from how long 20 ticks really take. MSPT comes from Paper's
+tick-end event, which Spigot does not have. On Folia the agent runs on the global region, which keeps
+its own pace whatever the world regions do, so its TPS and MSPT read as idle and entity and chunk counts are
+not reported at all.
+
+Samples are taken every second and summarised into one row every **metrics interval** (60 seconds by
+default, set in [Remote configuration](/docs/exyliaanalytics/remote-config)). Raw metrics are kept for
+90 days; older ranges read hourly and daily summaries.
