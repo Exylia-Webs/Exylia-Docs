@@ -1,0 +1,215 @@
+---
+title: "La caja"
+description: "Rarezas, los dos tipos de llave, los rodillos que caen y los bloques que los abren."
+---
+
+La caja es cómo se ganan los emotes en vez de regalarlos. Se gasta una llave, cae un rodillo, y lo que
+sale se desbloquea en la cuenta del jugador — suyo para siempre, pase lo que pase con su rango. La caja
+en sí es de ExyliaLib; este plugin le pasa el catálogo y lee sus ajustes y sus textos de `config.yml` y
+`messages.yml`.
+
+## Rarezas
+
+Cada emote declara un `tier` en `emotes.yml`, y `config.yml` declara cuáles son:
+
+```yaml
+tiers:
+  common:
+    name: "Common"
+    material: GRAY_DYE
+    color: "{muted}"
+    chance: 60.0
+    priority: 1
+  rare:
+    name: "Rare"
+    material: LIGHT_BLUE_DYE
+    color: "{info}"
+    chance: 25.0
+    priority: 2
+  epic:
+    name: "Epic"
+    material: PINK_DYE
+    color: "{accent}"
+    chance: 12.0
+    priority: 3
+  legendary:
+    name: "Legendary"
+    material: ORANGE_DYE
+    color: "{highlight}"
+    chance: 3.0
+    priority: 4
+```
+
+| Clave | Qué hace |
+|---|---|
+| `name` | Cómo la llaman los menús y los placeholders. |
+| `material` | El objeto con el que se dibuja la rareza. |
+| `color` | El color en el que se escriben su nombre y sus emotes. |
+| `chance` | Con qué frecuencia cae la caja en ella, **en relación a las demás**. |
+| `priority` | Dónde se sitúa en los menús; el más bajo va primero. |
+
+El catálogo incluido tiene 20 emotes comunes, 22 raros, 19 épicos y 7 legendarios.
+
+Nada de esto está fijado en el código. Borra `legendary`, inventa `mythic`, renombra las cuatro: la
+clave es el id que `emotes.yml` escribe como `tier`, y un emote que nombra una rareza que ya no existe
+cae en la primera — pierde su color, nunca su existencia.
+
+<Callout type="note" title="chance es un peso, no un porcentaje">
+Las probabilidades se calculan a partir de los pesos, así que cuatro rarezas con `60/25/12/3` y cuatro
+con `6/2.5/1.2/0.3` se comportan igual. Borrar una rareza reparte sus probabilidades entre las demás en
+vez de dejar un hueco del tres por ciento.
+</Callout>
+
+## Llaves
+
+Dos tipos, y la caja acepta los dos.
+
+### En la cuenta
+
+Un número en la fila de caja del jugador. Nada se puede tirar, duplicar ni perder por un inventario
+lleno:
+
+```text
+/emotesadmin keys give <jugador> <cantidad>
+/emotesadmin keys take <jugador> <cantidad>
+/emotesadmin keys set <jugador> <cantidad>
+/emotesadmin keys check <jugador>
+```
+
+Se puede ejecutar desde consola y con jugadores desconectados — una tienda, un listener de votos o un
+plugin de recompensas entregan llaves igual:
+
+```text
+[console] emotesadmin keys give %player% 1
+```
+
+Cada jugador recibe `crate.start-keys` llaves — una por defecto — la primera vez que se le ve.
+
+### En la mano
+
+Un objeto, así que se puede vender, meter en un kit, tirar y regalar a un amigo:
+
+```text
+/emotesadmin item key <jugador> [1-64]
+```
+
+Haz clic derecho en un bloque de caja vinculado con una en la mano y se abre en el acto: una llave, un
+rodillo, sin pantalla de pregunta. El clic izquierdo nunca gasta una — es como un jugador pregunta qué
+es un bloque. Cómo se dibuja la llave es `key-item` en `config.yml`; se reconoce por lo que lleva en sus
+datos, no por su nombre ni su material. Las llaves que no caben en el inventario esperan y se entregan
+en la siguiente entrada del jugador, con `rewards-claimed`.
+
+Las llaves en forma de objeto que acuñaron las versiones de este plugin que tenían su propia caja la
+siguen abriendo.
+
+## Abrir
+
+`/emote crate`, el botón **EMOTE CRATE** del menú, o un bloque vinculado clicado sin llave en la mano.
+La primera pantalla pregunta una sola cosa: cuántas a la vez.
+
+<Steps>
+  <Step title="Cuántas">
+    `menus/crate.yml`. Las opciones se dibujan hasta `crate.max-at-once`, con un tope de siete por el
+    ancho de la pantalla, y repartidas como lo estarán los rodillos — donde haces clic es donde cae ese
+    rodillo. Una opción que el jugador no puede pagar se dibuja con `empty_template` y las llaves que le
+    faltan.
+  </Step>
+  <Step title="Caen los rodillos">
+    `menus/crate_open.yml`. Un rodillo por caja, cada uno a lo alto de todo el cofre, cada uno con su
+    propia meta `crate.stagger-seconds` después del anterior. Cada cara conserva su nombre y su lore
+    todo el camino.
+  </Step>
+  <Step title="Lo que pasó de largo se queda">
+    No se limpia nada cuando para un rodillo. Lo que quedó a una casilla se queda en pantalla, porque
+    la mitad de lo que vale una caja es el legendario que pasó por delante de la línea.
+  </Step>
+  <Step title="Se paga al caer cada rodillo">
+    Las llaves se gastan y los premios se deciden antes de dibujar el primer fotograma. Cada rodillo
+    paga al parar, con `crate.on-win` o `crate.on-duplicate` y su propia línea en el chat. Cerrar la
+    ventana a mitad de caída no cuesta nada.
+  </Step>
+</Steps>
+
+| Rechazo | Mensaje |
+|---|---|
+| `crate.enabled` está desactivado | `crate-disabled` |
+| No hay suficientes llaves | `crate-no-keys` — `%amount%` es el coste, `%keys%` lo que tiene. |
+| Su última apertura sigue cayendo | `crate-busy` |
+| El catálogo está vacío | `crate-empty` |
+
+## Qué sale
+
+Un emote se desbloquea en la cuenta. `crate.reward` acepta `UNLOCK`, `ITEM` y `BOTH`, pero un emote no
+tiene objeto que entregar, así que los tres se comportan como `UNLOCK`: una llave nunca se gasta a cambio de nada. Un
+servidor que no quiera caja pone `crate.enabled: false`.
+
+`crate-won` nombra lo que salió (`%emote%` o `%reward%`) y su rareza (`%tier%`).
+
+## Duplicados
+
+Caer en algo que el jugador ya tiene desbloqueado devuelve llaves, tantas como diga
+`crate.duplicate-refund`, con `crate-duplicate` (`%refund%` es cuántas). Con el valor por defecto de
+`1`, un duplicado es una tirada gratis en vez de una pérdida.
+
+Un emote que el jugador solo tiene por un permiso **no** es un duplicado: se desbloquea para siempre,
+así que sobrevive al rango que se lo daba.
+
+## Ajustes
+
+```yaml
+crate:
+  enabled: true
+  start-keys: 1
+  duplicate-refund: 1
+  reward: UNLOCK
+  blocks: []
+  max-at-once: 4
+  spin-frames: 34
+  stagger-seconds: 2.0
+```
+
+| Clave | Por defecto | Qué hace |
+|---|---|---|
+| `enabled` | `true` | Desactivada, la caja lo dice en vez de abrirse. |
+| `start-keys` | `1` | Llaves que recibe un jugador la primera vez que se le ve. |
+| `duplicate-refund` | `1` | Llaves devueltas por algo que ya tenía. |
+| `reward` | `UNLOCK` | `UNLOCK`, `ITEM` o `BOTH` — los tres desbloquean, por lo de arriba. |
+| `blocks` | `[]` | Los bloques que abren la caja. Vincúlalos en el juego, no a mano. |
+| `max-at-once` | `4` | Cuántas cajas puede abrir un jugador de una vez. La pantalla admite siete. |
+| `spin-frames` | `34` | Cuántas caras recorre el primer rodillo antes de parar. Tope de 200, unos once segundos. |
+| `stagger-seconds` | `2.0` | Cuánto después de parar un rodillo para el siguiente. `0` los para a la vez. |
+
+`on-spin`, `on-win` y `on-duplicate` son bloques de efecto completos de ExyliaLib — ver
+[Configuración](/docs/exyliaemotes/configuracion#crate).
+
+## Bloques de caja
+
+Un bloque físico, en cualquier parte del mundo, que abre la caja al hacerle clic:
+
+```text
+/emotesadmin crate block add      # el bloque que estás mirando, hasta seis bloques de distancia
+/emotesadmin crate block remove
+/emotesadmin crate block list
+/emotesadmin crate block clear
+```
+
+Se escriben en `config.yml`, no en el mundo, así que un bloque vinculado sobrevive a pegar un
+schematic, a editar el mundo y a un rollback. Mientras está vinculado no se puede romper, volar ni
+empujar, y hacerle clic ya no hace lo que haría su material — una caja dibujada sobre un barril no debe
+abrir un barril.
+
+## Entregar emotes sin caja
+
+```text
+/emotesadmin unlocks grant <jugador> <emote>
+/emotesadmin unlocks revoke <jugador> <emote>
+/emotesadmin unlocks clear <jugador>
+```
+
+El mismo desbloqueo que escribe una caja, para un plugin de recompensas, un ticket de soporte o una
+temporada reiniciada. Sobrevive a que caduque un rango y no necesita plugin de permisos.
+
+<Callout type="tip" title="Permisos y desbloqueos son dos entradas distintas">
+Un jugador puede hacer un emote que desbloqueó **o** uno que le da su rango. Vender una rareza como
+rango es una línea — `exyliaemotes.tier.legendary` — y no depende de nada que haya sacado de la caja.
+</Callout>

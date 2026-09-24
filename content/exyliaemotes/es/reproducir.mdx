@@ -1,0 +1,136 @@
+---
+title: "Hacer un emote"
+description: "Qué pasa cuando empieza un emote, todas las formas en que termina y todos los motivos por los que se rechaza."
+---
+
+## Qué lo empieza
+
+| Desde | Cómo |
+|---|---|
+| El menú | Clic izquierdo en un emote que tienes. Primero se cierra la ventana y el emote empieza un tick después, para que no quede ninguna pantalla abierta sobre el plano. |
+| El chat | `/emote play <emote>`. |
+| Un admin | `/emotesadmin play <jugador> <emote>`, que se salta la propiedad y nada más. |
+
+Un dueto no se puede empezar desde el menú — una fila no tiene a quién nombrar. Ver
+[Duetos](/docs/exyliaemotes/duetos).
+
+## Qué pasa
+
+<Steps>
+  <Step title="El jugador real se oculta">
+    Para todos, mientras `camera.hide-body` esté activo. Sigue ahí, con su hitbox, donde estaba.
+  </Step>
+  <Step title="Se dibuja un cuerpo en su lugar">
+    Con su skin, a sus pies, mirando hacia donde miraba. Todos a su alrededor lo ven.
+  </Step>
+  <Step title="Se abre una cámara">
+    El jugador mira su propio cuerpo desde fuera, desde el plano que describe la línea `[CAMERA]` del
+    emote. Con `camera.enabled` desactivado no hay plano y no ve nada.
+  </Step>
+  <Step title="Termina">
+    El cuerpo desaparece en su última pose, la cámara se cierra y el jugador real vuelve a verse,
+    exactamente donde estaba. Un tick después del final de la animación, para que el cambio no ocurra
+    un fotograma antes.
+  </Step>
+</Steps>
+
+`feedback.on-play` se reproduce para el jugador en el momento en que empieza.
+
+## Qué lo termina
+
+| Qué | Cuándo |
+|---|---|
+| Cualquier clic | Cualquiera de los dos botones, sobre cualquier cosa. El clic se traga: no golpea, no coloca, no usa ni interactúa, porque el jugador no ve a qué apunta. |
+| Agacharse o saltar | Siempre. |
+| Una tecla de movimiento o de sprint | En la práctica siempre — ver la nota de abajo. |
+| Recibir un golpe | Cualquier daño, con `behaviour.cancel-on-damage` activo. El daño entra como siempre. |
+| Un puñetazo al cuerpo | Otro jugador golpeando al cuerpo a menos de 3.5 bloques, con `behaviour.cancel-on-damage` activo. Una pared en medio lo impide. |
+| Alejarse | Con la cámara desactivada el jugador sí puede moverse: alejarse más de `behaviour.move-tolerance` lo termina, con `cancel-on-move` activo. |
+| `/emote cancel` | O `/emote stop`. |
+| Salir, morir, cambiar de mundo | Siempre. |
+| El final de la animación | Un emote de una sola vez termina solo. |
+| `behaviour.endless-limit` | Un emote sin fin que nada más terminó, a los cinco minutos por defecto. |
+| Un admin | `/emotesadmin cancel [jugador]`. |
+| El plugin apagándose | Primero se terminan todos los emotes, para que nadie se quede dentro de una cámara. |
+
+<Callout type="note" title="Los primeros 300 milisegundos se ignoran">
+El jugador estaba pulsando algo en el momento en que pidió el emote — la tecla que abrió el menú, el
+paso que estaba dando — y el cliente lo vuelve a informar en cuanto cambia. Una tecla, un clic,
+agacharse o un golpe al aire en los primeros 300 ms no lo terminan. El daño, un puñetazo al cuerpo,
+salir, morir y los admins no esperan.
+</Callout>
+
+<Callout type="warning" title="cancel-on-move no impide que las teclas de movimiento terminen un emote">
+El estado de las teclas se lee dos veces: como el evento de entrada propio del servidor, que obedece a
+`cancel-on-move`, y directamente de la conexión, que no — cualquier tecla de movimiento o de sprint que
+se pulsa termina el emote ahí. Lo que sí desactiva `cancel-on-move: false` es terminarlo por moverse de
+verdad, que solo ocurre con la cámara desactivada.
+</Callout>
+
+Solo cuentan las teclas que se **pulsan**. Soltar el paso con el que llegó, o levantarse de un
+agachado en el que ya estaba, no termina nada.
+
+Un emote cortado antes de tiempo reproduce `feedback.on-cancel` para quienes lo hacían. Uno que llegó
+al final no reproduce nada: el cuerpo incorporándose ya lo dice.
+
+### Por qué un clic es la salida
+
+Un cliente que mira a través de una cámara deja de manejar a su propio jugador: no envía movimiento, y
+en la mayoría de versiones tampoco teclas. Lo que sí sigue enviando son los clics y los cambios de
+teclas, y los dos se leen directamente de la conexión. Además, hacer clic es lo primero que prueba
+todo el mundo.
+
+El propio cuerpo del jugador se le sigue dibujando justo delante del plano. Hacerle clic derecho
+enviaría una interacción consigo mismo, que el servidor responde desconectándolo — así que ese clic
+también se descarta, y termina el emote.
+
+### Por qué se traza un puñetazo
+
+El jugador que hace el emote está oculto para todos los clientes, así que ningún cliente enviará nunca
+un ataque contra él, y el cuerpo que ocupa su lugar no tiene hitbox. Sin más, un emote serían unos
+segundos de inmunidad. Así que un golpe cerca de un cuerpo se traza contra el propio cuerpo — una caja
+del tamaño de un jugador a sus pies — y termina el emote. El siguiente golpe es un golpe normal a un
+jugador normal.
+
+## Por qué se rechaza un emote
+
+Se comprueba en este orden; lo primero que se cumple es lo que se le dice al jugador:
+
+| Rechazo | Mensaje | Cuándo |
+|---|---|---|
+| Desconocido | `unknown-emote` | Ningún emote tiene ese id, o sus `effects` están vacíos. |
+| Necesita pareja | `needs-partner` | Es un dueto y no se nombró a nadie. |
+| Ya está haciendo uno | `already-playing` | Está haciendo un emote. |
+| No lo tiene | `no-permission` | `behaviour.require-permission` está activo y no tiene ni un permiso para él ni lo desbloqueó. |
+| Mundo equivocado | `wrong-world` | `behaviour.worlds` no está vacío y no incluye su mundo. |
+| En combate | `in-combat` | `behaviour.block-in-combat` está activo y está marcado en combate. |
+| Con cooldown | `on-cooldown` | Corre alguno de los dos cooldowns de abajo. `%time%` es lo que queda. |
+
+El `/emotesadmin play` de un admin se salta **solo** la comprobación de propiedad. Un jugador que ya
+está haciendo uno, en combate o en un mundo sin emotes no se ve obligado a hacerlo igualmente.
+
+<Callout type="note" title="El combate viene de ExyliaLib">
+`block-in-combat` lee el plugin de combate con el que esté conectado ExyliaLib. Sin ninguno, nadie
+está nunca marcado y la opción no hace nada.
+</Callout>
+
+## Cooldowns
+
+Dos, y los dos empiezan en el momento en que empieza un emote:
+
+| Cooldown | Bloquea | Lo fija |
+|---|---|---|
+| Compartido | Todos los emotes. | `behaviour.cooldown`, 3 segundos por defecto. `0s` lo desactiva. |
+| El suyo | Solo ese emote. | `cooldown` en la entrada de `emotes.yml`. La mayoría de los incluidos llevan entre 8 y 12 segundos. |
+
+Así que después de un `wave` el jugador espera tres segundos para cualquier otro y ocho para otro
+`wave`. En un dueto los dos jugadores reciben los dos.
+
+## Emotes sin fin y tempo
+
+52 de los emotes incluidos se repiten hasta que se paran. Cada vez que se hace uno se sortea un tempo
+del rango que declara su línea `[RAGDOLL]`, así que el mismo baile va un poco más rápido o más lento
+cada vez que alguien lo ve. La cámara gira alrededor del cuerpo en un bucle propio mientras dure.
+
+Si nada lo para, un emote sin fin termina tras `behaviour.endless-limit` (5 minutos, nunca menos de un
+segundo).

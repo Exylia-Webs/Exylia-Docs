@@ -1,0 +1,211 @@
+---
+title: "The crate"
+description: "Rarities, both kinds of key, the reels that fall, and the blocks that open them."
+---
+
+The crate is how emotes are won rather than given. A key is spent, a reel falls, and what it lands on
+is unlocked on the player's account — owned for good, whatever happens to their rank afterwards. The
+crate itself is ExyliaLib's; this plugin hands it the catalogue and reads its settings and lines from
+`config.yml` and `messages.yml`.
+
+## Rarities
+
+Every emote declares a `tier` in `emotes.yml`, and `config.yml` declares what the tiers are:
+
+```yaml
+tiers:
+  common:
+    name: "Common"
+    material: GRAY_DYE
+    color: "{muted}"
+    chance: 60.0
+    priority: 1
+  rare:
+    name: "Rare"
+    material: LIGHT_BLUE_DYE
+    color: "{info}"
+    chance: 25.0
+    priority: 2
+  epic:
+    name: "Epic"
+    material: PINK_DYE
+    color: "{accent}"
+    chance: 12.0
+    priority: 3
+  legendary:
+    name: "Legendary"
+    material: ORANGE_DYE
+    color: "{highlight}"
+    chance: 3.0
+    priority: 4
+```
+
+| Key | What it does |
+|---|---|
+| `name` | What menus and placeholders call it. |
+| `material` | The item the rarity is drawn with. |
+| `color` | The colour its name and its emotes are written in. |
+| `chance` | How often a crate lands on it, **relative to the other rarities**. |
+| `priority` | Where it sits in menus; lower comes first. |
+
+The shipped catalogue has 20 common, 22 rare, 19 epic and 7 legendary emotes.
+
+Nothing here is hard-coded. Delete `legendary`, invent `mythic`, rename all four: the key is the id
+`emotes.yml` writes as `tier`, and an emote naming a rarity that no longer exists falls back to the
+first one — it loses its colour, never its existence.
+
+<Callout type="note" title="chance is a weight, not a percentage">
+The shares are worked out from the weights, so four rarities weighted `60/25/12/3` and four weighted
+`6/2.5/1.2/0.3` behave identically. Deleting a rarity re-spreads its odds across the rest instead of
+leaving a three-percent hole.
+</Callout>
+
+## Keys
+
+Two kinds, and the crate takes both.
+
+### On the account
+
+A number on the player's crate row. Nothing can be dropped, duped, or lost to a full inventory:
+
+```text
+/emotesadmin keys give <player> <amount>
+/emotesadmin keys take <player> <amount>
+/emotesadmin keys set <player> <amount>
+/emotesadmin keys check <player>
+```
+
+Safe to run from console and for players who are offline — a shop, a vote listener or a reward plugin
+hands keys over the same way:
+
+```text
+[console] emotesadmin keys give %player% 1
+```
+
+Every player is given `crate.start-keys` keys — one by default — the first time they are seen.
+
+### In the hand
+
+An item, so it can be sold, put in a kit, dropped and given to a friend:
+
+```text
+/emotesadmin item key <player> [1-64]
+```
+
+Right click a bound crate block holding one and it opens on the spot: one key, one reel, no question
+screen. Left clicking never spends one — that is how a player asks what a block is. How the key is
+drawn is `key-item` in `config.yml`; it is recognised by what it carries in its data, not by its name or
+material. Keys that do not fit in the inventory wait and are handed over on the player's next join,
+with `rewards-claimed`.
+
+Key items minted by the versions of this plugin that ran their own crate keep opening it.
+
+## Opening
+
+`/emote crate`, the **EMOTE CRATE** button in the menu, or a bound block clicked without a key in hand.
+The first screen asks only one thing: how many at once.
+
+<Steps>
+  <Step title="How many">
+    `menus/crate.yml`. Choices are drawn up to `crate.max-at-once`, capped at seven by the width of
+    the screen, and spread the way the reels will be — where you click is where that reel falls. A
+    choice the player cannot afford is drawn by `empty_template` with how many keys it is missing.
+  </Step>
+  <Step title="The reels fall">
+    `menus/crate_open.yml`. One reel per crate, each running the full height of the chest, each with
+    its own finishing line `crate.stagger-seconds` after the one before it. Every face keeps its name
+    and lore the whole way down.
+  </Step>
+  <Step title="What went past stays">
+    Nothing is cleared when a reel stops. What it came within one slot of stays on screen, because
+    half of what a crate is worth is the legendary that went past the line.
+  </Step>
+  <Step title="Paid out as each reel lands">
+    Keys are spent and prizes decided before the first frame is drawn. Each reel pays out as it
+    stops, with `crate.on-win` or `crate.on-duplicate` and its own line in chat. Closing the window
+    mid-fall costs nothing.
+  </Step>
+</Steps>
+
+| Refusal | Message |
+|---|---|
+| `crate.enabled` is off | `crate-disabled` |
+| Not enough keys | `crate-no-keys` — `%amount%` is the cost, `%keys%` what they hold. |
+| Their last opening is still falling | `crate-busy` |
+| The catalogue is empty | `crate-empty` |
+
+## What comes out
+
+An emote is unlocked on the account. `crate.reward` accepts `UNLOCK`, `ITEM` and `BOTH`, but an emote
+has no item to hand over, so all three behave as `UNLOCK`: a key never buys nothing. A server that wants
+no crate at all sets `crate.enabled: false`.
+
+`crate-won` names what came out (`%emote%` or `%reward%`) and its rarity (`%tier%`).
+
+## Duplicates
+
+Landing on something the player has already unlocked hands keys back, as many as
+`crate.duplicate-refund` says, with `crate-duplicate` (`%refund%` is how many). At the default of `1` a
+duplicate is a free re-roll rather than a loss.
+
+An emote the player only owns through a permission is **not** a duplicate: it is unlocked for good, so
+it outlives the rank that granted it.
+
+## Settings
+
+```yaml
+crate:
+  enabled: true
+  start-keys: 1
+  duplicate-refund: 1
+  reward: UNLOCK
+  blocks: []
+  max-at-once: 4
+  spin-frames: 34
+  stagger-seconds: 2.0
+```
+
+| Key | Default | What it does |
+|---|---|---|
+| `enabled` | `true` | Off, the crate says so instead of opening. |
+| `start-keys` | `1` | Keys a player is given the first time they are seen. |
+| `duplicate-refund` | `1` | Keys handed back for something already owned. |
+| `reward` | `UNLOCK` | `UNLOCK`, `ITEM` or `BOTH` — all unlock, for the reason above. |
+| `blocks` | `[]` | The blocks that open the crate. Bind them in game, not by hand. |
+| `max-at-once` | `4` | How many crates one player may open in one go. The screen fits seven. |
+| `spin-frames` | `34` | How many faces the first reel runs through before it stops. Capped at 200, about eleven seconds. |
+| `stagger-seconds` | `2.0` | How long after one reel stops the next one does. `0` stops them together. |
+
+`on-spin`, `on-win` and `on-duplicate` are full ExyliaLib effect blocks — see
+[Configuration](/docs/exyliaemotes/configuration#crate).
+
+## Crate blocks
+
+A physical block, anywhere in the world, that opens the crate when it is clicked:
+
+```text
+/emotesadmin crate block add      # the block you are looking at, up to six blocks away
+/emotesadmin crate block remove
+/emotesadmin crate block list
+/emotesadmin crate block clear
+```
+
+They are written to `config.yml`, not into the world, so a bound block survives a schematic paste, a
+world edit and a rollback. While it is bound it cannot be broken, blown up or pushed away, and clicking
+it no longer does what its material does — a crate drawn on a barrel must not open a barrel.
+
+## Handing emotes over without a crate
+
+```text
+/emotesadmin unlocks grant <player> <emote>
+/emotesadmin unlocks revoke <player> <emote>
+/emotesadmin unlocks clear <player>
+```
+
+The same unlock a crate writes, for a reward plugin, a support ticket or a wiped season. It outlives a
+rank running out and needs no permissions plugin.
+
+<Callout type="tip" title="Permissions and unlocks are two separate ways in">
+A player may perform an emote they unlocked **or** one their rank grants. Selling a rarity as a rank is
+one line — `exyliaemotes.tier.legendary` — and it is independent of anything they unboxed.
+</Callout>

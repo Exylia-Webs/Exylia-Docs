@@ -1,0 +1,134 @@
+---
+title: "Playing an emote"
+description: "What happens when an emote starts, every way it ends, and every reason it is refused."
+---
+
+## What starts one
+
+| From | How |
+|---|---|
+| The menu | Left click an emote you own. The window closes first and the emote starts a tick later, so no screen is left open over the shot. |
+| Chat | `/emote play <emote>`. |
+| An admin | `/emotesadmin play <player> <emote>`, which reaches past ownership and nothing else. |
+
+A duet cannot be started from the menu — a row has nobody to name. See [Duets](/docs/exyliaemotes/duets).
+
+## What happens
+
+<Steps>
+  <Step title="The real player is hidden">
+    From everybody, while `camera.hide-body` is on. They are still there, with their hitbox, where
+    they stood.
+  </Step>
+  <Step title="A body is drawn in their place">
+    Wearing their skin, at their feet, facing where they were looking. Everybody around them sees it.
+  </Step>
+  <Step title="A camera opens">
+    The player watches their own body from outside, from the shot the emote's `[CAMERA]` line
+    describes. With `camera.enabled` off there is no shot and they see nothing of it.
+  </Step>
+  <Step title="It ends">
+    The body disappears on its last pose, the camera closes and the real player is shown again,
+    exactly where they were. One tick after the animation's own end, so the swap does not happen a
+    frame early.
+  </Step>
+</Steps>
+
+`feedback.on-play` is played to the player the moment it starts.
+
+## What ends one
+
+| What | When |
+|---|---|
+| Any click | Either button, at anything. The click is swallowed: it neither swings, places, uses nor interacts, because the player cannot see what they are aiming at. |
+| Crouching or jumping | Always. |
+| A walking key or sprint | In practice always — see the note below. |
+| Being hit | Any damage, when `behaviour.cancel-on-damage` is on. The damage lands as it always would. |
+| A punch at the body | Another player swinging at the body within 3.5 blocks, when `behaviour.cancel-on-damage` is on. A wall in between stops it. |
+| Walking away | With the camera off the player can actually move: drifting further than `behaviour.move-tolerance` ends it, when `cancel-on-move` is on. |
+| `/emote cancel` | Or `/emote stop`. |
+| Leaving, dying, changing world | Always. |
+| The end of the animation | A one-shot emote ends on its own. |
+| `behaviour.endless-limit` | An endless emote that nothing else ended, after five minutes by default. |
+| An admin | `/emotesadmin cancel [player]`. |
+| The plugin shutting down | Every emote is ended first, so nobody is left inside a camera. |
+
+<Callout type="note" title="The first 300 milliseconds are ignored">
+The player was pressing something the moment they asked for the emote — the key that opened the
+menu, the walk they were in the middle of — and the client reports it again as soon as it changes. A
+key, click, crouch or swing in the first 300 ms does not end it. Damage, a punch at the body, leaving,
+dying and admins are not held back.
+</Callout>
+
+<Callout type="warning" title="cancel-on-move does not keep walking keys from ending an emote">
+The key state is read twice: as the server's own input event, which obeys `cancel-on-move`, and
+straight off the connection, which does not — any walking or sprint key going down ends the emote
+there. What `cancel-on-move: false` does turn off is ending on actual movement, which only happens with
+the camera off.
+</Callout>
+
+Only keys going **down** count. Letting go of a walk they arrived in, or standing up from a crouch they
+were already in, ends nothing.
+
+An emote cut short plays `feedback.on-cancel` to its performers. One that ran to its end plays nothing:
+the body standing up again says so.
+
+### Why a click is the way out
+
+A client looking through a camera stops driving its own player: it sends no movement, and on most
+versions no keys either. What it still sends is clicks, and the key state changes, and both are read
+straight off the connection. Clicking is also what everybody tries first.
+
+The player's own body is still drawn for them right in front of the shot. Right-clicking it would send
+an interaction with themselves, which the server answers by disconnecting them — so that click is
+dropped too, and ends the emote instead.
+
+### Why a punch is traced
+
+The performer is hidden from every client, so no client will ever send an attack on them, and the body
+in their place has no hitbox. Left alone, that would make an emote a few seconds of immunity. So a
+swing near a body is traced against the body itself — a player-sized box at its feet — and ends the
+emote. The next swing is an ordinary hit on an ordinary player.
+
+## Why an emote is refused
+
+Checked in this order; the first that applies is what the player is told:
+
+| Refusal | Message | When |
+|---|---|---|
+| Unknown | `unknown-emote` | No emote has that id, or its `effects` are empty. |
+| Needs a partner | `needs-partner` | It is a duet and nobody was named. |
+| Already playing | `already-playing` | They are performing one. |
+| Not owned | `no-permission` | `behaviour.require-permission` is on and they neither hold a node for it nor unlocked it. |
+| Wrong world | `wrong-world` | `behaviour.worlds` is not empty and does not list their world. |
+| In combat | `in-combat` | `behaviour.block-in-combat` is on and they are combat tagged. |
+| On cooldown | `on-cooldown` | Either cooldown below is running. `%time%` is what is left. |
+
+An admin's `/emotesadmin play` skips **only** the ownership check. A player already performing, in
+combat or in a world where emotes are off is not made to perform anyway.
+
+<Callout type="note" title="Combat comes from ExyliaLib">
+`block-in-combat` reads whichever combat plugin ExyliaLib is bridged to. With none, nobody is ever
+tagged and the setting does nothing.
+</Callout>
+
+## Cooldowns
+
+Two, both started the moment an emote starts:
+
+| Cooldown | Blocks | Set by |
+|---|---|---|
+| Shared | Every emote. | `behaviour.cooldown`, 3 seconds by default. `0s` turns it off. |
+| Its own | That emote only. | `cooldown` on the entry in `emotes.yml`. Most shipped emotes carry 8 to 12 seconds. |
+
+So after a `wave` the player waits three seconds for anything else and eight for another `wave`. In a
+duet both players get both.
+
+## Endless emotes and tempo
+
+52 of the shipped emotes loop until they are stopped. Each play of one rolls a tempo from the range its
+`[RAGDOLL]` line declares, so the same dance is a shade quicker or slower every time anybody sees it.
+The camera circles the body on a loop of its own for as long as it lasts.
+
+With nothing to stop it, an endless emote ends after `behaviour.endless-limit` (5 minutes, never less
+than a second).

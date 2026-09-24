@@ -545,6 +545,38 @@ const ARMORSKIN_NAV: NavGroup[] = [
   },
 ];
 
+const EMOTES_NAV: NavGroup[] = [
+  {
+    label: { en: "Getting started", es: "Empezar" },
+    pages: [
+      page("introduction", "introduction", "introduccion"),
+      page("installation", "installation", "instalacion"),
+      page("first-steps", "first-steps", "primeros-pasos"),
+    ],
+  },
+  {
+    label: { en: "Configuring", es: "Configurar" },
+    pages: [
+      page("emotes", "emotes", "emotes"),
+      page("playing", "playing", "reproducir"),
+      page("duets", "duets", "duetos"),
+      page("menu", "menu", "menu"),
+      page("crate", "crate", "caja"),
+      page("showcases", "showcases", "showcases"),
+    ],
+  },
+  {
+    label: { en: "Reference", es: "Referencia" },
+    pages: [
+      page("commands", "commands", "comandos"),
+      page("permissions", "permissions", "permisos"),
+      page("configuration", "configuration", "configuracion"),
+      page("placeholders", "placeholders", "placeholders"),
+      page("faq", "faq", "faq"),
+    ],
+  },
+];
+
 function effectsNav(extra: DocRef[] = []): NavGroup[] {
   return [
     {
@@ -962,6 +994,26 @@ export const plugins: Plugin[] = [
       { en: "Folia", es: "Folia" },
     ],
     nav: effectsNav([page("crate", "crate", "caja")]),
+  },
+  {
+    id: "exyliaemotes",
+    name: "ExyliaEmotes",
+    tagline: { en: "Emotes performed by an animated body, filmed from outside", es: "Emotes hechos por un cuerpo animado, filmados desde fuera" },
+    summary: {
+      en: "68 emotes in four tabs, each one a body choreographed joint by joint that the player watches from a camera outside it: 52 that loop until stopped, two duets that meet in the middle, props built from blocks, owned by permission or won out of a crate, looped in lobby showcases, and written in a file a server owner can edit.",
+      es: "68 emotes en cuatro pestañas, cada uno un cuerpo coreografiado articulación a articulación que el jugador mira desde una cámara fuera de él: 52 que se repiten hasta que se paran, dos duetos que se encuentran en el medio, atrezo hecho de bloques, conseguidos por permiso o ganados en una caja, repetidos en showcases de lobby, y escritos en un archivo que el dueño puede editar.",
+    },
+    version: "1.0.0",
+    status: "stable",
+    category: { en: "Cosmetic", es: "Cosmético" },
+    minecraft: "1.21+",
+    banner: "https://s3.exylia.net/exylia-plugins/public/static/images/plugins/emotes/ExyliaEmotesBanner.webp",
+    tags: [
+      { en: "Emotes", es: "Emotes" },
+      { en: "Cosmetic", es: "Cosmético" },
+      { en: "Folia", es: "Folia" },
+    ],
+    nav: EMOTES_NAV,
   },
   {
     id: "exyliaarmortrims",

@@ -1,0 +1,95 @@
+---
+title: "Installation"
+description: "The jars, the files it writes, and the two tables it uses."
+---
+
+## Installing
+
+<Steps>
+  <Step title="Drop in the jars">
+    `ExyliaEmotes.jar` and `packetevents` into `plugins/`. `packetevents` is a hard dependency: the
+    plugin does not load without it. `ExyliaLib` is a soft depend — the loader installs it on the
+    first start if it is not there.
+  </Step>
+  <Step title="Start the server">
+    It writes `config.yml`, `messages.yml`, `emotes.yml`, the three files in `menus/` and
+    `database.yml`, and creates its table.
+  </Step>
+  <Step title="Grant the permissions">
+    Nothing is usable until players can open the menu and own at least one emote. See
+    [Permissions](/docs/exyliaemotes/permissions).
+  </Step>
+  <Step title="Set a preview stage">
+    Right clicking an emote in the menu previews it, and a fresh install has nowhere to do that.
+    Stand where previews should play and run `/emotesadmin preview location`.
+  </Step>
+</Steps>
+
+## Files
+
+| File | Contents |
+|---|---|
+| `config.yml` | Behaviour, the camera, duets, menu wording, rarities, the crate, the key item, the preview stage, showcases, feedback and placeholder fallbacks. |
+| `messages.yml` | Every line the plugin sends, and the prefix. |
+| `emotes.yml` | The four tabs and the 68 emotes. Hand-written, not schema-managed: your comments and your layout survive a reload. |
+| `menus/emotes.yml` | The main screen: tabs, grid, templates and buttons. |
+| `menus/crate.yml` | The crate's first screen: how many to open at once. |
+| `menus/crate_open.yml` | The reels falling, one column per crate. |
+| `database.yml` | Where rows are stored. |
+
+<Callout type="note" title="emotes.yml is yours, and it still gets new emotes">
+`config.yml` and `messages.yml` are written from a schema, so an unknown key is dropped and comments
+are regenerated. `emotes.yml` is not: it is read exactly as written. On every start and reload it is
+compared with the one in the jar — an emote an update adds is written into your file, and anything
+you changed or deleted is left alone.
+</Callout>
+
+The menu files follow the same rule. When a release has to change a menu's layout it raises
+`menu-version` at the top of the file; the file is then replaced and your previous one is kept beside
+it.
+
+## The tables
+
+### `emotes_players`
+
+This plugin's own table, one row per player:
+
+| Column | What it holds |
+|---|---|
+| `uuid` | The player. |
+| `name` | Their last known name. |
+| `favourites` | The emotes they starred, comma-separated, in their own order. |
+| `unlocked` | What the plugin's old crate had unlocked. Read once, never written again. |
+| `crate_keys` | The keys the plugin's old crate held. Read once, never written again. |
+| `created_at` / `updated_at` | When the row was made and last written. |
+
+A newcomer's row is only held in memory until something is written to it, such as their first
+favourite.
+
+A starred id the catalogue no longer declares is **kept** in the column and dropped where it is drawn,
+so a typo in a reload does not empty anybody's shortlist.
+
+### `exylia_crate_players`
+
+Keys and unlocks live in ExyliaLib's crate table, one row per player per plugin. The first time a
+player is seen there, their row is seeded from `emotes_players`:
+
+| What `emotes_players` has for them | What the crate row starts with |
+|---|---|
+| No row at all | `crate.start-keys` keys and nothing unlocked — a newcomer. |
+| A row | Its `crate_keys` and its `unlocked`, as they are, even when both are empty. |
+
+So an update from a version that ran its own crate carries every key and every unlock across. The old
+columns are never written again, so a rollback finds them as they were. Key items already sitting in
+inventories keep opening the crate too.
+
+## Updating
+
+Replace the jar and restart. `/emotesadmin reload` re-reads `config.yml`, `messages.yml`,
+`emotes.yml` and the menus, rebuilds the crate and restarts the showcases without touching the rest
+of the server — it deliberately does not reload the library, which is what `/exylialib reload` is for.
+
+<Callout type="warning" title="Emotes need a recent ExyliaLib">
+The rolled tempo of endless emotes needs ExyliaLib 1.177.0 or newer, and the crate 1.190.0 or newer.
+The loader installs the newest release, so this only matters on a server that pins an older one.
+</Callout>

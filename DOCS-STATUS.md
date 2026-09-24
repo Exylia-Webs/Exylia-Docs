@@ -23,6 +23,7 @@ scripts/doc-drift.sh exyliaevents # just one
 | `exyliachatcosmetics` | `ExyliaChatCosmetics` | 1.0.0 | `e1bf009` 2026-09-07 | Current — first full documentation: the shipped catalogue (180 tags in seven tabs, 90 nick, 96 chat, 90 shadow and 77 rank colours, 18 fonts, 5 modifiers, 18 animations), tag marks as sprites, particles and head skins with the 1.21.9 ceiling, the four custom kinds and the create/edit token economy, entitlements and expiry, the menus, and the whole built-in chat module across five pages, mentions included: a name is a mention with or without the `@`, and the nudge ships as a sound alone. Written against the source: the repository's own `docs/` predates the current catalogue by twelve commits. |
 | `exyliaclans` | `ExyliaClans` | 1.1.0 | `7d014e2` 2026-09-08 | Current — reviewed for 1.1.0. `visibility-mode` now ships as `DISABLED` and has five values; the kick truce, the cross-server clan home, the 32-character role-name clean, the level-table bounds and the configurable `placeholders.na` / `placeholders.none` fallbacks are documented. Corrected against the source: the DTR regeneration arithmetic, `setdtr` having no lower clamp and clearing the freeze, the backfill running on every start, an expired regroup point still teleporting whoever is counting down, `pillar-duration-seconds` and the camp `duration-seconds` being inert, the sneak-any-click claim confirm, the camelCase columns, and SQLite never having been a backend. The standalone reflection jar is named on the API page. |
 | `exyliaclasses` | `ExyliaClasses` | 1.0.0 | `d48bfe0` 2026-08-31 | Current — the only change since was a database index. |
+| `exyliaemotes` | `ExyliaEmotes` | 1.0.0 | `f7b0ba8` 2026-09-23 | Current — first full documentation, fourteen pages: the 68 shipped emotes in four tabs with every id, rarity, kind, cooldown and prop (52 endless, 16 one-shot, two duets), how an `emotes.yml` entry and its `[RAGDOLL]`/`[CAMERA]` lines are written, endless loops with `loop_from`, rolled `tempo` and `endless-limit`, the hidden player and the camera, every way out (clicks and keys read off the wire, the 300 ms grace, damage and the traced punch at the body) and every refusal, the two cooldowns, duets (one standing invitation, right-click to accept, reach on invite and accept, bodies placed `gap` apart on the line between the players), the menu and `emote:` actions, the crate on ExyliaLib with the one-time import of the old keys and unlocks, showcases, and every key of `config.yml` and `messages.yml`. No API page: `exylia-api` publishes no emotes service. Written against the source: the stale comments and the broken behaviour are listed below. |
 | `exyliaevents` | `ExyliaEvents` | 1.6.0 | `c55a4a4` 2026-09-20 | Current — reviewed across the 87 commits of 1.3.0 to 1.5.0. 51 types (43 games, 8 team variants): Block Morph Hunt with every setting, settling, the miss penalty, taunts and the four prop items; King of the Hill Teams; Hide and Seek's flashing last stretch (`glow-flash-interval`, `-count`, `-ticks`), seeker cage, `seeker-glow`, no pushing, hidden names and the win going to the hiders; the reworked Anvil Running storm and its new keys; Dodgeball `ammo`/`refill-seconds`; the Race grid and `boat-collisions`; Glass Bridge `collisions`; Paintball `shot-cooldown`; no pushing in Trivia; the TNT Run one-block break; and the defaults that moved (Mace Roulette `miss-kills-macer` and `mace-hit-eliminates` now on, `red-grace-ticks` 10, Sheep Wars `throw-power` 2.8). Shared `bounds-border` and `music-enabled`, the per-player arena border, idle arenas refusing world mobs and explosions, `player-isolation`, `exyliaevents.start.<configId>`, nametags hidden without TAB, `event-catalog` in `messages.yml`, 24 trivia questions. API: `forceStart`, `openMenu` and the six lifecycle events (`exylia-api` `v1.133.0`). Corrected: `chat-isolation` is in `config.yml`, not `scoreboards.yml`; there is no `menus/user/es/`. **Left out:** keys that were already undocumented before this review — the LMS and Survival Games zone, Block Party's colour and seed growth, Brackets' and Tournament's freeze and damage switches, Volcano's growth and footprint. 1.6.0: the custom-minigame registration API (`registerMinigame`, `net.exylia.lib.api.events.custom`, `exylia-api` `v1.7.0`) on the API page, the server-wide `world-border.enabled` switch, and Survival Games reading a chest minimum above the maximum as the maximum. The menu relayout needed no page: the grid was never documented. |
 | `exyliaffa` | `ExyliaFFA` | 1.1.1 | `569a4f1` 2026-09-02 | Current — arena chat isolation and duration inputs documented. |
 | `exyliahiteffect` | `ExyliaHitEffect` | 1.0.10 | `1fe222a` 2026-09-03 | Current. |
@@ -92,6 +93,37 @@ Its own `docs/` folder is a version behind the plugin — it was last touched at
 commits before `4e4428b`, and its tags, fonts, menu-default and command sections all predate what
 ships. The site's pages were written from the source; the repository's notes were used only where the
 source confirmed them.
+
+### Stale strings and broken behaviour in ExyliaEmotes
+
+Found while writing that set at `f7b0ba8`. The pages describe what the code does.
+
+- **Walking keys ignore `cancel-on-move`.** `EscapeHatch.java:78-85` ends an emote on any held walking,
+  sprint, jump or sneak key read off the wire, whatever `behaviour.cancel-on-move` says; only the Bukkit
+  `onInput` path (`EmoteStage.java:485-488`) honours it. With the camera up that packet path is the one
+  that fires.
+- **`%exyliaemotes_emote_<id>_<field>%` cannot reach an id with an underscore.**
+  `PlaceholderAPIHook.java:67` splits at the first `_` after `emote_`, so the thirteen shipped ids with
+  one (`six_seven`, `orange_justice`, `chicken_dance`...) always answer `placeholders.unknown`.
+- **`partner-cannot` says "does not own that emote" for any refusal.** `EmoteStage.java:212-213` maps
+  every refusal of the partner — cooldown, combat, world, ownership — onto `PARTNER_CANNOT`.
+- **An invitation checks almost nothing.** The javadoc at `Invitations.java:116` says everything that would
+  stop it is checked on invite; the code checks only self, busy and reach. Ownership, cooldown, combat
+  and world are checked on accept.
+- `EmoteMessages.java:86-87`: the default `needs-partner` tells the player to run
+  `/emote %id% <player>`; the command is `/emote play <id> <player>` (`/emote <x>` only opens the menu).
+- `EmoteMessages.java:79,102,106`: `cancelled`, `camera-unavailable` and `refreshed` are declared and
+  never sent.
+- `EmoteSettings.java:63`: `require-permission` says commands and the API are never limited by it.
+  `/emote play` is; only `/emotesadmin play` is not, and there is no API.
+- `EmoteSettings.java:148-154`: the `duet.max-distance` comment is garbled mid-sentence ("It is not what
+  / meet in the middle").
+- `EmoteSettings.java:279-281` and `menus/crate.yml:6-9`: keys are said to live on this plugin's row and
+  `/emotesadmin keys give` to be the only way in. They live in ExyliaLib's `exylia_crate_players`, and
+  `item key` hands out key items that open the crate.
+- `ExyliaEmotes.java:450-451`: says an edited menu gets the new version beside it as `.new`. ExyliaLib's
+  `BundledFiles` keeps the old file as `<name>.v<old version>` when `menu-version` rises, and otherwise
+  leaves an edited file alone.
 
 ## How a review goes
 
