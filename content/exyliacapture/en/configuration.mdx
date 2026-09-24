@@ -19,8 +19,9 @@ scheduler:
 ```
 
 <Field name="timezone" type="zone id" defaultValue="empty">
-Which clock schedules are read against. Empty uses the machine's timezone. Takes an IANA id such as
-`America/New_York`.
+Which clock schedules are read against. Empty uses ExyliaLib's own `timezone` setting, which is where
+a network should set it once. Takes an IANA id such as `America/New_York`; an id that does not exist
+is logged as an error and ExyliaLib's timezone is used instead.
 </Field>
 
 ### particles
@@ -36,26 +37,28 @@ particles:
 The outline drawn around a running event's zones. Covered in
 [Zones](/docs/exyliacapture/zones#the-outline).
 
-### One block per event type
+### event-visuals
 
-`koth`, `koth_capture_points`, `conquest`, `payload`, `koth_points` and `dtc` each carry a `boss-bar`
-and a `hologram`. Covered in [On-screen visuals](/docs/exyliacapture/visuals).
+One block per event type, keyed by the type id — `koth`, `koth_points_exclusive`, `koth_points_multi`,
+`koth_capture_points`, `conquest`, `payload`, `dtc` and `bounty` — each with a `boss-bar` and a
+`hologram`. A type added by an update writes its own entry on the next boot. Covered in
+[On-screen visuals](/docs/exyliacapture/visuals).
 
 ### leaderboard
 
 ```yaml
 leaderboard:
-  max-entries: 50
-  player-heads: true
+  top-limit: 50
+  use-player-heads: true
   rank-materials:
     first: GOLD_BLOCK
     second: IRON_BLOCK
     third: COPPER_BLOCK
-    player: PLAYER_HEAD
-    clan: SHIELD
+    default-player: PLAYER_HEAD
+    default-clan: SHIELD
   filter-materials:
-    selected: LIME_CONCRETE
-    unselected: RED_CONCRETE
+    active: LIME_CONCRETE
+    inactive: RED_CONCRETE
 ```
 
 Covered in [Statistics](/docs/exyliacapture/stats#leaderboard-appearance).
@@ -68,8 +71,8 @@ reads the same way.
 
 ## scoreboards.yml
 
-Three sections: one sidebar per type for a single running event, the two compact lines each event
-contributes when several run, and the shared multi-event sidebar. See
+Three sections, the first two keyed by type id: one sidebar per type for a single running event, the
+compact lines each event contributes when several run, and the shared multi-event sidebar. See
 [On-screen visuals](/docs/exyliacapture/visuals#sidebars).
 
 ## messages.yml
@@ -84,12 +87,16 @@ Every message, grouped by system:
 | `conquest` | Conquest messages, including the zone line formats. |
 | `payload` | Payload messages. |
 | `dtc` | Destroy The Core messages. |
+| `bounty` | The target being picked, revealed, killed, lost or surviving. |
 | `admin` | Panel and command responses. |
 | `leaderboard` | Leaderboard screens. |
 | `tabs` | The tab strip inside the menus. |
 | `event-list` | The `/capture` list. |
 | `reward-preview` | How rewards are described to players. |
 | `placeholders` | The fallback words: none, unknown, not applicable, dash. |
+| `holograms` | What a hologram shows before an event has a value: starts in, inactive, an empty zone, an idle cart. |
+| `event-types` | Each type's name, three description lines and category tag, keyed by type id. |
+| `rewards` | `claimed`, sent on the join that hands over rewards that were waiting, with `%amount%`. |
 
 ## database.yml
 
@@ -101,8 +108,11 @@ Menu layouts as YAML, editable without touching code.
 
 ```text
 menus/
-├── admin/    panel, event list and setup, type selector, per-type settings,
-│             conquest zone list and editor, schedules, commands and rewards
+├── admin/    panel, event list and setup, type selector, conquest zone list and
+│             editor, schedules, commands and rewards, and one settings screen
+│             per type: koth_settings, koth_points_settings,
+│             koth_capture_points_settings, conquest_settings, payload_settings,
+│             dtc_settings, bounty_settings
 └── user/     event list, player and clan leaderboards, event filter
 ```
 
@@ -111,9 +121,15 @@ to what it does: keep them.
 
 ## Migrations
 
-`config.yml` is at version 2. A file written by the previous version is migrated on the first boot
-after updating: the internal section is dropped and the boss bars are renamed into their current
-shape rather than rewritten, so a colour or style you had set survives.
+`config.yml` is at version 3 and `scoreboards.yml` at version 2. An older file is migrated on the
+first boot after updating, and every value you had set is carried across rather than regenerated:
+
+- **Version 2 to 3** — the per-type blocks move under `event-visuals`, keyed by type id.
+  `koth-capture-points` becomes `koth_capture_points`, and `koth-points` is split into
+  `koth_points_exclusive` and `koth_points_multi`, both starting from what it said.
+- **`scoreboards.yml`** — `scoreboards` and `compact-lines` are rekeyed the same way.
+- **Version 1** — the internal section is dropped and the boss bars' `color` and `style` are renamed
+  to `colour` and `overlay`.
 
 <Callout type="warning" title="Unknown keys are removed">
 A key no file declares is deleted on load and reported once as `UNKNOWN_KEY`. That is what keeps the

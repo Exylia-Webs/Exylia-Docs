@@ -21,9 +21,9 @@ on the [public API page](/docs/exylialib/api).
 
 <Callout type="warning" title="CaptureEvent is not a Bukkit event">
 In this plugin an "event" is a **game mode being played** — a KOTH, a conquest, a payload — not
-something you register a listener for. `CaptureEvent` is a plain record describing one run of one,
-and ExyliaCapture publishes no Bukkit events at all. Nothing on this page is listened to; it is all
-read and called.
+something you register a listener for. `CaptureEvent` is a plain record describing one run of one.
+The three Bukkit events the plugin does publish are listed under
+[Lifecycle events](#lifecycle-events), and carry a `CaptureEvent` snapshot.
 </Callout>
 
 A **config** is an event an administrator set up; a **run** is one occurrence of it. At most one run
@@ -78,9 +78,74 @@ without the next tick changing it underneath.
 plugin's log rather than throwing — an automation that starts events on a schedule should not have to
 catch anything.
 
-`stop` finishes the event the way its clock running out finishes it: a winner is resolved from the
-scores so far and the rewards are handed out. There is deliberately no way to cancel one without
-rewards — a stopped event players took part in is still an event they took part in.
+`stop` ends the run with the reason `STOPPED` and no winner passed in. What happens next is the
+mode's own, exactly as when its clock runs out: KOTH Points, KOTH Capture Points, Destroy The Core
+and Conquest settle from the scores so far, announce the podium and pay the top three; KOTH and
+Payload end with nobody winning; a bounty credits and pays its target as the survivor.
+
+## Menus
+
+| Method | What it does |
+|---|---|
+| `void openMenu(Player)` | Opens the capture menu for a player, the one `/capture` opens. |
+
+The screen a lobby NPC or a hotbar item wants: what is live, what is scheduled and when, drawn from
+the server's own menu files. Call it on the thread that owns the player, as an interaction handler
+already is.
+
+## Lifecycle events
+
+Three Bukkit events in `net.exylia.lib.api.capture.event` follow a run. Each carries a
+`CaptureEvent` or `CaptureConfig` snapshot, never the live game. They, and `openMenu`, need
+`exylia-api` `v1.133.0` or newer.
+
+| Event | When | Cancellable |
+|---|---|---|
+| `CaptureStartEvent` | A run of a config is about to start. `getConfig()`. | Yes |
+| `ZoneCaptureEvent` | Somebody took a zone. `getEvent()`, `getZone()`, `getPlayer()`, `getClan()`. | No |
+| `CaptureEndEvent` | The run is over. `getEvent()`, `getWinner()`, `getReason()`. | No |
+
+```java
+@EventHandler
+public void onEnd(CaptureEndEvent event) {
+    if (event.getReason() == CaptureEndReason.FINISHED) {
+        event.getWinner().ifPresent(uuid -> announce(event.getEvent().displayName(), uuid));
+    }
+}
+```
+
+**`CaptureStartEvent`** fires once the config is found, enabled, complete, not already running and of
+a known type — and before the run registers a zone, puts up a display or runs a start command. Every
+start comes through it: a command, the schedule, the admin menu and `start(String)` alike. A
+cancelled start is refused like any other: `start` answers empty, the refusal is logged, and an admin
+who started it by command is told it failed without a reason, so a handler that cancels should say why
+itself.
+
+**`ZoneCaptureEvent`** fires each time a zone is taken: the hill in a KOTH (once per capture when it
+runs on), each point in KOTH Capture Points, a Conquest zone falling to a clan, and a bounty's target
+being killed. It comes after the capture is on the statistics and before the mode decides whether it
+won, so a winning capture is followed by `CaptureEndEvent`. `getZone()`, `getPlayer()` and `getClan()`
+are all `Optional`: the zone is only named in Conquest, and the clan only when the run scores by clan.
+KOTH Points, Payload and Destroy The Core have no moment of taking a zone and never fire it.
+
+**`CaptureEndEvent`** fires once per run, after the mode has settled it — the result broadcast, the
+end commands run and the winner's rewards handed out — and before the run stops being listed, so
+`scores(String)` still answers for it. `getWinner()` is the one player the run was ended in favour of;
+it is empty when nobody won, and also when the result is shared, read from the scores or a bounty's
+target outlived the hunt. `getReason()` is a `CaptureEndReason`:
+
+| Constant | Meaning |
+|---|---|
+| `FINISHED` | Somebody reached what the mode plays to: held the hill, hit the target, got the cart home, killed the target. |
+| `TIME_UP` | The clock ran out first. |
+| `STOPPED` | Stopped early: by an admin, `stop(String)`, the plugin shutting down, or a bounty left with nobody to hunt. |
+
+<Callout type="warning" title="Not always the main thread">
+Each event is fired on the thread that caused it — the sender's own for a command, the global thread
+for the schedule and for a run ended by its zones or its clock — and is asynchronous when that is not
+the main thread. On Folia none of those is a single main thread, so schedule anything that touches the
+wider world.
+</Callout>
 
 ## Statistics
 
@@ -133,9 +198,8 @@ decided and the rewards are being handed out).
 
 ## What it does not expose
 
-No Bukkit events: ExyliaCapture publishes none, and the "events" above are game modes. Zone geometry,
-reward tables, the scheduler's own writes, admin menus and raw configuration rows are left out on
-purpose — a public contract cannot be broken later, so it carries what an integration needs and
-nothing that only made sense inside one version.
+Zone geometry, reward tables, the scheduler's own writes, admin menus and raw configuration rows are
+left out on purpose — a public contract cannot be broken later, so it carries what an integration
+needs and nothing that only made sense inside one version.
 
 If something you need is genuinely missing, ask on [Discord](https://discord.exylia.net).

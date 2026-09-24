@@ -1,62 +1,77 @@
 ---
 title: "Scheduling"
-description: "Recurring events by time of day and weekday, with a minimum player count."
+description: "Recurring events by time of day, weekday or interval, with player counts and gates."
 ---
 
-Each event carries its own list of schedules, edited from the schedule screens in `/captureadmin`. A
-schedule is a time of day, a set of weekdays and a minimum number of players online.
+Each event carries its own list of schedules, edited from the schedule screens in `/captureadmin`.
+The timetable itself is ExyliaLib's [schedule module](/docs/exylialib/schedules): the same editor, the
+same fields and the same rules as every other Exylia plugin that starts things on a clock.
 
 ## What a schedule holds
 
 | Field | Meaning |
 |---|---|
-| `name` | A label for the entry. Defaults to the event id. |
-| `time` | `HH:mm`, the exact minute it fires. Required. |
+| `name` | A label for the entry. Blank shows the times instead. |
+| `enabled` | Whether it may fire at all. On by default. |
 | `days` | Weekday names, or `*` for every day. An empty list also means every day. |
-| `min-players` | Players who must be online for it to fire. Defaults to `0`. |
+| `times` | The `HH:mm` clock times it fires at, as a list. A single `time` is still read. |
+| `every` | Repeat this often instead of at fixed times, such as `2h` or `90m`. |
+| `from` / `to` | The window a repeat runs inside, as `HH:mm`. |
+| `min-players` | Players who must be online for it to fire. `0` by default. |
+| `max-players` | The most players that may be online for it to fire. `0` is no limit. |
+| `condition` | An Exylia comparison that must hold, such as `%server_tps% >= 18`. |
+| `cooldown` | The shortest gap between two fires of this entry. |
+| `requires` | Named gates, listed below. |
 
-An event can have as many schedules as you want: three different times on weekdays and one on
-Saturday is four entries on the same event.
+An event can have as many schedules as you want: three times on weekdays and one on Saturday is two
+entries, one holding three times and one holding one. A repeat is anchored to its window's opening, not to when the server
+started: every two hours from `10:00` fires at 10:00, 12:00 and 14:00 whatever time it restarted.
 
 ## How firing works
 
-The scheduler checks once a second. When the current weekday and `HH:mm` match an entry, that entry
-fires — once per minute at most, so a check landing twice in the same minute cannot start it twice.
+When an entry is due, every gate is checked and the start is skipped — not retried later — when any
+fails:
 
-It then skips the start when either is true:
+- That event is already running. This is always checked, whatever `requires` says.
+- Fewer than `min-players` or more than `max-players` are online.
+- The `condition` does not hold, or the `cooldown` has not passed.
+- A gate in `requires` does not pass.
 
-- Fewer players are online than `min-players`.
-- That event is already running.
+A fire more than two minutes late, after a frozen server, is skipped too. Skips are written to the
+console debug log rather than being silent.
 
-Both cases are written to the console debug log rather than being silent.
+### The gates this plugin offers
 
-<Callout type="note" title="It is not cron">
-Despite the internals being called cron entries, there are no cron expressions. A schedule is a
-weekday set plus one exact minute; there is no "every 15 minutes" and no interval syntax. Recurring
-more often than daily means adding more entries.
-</Callout>
+| Gate | Passes when |
+|---|---|
+| `event-inactive` | The event this entry starts is not running. |
+| `nothing-running` | No capture event at all is running on the server. |
+
+`nothing-running` is what configuration alone cannot say: "start this one, but not while any other
+event is on". A gate name the plugin does not offer never passes, so a typo stops the entry from firing
+rather than being ignored.
 
 ## Timezone
 
-Every schedule is read against one clock, set globally:
+Every schedule is read against one clock:
 
 ```yaml title="config.yml"
 scheduler:
   timezone: ""
 ```
 
-Empty means the machine's own timezone. Otherwise it takes a zone id such as `America/New_York` or
-`Europe/Madrid`.
+Empty — the default — uses ExyliaLib's own `timezone` setting, which is where a network sets it once
+for every plugin. Otherwise it takes a zone id such as `America/New_York` or `Europe/Madrid`, and
+overrides that for this plugin only.
 
-<Callout type="warning" title="An invalid zone id stops the scheduler">
-The value is parsed at load. Use a real IANA zone id — the ones you would find in `/usr/share/zoneinfo`
-— rather than an abbreviation like `CET`.
+<Callout type="warning" title="An invalid zone id falls back">
+A value that is not a real IANA zone id — an abbreviation like `CET`, or a typo — is logged as an error
+on load, and ExyliaLib's timezone is used instead. Check the console after changing it.
 </Callout>
 
 ## Time until the next one
 
-The next fire is computed by walking forward up to seven days from now and taking the earliest
-matching entry. That value is what feeds:
+The time until an event's next fire across all its entries is what feeds:
 
 - `%exyliacapture_<id>_time_until_start%` for one event.
 - `%exyliacapture_next_event_time_until_start%` for the soonest event on the whole server.

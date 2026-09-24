@@ -1,64 +1,80 @@
 ---
 title: "Programación"
-description: "Eventos recurrentes por hora y día de la semana, con mínimo de jugadores."
+description: "Eventos recurrentes por hora, día de la semana o intervalo, con número de jugadores y condiciones."
 ---
 
 Cada evento lleva su propia lista de horarios, editable desde las pantallas de horarios de
-`/captureadmin`. Un horario es una hora del día, un conjunto de días de la semana y un mínimo de
-jugadores conectados.
+`/captureadmin`. El horario en sí es el [módulo de horarios](/docs/exylialib/horarios) de ExyliaLib:
+el mismo editor, los mismos campos y las mismas reglas que cualquier otro plugin de Exylia que arranca
+cosas con reloj.
 
 ## Qué contiene un horario
 
 | Campo | Significado |
 |---|---|
-| `name` | Una etiqueta para la entrada. Por defecto, el id del evento. |
-| `time` | `HH:mm`, el minuto exacto en que dispara. Obligatorio. |
+| `name` | Una etiqueta para la entrada. En blanco muestra las horas en su lugar. |
+| `enabled` | Si puede disparar. Activado por defecto. |
 | `days` | Nombres de días, o `*` para todos. Una lista vacía también significa todos. |
+| `times` | Las horas `HH:mm` en que dispara, como lista. Un `time` suelto se sigue leyendo. |
+| `every` | Repetir con esta frecuencia en vez de a horas fijas, como `2h` o `90m`. |
+| `from` / `to` | La ventana dentro de la que corre la repetición, como `HH:mm`. |
 | `min-players` | Jugadores que deben estar conectados para que dispare. Por defecto `0`. |
+| `max-players` | Máximo de jugadores conectados para que dispare. `0` es sin límite. |
+| `condition` | Una comparación de Exylia que debe cumplirse, como `%server_tps% >= 18`. |
+| `cooldown` | El tiempo mínimo entre dos disparos de esta entrada. |
+| `requires` | Condiciones con nombre, listadas abajo. |
 
-Un evento puede tener tantos horarios como quieras: tres horas distintas entre semana y una el sábado
-son cuatro entradas en el mismo evento.
+Un evento puede tener tantos horarios como quieras: tres horas entre semana y una el sábado son dos
+entradas, una con tres horas y otra con una. Una repetición se ancla a la apertura de su ventana, no a
+cuándo arrancó el servidor: cada dos horas desde las `10:00` dispara a las 10:00, 12:00 y 14:00 sea
+cual sea la hora a la que se reinició.
 
 ## Cómo dispara
 
-El scheduler comprueba una vez por segundo. Cuando el día de la semana y el `HH:mm` actuales coinciden
-con una entrada, esa entrada dispara — como mucho una vez por minuto, así que dos comprobaciones
-dentro del mismo minuto no pueden iniciarlo dos veces.
+Cuando toca una entrada, se comprueba cada condición y el inicio se salta — no se reintenta más tarde
+— si alguna falla:
 
-Después se salta el inicio si se cumple alguna de estas:
+- Ese evento ya está corriendo. Esto se comprueba siempre, diga lo que diga `requires`.
+- Hay menos jugadores conectados que `min-players` o más que `max-players`.
+- La `condition` no se cumple, o no ha pasado el `cooldown`.
+- Una condición de `requires` no se cumple.
 
-- Hay menos jugadores conectados que `min-players`.
-- Ese evento ya está corriendo.
+Un disparo que llega más de dos minutos tarde, tras un servidor congelado, también se salta. Los
+saltos se escriben en el log de depuración de la consola en vez de quedar en silencio.
 
-Ambos casos se escriben en el log de depuración de la consola en vez de quedar en silencio.
+### Las condiciones que ofrece este plugin
 
-<Callout type="note" title="No es cron">
-Aunque internamente las entradas se llamen cron, no hay expresiones cron. Un horario es un conjunto
-de días más un minuto exacto; no existe "cada 15 minutos" ni sintaxis de intervalos. Repetir con más
-frecuencia que a diario significa añadir más entradas.
-</Callout>
+| Condición | Se cumple cuando |
+|---|---|
+| `event-inactive` | El evento que arranca esta entrada no está corriendo. |
+| `nothing-running` | No hay ningún evento de captura corriendo en el servidor. |
+
+`nothing-running` es lo que la configuración sola no puede expresar: "arranca este, pero no mientras
+haya otro evento en marcha". Un nombre que el plugin no ofrece nunca se cumple, así que una errata
+impide que la entrada dispare en vez de ignorarse.
 
 ## Zona horaria
 
-Todos los horarios se leen contra un mismo reloj, definido globalmente:
+Todos los horarios se leen contra un mismo reloj:
 
 ```yaml title="config.yml"
 scheduler:
   timezone: ""
 ```
 
-Vacío usa la zona horaria de la máquina. Si no, acepta un identificador de zona como
-`America/New_York` o `Europe/Madrid`.
+Vacío — el valor por defecto — usa el ajuste `timezone` de ExyliaLib, que es donde una red lo fija una
+sola vez para todos los plugins. Si no, acepta un identificador de zona como `America/New_York` o
+`Europe/Madrid`, y sustituye a aquel solo para este plugin.
 
-<Callout type="warning" title="Un identificador inválido detiene el scheduler">
-El valor se interpreta al cargar. Usa un identificador IANA real — de los que hay en
-`/usr/share/zoneinfo` — y no una abreviatura como `CET`.
+<Callout type="warning" title="Un identificador inválido cae al de ExyliaLib">
+Un valor que no es un identificador IANA real — una abreviatura como `CET`, o una errata — se registra
+como error al cargar, y se usa en su lugar la zona horaria de ExyliaLib. Revisa la consola después de
+cambiarlo.
 </Callout>
 
 ## Cuánto falta para el siguiente
 
-El próximo disparo se calcula avanzando hasta siete días desde ahora y tomando la entrada coincidente
-más cercana. Ese valor es el que alimenta:
+El tiempo hasta el próximo disparo de un evento, entre todas sus entradas, es lo que alimenta:
 
 - `%exyliacapture_<id>_time_until_start%` para un evento concreto.
 - `%exyliacapture_next_event_time_until_start%` para el evento más próximo de todo el servidor.

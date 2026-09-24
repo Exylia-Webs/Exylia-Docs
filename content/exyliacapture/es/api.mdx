@@ -22,8 +22,8 @@ Exylia y están en la [página de la API pública](/docs/exylialib/api).
 <Callout type="warning" title="CaptureEvent no es un evento de Bukkit">
 En este plugin un "evento" es un **modo de juego que se está jugando** — un KOTH, una conquista, un
 payload —, no algo para lo que registres un listener. `CaptureEvent` es un record común que describe
-una partida de uno de esos modos, y ExyliaCapture no publica ningún evento de Bukkit. Nada de esta
-página se escucha: todo se lee y se llama.
+una partida de uno de esos modos. Los tres eventos de Bukkit que el plugin sí publica están en
+[Eventos del ciclo de vida](#eventos-del-ciclo-de-vida), y llevan una instantánea `CaptureEvent`.
 </Callout>
 
 Una **config** es un evento que montó un administrador; una **partida** es una ocurrencia suya. Existe
@@ -78,10 +78,77 @@ se puede ordenar y dibujar sin que el siguiente tick la cambie por debajo.
 del plugin en vez de lanzar: una automatización que arranca eventos por horario no tendría que atrapar
 nada.
 
-`stop` termina el evento igual que lo termina que se le acabe el reloj: se resuelve un ganador con las
-puntuaciones que haya y se reparten las recompensas. A propósito no hay forma de cancelar uno sin
-recompensas: un evento parado en el que jugadores participaron sigue siendo un evento en el que
-participaron.
+`stop` termina la partida con el motivo `STOPPED` y sin pasar ganador. Lo que pasa después es cosa
+del modo, igual que cuando se le acaba el reloj: KOTH Points, KOTH Capture Points, Destroy The Core y
+Conquest se resuelven con las puntuaciones que haya, anuncian el podio y pagan a los tres primeros;
+KOTH y Payload terminan sin ganador; un Bounty acredita y paga a su objetivo como
+superviviente.
+
+## Menús
+
+| Método | Qué hace |
+|---|---|
+| `void openMenu(Player)` | Abre a un jugador el menú de capturas, el mismo que abre `/capture`. |
+
+La pantalla que quiere un NPC de lobby o un ítem de la hotbar: lo que está en vivo, lo que está
+programado y cuándo, dibujado con los propios archivos de menú del servidor. Llámalo desde el hilo
+dueño del jugador, como ya lo es un handler de interacción.
+
+## Eventos del ciclo de vida
+
+Tres eventos de Bukkit en `net.exylia.lib.api.capture.event` siguen una partida. Cada uno lleva una
+instantánea `CaptureEvent` o `CaptureConfig`, nunca el juego vivo. Ellos, y `openMenu`, necesitan
+`exylia-api` `v1.133.0` o posterior.
+
+| Evento | Cuándo | Cancelable |
+|---|---|---|
+| `CaptureStartEvent` | Una partida de una config está a punto de arrancar. `getConfig()`. | Sí |
+| `ZoneCaptureEvent` | Alguien tomó una zona. `getEvent()`, `getZone()`, `getPlayer()`, `getClan()`. | No |
+| `CaptureEndEvent` | La partida terminó. `getEvent()`, `getWinner()`, `getReason()`. | No |
+
+```java
+@EventHandler
+public void onEnd(CaptureEndEvent event) {
+    if (event.getReason() == CaptureEndReason.FINISHED) {
+        event.getWinner().ifPresent(uuid -> announce(event.getEvent().displayName(), uuid));
+    }
+}
+```
+
+**`CaptureStartEvent`** se lanza cuando la config existe, está habilitada, completa, no está ya
+corriendo y es de un tipo conocido — y antes de que la partida registre una zona, muestre nada o
+ejecute un comando de inicio. Todo arranque pasa por aquí: un comando, el horario, el menú de
+administración y `start(String)` por igual. Un arranque cancelado se rechaza como cualquier otro:
+`start` devuelve vacío, el rechazo queda en el log, y al admin que lo arrancó por comando se le dice
+que falló sin motivo, así que un handler que cancela debería explicar el porqué él mismo.
+
+**`ZoneCaptureEvent`** se lanza cada vez que se toma una zona: la colina en un KOTH (una vez por
+captura cuando sigue corriendo), cada punto en KOTH Capture Points, una zona de Conquest que cae ante
+un clan, y el objetivo de un Bounty al morir a manos de alguien. Llega después de que la captura
+esté en las estadísticas y antes de que el modo decida si ganó, así que una captura ganadora va
+seguida de `CaptureEndEvent`. `getZone()`, `getPlayer()` y `getClan()` son todos `Optional`: la zona
+solo tiene nombre en Conquest, y el clan solo cuando la partida puntúa por clan. KOTH Points, Payload y
+Destroy The Core no tienen un momento de tomar una zona y nunca lo lanzan.
+
+**`CaptureEndEvent`** se lanza una vez por partida, después de que el modo la resuelva — el resultado
+anunciado, los comandos de fin ejecutados y las recompensas del ganador entregadas — y antes de que la
+partida deje de listarse, así que `scores(String)` todavía responde por ella. `getWinner()` es el
+único jugador a cuyo favor terminó; está vacío cuando nadie ganó, y también cuando el resultado es
+compartido, se saca de las puntuaciones o el objetivo de un Bounty sobrevivió a la caza.
+`getReason()` es un `CaptureEndReason`:
+
+| Constante | Significado |
+|---|---|
+| `FINISHED` | Alguien llegó a lo que el modo persigue: aguantó la colina, alcanzó el objetivo, llevó el carro a destino, mató al objetivo. |
+| `TIME_UP` | Se acabó el reloj antes. |
+| `STOPPED` | Parada antes de tiempo: por un admin, `stop(String)`, el apagado del plugin, o un Bounty sin nadie a quien cazar. |
+
+<Callout type="warning" title="No siempre en el hilo principal">
+Cada evento se lanza en el hilo que lo provocó — el del propio emisor para un comando, el hilo global
+para el horario y para una partida terminada por sus zonas o su reloj — y es asíncrono cuando ese no
+es el hilo principal. En Folia ninguno de ellos es un único hilo principal, así que programa todo lo
+que toque el resto del mundo.
+</Callout>
 
 ## Estadísticas
 
@@ -137,10 +204,9 @@ ganador y se están repartiendo las recompensas).
 
 ## Lo que no expone
 
-No hay eventos de Bukkit: ExyliaCapture no publica ninguno, y los "eventos" de arriba son modos de
-juego. La geometría de las zonas, las tablas de recompensas, las escrituras del programador de
-horarios, los menús de administración y las filas crudas de configuración quedan fuera a propósito: un
-contrato público no se puede romper después, así que lleva lo que una integración necesita y nada que
-solo tuviera sentido dentro de una versión.
+La geometría de las zonas, las tablas de recompensas, las escrituras del programador de horarios, los
+menús de administración y las filas crudas de configuración quedan fuera a propósito: un contrato
+público no se puede romper después, así que lleva lo que una integración necesita y nada que solo
+tuviera sentido dentro de una versión.
 
 Si de verdad te falta algo, pídelo en [Discord](https://discord.exylia.net).
