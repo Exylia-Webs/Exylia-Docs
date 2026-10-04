@@ -1,0 +1,125 @@
+---
+title: "Migration"
+description: "Moving from ExyliaSurvivalCore's mines module, and importing mines from CataMines or RealMines."
+---
+
+## From ExyliaSurvivalCore
+
+Mines used to be a module of ExyliaSurvivalCore. They are now this plugin, and a server that ran them
+there brings everything over on its own: the mines, the blocks they were regrowing, the settings, the
+messages and the mining history.
+
+<Steps>
+  <Step title="Update ExyliaSurvivalCore">
+    Use a release without the mines module, or turn its `mines` module off. While the survival core
+    still runs its own mines, nothing is imported and the console says so.
+  </Step>
+  <Step title="Install ExyliaMines next to it">
+    Drop `ExyliaMines.jar` into `plugins/` and keep ExyliaSurvivalCore installed: the mines are read from
+    the survival core's own database, whatever engine it uses, so it has to be running.
+  </Step>
+  <Step title="Start the server once">
+    The console lists what was imported. From then on ExyliaMines runs the mines, and `/minesadmin`
+    opens them.
+  </Step>
+</Steps>
+
+### What is brought over
+
+| What | From | To |
+|---|---|---|
+| Settings | The `settings` and `sounds` sections of `plugins/ExyliaSurvivalCore/modules/mines/config.yml` | `config.yml`, written with them — only when ExyliaMines has no `config.yml` yet. The keys are the same. |
+| Messages | `plugins/ExyliaSurvivalCore/lang/<language>/modules/mines/messages.yml`, every language | `lang/<language>/messages.yml`, where none exists yet. The keys are the same. |
+| Mines | The `sc_mines` table | `mines`. Area, type, composition, levels, loot, effects, permission, switches, reset times and teleports. |
+| Broken blocks | The `sc_mine_broken_blocks` table | `mines_broken_blocks`, so a hole left before the move still grows back. |
+| Mining history | The `sc_stat_counters` rows `mines.<id>.blocks`, per player | `mines_stats`. See below. |
+
+A mine whose id ExyliaMines already has is left as it is. On a network sharing one database, that is what
+makes every row come over once, whichever server starts first.
+
+Features that did not exist in the survival core — the hologram, lucky rewards, potion effects, Fortune
+settings — start empty on an imported mine.
+
+### Mining history
+
+How many blocks each player mined in each mine, as the survival core's stats module counted them, is
+imported once the mines are in, for the mines this server has. Each player's count is **raised** to the
+survival core's number, never lowered, so a leaderboard starts from the history rather than from zero and
+running the import twice changes nothing.
+
+### It happens once
+
+When the mines are in, the file `plugins/ExyliaMines/.imported-survivalcore` is written; the history writes
+`.imported-survivalcore-stats`. From then on nothing is read from the survival core again, so a mine you
+delete here never comes back. Deleting a marker file runs that part again on the next start.
+
+The import **waits**, without writing its marker, while:
+
+- the survival core's folder is there but the plugin is not running — "ExyliaSurvivalCore left mines
+  behind but is not running";
+- the survival core still runs its own mines module.
+
+A server that never ran the survival core — no `plugins/ExyliaSurvivalCore/` folder — has nothing to wait
+for, and the markers are written on the first start.
+
+### What else carries over
+
+- **Permissions.** `exyliasurvivalcore.mines.admin` still works: it is declared by ExyliaMines and grants
+  `exyliamines.admin`. Mine permissions are stored on each mine and come over with it.
+- **Commands.** `/minesadmin` keeps its name.
+- **Placeholders.** Inside Exylia plugins' own files the names are the same, `%mine_reset_<id>%`. Through
+  PlaceholderAPI the plugin in front changes: `%exyliasurvivalcore_mine_reset_<id>%` becomes
+  `%exyliamines_mine_reset_<id>%`. See [Placeholders](/docs/exyliamines/placeholders).
+- **The API.** Plugins that broke mine blocks through ExyliaSurvivalCore move to `MinesService`. See
+  [API](/docs/exyliamines/api).
+
+## From CataMines or RealMines
+
+```text
+/minesadmin import catamines
+/minesadmin import realmines
+```
+
+The mines are read straight from the other plugin's folder, `plugins/CataMines/mines/` or
+`plugins/RealMines/mines/`, one `.yml` file per mine. That plugin does **not** have to be installed, and
+nothing in its files is changed.
+
+Every mine comes over as a **classic** mine of this server, enabled. Its id is its name in lower case, with
+anything other than letters, digits, `_` and `-` turned into `_`. A mine whose id is already taken — on any
+server of the database — is skipped, so running an import again only adds what is new. The answer says how
+many were imported and how many skipped; a file that could not be read is named in the console.
+
+Imported mines are set up at once and refill on their first interval. Their holograms, loot tables and
+everything else this plugin adds are set afterwards from `/minesadmin`.
+
+### CataMines 2.x
+
+| CataMines | ExyliaMines |
+|---|---|
+| `name` | Id and display name |
+| `region` (world, `p1`, `p2`) | The area. Only cuboid regions; any other region type is skipped. |
+| `composition` (`block`, `chance`) | The composition, each chance as a weight |
+| `resetDelay` | Reset interval; the default from `config.yml` when it is not set |
+| `resetMode` with `PERCENTAGE`, and `resetPercentage` | Threshold: CataMines resets when the share **left** falls to its value, ExyliaMines when the share **mined** reaches it, so `100 − resetPercentage` |
+| `warn.enableWarn`, `warn.warnSeconds` | Reset warning: the longest of the warning seconds |
+| `teleportLocation` | Entry teleport |
+| `teleportResetLocation`, with `teleportPlayersToResetLocation` | Safe teleport |
+
+CataMines loot tables are not imported.
+
+### RealMines 1.x
+
+| RealMines | ExyliaMines |
+|---|---|
+| `type` | Only `BLOCKS` mines. Schematic and farm mines have no counterpart and are skipped. |
+| `name`, `displayName` | Id, and display name with its `&` colour codes removed |
+| `world`, `pos1`, `pos2` | The area |
+| `block-sets` (`default`, or the first set), or `blocks` | The composition, each `percentage` as a weight |
+| `reset.time.active`, `reset.time.value` | Reset interval, at least 5 seconds; the default from `config.yml` when time resets are off |
+| `reset.percentage.active`, `reset.percentage.value` | Threshold, as `100 − value` |
+| `settings.send-mined-items-to-inventory` | Auto-pickup |
+| `settings.break-permission` | Mine permission `realmines.<name>.break` |
+| `icon` | Icon, when it names a material |
+| `teleport` | Entry teleport, centred on the block |
+
+Locations are only imported in worlds that are loaded when the import runs; load the worlds first.

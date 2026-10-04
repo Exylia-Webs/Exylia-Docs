@@ -1,0 +1,71 @@
+---
+title: "Vault"
+description: "Publishing one stored currency as the server's Vault economy, sitting beneath EssentialsX or CMI or on top of them, and how the bridge answers what Vault plugins ask."
+---
+
+Most shop, jobs, auction and rank plugins only speak Vault. ExyliaEconomy can publish one stored currency
+as the server's Vault economy, so all of them run on it with no EssentialsX or CMI underneath.
+
+Vault itself must be installed. Without it, nothing is published and the console says so.
+
+## Choosing the currency
+
+On a stored currency's screen in `/economyadmin`, the **Vault economy** switch publishes it. Choosing
+another currency replaces it; clicking the published one again unpublishes it, and deleting it does too.
+**Economy settings** shows which one is published.
+
+A fresh server publishes `dollars`. Should the chosen currency no longer exist while Vault is installed
+and no other economy plugin is, the first stored currency serves instead, with a console warning — a
+server whose default currency is `vault` would otherwise have no money at all. Unpublished on purpose,
+it stays unpublished.
+
+## Beneath or on top
+
+| Vault on top | Another economy plugin installed | Who serves Vault |
+|---|---|---|
+| off (default) | no | Your currency. |
+| off (default) | EssentialsX, CMI… | The other plugin. Your currency is registered beneath it and serves only without it. |
+| on | either | Your currency. |
+
+**Vault on top** is in the economy settings. The console says which of the two happened:
+*"EssentialsX provides the Vault economy; 'dollars' is registered beneath it"*, or *"'dollars' is the
+server's Vault economy."* When an economy plugin is installed or removed while the server runs, who serves
+is worked out again.
+
+<Callout type="warning" title="Two economies, two sets of balances">
+Running EssentialsX's economy and this plugin side by side means two places where money lives. Pick one
+for Vault and import the other — see [Migration](/docs/exyliaeconomy/migration#from-vault-or-playerpoints).
+</Callout>
+
+## Plugins that load first
+
+Vault is published while the plugin enables, before its currencies are even read, so a plugin that looks
+for an economy in its own enable finds one. Until the currencies arrive a moment later, the bridge answers
+an empty balance and refuses payments with *"The economy is still loading."*, and every plugin that kept
+the bridge keeps working through every reload after that.
+
+To be sure ExyliaEconomy enables first, `plugin.yml` lists these under `loadbefore`: ExyliaSurvivalCore,
+ExyliaMines, ShopGUIPlus, EconomyShopGUI, ChestShop, QuickShop, Jobs, zAuctionHouseV3 and AuctionHouse.
+
+## What Vault plugins get
+
+| Vault call | What the bridge does |
+|---|---|
+| Name | `ExyliaEconomy:<currency>`. |
+| Balance, has | Memory for a player on this server. For anybody else the row is read from the database, waiting up to two seconds off the main thread; on the main thread it never waits and answers the last balance read, or zero for somebody never read, fetching the row for the next call. |
+| Deposit | Any player: on this server at once, queued for anybody elsewhere. Refused whole at the ceiling. |
+| Withdraw | **Only from a player on this server.** Charging somebody offline or elsewhere is refused: *"Only the balance of a player on this server can be charged."* |
+| Amounts | Vault's `double`, rounded half up to the currency's decimals, so `2.3 × 3` is `6.90`, never `6.89`. |
+| Players by name | Looked up among the names ExyliaLib knows. An unknown name is refused. |
+| Banks | Not supported. Every bank call answers *not implemented*. |
+| Format, names, decimals | The currency's own. |
+
+Every Vault movement is a ledger line with the reason `vault:<plugin>`, naming the plugin that called
+Vault — `vault:jobs`, `vault:chestshop` — or plain `vault` when no plugin can be found.
+
+## The `vault` currency id
+
+ExyliaLib knows the Vault economy as the currency id `vault`, and its default currency ships as `vault`.
+While one of your currencies serves Vault, `vault` is a second name for it everywhere — a price in `vault`,
+a leaderboard of `vault`, the history of `vault` all mean that currency. While another plugin serves
+Vault, `vault` is that plugin's money. See [First steps](/docs/exyliaeconomy/first-steps#which-currency-balance-reads).

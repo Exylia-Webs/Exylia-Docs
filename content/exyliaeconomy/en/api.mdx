@@ -1,0 +1,132 @@
+---
+title: "API"
+description: "Paying and charging these currencies through ExyliaLib, reacting to every balance change, and cancelling payments and exchanges with ExyliaEconomy's own events."
+badge: "dev"
+---
+
+There are two halves. Moving money needs only **ExyliaLib**: every currency this plugin keeps is
+registered with the library's economy facade, next to Vault and PlayerPoints, and a plugin pays and
+charges them by id without knowing ExyliaEconomy exists. Stopping a player's `/pay` or exchange before it
+happens needs ExyliaEconomy's own two events.
+
+## Moving money
+
+```java
+import net.exylia.lib.economy.Economy;
+import net.exylia.lib.economy.EconomyResponse;
+import net.exylia.lib.economy.Transaction;
+
+// Pay 50 gems. The reason is what the ledger and the analytics show.
+EconomyResponse paid = Economy.of("gems").deposit(player.getUniqueId(), new BigDecimal("50"),
+        Transaction.of("myplugin:reward").by(player.getUniqueId()));
+
+// Charge the default currency, whichever it is.
+String money = Economy.defaultId();
+if (Economy.of(money).withdraw(uuid, price, Transaction.of("myplugin:buy")).isSuccess()) {
+    // hand the item over
+}
+
+// The currencies a player may use, in the order the admin arranged them.
+for (String id : Economy.ordered()) {
+    if (Economy.canUse(player, id)) {
+        // offer it
+    }
+}
+```
+
+| Call | What it answers |
+|---|---|
+| `Economy.of(id)` | A view of one currency: `balance`, `balanceLater`, `has`, `deposit`, `withdraw`, `set`, `transfer`. |
+| `Economy.defaultId()` | The default currency's id, with `vault` resolved to the currency serving it. |
+| `Economy.ordered()` | Every currency in the admin's sort order. |
+| `Economy.canUse(who, id)` | Whether the currency names no permission, or they have it. |
+| `Economy.kind(id)` | `STORED`, `ITEM`, `EXPERIENCE`, `EXTERNAL` or `UNKNOWN`. |
+| `Economy.info(id)` | Name, plural, symbol, icon, decimals and both formats, with the overlays applied. |
+| `Economy.parseAmount(text)` | An amount as players type it, or `null`. |
+
+The full facade is on the [library's rewards and economy page](/docs/exylialib/rewards#economy).
+
+### What a stored currency does with your call
+
+- **Amounts** are cut to the currency's decimals before anything moves.
+- **A deposit over the ceiling** is refused whole, never cut, and the response says why.
+- **A player on another server or offline** is not refused: a deposit, withdrawal or set is queued and
+  succeeds, landing where the player is. A withdrawal queued that way floors at zero when it lands, so
+  check `has` first when the money must really be there.
+- **A player here whose balance is still loading** — the first moment after joining — has withdrawals
+  refused with *"Your balance is still loading."*
+- **The reason** in your `Transaction` is the ledger line's reason, and a label for it in `messages.yml`
+  `reasons` makes it readable in histories; without one, the part before the colon is shown.
+
+## Reacting to changes
+
+Every change to a stored balance fires ExyliaLib's `BalanceChangeEvent`, once, on the server that wrote it,
+after the money moved. A change queued on one server and applied on another is announced where it lands,
+so summing the deltas across a network gives the money that moved. A payment is two events, one per side.
+
+```java
+@EventHandler
+public void onChange(BalanceChangeEvent event) {
+    if (!event.currency().equals("gems")) return;
+    // event.player(), event.before(), event.after(), event.delta(),
+    // and event.transaction().reason()
+}
+```
+
+It may fire off the main thread; hop to the player's thread before touching the world.
+
+## ExyliaEconomy's own events
+
+Both live in `net.exylia.exyliaEconomy.api.event`, are cancellable, and fire on the player's thread — the
+main thread on Paper, their region's on Folia — before any money moves. Depend on ExyliaEconomy
+(`depend` or `softdepend` in your `plugin.yml`) and compile against its jar from the
+[releases](https://github.com/Exylia-Plugins/ExyliaEconomy/releases).
+
+### EconomyPayEvent
+
+A player is about to pay another with `/pay`, `/economy pay` or a currency's `pay`. Fired once every rule
+has passed — the currency allows transfers, the minimum, the receiver accepts payments, the payer can
+afford the amount and the tax — and before anything is taken.
+
+| Method | Returns |
+|---|---|
+| `payer()` | The paying `Player`. |
+| `receiver()`, `receiverName()` | Who gets it. They may be offline or on another server. |
+| `currency()` | The currency's id. |
+| `amount()` | What the receiver gets. |
+| `tax()` | What the payer pays on top, kept by nobody; zero for none. |
+
+### EconomyExchangeEvent
+
+A player is about to exchange one currency for another. Fired before the rate is applied; the exchange may
+still be refused afterwards by its own rules.
+
+| Method | Returns |
+|---|---|
+| `getPlayer()` | Who exchanges. |
+| `from()` | The currency given, by id. |
+| `to()` | The currency asked for, as typed. |
+| `amount()` | How much of `from` was typed. |
+
+### Cancelling
+
+A cancelled event tells the player *"The payment was cancelled."* or *"The exchange was cancelled."*,
+unless you set `cancelMessage(line)`: your line instead, in ExyliaLib's text format, or `""` to say
+nothing because you already did.
+
+```java
+@EventHandler
+public void onPay(EconomyPayEvent event) {
+    if (inCombat(event.payer())) {
+        event.setCancelled(true);
+        event.cancelMessage("{error}You cannot pay anybody during combat.");
+    }
+}
+```
+
+There is no event after a payment: what moved is the two `BalanceChangeEvent`s, one per side.
+
+<Callout type="note" title="What these events do not see">
+They fire for players' own commands only. Admin commands, interest, banknotes, Vault plugins and other
+plugins paying through ExyliaLib move money without them; `BalanceChangeEvent` sees all of it.
+</Callout>

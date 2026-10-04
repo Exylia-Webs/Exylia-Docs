@@ -54,6 +54,8 @@ export type Plugin = {
   banner: string;
   /** BuiltByBit resource page. Absent for what is not sold on its own. */
   purchase?: string;
+  /** GitHub releases of a free, open-source plugin; shown in place of `purchase`. */
+  download?: string;
   /** Sidebar structure. Empty for plugins whose docs are not written yet. */
   nav: NavGroup[];
 };
@@ -925,6 +927,93 @@ const STAFF_NAV: NavGroup[] = [
   },
 ];
 
+const MINES_NAV: NavGroup[] = [
+  {
+    label: { en: "Getting started", es: "Empezar" },
+    pages: [
+      page("introduction", "introduction", "introduccion"),
+      page("installation", "installation", "instalacion"),
+      page("first-steps", "first-steps", "primeros-pasos"),
+    ],
+  },
+  {
+    label: { en: "Configuring", es: "Configurar" },
+    pages: [
+      page("mines", "mines", "minas"),
+      page("area", "area", "area"),
+      page("classic-mines", "classic-mines", "minas-clasicas"),
+      page("realistic-mines", "realistic-mines", "minas-realistas"),
+      page("loot-and-effects", "loot-and-effects", "botin-y-efectos"),
+      page("fortune", "fortune", "fortuna"),
+      page("lucky-rewards", "lucky-rewards", "premios-de-suerte"),
+      page("boosts", "boosts", "potenciadores"),
+    ],
+  },
+  {
+    label: { en: "Systems", es: "Sistemas" },
+    pages: [
+      page("holograms", "holograms", "hologramas"),
+      page("players-menu", "players-menu", "menu-de-jugadores"),
+      page("stats", "stats", "estadisticas"),
+      page("integrations", "integrations", "integraciones"),
+      page("migration", "migration", "migracion"),
+    ],
+  },
+  {
+    label: { en: "Reference", es: "Referencia" },
+    pages: [
+      page("commands", "commands", "comandos"),
+      page("permissions", "permissions", "permisos"),
+      page("placeholders", "placeholders", "placeholders"),
+      page("configuration", "configuration", "configuracion"),
+      page("api", "api", "api"),
+      page("faq", "faq", "faq"),
+    ],
+  },
+];
+
+const ECONOMY_NAV: NavGroup[] = [
+  {
+    label: { en: "Getting started", es: "Empezar" },
+    pages: [
+      page("introduction", "introduction", "introduccion"),
+      page("installation", "installation", "instalacion"),
+      page("first-steps", "first-steps", "primeros-pasos"),
+    ],
+  },
+  {
+    label: { en: "Configuring", es: "Configurar" },
+    pages: [
+      page("currencies", "currencies", "monedas"),
+      page("payments", "payments", "pagos"),
+      page("banknotes", "banknotes", "billetes"),
+      page("interest", "interest", "intereses"),
+      page("leaderboards", "leaderboards", "clasificaciones"),
+    ],
+  },
+  {
+    label: { en: "Systems", es: "Sistemas" },
+    pages: [
+      page("vault", "vault", "vault"),
+      page("network", "network", "red"),
+      page("ledger", "ledger", "registro"),
+      page("migration", "migration", "migracion"),
+      page("integrations", "integrations", "integraciones"),
+    ],
+  },
+  {
+    label: { en: "Reference", es: "Referencia" },
+    pages: [
+      page("commands", "commands", "comandos"),
+      page("permissions", "permissions", "permisos"),
+      page("placeholders", "placeholders", "placeholders"),
+      page("configuration", "configuration", "configuracion"),
+      page("api", "api", "api"),
+      page("faq", "faq", "faq"),
+    ],
+  },
+];
+
 export const plugins: Plugin[] = [
   {
     id: "exyliaffa",
@@ -1257,6 +1346,50 @@ export const plugins: Plugin[] = [
       { en: "Folia", es: "Folia" },
     ],
     nav: SURVIVALCORE_NAV,
+  },
+  {
+    id: "exyliamines",
+    name: "ExyliaMines",
+    tagline: { en: "Mines that come back, built in game", es: "Minas que vuelven, construidas en el juego" },
+    summary: {
+      en: "Classic mines refilled from a weighted composition and realistic mines whose blocks grow back one by one, all built from a menu, with custom loot, lucky rewards, timed boosts, Fortune rules, holograms and statistics. Free and open source.",
+      es: "Minas clásicas que se rellenan desde una composición ponderada y minas realistas cuyos bloques vuelven a crecer uno a uno, todo montado desde un menú, con botín propio, premios de suerte, potenciadores temporales, reglas de Fortuna, hologramas y estadísticas. Gratis y de código abierto.",
+    },
+    version: "1.3.3",
+    status: "stable",
+    category: { en: "Survival", es: "Survival" },
+    minecraft: "1.21+",
+    banner: "https://s3.exylia.net/exylia-plugins/public/static/images/plugins/mines/ExyliaMinesBanner.webp",
+    download: "https://github.com/Exylia-Plugins/ExyliaMines/releases",
+    tags: [
+      { en: "Mines", es: "Minas" },
+      { en: "Open source", es: "Código abierto" },
+      { en: "Regeneration", es: "Regeneración" },
+      { en: "Folia", es: "Folia" },
+    ],
+    nav: MINES_NAV,
+  },
+  {
+    id: "exyliaeconomy",
+    name: "ExyliaEconomy",
+    tagline: { en: "Server currencies, shared across a network", es: "Monedas del servidor, compartidas en toda la red" },
+    summary: {
+      en: "As many currencies as you want, kept in the database and edited in game, one published to Vault, payments with taxes and confirmations, banknotes a copy cannot redeem twice, interest, leaderboards, a ledger with rollback, and balances shared across every server. Free and open source.",
+      es: "Tantas monedas como quieras, guardadas en la base de datos y editadas dentro del juego, una publicada en Vault, pagos con impuestos y confirmaciones, billetes que una copia no puede canjear dos veces, intereses, clasificaciones, un registro con reversión y saldos compartidos entre todos los servidores. Gratis y de código abierto.",
+    },
+    version: "1.1.0",
+    status: "stable",
+    category: { en: "Survival", es: "Survival" },
+    minecraft: "1.21+",
+    banner: "https://s3.exylia.net/exylia-plugins/public/static/images/plugins/economy/ExyliaEconomyBanner.webp",
+    download: "https://github.com/Exylia-Plugins/ExyliaEconomy/releases",
+    tags: [
+      { en: "Economy", es: "Economía" },
+      { en: "Vault", es: "Vault" },
+      { en: "Network", es: "Red" },
+      { en: "Folia", es: "Folia" },
+    ],
+    nav: ECONOMY_NAV,
   },
   {
     id: "exyliasandbox",

@@ -1,0 +1,114 @@
+---
+title: "Potenciadores"
+description: "Multiplicadores temporales de drops, experiencia y dinero en algunas minas o en todas, lanzados por comando o con un horario semanal."
+---
+
+Un potenciador multiplica durante un tiempo lo que paga minar: los objetos que da un bloque, la experiencia,
+el dinero. Puede cubrir todas las minas o una lista de ellas, lo lanza un administrador o el horario de
+`boosts.yml`, y sobrevive a un reinicio con el tiempo que le quedaba.
+
+## boosts.yml
+
+```yaml title="plugins/ExyliaMines/boosts.yml"
+boosts:
+  gold_rush:
+    name: '{highlight}&lGOLD RUSH'
+    drops: 2.0
+    experience: 1.5
+    money: 2.0
+    duration: 900
+    mines: []
+  happy_hour:
+    name: '{accent}&lHAPPY HOUR'
+    drops: 1.2
+    experience: 1.2
+    money: 1.2
+    duration: 3600
+    mines: []
+schedule:
+  weekend_rush:
+    boost: gold_rush
+    days:
+      - SATURDAY
+      - SUNDAY
+    times:
+      - '20:00'
+    min-players: 5
+```
+
+| Clave | Qué hace |
+|---|---|
+| `name` | Lo que leen los jugadores en el chat, en los menús y en la boss bar. |
+| `drops` | Multiplicador de los objetos que da un bloque: su drop vanilla, los objetos de su tabla de botín y los premios de suerte de objeto. |
+| `experience` | Multiplicador de la experiencia vanilla que da un bloque. |
+| `money` | Multiplicador del dinero que pagan las tablas de botín y los premios de suerte. |
+| `duration` | Cuánto dura: `900`, `15m`, `1h`. |
+| `mines` | Los ids de las minas a las que se aplica. Vacío significa todas. |
+
+Un multiplicador puede ser cualquier número: `2` duplica, `1.2` añade una quinta parte, `1` lo deja igual.
+La parte decimal se tira por drop, así que un objeto a ×1,2 son dos objetos una de cada cinco veces. Los
+potenciadores activos a la vez **se multiplican entre sí**: Gold Rush y Happy Hour juntos dan drops ×2,4.
+
+## Lanzar uno a mano
+
+| Comando | Qué hace |
+|---|---|
+| `/minesadmin boost start <id>` | Lanza un potenciador de `boosts.yml`. Si ya estaba activo, vuelve a empezar con su duración completa. |
+| `/minesadmin boost custom <multiplier> <duration> [mines]` | Lanza un potenciador escribiendo sus números: un mismo multiplicador para drops, experiencia y dinero. Los ids de mina van separados por comas; sin ninguno, todas las minas. |
+| `/minesadmin boost stop <id>` | Termina ya un potenciador activo. `all` los termina todos. |
+| `/minesadmin boost list` | Lista los potenciadores activos, primero el que antes termina. |
+
+`/minesadmin boost custom 1.5 30m gold,iron` potencia las minas `gold` e `iron` un 50 % durante treinta
+minutos. Su nombre sale de `boosts.custom-name` en `messages.yml`, "POTENCIADOR x1.5", y su id se construye a
+partir de sus números, `custom-1.5-gold+iron`, que es lo que acepta `boost stop`. Un multiplicador de cero o
+menos, o una duración de menos de un segundo, se rechaza.
+
+Los cuatro necesitan `exyliamines.admin` y también funcionan desde la consola.
+
+## El horario
+
+Cada entrada de `schedule` lanza su `boost` a cada hora de `times`, los días indicados en `days`:
+
+| Clave | Qué hace |
+|---|---|
+| `boost` | El id de un potenciador de `boosts.yml`. |
+| `days` | De `MONDAY` a `SUNDAY`. Vacío significa todos los días. |
+| `times` | `HH:mm`, en formato de 24 horas. Se admiten varias. |
+| `min-players` | Ese lanzamiento se salta mientras haya menos jugadores conectados. `0` no lo salta nunca. |
+
+Las horas siguen la zona horaria configurada en los ajustes de ExyliaLib, no la de la máquina. Una hora o un
+día que no se puede leer se indica en consola y se omite, y una entrada que se queda sin ninguna hora no hace
+nada. El nombre de la entrada —`weekend_rush`— lo eliges tú; solo importa el potenciador al que apunta.
+`/minesadmin reload` aplica al momento un horario editado.
+
+## Qué ven los jugadores
+
+- **Cuando empieza y termina**, las líneas `boosts.started` y `boosts.ended` llegan a quien diga
+  `announcements.boosts` en `config.yml`: `SERVER` por defecto, `NEARBY` para los jugadores a menos de
+  `announcements.radius` bloques de cualquier mina potenciada, u `OFF`.
+- **Dentro de una mina potenciada**, una boss bar, `boosts.bossbar`, nombra el potenciador y los
+  multiplicadores y se vacía a medida que se agota. Con varios potenciadores sobre una mina, nombra el que
+  termina más tarde y muestra los multiplicadores de todos combinados.
+- **En los menús**, el menú `/mines` y la sección **Recompensas** de la mina muestran el multiplicador de
+  drops y el tiempo restante.
+- **En placeholders**, `%mine_boost_<id>%`, `%mine_boost_name_<id>%` y `%mine_boost_time_<id>%`. Ver
+  [Placeholders](/docs/exyliamines/placeholders).
+
+Cada línea de potenciador puede usar `%boost%`, `%id%`, `%drops%`, `%experience%`, `%money%`, `%time%`
+(restante), `%duration%` y, en el anuncio de inicio, `%mines%` —los nombres de las minas, o
+`boosts.all-mines`, "todas las minas". La boss bar admite además `%mine_name%`.
+
+## Reinicios y redes
+
+Un potenciador activo se guarda en la base de datos (`mines_boosts`) con cuándo empezó y cuándo termina.
+Tras un reinicio continúa con el tiempo que le quedaba; uno que se agotó con el servidor apagado se borra sin
+anuncio.
+
+Un potenciador pertenece al servidor en el que se lanzó, igual que las minas que potencia. En una red que
+comparte una base de datos, lanzar Gold Rush en un servidor no afecta a los demás.
+
+## ¿Y los potenciadores de ExyliaSurvivalCore?
+
+Son independientes y se acumulan. Primero se aplica el potenciador de la mina y después —con
+ExyliaSurvivalCore instalado— los potenciadores propios de drops, experiencia y dinero del minero para la
+fuente `mines`. Ver [Integraciones](/docs/exyliamines/integraciones).

@@ -1,0 +1,105 @@
+---
+title: "Ledger and rollback"
+description: "What the ledger writes and keeps, every reason it records, the history screen, /economyadmin log and export, and how a rollback reverts movements once."
+---
+
+With the ledger on — the default — every movement of a stored currency writes a line to `exylia_ledger`:
+what moved, what the balance read afterwards, the reason, who caused it, which server applied it and
+when. That includes changes that arrived from another server and changes made by other plugins.
+
+Item, experience and display-only currencies keep no ledger.
+
+## What is written
+
+Consecutive movements of one balance with the same reason, caused by the same player, are one line: an autosell flush is one
+sale, not a hundred. A movement of zero is not written.
+
+| Reason | Where it came from |
+|---|---|
+| `pay` | `/pay` and every other spelling of it |
+| `pay:tax` | The tax on a payment |
+| `pay:tax-refund` | The tax returned when the payment failed |
+| `pay:refund` | The part of a queued payment the receiver's ceiling cut, back to the payer |
+| `admin:give`, `admin:take`, `admin:set`, `admin:reset` | `/economyadmin` and the currency commands |
+| `admin:giveall` | `/economyadmin giveall` |
+| `import:<currency>` | `/economyadmin import` |
+| `exchange:<from>><to>` | Both sides of an exchange |
+| `exchange:refund` | The source returned when the other side failed |
+| `note:withdraw`, `note:redeem` | Banknotes |
+| `interest` | Interest |
+| `rollback` | A rollback's reversals |
+| `vault`, `vault:<plugin>` | A plugin paying through Vault |
+| `api` | Another plugin that gave no reason |
+
+Other Exylia plugins write their own reasons — `shop:buy`, `market:sale`, `auctions:bid`. What a player
+reads for each reason is the `reasons` section of `messages.yml`: the exact reason first, then the part
+before the colon, then the reason itself with its first letter raised.
+
+## Retention
+
+Lines older than the retention set in **Economy settings** are deleted every hour: 30, 90, 180 or 365
+days, or forever. A fresh server keeps 90 days.
+
+Turning the ledger **off** stops writing new lines. The history screen, `/economyadmin log`, `export` and
+`rollback` then have nothing new to work with.
+
+## Reading it
+
+| Where | What it shows |
+|---|---|
+| `/economy history [currency] [player]`, `/shards history [player]` | A player gets `menus/user/history.yml`, the last 90 lines; the console gets the last 15. |
+| Left-click a currency in `/wallet` | The same screen. |
+| `/economyadmin log <player> [currency] [page]` | Ten lines a page, newest first, each with its **id** — the number a rollback names. |
+
+Somebody else's history needs `exyliaeconomy.others`. `/eadmin log Steve 2` is page 2 of the default
+currency, not a currency called 2.
+
+## Exporting
+
+```text
+/economyadmin export <currency|all> [days]
+```
+
+Writes `plugins/ExyliaEconomy/exports/ledger-<scope>-<yyyyMMdd-HHmmss>.csv`, off the game thread. `days`
+keeps only the lines written in the last that many days; `0` or nothing is everything. `all` includes
+every currency and every server's per-server lines.
+
+```text
+id,time,player,currency,delta,balance_after,reason,initiator,server
+1042,2026-10-04T18:22:05+02:00,8667ba71-…,dollars,-105.00,895.00,pay,8667ba71-…,survival-1
+```
+
+Times are ISO dates in the server's zone. A cell starting with `=`, `+`, `-`, `@` or a tab is prefixed
+with `'`, so a spreadsheet opening the file runs nothing.
+
+## Rollback
+
+```text
+/economyadmin rollback <player> <window|#id> [currency] [confirm]
+```
+
+Reverts a player's movements in one currency: every line in a window back from now (`30m`, `1h`, `2d`),
+or one line by its id (`#42`). It always asks first, showing how many movements, the net change and how
+many transfers were left out; **[✔ CONFIRM]** runs the same command with `confirm` within 30 seconds, and
+reverts exactly the lines that were shown.
+
+Each line is reverted by the opposite movement through the currency, as an admin change with reason
+`rollback`:
+
+- a deposit is withdrawn, a withdrawal deposited back;
+- each line is claimed first in `exylia_economy_claims`, kept forever, so no line is ever reverted twice,
+  whoever asks and on whichever server: *"Already done: 3"*;
+- a reversal the currency refuses — a withdrawal from somebody who no longer has it — is left as it was
+  and counted as refused, and its claim is given back for a later try;
+- on a player who is not on this server, a reversal is queued like any admin change, and a withdrawal
+  floors at zero when it lands.
+
+<Callout type="warning" title="What a rollback never touches">
+Lines with the reasons `pay…`, `exchange…`, `note…` and `rollback` are never reverted, and are counted as
+*transfers left out*. Each has another side a rollback of this player cannot see — the receiver keeps
+the payment, the other currency keeps its leg, the note can still be redeemed — so reverting one side
+would create money. Revert those by hand, with `give` and `take` on both players.
+</Callout>
+
+A window looks at the player's newest 500 lines in that currency. Because consecutive movements with one
+reason are one line, a line is reverted whole.

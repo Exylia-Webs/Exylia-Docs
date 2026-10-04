@@ -1,0 +1,100 @@
+---
+title: "Red"
+description: "Compartir saldos entre servidores: quién escribe un saldo, qué pasa con un cambio para un jugador que está en otra parte, monedas compartidas y por servidor, IDs de servidor y Redis."
+---
+
+Todos los servidores que apuntan a la misma base de datos comparten las mismas monedas, los mismos ajustes
+de la economía y los mismos saldos. No hay nada que configurar aparte de la propia base de datos; Redis lo
+hace instantáneo.
+
+## Quién escribe un saldo
+
+Propiedad, no sincronización. El saldo de un jugador lo reclama el servidor al que entra, se carga en
+memoria y lo escribe solo ese servidor mientras está allí. Cuando sale, se escribe su último saldo y se
+libera el reclamo.
+
+Un servidor al que entra el jugador espera hasta cinco segundos a que el anterior termine su última
+escritura y lo libere, y después se queda con el saldo. Una escritura de un servidor que perdió el saldo
+entretanto nunca se escribe encima de la del nuevo dueño: se pone en cola para él. Dos servidores nunca
+pueden guardar dos totales distintos.
+
+Hasta que se reclama el saldo de un jugador — el primer instante tras entrar —, un ingreso para él queda en
+cola y se aplica justo después, y todo lo que gastaría su dinero se rechaza con *"Your balance is still
+loading."*
+
+## Un cambio para alguien que está en otra parte
+
+Un ingreso, una retirada o una fijación de saldo para un jugador desconectado, o conectado en otro
+servidor, no se escribe en su saldo. Queda en cola en la base de datos para quien lo tenga:
+
+| Cambio | Cuándo se aplica |
+|---|---|
+| Ingreso | Siempre, entero, hasta el máximo. Lo que el máximo recorte de un pago vuelve al que pagó. |
+| Retirada | Sin bajar de cero: no puede dejar en negativo a alguien que no ve. |
+| Fijar, reiniciar | Sustituye el saldo. |
+
+Los cambios en cola se aplican del más antiguo al más reciente, cada uno exactamente una vez, aunque se
+enteren muchos servidores:
+
+- a un jugador conectado en otra parte se lo aplica ese servidor **al momento** con Redis activado, y como
+  mucho en un minuto sin él;
+- a un jugador desconectado se le aplica cuando vuelve a entrar, en el servidor que sea.
+
+Los cambios hechos mientras un servidor no podía llegar a la base de datos se reintentan cada segundo, y un
+cambio que no se puede escribir de ninguna manera queda anotado en consola con todo lo necesario para
+aplicarlo a mano.
+
+## Monedas compartidas y por servidor
+
+**Compartida entre servidores**, en la pantalla de una moneda almacenada, decide qué saldo tiene un
+jugador:
+
+| | Un saldo | Clasificación | Billetes | Intereses |
+|---|---|---|---|---|
+| Activado (por defecto) | Uno para toda la red | Una para la red | Se canjean en cualquier parte | Se pagan una vez por jugador |
+| Desactivado | Uno por servidor, guardado como `<id>@<server-id>` | Una por servidor | Solo en el servidor que los imprimió | Los paga cada servidor |
+
+Una moneda por servidor es el dinero de un survival que se queda en ese survival, mientras el lobby de al
+lado tiene el suyo. Los cambios en cola para un saldo por servidor solo los reclama ese servidor.
+
+El interruptor se rechaza en cuanto la moneda tiene algún saldo distinto del inicial, porque los saldos que
+tiene quedarían atrás bajo la otra clave. Decídelo antes de que los jugadores ganen nada.
+
+## IDs de servidor
+
+La propiedad se anota con `server-id`, que se define bajo `redis` en el `database.yml` de cada servidor
+aunque Redis esté desactivado:
+
+```yaml title="plugins/ExyliaEconomy/database.yml"
+database:
+  redis:
+    enabled: true
+    host: 10.0.0.6
+    server-id: survival-1
+```
+
+Vale `server-1` en cada servidor que nunca lo cambió. Dos servidores que comparten saldos con el mismo ID
+creen ambos que tienen al jugador y se sobrescriben. Cuando el plugin ve el ID por defecto junto con Redis
+o una base de datos en red, avisa una vez al arrancar: *"this server's id is the default 'server-1' while
+balances are shared…"*. Dale a cada servidor el suyo.
+
+El ID es también la clave de una moneda por servidor: cambiar el ID de un servidor lo lleva a un conjunto
+nuevo y vacío de saldos por servidor.
+
+## Con Redis y sin él
+
+| | Con Redis | Sin Redis |
+|---|---|---|
+| Un cambio para un jugador en otro servidor | Se aplica al momento | Se aplica como mucho en un minuto |
+| Una moneda editada en `/economyadmin` | Todos los servidores la vuelven a leer al momento | Los demás servidores mantienen los ajustes anteriores hasta un `/economyadmin reload` o un reinicio |
+| Saldos, cambios en cola, marcas | Compartidos a través de la base de datos | Compartidos a través de la base de datos |
+
+Redis es opcional y se configura una vez en `database.yml`. Ver la
+[página de base de datos de la librería](/docs/exylialib/base-de-datos).
+
+## Apagar un servidor
+
+Cuando un servidor se apaga, se escribe y se libera el último saldo de cada jugador, y el plugin espera
+hasta diez segundos a las escrituras que aún estén en camino. Las que sigan pendientes después se anotan con
+su cantidad. Los ingresos se agrupan durante medio segundo antes de escribirse; las retiradas se escriben al
+momento.

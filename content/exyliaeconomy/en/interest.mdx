@@ -1,0 +1,74 @@
+---
+title: "Interest"
+description: "A percentage of a balance paid at every interval: the four settings, when a payout happens, who earns it, and why nobody is paid twice."
+---
+
+Interest pays a percentage of a stored currency's balance at a fixed interval. Nothing is paid until a
+currency is listed under `interest` in `config.yml`, and a fresh server lists none.
+
+```yaml title="plugins/ExyliaEconomy/config.yml"
+interest:
+  dollars:
+    rate: 1.0
+    interval: 1h
+    max: '500'
+    online-only: true
+```
+
+| Key | Default | What it does |
+|---|---|---|
+| `rate` | `1.0` | Percent of the balance per payout. `0` pays nothing. |
+| `interval` | `1h` | How often: `30m`, `1h`, `1d`. At least one minute; anything shorter is ignored. |
+| `max` | `'0'` | The most one payout gives, read like a typed amount (`500`, `2k`). `'0'` for no cap. |
+| `online-only` | `true` | `true` pays the players online. `false` also pays every balance of players who are not. |
+
+The key is the currency's id. Item, experience and display-only currencies earn nothing.
+
+## When a payout happens
+
+Time is cut into slots of the interval, counted from the Unix epoch, so a `1h` currency pays at the top
+of every hour and a `1d` currency at midnight UTC — whatever time the server started. The plugin looks
+every 30 seconds, so a payout lands within half a minute of the boundary.
+
+A slot is never paid on the start that finds it: the first payout is at the first boundary after the
+server comes up. A boundary that passed while the server was down is not paid later.
+
+## What a payout is
+
+The balance at that moment times `rate` percent, cut to the currency's decimals and capped at `max`. A
+balance of zero earns nothing, and an amount that rounds to nothing is not paid.
+
+The player is told *"Interest +12.50 · next in 59m ⌚"*. Empty `interest-paid` in `messages.yml` to pay
+silently. The ledger records it as `interest`.
+
+A deposit the ceiling refuses is not paid, and that slot is not tried again.
+
+## Who earns it
+
+With `online-only: true`, every player online on each server who:
+
+- has `exyliaeconomy.interest`, granted to everyone by default;
+- may use the currency, when it names a permission;
+- has their balance loaded.
+
+With `online-only: false`, every server additionally sweeps the currency's whole balance table and pays
+every player who is not online there, queued for whoever holds them. A permission cannot be checked for
+somebody offline, so **every** stored balance earns, `exyliaeconomy.interest` or not.
+
+<Callout type="warning" title="online-only: false pays everybody">
+Taking `exyliaeconomy.interest` away from a group only stops their payouts while they are online. With
+`online-only: false` their offline balances keep earning. Leave it at `true` unless that is what you want.
+</Callout>
+
+## Nobody is paid twice
+
+Each payout is claimed in the database first, per player and slot, in `exylia_economy_claims`. Only one
+claim can win:
+
+- a player connected to two servers of a shared currency at once is paid once;
+- a restart in the middle of a slot never pays that slot again;
+- with `online-only: false`, every server sweeping the same table pays each balance once, and a server
+  that crashes halfway leaves the rest to the others.
+
+A currency that is not shared across servers is a balance per server, so each server pays its own.
+Claims are deleted two days after their slot.

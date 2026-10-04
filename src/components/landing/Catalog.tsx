@@ -278,14 +278,14 @@ function PluginCard({ plugin, index, lang }: { plugin: Plugin; index: number; la
               : dict.landing.unpublished[lang]}
           </span>
 
-          {plugin.purchase && (
+          {(plugin.purchase ?? plugin.download) && (
             <a
-              href={plugin.purchase}
+              href={plugin.purchase ?? plugin.download}
               target="_blank"
               rel="noopener noreferrer"
               className="relative z-10 shrink-0 rounded-full border border-white/12 px-3 py-1 font-mono text-[10px] uppercase tracking-[0.14em] text-white/50 transition-colors hover:border-white/35 hover:text-white"
             >
-              {dict.landing.buy[lang]} ↗
+              {(plugin.purchase ? dict.landing.buy : dict.landing.download)[lang]} ↗
             </a>
           )}
         </div>

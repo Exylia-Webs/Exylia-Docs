@@ -1,0 +1,123 @@
+---
+title: "Minas realistas"
+description: "Niveles, tiempos de regeneración, cadenas de degradación que se pican etapa a etapa y cómo se curan los bloques rotos tras un reinicio."
+---
+
+Una mina realista nunca rellena su área. Cuida de los bloques que ya están en ella: cada uno que rompe un
+jugador desaparece y vuelve a crecer solo, tras un tiempo definido por material. Encaja con una cueva
+natural, una pared de mineral hecha a mano o una cantera que deba parecer intacta.
+
+Nada escanea el área para averiguar qué contiene. Los bloques de la mina son exactamente los materiales que
+añades como **niveles**.
+
+## Niveles
+
+**Niveles de regeneración** en la pantalla de configuración los lista en orden.
+
+| Clic sobre un nivel | Qué hace |
+|---|---|
+| Clic izquierdo o derecho | Abre el nivel. |
+| Shift + clic derecho | Lo quita. |
+
+**Añadir nivel** te pide elegir un bloque. Se rechaza un material que no se puede colocar, y también uno que
+ya tiene nivel. Un nivel nuevo empieza con `settings.default-realistic-regen-seconds` de `config.yml`, 60
+segundos por defecto.
+
+Dentro de un nivel:
+
+| Botón | Qué hace |
+|---|---|
+| **Tiempo de regeneración** | Cuánto tarda el bloque en volver tras la rotura, como mínimo un segundo. Acepta `30`, `30s`, `5m`. |
+| **Tabla de botín** | Lo que paga romper este material en lugar de su drop vanilla. Ver [Botín y efectos](/docs/exyliamines/botin-y-efectos). |
+| **Efectos al romper** | Efectos que se reproducen al romper este material, en lugar de los de la mina. |
+| **Cadena de degradación** | Las etapas por las que pasa el bloque mientras vuelve a crecer. |
+| **Subir** / **Bajar** | Reordena la lista. Los niveles se identifican por material, así que el orden solo afecta a cómo se lee la lista. |
+| **Quitar nivel** | Lo quita. |
+
+## Qué hace una rotura
+
+Al romper el material de un nivel dentro de la mina:
+
+1. La mina rompe el bloque, con la tabla de botín del nivel si la tiene y el drop vanilla de la herramienta
+   si no.
+2. Se convierte en **aire**, o en la primera etapa de su cadena de degradación.
+3. Cuando ha pasado el **tiempo de regeneración** del nivel desde esa rotura, el bloque vuelve a estar como
+   estaba.
+
+`sounds.block-mined` en `config.yml` suena para el minero con cada rotura de una mina realista. Está vacío
+—en silencio— por defecto.
+
+## Cadenas de degradación
+
+Una cadena de degradación es lo que muestra un bloque roto mientras vuelve a crecer, en lugar de un simple
+agujero. Cada etapa es un bloque y un retraso; **Añadir etapa** pide primero el retraso y luego el bloque.
+
+| Clic sobre una etapa | Qué hace |
+|---|---|
+| Clic izquierdo | La sube. |
+| Clic derecho | La baja. |
+| Clic central | Abre la tabla de botín propia de la etapa. |
+| Shift + clic derecho | La quita. |
+
+Las etapas van estrictamente en el orden de la lista, y **las mueve el jugador**: una etapa se queda hasta
+que alguien la pica.
+
+- La primera etapa aparece su retraso después de la rotura original; hasta entonces el sitio es aire. Un
+  retraso de `0` la coloca al instante.
+- Picar una etapa trae la siguiente, con su retraso contado desde esa rotura.
+- Picar la última etapa deja el sitio como aire.
+- Llegue a la etapa que llegue, el bloque vuelve al material del nivel cuando ha pasado el **tiempo de
+  regeneración** del nivel desde la rotura **original**. Ese plazo es una red de seguridad para el jugador
+  que nunca vuelve a terminar la cadena — y también significa que una cadena picada deprisa sigue
+  esperando, como aire, el resto del tiempo de regeneración.
+
+Por ejemplo, un nivel de `DIAMOND_ORE` con 2 minutos de regeneración y una cadena de `STONE` (0s) y luego
+`COBBLESTONE` (0s): el mineral se rompe en piedra, la piedra en roca, la roca en aire, y el mineral de
+diamante vuelve dos minutos después del primer golpe.
+
+Una etapa paga su propia tabla de botín si la tiene, y si no el drop vanilla de su bloque. Sus efectos al
+romper son los globales de la mina, salvo que el bloque de la etapa sea también un nivel con efectos
+propios.
+
+<Callout type="warning" title="Los bloques de la cadena son de la mina en toda el área">
+Cada material usado en una cadena cuenta como bloque de la mina, para que un jugador pueda picar una etapa.
+Eso vale en cualquier punto del área: una `STONE` que ya estaba en la cueva cuando `STONE` es una etapa se
+rompe a través de la mina, paga su drop vanilla y, al no estar regenerándose, **nunca vuelve a crecer**.
+Elige bloques de etapa que no aparezcan de forma natural en el área, o añade ese material como un nivel
+propio.
+</Callout>
+
+## Solo vuelve lo que la mina sigue poseyendo
+
+Cuando un bloque tiene que volver —una etapa que aparece, o la curación final— la mina comprueba primero qué
+hay en el sitio. Solo escribe su bloque sobre aire, el material del propio nivel o una de sus etapas.
+Cualquier otra cosa la puso un jugador después de la rotura, y sobrescribirla la borraría, junto con lo que
+guardase un cofre. Ese sitio se queda como lo dejó el jugador y la mina deja de regenerarlo.
+
+Colocar los materiales de la propia mina dentro del área se rechaza de todos modos, así que lo que un
+jugador puede meter en un agujero siempre es algo suyo. Ver [Área y formas](/docs/exyliamines/area).
+
+## Reinicios
+
+Cada bloque en plena regeneración se escribe en la base de datos (`mines_broken_blocks`). Un bloque recién
+roto sale en el siguiente tick; los cambios de etapa y las curaciones se agrupan cada cinco segundos.
+
+Cuando arranca el plugin, **todos los bloques que siguen rotos se curan de golpe**, les quedara el tiempo
+que les quedara: un reinicio o una recarga los regenera todos en vez de retomar sus temporizadores. Además:
+
+- Un bloque cuyo chunk no está cargado sigue registrado y se reintenta cada 10 segundos hasta que lo esté;
+  su fila solo se borra cuando el bloque ha vuelto.
+- Un bloque en un mundo que aún no está cargado espera a que ese mundo cargue.
+- Una fila de un nivel o una mina que se ha eliminado se descarta.
+- Una fila de una mina que este servidor no conoce se deja en paz: en una base de datos compartida, esa
+  mina pertenece a otro servidor.
+
+<Callout type="note" title="Las minas realistas no tienen sección de teletransportes">
+La pantalla de configuración de una mina realista no tiene sección **Teletransportes**, así que no se le
+puede dar un punto de entrada desde el editor. `/mine <id>` y el menú `/mines` responden entonces "Esta mina
+no tiene punto de entrada." para ella. Envía a los jugadores con un warp propio; una mina realista importada
+de ExyliaSurvivalCore conserva el punto de entrada que tenía allí.
+</Callout>
+
+Entrar en una mina realista no muestra título de entrada ni barra de "próximo reinicio": no hay reinicio que
+contar. Los efectos de poción, la barra del potenciador y todo lo demás funcionan como en una mina clásica.

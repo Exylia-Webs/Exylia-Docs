@@ -1,0 +1,148 @@
+---
+title: "Installation"
+description: "Downloading the plugin, how ExyliaLib installs itself, the database, the files the first start writes, and how updates arrive."
+---
+
+## Downloading
+
+ExyliaEconomy is free. Every release is published on
+[GitHub](https://github.com/Exylia-Plugins/ExyliaEconomy/releases) with two copies of the same jar:
+`ExyliaEconomy-<version>.jar` and `ExyliaEconomy.jar`. Either one works; the second keeps the same name
+on every release, which is what the updater downloads.
+
+## Before you start
+
+| Plugin | What for |
+|---|---|
+| `ExyliaLib` | Required. Configuration, menus, database, Redis, placeholders, the editors and the economy facade. 1.236.0 or newer. |
+| `Vault` | Optional. Without it nothing is published as the Vault economy, and plugins that only speak Vault see no money. |
+| `PlaceholderAPI` | Optional. Exposes the balances and leaderboards to other plugins. |
+| `ExyliaAnalytics` | Optional. Is handed every stored currency's money supply. |
+
+<Callout type="note" title="ExyliaLib is listed as soft, and installs itself">
+`plugin.yml` names ExyliaLib under `softdepend` on purpose, so the plugin can still start without it.
+When ExyliaLib is missing, ExyliaEconomy downloads the exact release it was built against
+(`ExyliaLib-1.236.0.jar` from the library's GitHub releases) into `plugins/ExyliaLib.jar`, says so in
+the console, and stays disabled until you restart. When an ExyliaLib jar is already in `plugins/` but
+failed to load, nothing is downloaded: the console asks you to fix the library's own errors first.
+</Callout>
+
+ExyliaEconomy does not need packetevents itself. ExyliaLib does: install it next to the library as
+the [library's installation page](/docs/exylialib/installation) explains.
+
+## Installing
+
+<Steps>
+  <Step title="Drop in the jar">
+    Copy `ExyliaEconomy.jar` into `plugins/`, with Vault if you want plugins that use Vault to see the
+    currencies.
+  </Step>
+  <Step title="Start the server">
+    Without ExyliaLib, the first start downloads it and asks for a restart. Restart once.
+  </Step>
+  <Step title="Check the console">
+    Once the currencies are read you see a line such as
+    `Economy: 2 stored, 1 item and 1 experience currencies.`, then which currency serves Vault.
+    Nothing about money works before the first line appears, a moment after the server finishes
+    starting.
+  </Step>
+  <Step title="Open the editor">
+    With `exyliaeconomy.admin`, run `/economyadmin` to see the currencies the server starts with. See
+    [First steps](/docs/exyliaeconomy/first-steps).
+  </Step>
+</Steps>
+
+<Callout type="warning" title="Next to ExyliaSurvivalCore">
+A server that ran the `economy` module of ExyliaSurvivalCore must install this plugin **before** its
+first start, with ExyliaSurvivalCore's folder still in place: that first start is when the database
+settings, the currencies, the messages and the players' menus are brought over. Read
+[Migration](/docs/exyliaeconomy/migration) first.
+</Callout>
+
+## Generated files
+
+All of them live in `plugins/ExyliaEconomy/`.
+
+| File | Contents |
+|---|---|
+| `config.yml` | What each server decides alone: language, debug, the `/pay` confirmation, offline notices, banknotes and interest. |
+| `lang/<code>/messages.yml` | Every line the plugin sends, the banknote's look, and the words of the currency editor. |
+| `lang/<code>/menus/user/` | The players' screens: `wallet.yml`, `top.yml`, `history.yml`. Written when missing, never overwritten. |
+| `lang/<code>/menus/admin/` | The editor's screens: `currency_admin_list.yml`, `currency_admin_edit.yml`, `currency_admin_settings.yml`. |
+| `database.yml` | Database engine and Redis, written by ExyliaLib. H2 by default. |
+| `currencies.yml.imported` | The currency file the first start imported into the database, set aside. Never read again. |
+| `exports/` | Ledger exports written by `/economyadmin export`. |
+| `.imported-survivalcore` | A marker that the files of ExyliaSurvivalCore were looked for. Delete it to look again. |
+
+`<code>` is the language the plugin runs in: `en`, `es` or `pt`, or ExyliaLib's own language while
+`config.yml` says `default`. See [Configuration](/docs/exyliaeconomy/configuration).
+
+<Callout type="warning" title="menus/admin/ is rewritten">
+The three editor screens are replaced from the jar every time the plugin starts and every time its
+menus are reloaded — `/economyadmin reload`, and a reload of ExyliaLib itself. Their header says
+"regenerated on every startup"; it happens on reload too. Nothing an owner is meant to edit lives
+there.
+</Callout>
+
+<Callout type="note" title="The currencies are not in a file">
+Currencies and the economy-wide settings live in the database, in `exylia_currencies` and
+`exylia_economy_settings`, and are edited with `/economyadmin`. The first start imports
+`currencies.yml` — yours, ExyliaSurvivalCore's, or the shipped defaults — and renames it. A
+`currencies.yml` found on a later start is reported in the console and ignored.
+</Callout>
+
+## Database
+
+By default the plugin uses **H2**: a file inside the plugin folder, with no server, no installation
+and no maintenance. It is perfectly fine for a single server.
+
+To share balances across servers, every server points at the same database:
+
+```yaml title="plugins/ExyliaEconomy/database.yml"
+database:
+  type: mysql
+  settings:
+    max-pool-size: 0
+  mysql:
+    host: 127.0.0.1
+    port: 3306
+    database: minecraft
+    username: root
+    password: ""
+  redis:
+    enabled: true
+    host: 127.0.0.1
+    server-id: survival-1
+```
+
+Supported engines: `h2`, `mysql`, `mariadb`, `postgresql` and `mongodb`. Only the block matching
+`type` is read. The file is ExyliaLib's; its full reference is in the
+[library's database page](/docs/exylialib/database).
+
+<Callout type="danger" title="Give every server its own server-id">
+Who holds a balance is decided by `server-id`, which is `server-1` unless you change it. Two servers
+sharing a database with the same id both believe they hold the player and write over each other's
+balances. The console warns once when it sees the default id on a shared database. See
+[Network](/docs/exyliaeconomy/network).
+</Callout>
+
+Nothing waits on the database while the plugin enables. The currencies are read on the first tick;
+a player's balances are claimed when they join, and every write is asynchronous.
+
+## Updating
+
+ExyliaLib keeps ExyliaEconomy up to date. The plugin names its GitHub repository in `plugin.yml`
+(`exylia-updates: Exylia-Plugins/ExyliaEconomy`) and the oldest library it runs on
+(`exylia-lib: 1.236.0`); ExyliaLib checks for a newer release at startup and on a timer, downloads it,
+checks it, and stages it for the next restart.
+
+- Only minor and patch releases are installed on their own. A new major version is announced and left
+  to you.
+- A release that needs a newer ExyliaLib than the one that will be running is held back until the
+  library catches up.
+- `/exylialib plugins` checks right now. `plugin-updates` in `plugins/ExyliaLib/config.yml` turns it
+  off (`enabled: false`), allows majors, or skips this plugin by name.
+
+To update by hand, replace the jar and restart. `config.yml`, `messages.yml` and the players' menus
+keep your edits; `menus/admin/` is refreshed from the jar; currencies, balances and the ledger live in
+the database and are untouched.

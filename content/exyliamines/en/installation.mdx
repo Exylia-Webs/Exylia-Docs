@@ -1,0 +1,159 @@
+---
+title: "Installation"
+description: "Download, dependencies, how ExyliaLib installs itself, the files the plugin generates, the database and updates."
+---
+
+## Download
+
+ExyliaMines is free. Download `ExyliaMines.jar` from the
+[latest GitHub release](https://github.com/Exylia-Plugins/ExyliaMines/releases/latest); every release
+attaches the jar under that same name. The source is in the same repository, under the GPL-3.0 licence.
+
+## Before you start
+
+| Plugin | What for |
+|---|---|
+| `packetevents` | Required. Declared under `depend`, so without it the server does not load ExyliaMines at all. Holograms and every other packet feature of ExyliaLib run through it. |
+| `ExyliaLib` | Required, version **1.230.0** or newer. Configuration, menus, database, regions, holograms, loot, effects, schedules, teleports and updates. |
+
+Optional, each one adding something when present:
+
+| Plugin | What it adds |
+|---|---|
+| `ExyliaSurvivalCore` | Its boosters, auto-sell, enchantment limits and blocked items apply inside mines, and the mines it used to hold are imported. See [Integrations](/docs/exyliamines/integrations) and [Migration](/docs/exyliamines/migration). |
+| `PlaceholderAPI` | The plugin's placeholders in other plugins: scoreboards, tab lists, hologram plugins. |
+| `Vault` | Money in loot tables and lucky rewards, through ExyliaLib's economy. |
+| `Worlds` or `Multiverse-Core` | Nothing to configure: a mine in a world one of them loads late is set up the moment the world loads. |
+
+<Callout type="note" title="Why ExyliaLib is listed as soft">
+`plugin.yml` names ExyliaLib under `softdepend` on purpose. Listed under `depend`, a server without the
+library would refuse to load ExyliaMines and say nothing more useful than that it is missing. As a soft
+dependency, ExyliaMines still starts — and its first act is to install the library.
+</Callout>
+
+## Installing
+
+<Steps>
+  <Step title="Drop in the jars">
+    Copy `ExyliaMines.jar` and `packetevents` into `plugins/`. Add `ExyliaLib.jar` too if you have it;
+    if you do not, the next step fetches it.
+  </Step>
+  <Step title="Start the server">
+    With ExyliaLib present, ExyliaMines enables, writes its files and creates its tables. You should see
+    `ExyliaMines enabled` and, once the mines are read from the database, `Loaded 0 mine(s).`
+  </Step>
+  <Step title="Restart if it asked you to">
+    Without ExyliaLib, ExyliaMines downloads it to `plugins/ExyliaLib.jar`, logs that a restart is
+    needed and disables itself. Restart once and both plugins start.
+  </Step>
+  <Step title="Open the editor">
+    With `exyliamines.admin`, run `/minesadmin`. See [First steps](/docs/exyliamines/first-steps).
+  </Step>
+</Steps>
+
+### What the ExyliaLib download does
+
+The check runs every time ExyliaMines starts without a running ExyliaLib, and it is careful about it:
+
+- If a jar named `ExyliaLib*.jar` is already in `plugins/`, nothing is downloaded. The library is there
+  and failed to load, so the console says to fix the errors printed above and restart.
+- Otherwise the latest release is fetched from `https://github.com/DiGround-s/ExyliaLib/releases/latest/download/ExyliaLib.jar`,
+  with a 15-second connection timeout and a 30-second read timeout.
+- The download is only kept if it is a readable jar whose `plugin.yml` says `name: ExyliaLib`, and it is
+  never written over an `ExyliaLib.jar` that appeared in the meantime.
+- If anything fails — no internet, a firewall, GitHub down — the console says so and names the page to
+  download the jar from by hand: `https://github.com/DiGround-s/ExyliaLib/releases/latest`.
+
+In every case ExyliaMines disables itself until the next start: it cannot run a single feature without
+the library.
+
+## Generated files
+
+All of them live in `plugins/ExyliaMines/`.
+
+| File | Contents |
+|---|---|
+| `config.yml` | Language, debug, default reset times, tick intervals, sounds, announcement reach and the Fortune rules. See [Configuration](/docs/exyliamines/configuration). |
+| `templates.yml` | The starting points offered by **Create from template**. |
+| `boosts.yml` | Timed boosts and the schedule that starts them. |
+| `lang/<language>/messages.yml` | Every line the plugin sends, the titles and boss bars, the hologram lines. |
+| `lang/<language>/menus/user/mines.yml` | The players' `/mines` menu. |
+| `lang/<language>/menus/admin/` | The fourteen staff screens. |
+| `database.yml` | The database engine, written by ExyliaLib. H2 by default, embedded, nothing to install. |
+
+`<language>` is the language the plugin speaks: `language` in `config.yml`, which is `default` — follow
+ExyliaLib's language — on a fresh install. English, Spanish and Portuguese are shipped (`en`, `es`, `pt`);
+any other code starts as English for you to translate.
+
+<Callout type="warning" title="menus/admin/ is rewritten on every start">
+The staff screens are refreshed from the jar each time the plugin starts, so a button added in a release
+reaches every server. Edits there are lost; nothing an owner is meant to change lives in that folder.
+The players' `menus/user/mines.yml` is yours: a release only adds what is missing from it, and a changed
+default waits in `/exylialib updates` for you to apply or ignore.
+</Callout>
+
+A menu file that fails to parse is named in the console and that one screen is not registered; the rest
+of the plugin keeps running.
+
+<Callout type="note" title="Mines are not in a file">
+Mines, their cycles, broken blocks, statistics and running boosts live in the database, not in YAML.
+That is what lets several servers share one database: each mine belongs to the server it was created
+on, and each server only loads its own.
+</Callout>
+
+## Database
+
+By default the plugin uses **H2**: a file inside the plugin folder, with no server, no installation and
+no maintenance. It is perfectly fine for a single server.
+
+To share data across servers, edit `database.yml`:
+
+```yaml title="plugins/ExyliaMines/database.yml"
+database:
+  type: mysql
+  settings:
+    max-pool-size: 0
+  mysql:
+    host: 127.0.0.1
+    port: 3306
+    database: minecraft
+    username: root
+    password: ""
+```
+
+Supported engines: `h2`, `mysql`, `mariadb`, `postgresql` and `mongodb`. Only the block matching `type`
+is read. The file is ExyliaLib's; its full reference is in the
+[library's database page](/docs/exylialib/database).
+
+The plugin creates five tables:
+
+| Table | One row per |
+|---|---|
+| `mines` | mine: its server, type, area, composition or levels, reset settings, teleports, hologram, loot, effects and Fortune settings |
+| `mines_state` | classic mine: blocks mined since its last refill and when the next one is due |
+| `mines_broken_blocks` | block of a realistic mine waiting to grow back |
+| `mines_stats` | player and mine: blocks mined there |
+| `mines_boosts` | boost running on a server |
+
+Nothing waits on the database while the plugin enables. The mines are read asynchronously and set up as
+soon as they arrive, and a player's counts are read when they join.
+
+## Updating
+
+ExyliaLib keeps ExyliaMines up to date. `plugin.yml` names the GitHub repository its releases come from
+(`exylia-updates: Exylia-Plugins/ExyliaMines`) and the oldest ExyliaLib each build runs on
+(`exylia-lib`), and the library does the rest:
+
+- It checks at startup and on a timer, downloads a newer release, verifies it is a jar of the same plugin
+  at the version announced, and stages it to replace the current jar **on the next restart**.
+- A release needing a newer ExyliaLib than the one that will be running is held back until the library
+  catches up, so an update never leaves the plugin on a library too old for it.
+- A new **major** version (2.0.0 after 1.x) is only announced, never installed, unless you allow majors.
+- `/exylialib plugins` runs the check right now.
+
+Turn it off, allow majors, or exclude ExyliaMines by name under `plugin-updates` in
+`plugins/ExyliaLib/config.yml` (`enabled`, `majors`, `owners`, `skip`).
+
+To update by hand, replace the jar and restart. Your edits to `config.yml`, `templates.yml`, `boosts.yml`,
+`messages.yml` and the players' menu are kept, new keys are added with their comments, and the mines
+themselves live in the database.

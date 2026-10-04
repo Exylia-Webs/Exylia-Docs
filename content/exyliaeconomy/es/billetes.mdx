@@ -1,0 +1,112 @@
+---
+title: "Billetes"
+description: "/withdraw y /deposit, qué monedas imprimen billetes, qué es un billete, por qué una copia paga una sola vez y las protecciones que los mantienen fuera del crafteo y el comercio."
+---
+
+Un billete es dinero impreso en papel. `/withdraw <amount> [currency]` le quita la cantidad al jugador y
+le entrega un billete; hacer clic derecho con el billete, o `/deposit` mientras lo sostiene, le paga esa
+cantidad a quien lo canjee. Los billetes se pueden regalar, tirar, intercambiar entre jugadores y guardar
+en cofres como cualquier ítem.
+
+## Qué monedas imprimen billetes
+
+```yaml title="plugins/ExyliaEconomy/config.yml"
+banknotes:
+  - default
+  - shards
+```
+
+IDs de moneda, donde `default` significa la moneda por defecto. Solo las monedas almacenadas imprimen
+billetes; una moneda de ítem, de experiencia o solo visual en esta lista se rechaza. Una lista vacía
+desactiva los billetes. Un servidor nuevo escribe `[default]`.
+
+## Retirar
+
+`/withdraw <amount> [currency]` necesita `exyliaeconomy.withdraw`, concedido a todos por defecto. Sin
+moneda usa la de por defecto. Se rechaza, antes de quitar nada, cuando:
+
+- la moneda no está en la lista `banknotes` — *"… cannot be withdrawn as a banknote."*;
+- la cantidad no es positiva, o se redondea a nada con los decimales de la moneda;
+- el saldo del jugador todavía se está cargando;
+- no le alcanza;
+- no tiene ningún hueco libre en el inventario — *"Free a slot in your inventory first."*
+
+Primero se anota el billete en la base de datos, y después se cobra el dinero y se entrega el billete en el
+mismo tick. Si al final no se puede cobrar, la anotación se descarta y no se entrega nada. Dos retiradas
+separadas por menos de medio segundo cuentan como una.
+
+## Qué es un billete
+
+El ítem se dibuja a partir de la sección `banknote` de `messages.yml`:
+
+```yaml title="plugins/ExyliaEconomy/lang/es/messages.yml"
+banknote:
+  material: PAPER
+  name: '{primary}&lBILLETE &8[{success}%amount%&8]'
+  lore:
+    - ''
+    - '{secondary}Información:'
+    - ' {letters_black}▎ {letters}Moneda {letters_black}» {highlight}%currency%'
+    - ' {letters_black}▎ {letters}Firmado por {letters_black}» {highlight}%issuer%'
+    - ' {letters_black}▎ {letters}Emitido {letters_black}» {info}%date%'
+    - ''
+    - '{warning}➥ Clic derecho para canjear'
+    - ''
+```
+
+`%amount%` es la cantidad con formato, `%currency%` el nombre en plural de la moneda, `%issuer%` quién lo
+imprimió y `%date%` el día en que se imprimió. El billete siempre brilla y nunca se apila.
+
+Lo que vale un billete no está en el ítem. El ítem solo lleva el ID del billete; la cantidad, la moneda y
+el emisor son una fila en `exylia_banknotes`, escrita antes de cobrar el dinero. Renombrar o editar el ítem
+no cambia nada.
+
+## Canjear
+
+Clic derecho con un billete en cualquiera de las dos manos, al aire o a un bloque, o `/deposit` mientras
+se sostiene uno (primero la mano principal, después la secundaria). El clic derecho no necesita permiso;
+`/deposit` necesita `exyliaeconomy.use`. Ambos necesitan el permiso propio de la moneda, si tiene uno.
+
+El billete sale de la mano **antes** de cualquier otra cosa; después se reclama su fila en la base de
+datos, y después se paga el dinero:
+
+| Lo que dice la base de datos | Lo que ve el jugador |
+|---|---|
+| Aún no canjeado | *"Redeemed a banknote of …"* — el dinero es suyo. |
+| Ya canjeado, o no existe ese billete | *"This banknote was already redeemed or is not valid."* — el ítem desaparece. |
+| La moneda rechazó el pago (su máximo) | El billete vuelve, sin canjear, con el motivo. |
+| La base de datos no respondió | El billete vuelve: *"The banknote could not be processed right now."* |
+
+<Callout type="tip" title="Una copia paga una sola vez">
+Una pila duplicada, un clon en creativo, el mismo billete canjeado en dos servidores a la vez: solo un
+reclamo sobre la fila puede ganar, así que el dinero se paga exactamente una vez en toda la red y cualquier
+otra copia simplemente desaparece.
+</Callout>
+
+## Monedas por servidor
+
+Un billete de una moneda que **no** se comparte entre servidores es un saldo del servidor que lo imprimió.
+Canjearlo en otro servidor se rechaza y el billete vuelve: *"This banknote can only be redeemed on the
+server that printed it."* Un billete de una moneda compartida se canjea en cualquier parte.
+
+## Fuera del crafteo y el comercio
+
+Un billete es papel, y el vanilla lo convertiría encantado en libros, mapas y cohetes, o se lo cambiaría a
+un bibliotecario. Cualquier inventario que contenga un billete se niega a producir un resultado:
+
+- mesas de crafteo, la cuadrícula del inventario y los crafters;
+- yunques, afiladoras, mesas de herrería, telares, mesas de cartografía y cortapiedras;
+- comercios con aldeanos.
+
+## En el registro
+
+Las dos mitades de un billete son dos líneas del registro: `note:withdraw` en el emisor y `note:redeem` en
+quien lo canjeó. Una reversión nunca revierte ninguna de las dos, porque la otra mitad es un billete que
+alguien todavía puede tener. Ver [Registro](/docs/exyliaeconomy/registro).
+
+<Callout type="note" title="Arreglar un billete atascado">
+Si se rechaza un pago y la base de datos no consigue después marcar el billete como no canjeado, el billete
+vuelve al jugador pero sigue marcado como canjeado, y la consola indica su ID. Pon `redeemed_at` a `0` en
+esa fila de `exylia_banknotes` para que se pueda canjear de nuevo. Un jugador que sale antes de que se le
+pueda devolver un billete rechazado se anota igual en consola, con la fila que hay que pagar a mano.
+</Callout>

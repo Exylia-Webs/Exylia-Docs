@@ -1,0 +1,135 @@
+---
+title: "API"
+description: "Pagar y cobrar en estas monedas a través de ExyliaLib, reaccionar a cada cambio de saldo y cancelar pagos y cambios con los eventos propios de ExyliaEconomy."
+badge: "dev"
+---
+
+Hay dos mitades. Mover dinero solo necesita **ExyliaLib**: cada moneda que guarda este plugin está
+registrada en la fachada de economía de la librería, junto a Vault y PlayerPoints, y un plugin paga y cobra
+en ellas por ID sin saber siquiera que ExyliaEconomy existe. Frenar el `/pay` o el cambio de un jugador
+antes de que ocurra necesita los dos eventos propios de ExyliaEconomy.
+
+## Mover dinero
+
+```java
+import net.exylia.lib.economy.Economy;
+import net.exylia.lib.economy.EconomyResponse;
+import net.exylia.lib.economy.Transaction;
+
+// Pagar 50 gemas. El motivo es lo que muestran el registro y las analíticas.
+EconomyResponse paid = Economy.of("gems").deposit(player.getUniqueId(), new BigDecimal("50"),
+        Transaction.of("myplugin:reward").by(player.getUniqueId()));
+
+// Cobrar en la moneda por defecto, sea cual sea.
+String money = Economy.defaultId();
+if (Economy.of(money).withdraw(uuid, price, Transaction.of("myplugin:buy")).isSuccess()) {
+    // entregar el ítem
+}
+
+// Las monedas que puede usar un jugador, en el orden que fijó el administrador.
+for (String id : Economy.ordered()) {
+    if (Economy.canUse(player, id)) {
+        // ofrecerla
+    }
+}
+```
+
+| Llamada | Qué responde |
+|---|---|
+| `Economy.of(id)` | Una vista de una moneda: `balance`, `balanceLater`, `has`, `deposit`, `withdraw`, `set`, `transfer`. |
+| `Economy.defaultId()` | El ID de la moneda por defecto, con `vault` resuelto a la moneda que lo sirve. |
+| `Economy.ordered()` | Cada moneda en el orden del administrador. |
+| `Economy.canUse(who, id)` | Si la moneda no tiene permiso, o si lo tiene. |
+| `Economy.kind(id)` | `STORED`, `ITEM`, `EXPERIENCE`, `EXTERNAL` o `UNKNOWN`. |
+| `Economy.info(id)` | Nombre, plural, símbolo, icono, decimales y los dos formatos, con las superposiciones aplicadas. |
+| `Economy.parseAmount(text)` | Una cantidad escrita como la escriben los jugadores, o `null`. |
+
+La fachada completa está en la [página de recompensas y economía de la librería](/docs/exylialib/recompensas#economía).
+
+### Qué hace una moneda almacenada con tu llamada
+
+- **Las cantidades** se recortan a los decimales de la moneda antes de mover nada.
+- **Un ingreso por encima del máximo** se rechaza entero, nunca se recorta, y la respuesta dice por qué.
+- **Un jugador en otro servidor o desconectado** no se rechaza: un ingreso, una retirada o una fijación
+  quedan en cola y tienen éxito, y se aplican donde esté el jugador. Una retirada en cola así no baja de cero
+  al aplicarse, así que comprueba antes `has` cuando el dinero tenga que estar de verdad.
+- **Un jugador de aquí cuyo saldo aún se está cargando** — el primer instante tras entrar — ve rechazadas
+  las retiradas con *"Your balance is still loading."*
+- **El motivo** de tu `Transaction` es el motivo de la línea del registro, y una etiqueta para él en la
+  sección `reasons` de `messages.yml` lo hace legible en los historiales; sin ella se muestra la parte antes
+  de los dos puntos.
+
+## Reaccionar a los cambios
+
+Cada cambio de un saldo almacenado dispara el `BalanceChangeEvent` de ExyliaLib, una vez, en el servidor que
+lo escribió, después de mover el dinero. Un cambio puesto en cola en un servidor y aplicado en otro se
+anuncia donde se aplica, así que sumar los deltas de toda una red da el dinero que se movió. Un pago son dos
+eventos, uno por lado.
+
+```java
+@EventHandler
+public void onChange(BalanceChangeEvent event) {
+    if (!event.currency().equals("gems")) return;
+    // event.player(), event.before(), event.after(), event.delta(),
+    // y event.transaction().reason()
+}
+```
+
+Puede dispararse fuera del hilo principal; pasa al hilo del jugador antes de tocar el mundo.
+
+## Los eventos propios de ExyliaEconomy
+
+Los dos están en `net.exylia.exyliaEconomy.api.event`, son cancelables y se disparan en el hilo del jugador
+— el hilo principal en Paper, el de su región en Folia — antes de mover dinero. Depende de ExyliaEconomy
+(`depend` o `softdepend` en tu `plugin.yml`) y compila contra su jar de las
+[releases](https://github.com/Exylia-Plugins/ExyliaEconomy/releases).
+
+### EconomyPayEvent
+
+Un jugador va a pagar a otro con `/pay`, `/economy pay` o el `pay` de una moneda. Se dispara cuando ya se
+cumplieron todas las reglas — la moneda permite transferencias, el mínimo, el receptor acepta pagos, el que
+paga puede permitirse la cantidad y el impuesto — y antes de cobrar nada.
+
+| Método | Devuelve |
+|---|---|
+| `payer()` | El `Player` que paga. |
+| `receiver()`, `receiverName()` | Quién lo recibe. Puede estar desconectado o en otro servidor. |
+| `currency()` | El ID de la moneda. |
+| `amount()` | Lo que recibe el receptor. |
+| `tax()` | Lo que paga encima el que paga, que no se queda nadie; cero si no hay. |
+
+### EconomyExchangeEvent
+
+Un jugador va a cambiar una moneda por otra. Se dispara antes de aplicar la tasa; el cambio todavía puede
+rechazarse después por sus propias reglas.
+
+| Método | Devuelve |
+|---|---|
+| `getPlayer()` | Quién cambia. |
+| `from()` | La moneda que da, por ID. |
+| `to()` | La moneda que pide, tal como la escribió. |
+| `amount()` | Cuánto de `from` escribió. |
+
+### Cancelar
+
+Un evento cancelado le dice al jugador *"The payment was cancelled."* o *"The exchange was cancelled."*,
+salvo que pongas `cancelMessage(line)`: tu línea en su lugar, en el formato de texto de ExyliaLib, o `""`
+para no decir nada porque ya se lo dijiste tú.
+
+```java
+@EventHandler
+public void onPay(EconomyPayEvent event) {
+    if (inCombat(event.payer())) {
+        event.setCancelled(true);
+        event.cancelMessage("{error}No puedes pagar a nadie en combate.");
+    }
+}
+```
+
+No hay evento después de un pago: lo que se movió son los dos `BalanceChangeEvent`, uno por lado.
+
+<Callout type="note" title="Lo que no ven estos eventos">
+Solo se disparan con los comandos de los propios jugadores. Los comandos de administración, los intereses,
+los billetes, los plugins de Vault y los demás plugins que pagan a través de ExyliaLib mueven dinero sin
+ellos; `BalanceChangeEvent` lo ve todo.
+</Callout>

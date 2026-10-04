@@ -1,0 +1,167 @@
+---
+title: "Migration"
+description: "Coming from the economy module of ExyliaSurvivalCore, the currencies.yml import of a first start, and moving balances in from Vault, EssentialsX, CMI or PlayerPoints."
+---
+
+## From ExyliaSurvivalCore
+
+ExyliaEconomy is the `economy` module of ExyliaSurvivalCore, as its own plugin. The balances, the queued
+changes and the ledger already lived in tables with plugin-neutral names (`exylia_balances`,
+`exylia_balance_pending`, `exylia_ledger`), so moving over is a matter of opening the same database.
+
+<Steps>
+  <Step title="Update every server together">
+    Install ExyliaEconomy next to the release of ExyliaSurvivalCore that hands the economy over, on every
+    server that shares balances, before any of them starts again. A server still running the old module
+    does not hear changes announced by one running ExyliaEconomy, and the other way round.
+  </Step>
+  <Step title="Keep the old folder for the first start">
+    `plugins/ExyliaSurvivalCore/` must still be there: the first start reads from it.
+  </Step>
+  <Step title="Start once and read the console">
+    Each step below says what it copied. Then open `/economyadmin`: the currencies are the ones you had.
+  </Step>
+</Steps>
+
+On its first start next to ExyliaSurvivalCore, ExyliaEconomy brings over, once:
+
+| What | How |
+|---|---|
+| `database.yml` | Copied here before anything opens the database, so the plugin reads the database the balances are already in, with the same Redis server id. An embedded H2 file is copied into this plugin's folder under the same path, through a temporary file, so deleting the survival core's folder never takes the balances with it. An H2 file this plugin already has is never written over; the survival core's then stays the one read. |
+| Currencies and settings | Copied from `sc_currencies` and `sc_economy_settings` into `exylia_currencies` and `exylia_economy_settings`, only while both new tables are empty. The old tables are left exactly as they were. |
+| Messages | Each language's `modules/economy/messages.yml` becomes `lang/<code>/messages.yml`, where this plugin has none. |
+| Players' menus | The wallet, top and history screens become `lang/<code>/menus/user/`, with their buttons moved from `survivalcore:` to `exyliaeconomy:` actions. The admin screens are rewritten from the jar anyway. |
+| `currencies.yml` | When the tables are still empty, `modules/economy/currencies.yml` is copied over and imported. |
+
+Nothing in ExyliaSurvivalCore's folder is ever changed or deleted. A marker file, `.imported-survivalcore`,
+records that the import ran; delete it to run it again. A `database.yml` written by an earlier version that
+still opened the survival core's H2 file is given its own copy on the next start, and the console says so.
+
+<Callout type="danger" title="Do not point it at a new database">
+The balances are in the survival core's database. If the copy of `database.yml` fails, the console says
+so and the next start tries again rather than settling on a new, empty database. Copy
+`plugins/ExyliaSurvivalCore/database.yml` here by hand if it keeps failing.
+</Callout>
+
+### Permissions
+
+What staff were granted while the economy lived in ExyliaSurvivalCore keeps working: the old nodes are
+declared again, each with its new node as a child.
+
+| Old node | Grants | Default |
+|---|---|---|
+| `exyliasurvivalcore.economy` | `exyliaeconomy.use` | everyone |
+| `exyliasurvivalcore.economy.pay` | `exyliaeconomy.pay` | everyone |
+| `exyliasurvivalcore.economy.others` | `exyliaeconomy.others` | operators |
+| `exyliasurvivalcore.economy.admin` | `exyliaeconomy.admin` | operators |
+
+### Commands and placeholders
+
+The commands keep their names — `/balance`, `/pay`, `/baltop`, `/wallet`, `/economy`, `/economyadmin` and
+the currency commands — and so do the old admin spellings `/eco give`, `/eco take`, `/eco set`,
+`/eco reset` and `/eco import`, which reward and crate files on live servers are written with.
+
+The placeholders belong to this plugin now: `%exyliasurvivalcore_economy_balance_<currency>%` becomes
+`%exyliaeconomy_economy_balance_<currency>%`, and the same for the rest. See
+[Placeholders](/docs/exyliaeconomy/placeholders).
+
+## The first start's currency file
+
+The currencies live in the database. The first time the tables are empty — a new server, or one whose
+survival core had no currencies to copy — the plugin imports a `currencies.yml`, in this order:
+
+1. `plugins/ExyliaEconomy/currencies.yml`, if you put one there;
+2. `plugins/ExyliaSurvivalCore/modules/economy/currencies.yml`, copied over first;
+3. the shipped defaults: `dollars`, `shards`, `netherite_ingots`, and the `vault` and `points` overlays.
+
+The file is then renamed to `currencies.yml.imported` and never read again. Its layout, for a server
+that wants to prepare one:
+
+```yaml title="plugins/ExyliaEconomy/currencies.yml"
+stored:
+  gems:
+    name: Gem
+    plural: Gems
+    symbol: "◆"
+    icon: EMERALD
+    decimals: 0
+    format: "%amount% %symbol%"
+    compact-format: "%amount%%symbol%"
+    aliases: [gems, gem]
+    start: 0
+    max: -1
+    permission: ""
+    transfer:
+      enabled: true
+      minimum: 1
+      tax-percent: 0
+    exchange:
+      enabled: false
+      rates: {}
+    leaderboard: true
+    networked: true
+    commands: true
+items:
+  emeralds:
+    item: EMERALD          # or a 'bytes:' snapshot of a custom item
+    name: Emerald
+    plural: Emeralds
+    icon: EMERALD
+    format: "%amount% %name%"
+    aliases: []
+experience:
+  levels: false
+  points: true
+display:
+  vault:
+    name: Dollar
+    plural: Dollars
+    symbol: "$"
+    decimals: 2
+    format: "%symbol%%amount%"
+vault:
+  provide: gems
+  force: false
+ledger:
+  enabled: true
+```
+
+A stored id that is not `a-z`, `0-9` and `_` up to 32, or an item currency without an item, is skipped
+with a warning. A stored block without `exchange.enabled` reads it as **on**.
+
+## From Vault or PlayerPoints
+
+`/economyadmin import <from> <into>` adds every player's balance in one currency to a stored one. `from`
+can be any currency the server runs, including `vault` while EssentialsX or CMI still serves it, or
+`points` for PlayerPoints.
+
+<Steps>
+  <Step title="Keep the old economy serving for now">
+    Leave EssentialsX, CMI or PlayerPoints installed, so `vault` or `points` still reads their balances.
+  </Step>
+  <Step title="Import">
+    `/economyadmin import vault dollars`. It walks every player who has ever joined this server, reads
+    their balance one at a time, and deposits what is positive. Players held on this server are paid at
+    once; everybody else gets a queued change. The console names any balance over the target's ceiling,
+    which is skipped.
+  </Step>
+  <Step title="Switch Vault over">
+    Remove the old economy plugin, or turn **Vault on top** on, so the stored currency serves Vault.
+  </Step>
+</Steps>
+
+An import is **added**, never set, so it is run once:
+
+- a second import of the same pair is refused unless you add `again`;
+- with `again`, only the players not imported yet are paid — nobody is paid twice, even after an import
+  that stopped halfway or one started on two servers at once;
+- an import between a currency and itself, `vault` into the currency serving `vault` included, is refused;
+- a second run typed while one is reading is refused: *"That import is already running."*
+
+Each player imported is recorded in `exylia_balance_imports`, and the ledger reads `import:<from>`.
+
+<Callout type="note" title="Only players this server has seen">
+Neither Vault nor PlayerPoints can list balances, so the import walks the server's own player list. A
+player who never joined this server is not imported; run the import on the server where your players
+are.
+</Callout>

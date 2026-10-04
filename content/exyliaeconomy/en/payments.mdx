@@ -1,0 +1,149 @@
+---
+title: "Payments"
+description: "What /pay checks and in which order, the transfer tax, the confirmation above an amount, the one-second throttle, /paytoggle, offline notices, exchanges and giveall."
+---
+
+`/pay <player> <amount> [currency]` is the one way players hand each other money. `/economy pay` and
+every currency's own `pay` (`/shards pay <player> <amount>`) run exactly the same code, so the rules
+below apply to all three.
+
+## What a payment checks
+
+In this order, stopping at the first refusal:
+
+<Steps>
+  <Step title="The currency">
+    It must exist, and the payer must have its permission if it names one. Without a third word, the
+    default currency is used.
+  </Step>
+  <Step title="The amount">
+    A positive amount as players type it: `100`, `2.5k`, `1m`. Anything else is *"That is not an
+    amount."*
+  </Step>
+  <Step title="The currency's rules">
+    A stored currency must have **Transfers** on, and the amount must be at least its minimum. Item
+    and experience currencies have no rules here.
+  </Step>
+  <Step title="The payer's balance is loaded">
+    Right after joining, a balance takes a moment to be claimed from the database. Until then:
+    *"Your balance is still loading."*
+  </Step>
+  <Step title="The receiver">
+    Anybody the network knows, online, offline or on another server. Paying yourself is refused.
+  </Step>
+  <Step title="The receiver accepts payments">
+    Unless the payer has `exyliaeconomy.paytoggle.bypass`, a receiver who turned payments off with
+    `/paytoggle` refuses it: *"… is not accepting payments right now."*
+  </Step>
+  <Step title="The confirmation">
+    Above the configured amount, the payment asks first. See below.
+  </Step>
+  <Step title="The throttle">
+    One payment a second from the same payer to the same receiver. Anything faster is dropped without
+    a word.
+  </Step>
+  <Step title="The payer can afford it">
+    The amount plus the tax.
+  </Step>
+  <Step title="Other plugins">
+    `EconomyPayEvent` fires, and a listener may cancel it. See [API](/docs/exyliaeconomy/api).
+  </Step>
+</Steps>
+
+Then the tax is taken, the amount is moved, and both sides are told. A transfer that fails after the
+tax was taken — the receiver's ceiling, typically — gives the tax back and says why, in the currency's
+own words.
+
+## The transfer tax
+
+A stored currency's **Transfer tax** is a percentage charged to the payer **on top of** the amount:
+
+| Tax | `/pay Steve 100` costs the payer | Steve receives |
+|---|---|---|
+| `0` | 100 | 100 |
+| `5` | 105 | 100 |
+| `2.5` | 102.5 (102 in a whole-number currency) | 100 |
+
+The tax is cut to the currency's decimals, in the payer's favour, and goes to nobody: it leaves the
+economy. With a tax, the payer reads *"You paid 100 to Steve. Tax: 5"* instead of the plain line. The
+ledger records it as its own line, `pay:tax`.
+
+## Confirmation above an amount
+
+`pay-confirm-above` in `config.yml` makes a large payment ask first:
+
+```yaml title="plugins/ExyliaEconomy/config.yml"
+pay-confirm-above:
+  default: '10k'
+  shards: '500'
+```
+
+Keys are currency ids; `default` covers every currency not listed. Amounts read like the command's.
+`'0'` never asks, which is what a fresh server writes.
+
+A payment above the amount answers *"Send 20,000 to Steve? [✔ CONFIRM] 30s"*. Clicking **[✔ CONFIRM]**
+runs `/pay Steve 20000 dollars confirm`; typing the same thing works too. The confirmation:
+
+- lasts 30 seconds;
+- is bound to the exact receiver, currency and amount — a `confirm` for anything else confirms nothing:
+  *"Nothing to confirm: it expired or changed."*;
+- is used up by the payment it allows, and replaced by the payer's next question;
+- is only asked when the payer could afford it, so nobody confirms a payment that is then refused.
+
+`/pay Steve 20000 confirm` — `confirm` straight after the amount — means the default currency.
+
+## Turning payments off
+
+`/paytoggle` stops a player receiving payments, and running it again turns them back on. It is kept in
+the database, so it holds on every server of the network and through restarts, and a toggle made on one
+server applies to the next payment anywhere. Players with `exyliaeconomy.paytoggle.bypass` (operators by
+default) pay them regardless.
+
+It only stops `/pay` and the currency `pay` commands. Admin commands, interest, banknotes and other
+plugins still pay them.
+
+## Telling the receiver
+
+| Where the receiver is | What they are told |
+|---|---|
+| On the payer's server | At once: *"Steve paid you 100."* |
+| Offline | Nothing now. On their next join, anywhere on the network, three seconds after they arrive: *"While you were away, Steve paid you 100."*, or *"… you received 300 from 3 players."* — one line per currency. |
+| Online on another server | Nothing. The money arrives there at once, but no line is sent. |
+
+The offline notice is `offline-pay-notice` in `config.yml`, on by default. It keeps its own table,
+`exylia_pay_notices`, rather than reading the ledger, so it works with the ledger turned off. Each
+notice is shown once, even if the player joins two servers in a row.
+
+## Exchanging currencies
+
+`/economy exchange <amount> <from> <to>` — or `/shards exchange <amount> <to>` — swaps one currency for
+another at the source's rate. It needs **Exchange** on the source currency, a rate from it to the target,
+and the target currency's permission. `EconomyExchangeEvent` fires first, and a listener may cancel it.
+
+The ledger records both sides as `exchange:<from>><to>`. See
+[Currencies](/docs/exyliaeconomy/currencies#exchange-rates) for how the amounts are rounded.
+
+## Giving everybody
+
+`/economyadmin giveall <currency> <amount>` gives an amount to every player online **on this server**.
+It always asks first — *"Give 100 to each of the 24 players online? [✔ CONFIRM]"* — and the click
+runs the same command with `confirm`. Each player gets a separate deposit, with its own ledger line
+(`admin:giveall`) and its own *"You received 100."*; a player without the currency's permission, or
+whose ceiling refuses it, is skipped and counted: *"Gave 100 to 23 players. Skipped: 1"*.
+
+## Admin changes
+
+`/economyadmin give`, `take`, `set` and `reset` work on any player the network knows. On a player who is
+not on this server the change is queued and lands where they are, or when they are next seen; the admin
+reads *"Queued +100 for Steve. They are away; it lands when they are next seen."* instead of a balance.
+See [Network](/docs/exyliaeconomy/network) for what a queued change does.
+
+| Command | On a player here | Queued for a player elsewhere |
+|---|---|---|
+| `give` | Deposits, refused at the ceiling | Lands in full, cut at the ceiling |
+| `take` | Withdraws, refused when they hold less | Lands floored at zero |
+| `set` | Sets the balance; `0` is accepted, refused above the ceiling | Replaces the balance |
+| `reset` | Back to the starting balance | Replaces the balance |
+
+A player online here is told *"You received …"* or *"… was taken from you."*; `set` and `reset` say
+nothing to them.

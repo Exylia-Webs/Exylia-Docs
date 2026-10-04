@@ -1,0 +1,111 @@
+---
+title: "Banknotes"
+description: "/withdraw and /deposit, which currencies print notes, what a note is, why a copied note pays once, and the guards that keep notes out of crafting and trading."
+---
+
+A banknote is money printed as paper. `/withdraw <amount> [currency]` takes the amount from the player
+and hands them a note; right-clicking the note, or `/deposit` while holding it, pays it back to whoever
+redeems it. Notes can be given, dropped, traded between players and stored in chests like any item.
+
+## Which currencies print notes
+
+```yaml title="plugins/ExyliaEconomy/config.yml"
+banknotes:
+  - default
+  - shards
+```
+
+Currency ids, with `default` meaning the default currency. Only stored currencies print notes; an item,
+experience or display-only currency on this list is refused. An empty list turns banknotes off. A fresh
+server writes `[default]`.
+
+## Withdrawing
+
+`/withdraw <amount> [currency]` needs `exyliaeconomy.withdraw`, given to everyone by default. Without a
+currency it uses the default one. It is refused, before anything is taken, when:
+
+- the currency is not on the `banknotes` list — *"… cannot be withdrawn as a banknote."*;
+- the amount is not a positive amount, or rounds to nothing in the currency's decimals;
+- the player's balance is still loading;
+- they cannot afford it;
+- they have no free inventory slot — *"Free a slot in your inventory first."*
+
+The note is recorded in the database first, then the money is taken and the note handed over in the
+same tick. If the money cannot be taken after all, the record is discarded and nothing is handed out.
+Two withdrawals closer than half a second are one.
+
+## What a note is
+
+The item is drawn from the `banknote` section of `messages.yml`:
+
+```yaml title="plugins/ExyliaEconomy/lang/en/messages.yml"
+banknote:
+  material: PAPER
+  name: '{primary}&lBANKNOTE &8[{success}%amount%&8]'
+  lore:
+    - ''
+    - '{secondary}Information:'
+    - ' {letters_black}▎ {letters}Currency {letters_black}» {highlight}%currency%'
+    - ' {letters_black}▎ {letters}Signed by {letters_black}» {highlight}%issuer%'
+    - ' {letters_black}▎ {letters}Issued {letters_black}» {info}%date%'
+    - ''
+    - '{warning}➥ Right-click to redeem'
+    - ''
+```
+
+`%amount%` is the formatted amount, `%currency%` the currency's plural name, `%issuer%` who printed it,
+`%date%` the day it was printed. The note always glows and never stacks.
+
+What a note is worth is not on the item. The item carries only the note's id; the amount, currency and
+issuer are a row in `exylia_banknotes`, written before the money is taken. Renaming or editing the item
+changes nothing.
+
+## Redeeming
+
+Right-click with a note in either hand, at the air or at a block, or run `/deposit` while holding one
+(main hand first, then off hand). Right-clicking needs no permission; `/deposit` needs
+`exyliaeconomy.use`. Either needs the currency's own permission, when it names one.
+
+The note leaves the hand **before** anything else happens, then its row is claimed in the database, then
+the money is paid:
+
+| What the database says | What the player sees |
+|---|---|
+| Not redeemed yet | *"Redeemed a banknote of …"* — the money is theirs. |
+| Already redeemed, or no such note | *"This banknote was already redeemed or is not valid."* — the item is gone. |
+| The currency refused the payment (its ceiling) | The note comes back, unredeemed, with the reason. |
+| The database did not answer | The note comes back: *"The banknote could not be processed right now."* |
+
+<Callout type="tip" title="A copied note pays once">
+A duplicated stack, a creative clone, the same note redeemed on two servers at once: only one claim on
+the row can win, so the money is paid exactly once on the whole network and every other copy simply
+disappears.
+</Callout>
+
+## Per-server currencies
+
+A note of a currency that is **not** shared across servers is a balance on the server that printed it.
+Redeeming it on any other server is refused and the note comes back: *"This banknote can only be
+redeemed on the server that printed it."* A note of a shared currency redeems anywhere.
+
+## Kept out of crafting and trading
+
+A note is paper, and vanilla would happily turn paper into books, maps and rockets, or trade it to a
+librarian. Any inventory holding a note refuses to produce a result:
+
+- crafting tables, the inventory grid and crafters;
+- anvils, grindstones, smithing tables, looms, cartography tables and stonecutters;
+- villager trades.
+
+## In the ledger
+
+A note's two halves are two ledger lines: `note:withdraw` on the issuer, `note:redeem` on whoever
+redeemed it. A rollback never reverts either, because the other half is a note somebody may still hold.
+See [Ledger](/docs/exyliaeconomy/ledger).
+
+<Callout type="note" title="Fixing a stuck note">
+If a payment is refused and the database then fails to mark the note unredeemed again, the note comes
+back to the player but stays marked redeemed, and the console names its id. Set `redeemed_at` to `0` on
+that row of `exylia_banknotes` to make it redeemable again. A player who leaves before a refused note
+can be handed back is logged the same way, with the row to pay by hand.
+</Callout>

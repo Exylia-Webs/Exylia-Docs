@@ -1,0 +1,132 @@
+---
+title: "Minas clásicas"
+description: "La composición, las tres formas en que se rellena una mina clásica, qué ven y qué les pasa a los jugadores de dentro, y el ciclo que se conserva tras un reinicio."
+---
+
+Una mina clásica se rellena entera a partir de su **composición**: cada bloque de su área se sustituye por un
+bloque sacado al azar de una lista ponderada.
+
+## La composición
+
+**Composición de bloques** en la pantalla de configuración lista cada entrada con su peso y la probabilidad
+que le corresponde: el peso de la entrada sobre la suma de todos los pesos. Los pesos son relativos, no
+porcentajes — piedra a `70` y carbón a `30` es la misma mina que piedra a `7` y carbón a `3`.
+
+| Clic sobre una entrada | Qué hace |
+|---|---|
+| Clic izquierdo | Peso +1. |
+| Clic derecho | Peso −1, nunca por debajo de `0.1`. |
+| Shift + clic izquierdo | Pide un peso exacto, de al menos `0.1`. |
+| Clic central | Abre la tabla de botín de la entrada. Ver [Botín y efectos](/docs/exyliamines/botin-y-efectos). |
+| Tecla de soltar (`Q`) | Abre los efectos al romper de la entrada. |
+| Shift + clic derecho | Quita la entrada. |
+
+**Añadir bloque** te pide elegir un bloque; llega con un peso de `10`. Un material que no se puede colocar
+como bloque se rechaza. Cada material debería aparecer una sola vez: el botín y los efectos se buscan por
+material, así que una segunda entrada del mismo solo contaría en el sorteo.
+
+Solo los materiales de la composición son de la mina. Romper uno es una rotura de mina, con su botín y su
+cuenta para el umbral; cualquier otra cosa dentro del área se deja en paz, o se rechaza con **restringir
+rotura** activado. Ver [Minas](/docs/exyliamines/minas).
+
+## Cuándo se rellena
+
+Tres cosas rellenan una mina clásica:
+
+| Disparador | Dónde se define | Qué hace |
+|---|---|---|
+| **Intervalo** | **Reinicios** → **Intervalo de reinicio** | La rellena cada intervalo. 5 minutos por defecto, 5 segundos como mínimo. Acepta `90`, `5m`, `1h30m`. |
+| **Umbral** | **Reinicios** → **Umbral de reinicio** | La rellena antes de tiempo cuando se ha picado esta proporción desde el último relleno. `0`, el valor por defecto, lo desactiva. Clic izquierdo y derecho suman y restan un 5 %, el clic central pide un valor exacto de 0 a 100. |
+| **Forzar reinicio** | **Reinicios** → **Forzar reinicio** | La rellena ahora. Necesita una región y al menos un bloque en la composición. |
+
+Cada relleno, lo provoque lo que lo provoque, reinicia el intervalo. Acortar el intervalo se aplica al
+instante; alargarlo se aplica a partir del siguiente relleno.
+
+El umbral cuenta los bloques rotos **a través de la mina** desde su último relleno, frente al número de
+bloques de su forma. Nada escanea el área, así que una mina grande no cuesta más de vigilar que una pequeña.
+
+<Callout type="note" title="Una mina descargada espera">
+Un relleno que toca mientras ninguno de los chunks de la mina está cargado se aplaza hasta que lo estén
+todos. Nadie puede picar una mina a la que nadie se acerca, y llenarla cargaría todos sus chunks de golpe.
+Ocurre en cuanto alguien se acerca lo suficiente.
+</Callout>
+
+## El aviso
+
+**Aviso de reinicio** define con cuánta antelación se avisa a los jugadores de dentro antes de un relleno
+por intervalo: 10 segundos por defecto, `0s` para desactivarlo. Cuando empieza, todos los de dentro ven el
+título `visuals.reset-warning-title` y la cuenta atrás `visuals.reset-bossbar`, que ocupa el lugar de la
+barra de "próximo reinicio" hasta el relleno.
+
+El aviso pertenece al intervalo. Un relleno por umbral o forzado ocurre en el acto.
+
+## Qué les pasa a los jugadores de dentro
+
+Por orden, cuando empieza un relleno:
+
+<Steps>
+  <Step title="El teletransporte seguro">
+    Si **Teletransportes** → **Teletransporte seguro** está definido, todos los de dentro se envían allí
+    primero.
+  </Step>
+  <Step title="Se limpian las entidades sueltas">
+    Con `settings.clean-entities-on-reset` activado (por defecto), se eliminan dentro de la forma los
+    objetos tirados, orbes de experiencia, proyectiles, vagonetas, cristales del End y fuegos artificiales.
+    Mobs, soportes de armadura, marcos y cuadros se respetan. Los jugadores, siempre.
+  </Step>
+  <Step title="Se rellena el área">
+    En unos pocos ticks: todos los rellenos en curso comparten unos 4 milisegundos por tick, así que varias
+    minas reiniciándose a la vez cuestan lo mismo que una, solo que repartidas en más ticks. Un bloque que
+    ya es el material sorteado para él no se toca.
+  </Step>
+  <Step title="Se libera a los enterrados">
+    Con **Teletransportes** → **Liberar enterrados** activado (por defecto), a quien hayan enterrado los
+    bloques nuevos se le sube al primer hueco de dos bloques de alto que tenga encima, como mucho dos
+    bloques por encima del techo de la mina. Alguien bajo un techo sin hueco va al teletransporte seguro, o
+    si no al de entrada.
+  </Step>
+  <Step title="Se anuncia">
+    Suena `sounds.reset` para los jugadores de dentro, los otros plugins reciben `MineResetEvent` y la línea
+    `reset-announcement` va a quien diga `announcements.reset`.
+  </Step>
+</Steps>
+
+<Callout type="warning" title="Un relleno sobrescribe todo lo que hay en la forma">
+Cada bloque dentro de la forma se vuelve a sortear desde la composición, incluido lo que un jugador haya
+colocado allí desde el último relleno. Deja la decoración fuera de la caja seleccionada, o fuera de la
+esfera o el cilindro recortados de ella.
+</Callout>
+
+### El anuncio
+
+`announcements.reset` en `config.yml` decide quién lee que una mina se ha rellenado:
+
+| Valor | Quién |
+|---|---|
+| `OFF` | Nadie. |
+| `NEARBY` | Los jugadores a `announcements.radius` bloques o menos del centro de la mina, 64 por defecto. El valor por defecto. |
+| `SERVER` | Todos los conectados. |
+
+La línea por defecto lleva un **[Ir]** clicable que ejecuta `/mine <id>`.
+
+## Entrar y salir
+
+Entrar en una mina clásica reproduce `sounds.enter`, muestra el título `visuals.entry-title` y pone la barra
+de "próximo reinicio" `visuals.bossbar`, que se vacía a medida que se acerca el relleno. Todo se retira al
+salir. Vacía el `text` de un título o una barra en `messages.yml` para desactivarlo, o pon un sonido a `""`.
+
+## Teletransportes
+
+| Botón | Clic | Qué es |
+|---|---|---|
+| **Teletransporte de entrada** | izquierdo / shift-izquierdo | Adonde envían a los jugadores `/mine <id>` y el menú `/mines`. Se define colocándote en el sitio; shift-izquierdo lo borra. Sin él, `/mine` responde "Esta mina no tiene punto de entrada." |
+| **Teletransporte seguro** | izquierdo / shift-izquierdo | Adonde se envía a los jugadores de dentro al empezar cada relleno. Opcional. |
+| **Liberar enterrados** | clic | Activa o desactiva subir a los jugadores que el relleno enterró. Activado por defecto. |
+
+## El ciclo sobrevive a un reinicio
+
+El punto del ciclo en que está cada mina clásica se guarda cada 30 segundos y al apagar el servidor: cuántos
+bloques se picaron desde el último relleno y cuándo toca el siguiente. Tras un reinicio, la cuenta atrás
+sigue donde estaba y el umbral sigue contando desde la misma proporción, en lugar de que cada mina empiece
+de cero como si nadie la hubiera tocado. Un relleno que tocó con el servidor apagado ocurre en cuanto se
+cargan los chunks de la mina.

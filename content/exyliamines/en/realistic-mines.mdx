@@ -1,0 +1,119 @@
+---
+title: "Realistic mines"
+description: "Levels, regeneration times, degrade chains mined stage by stage, and how broken blocks heal across restarts."
+---
+
+A realistic mine never refills its area. It looks after the blocks already standing in it: each one a
+player breaks disappears and grows back on its own, after a time set per material. It suits a natural
+cave, an ore wall built by hand, a quarry that should look untouched.
+
+Nothing scans the area to find out what it holds. The mine's blocks are exactly the materials you add as
+**levels**.
+
+## Levels
+
+**Regen levels** on the setup screen lists them in order.
+
+| Click on a level | What it does |
+|---|---|
+| Left- or right-click | Opens the level. |
+| Shift-right-click | Removes it. |
+
+**Add level** asks you to pick a block. A material that cannot be placed is refused, and so is one that
+already has a level. A new level starts with `settings.default-realistic-regen-seconds` from
+`config.yml`, 60 seconds by default.
+
+Inside a level:
+
+| Button | What it does |
+|---|---|
+| **Regen time** | How long after the break the block is back, at least one second. Accepts `30`, `30s`, `5m`. |
+| **Loot table** | What breaking this material pays instead of its vanilla drop. See [Loot and effects](/docs/exyliamines/loot-and-effects). |
+| **Break effects** | Effects played when this material breaks, in place of the mine's own. |
+| **Degrade chain** | The stages the block passes through while it grows back. |
+| **Move up** / **Move down** | Reorders the list. Levels are matched by material, so the order is only how the list reads. |
+| **Remove level** | Removes it. |
+
+## What a break does
+
+Breaking a level's material inside the mine:
+
+1. The block is broken by the mine, with the level's loot table if it has one and the tool's vanilla drop
+   otherwise.
+2. It turns to **air**, or to the first stage of its degrade chain.
+3. Once the level's **regen time** has passed since that break, the block is back as it was.
+
+`sounds.block-mined` in `config.yml` plays to the miner on every break of a realistic mine. It is empty —
+silent — by default.
+
+## Degrade chains
+
+A degrade chain is what a broken block shows while it grows back, instead of a plain hole. Each stage is a
+block and a delay; **Add stage** asks for the delay first, then the block.
+
+| Click on a stage | What it does |
+|---|---|
+| Left-click | Moves it up. |
+| Right-click | Moves it down. |
+| Middle-click | Opens the stage's own loot table. |
+| Shift-right-click | Removes it. |
+
+Stages run strictly in list order, and **the player drives them**: a stage stays until somebody mines it.
+
+- The first stage appears its delay after the original break; until then the spot is air. A delay of `0`
+  places it at once.
+- Mining a stage brings in the next one, its delay counted from that break.
+- Mining the last stage leaves the spot as air.
+- Whatever stage the block has reached, it heals back to the level's material once the level's **regen
+  time** has passed since the **original** break. That deadline is a safety net for a player who never
+  comes back to finish the chain — and it also means a chain mined quickly still waits, as air, for the
+  rest of the regen time.
+
+For example, a `DIAMOND_ORE` level with a regen time of 2 minutes and a chain of `STONE` (0s) then
+`COBBLESTONE` (0s): the ore breaks into stone, the stone into cobblestone, the cobblestone into air, and
+the diamond ore is back two minutes after the first swing.
+
+A stage pays its own loot table when it has one, and the vanilla drop of its block otherwise. Its break
+effects are the mine's global ones, unless the stage's block is also a level with effects of its own.
+
+<Callout type="warning" title="Chain blocks belong to the mine everywhere in the area">
+Every material used in a chain counts as one of the mine's blocks, so a player can mine a stage. That
+holds anywhere in the area: a `STONE` already standing in the cave when `STONE` is a stage is broken
+through the mine, pays its vanilla drop and, not being mid-regeneration, **never grows back**. Pick stage
+blocks that do not occur naturally in the area, or add that material as a level of its own.
+</Callout>
+
+## Only what the mine still owns grows back
+
+When a block is due to come back — a stage appearing, or the final heal — the mine checks what is there
+first. It writes its block only over air, the level's own material or one of its stages. Anything else
+was put there by a player after the break, and overwriting it would delete it, together with whatever a
+chest held. That spot is left as the player made it and the mine stops regrowing it.
+
+Placing the mine's own materials inside the area is refused anyway, so what a player can put in a hole is
+always something of their own. See [Area and shapes](/docs/exyliamines/area#what-cannot-farm-a-mine).
+
+## Restarts
+
+Every block mid-regeneration is written to the database (`mines_broken_blocks`). A block broken a moment
+ago goes out on the next tick; stage changes and heals are batched every five seconds.
+
+When the plugin starts, **every block still broken is healed at once**, whatever time it had left: a
+restart or reload regrows them all rather than resuming their timers. Then:
+
+- A block whose chunk is not loaded stays tracked and is retried every 10 seconds until it is; its row is
+  only deleted once the block is back.
+- A block in a world that is not loaded yet waits for that world to load.
+- A row for a level or a mine that has been removed is discarded.
+- A row for a mine this server does not know is left alone: on a shared database, that mine belongs to
+  another server.
+
+<Callout type="note" title="Realistic mines have no teleports section">
+The setup screen of a realistic mine has no **Teleports** section, so it cannot be given an entry point
+from the editor. `/mine <id>` and the `/mines` menu then answer "This mine has no entry point." for it.
+Send players there with a warp of your own; a realistic mine imported from ExyliaSurvivalCore keeps the
+entry point it had there.
+</Callout>
+
+Entering a realistic mine shows no entry title and no "next reset" bar — there is no reset to count down
+to. Potion effects, the boost bar and everything else apply as in a classic mine.

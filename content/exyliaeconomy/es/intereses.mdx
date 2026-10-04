@@ -1,0 +1,75 @@
+---
+title: "Intereses"
+description: "Un porcentaje del saldo pagado en cada intervalo: los cuatro ajustes, cuándo se paga, quién cobra y por qué nadie cobra dos veces."
+---
+
+Los intereses pagan un porcentaje del saldo de una moneda almacenada cada cierto intervalo fijo. No se paga
+nada hasta que una moneda aparece bajo `interest` en `config.yml`, y un servidor nuevo no incluye ninguna.
+
+```yaml title="plugins/ExyliaEconomy/config.yml"
+interest:
+  dollars:
+    rate: 1.0
+    interval: 1h
+    max: '500'
+    online-only: true
+```
+
+| Clave | Por defecto | Qué hace |
+|---|---|---|
+| `rate` | `1.0` | Porcentaje del saldo por pago. `0` no paga nada. |
+| `interval` | `1h` | Cada cuánto: `30m`, `1h`, `1d`. Como mínimo un minuto; lo que sea más corto se ignora. |
+| `max` | `'0'` | Lo máximo que da un pago, leído como una cantidad escrita (`500`, `2k`). `'0'` para sin límite. |
+| `online-only` | `true` | `true` paga a los jugadores conectados. `false` paga además cada saldo de los que no lo están. |
+
+La clave es el ID de la moneda. Las monedas de ítem, de experiencia y solo visuales no ganan nada.
+
+## Cuándo se paga
+
+El tiempo se divide en tramos del intervalo, contados desde la época Unix, así que una moneda de `1h` paga
+en cada hora en punto y una de `1d` a medianoche UTC, sea cual sea la hora a la que arrancó el servidor. El
+plugin lo comprueba cada 30 segundos, así que un pago llega como mucho medio minuto después del límite.
+
+Un tramo nunca se paga en el arranque que lo encuentra: el primer pago llega en el primer límite después de
+que el servidor arranca. Un límite que pasó con el servidor apagado no se paga después.
+
+## Qué es un pago
+
+El saldo en ese momento por el `rate` en porcentaje, recortado a los decimales de la moneda y limitado a
+`max`. Un saldo de cero no gana nada, y una cantidad que se redondea a nada no se paga.
+
+Al jugador se le dice *"Interest +12.50 · next in 59m ⌚"*. Deja vacío `interest-paid` en `messages.yml`
+para pagar en silencio. El registro lo anota como `interest`.
+
+Un ingreso que el máximo rechaza no se paga, y ese tramo no se vuelve a intentar.
+
+## Quién cobra
+
+Con `online-only: true`, cada jugador conectado en cada servidor que:
+
+- tenga `exyliaeconomy.interest`, concedido a todos por defecto;
+- pueda usar la moneda, cuando tiene un permiso;
+- tenga su saldo cargado.
+
+Con `online-only: false`, cada servidor recorre además toda la tabla de saldos de la moneda y paga a cada
+jugador que no esté conectado en él, en cola para quien lo tenga. Un permiso no se puede comprobar para
+alguien desconectado, así que **cada** saldo almacenado gana, con `exyliaeconomy.interest` o sin él.
+
+<Callout type="warning" title="online-only: false paga a todos">
+Quitarle `exyliaeconomy.interest` a un grupo solo frena sus pagos mientras están conectados. Con
+`online-only: false` sus saldos siguen ganando cuando no lo están. Déjalo en `true` salvo que eso sea lo que
+quieres.
+</Callout>
+
+## Nadie cobra dos veces
+
+Cada pago se reclama primero en la base de datos, por jugador y tramo, en `exylia_economy_claims`. Solo un
+reclamo puede ganar:
+
+- un jugador conectado a dos servidores de una moneda compartida a la vez cobra una vez;
+- un reinicio en mitad de un tramo nunca vuelve a pagar ese tramo;
+- con `online-only: false`, todos los servidores que recorren la misma tabla pagan cada saldo una vez, y un
+  servidor que se cae a medias deja el resto a los demás.
+
+Una moneda que no se comparte entre servidores es un saldo por servidor, así que cada servidor paga el
+suyo. Los reclamos se borran dos días después de su tramo.

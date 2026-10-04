@@ -1,0 +1,94 @@
+---
+title: "Network"
+description: "Sharing balances across servers: who writes a balance, what happens to a change for a player somewhere else, shared and per-server currencies, server ids and Redis."
+---
+
+Every server that points at the same database shares the same currencies, the same economy settings and
+the same balances. There is nothing to configure beyond the database itself; Redis makes it immediate.
+
+## Who writes a balance
+
+Ownership, not synchronisation. A player's balance is claimed by the server they join, loaded into memory,
+and written by that server alone while they are there. When they leave, their last balance is written and
+the claim let go.
+
+A server the player joins waits up to five seconds for the previous one to finish its last write and let
+go, then takes the balance over. A write by a server that lost the balance in between is never written over
+the new owner's: it is queued for it instead. Two servers can never save two different totals.
+
+Until a player's balance is claimed — the first moment after joining — a deposit to them is queued and
+applied right after, and anything that would spend their money is refused with *"Your balance is still
+loading."*
+
+## A change for somebody elsewhere
+
+A deposit, withdrawal or set for a player who is offline, or online on another server, is not written to
+their balance. It is queued in the database for whoever holds them:
+
+| Change | When it lands |
+|---|---|
+| Deposit | Always, in full, up to the ceiling. Anything the ceiling cuts from a payment goes back to the payer. |
+| Withdrawal | Floored at zero: it cannot overdraw somebody it cannot see. |
+| Set, reset | Replaces the balance. |
+
+Queued changes land oldest first, each exactly once however many servers hear about it:
+
+- a player online elsewhere has it folded in by that server **at once** when Redis is on, and within a
+  minute otherwise;
+- an offline player has it folded in when they next join, on whichever server.
+
+Changes made while a server was unreachable are retried every second, and a change that cannot be written
+at all is logged in the console with everything needed to apply it by hand.
+
+## Shared and per-server currencies
+
+**Shared across servers**, on a stored currency's screen, decides which balance a player has:
+
+| | One balance | Leaderboard | Banknotes | Interest |
+|---|---|---|---|---|
+| On (default) | One across the whole network | One for the network | Redeem anywhere | Paid once per player |
+| Off | One per server, stored as `<id>@<server-id>` | One per server | Only on the server that printed them | Paid by each server |
+
+A per-server currency is a survival server's money that stays on that survival server, while the lobby
+next door keeps its own. Changes queued for a per-server balance are only ever claimed by that server.
+
+The switch is refused once the currency holds any balance other than the starting one, because the
+balances it holds would be left behind under the other key. Decide before players earn any.
+
+## Server ids
+
+Ownership is recorded by `server-id`, set under `redis` in each server's `database.yml` even when Redis
+itself is off:
+
+```yaml title="plugins/ExyliaEconomy/database.yml"
+database:
+  redis:
+    enabled: true
+    host: 10.0.0.6
+    server-id: survival-1
+```
+
+It is `server-1` on every server that never set it. Two servers sharing balances under the same id both
+believe they hold the player and overwrite each other. When the plugin sees the default id together with
+Redis or a networked database, it warns once at start:
+*"this server's id is the default 'server-1' while balances are shared…"*. Give every server its own.
+
+The id is also what a per-server currency is keyed by: renaming a server's id moves it onto a new, empty
+set of per-server balances.
+
+## With and without Redis
+
+| | With Redis | Without Redis |
+|---|---|---|
+| A change for a player on another server | Lands at once | Lands within a minute |
+| A currency edited in `/economyadmin` | Every server reads it again at once | Other servers keep the old settings until `/economyadmin reload` or a restart |
+| Balances, queued changes, flags | Shared through the database | Shared through the database |
+
+Redis is optional, and configured once in `database.yml`. See the
+[library's database page](/docs/exylialib/database).
+
+## Stopping a server
+
+When a server stops, every player's last balance is written and handed back, and the plugin waits up to
+ten seconds for writes still on their way. Writes still pending after that are logged with their amount.
+Deposits gather for half a second before they are written; withdrawals are written at once.

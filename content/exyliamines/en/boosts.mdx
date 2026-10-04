@@ -1,0 +1,114 @@
+---
+title: "Boosts"
+description: "Timed multipliers of drops, experience and money in some mines or all of them, started by command or on a weekly schedule."
+---
+
+A boost multiplies what mining pays for a while: the items a block gives, the experience, the money. It
+may cover every mine or a list of them, it is started by an admin or by the schedule in `boosts.yml`, and
+it survives a restart with the time it had left.
+
+## boosts.yml
+
+```yaml title="plugins/ExyliaMines/boosts.yml"
+boosts:
+  gold_rush:
+    name: '{highlight}&lGOLD RUSH'
+    drops: 2.0
+    experience: 1.5
+    money: 2.0
+    duration: 900
+    mines: []
+  happy_hour:
+    name: '{accent}&lHAPPY HOUR'
+    drops: 1.2
+    experience: 1.2
+    money: 1.2
+    duration: 3600
+    mines: []
+schedule:
+  weekend_rush:
+    boost: gold_rush
+    days:
+      - SATURDAY
+      - SUNDAY
+    times:
+      - '20:00'
+    min-players: 5
+```
+
+| Key | What it does |
+|---|---|
+| `name` | What players read in chat, in menus and on the boss bar. |
+| `drops` | Multiplier of the items a block gives: its vanilla drop, the items of its loot table and item lucky rewards. |
+| `experience` | Multiplier of the vanilla experience a block gives. |
+| `money` | Multiplier of the money loot tables and lucky rewards pay. |
+| `duration` | How long it lasts: `900`, `15m`, `1h`. |
+| `mines` | The mine ids it applies to. Empty means every mine. |
+
+A multiplier may be any number: `2` doubles, `1.2` adds a fifth, `1` leaves it alone. A fraction is
+rolled per drop, so one item at ×1.2 is two items a fifth of the time. Boosts running at the same time
+**multiply together**: Gold Rush and Happy Hour at once give drops ×2.4.
+
+## Starting one by hand
+
+| Command | What it does |
+|---|---|
+| `/minesadmin boost start <id>` | Starts a boost from `boosts.yml`. One already running starts over with its full duration. |
+| `/minesadmin boost custom <multiplier> <duration> [mines]` | Starts a boost with its numbers typed out: one multiplier for drops, experience and money alike. Mine ids are separated by commas; none means every mine. |
+| `/minesadmin boost stop <id>` | Ends a running boost now. `all` ends every one. |
+| `/minesadmin boost list` | Lists the running boosts, the soonest to end first. |
+
+`/minesadmin boost custom 1.5 30m gold,iron` boosts the `gold` and `iron` mines by half for thirty minutes.
+Its name comes from `boosts.custom-name` in `messages.yml`, "BOOST x1.5", and its id is written out from
+its numbers, `custom-1.5-gold+iron`, which is what `boost stop` takes. A multiplier of zero or less, or a
+duration under a second, is refused.
+
+All four need `exyliamines.admin` and also work from the console.
+
+## The schedule
+
+Each entry under `schedule` starts its `boost` at every time of `times`, on the `days` listed:
+
+| Key | What it does |
+|---|---|
+| `boost` | The id of a boost in `boosts.yml`. |
+| `days` | `MONDAY` to `SUNDAY`. Empty means every day. |
+| `times` | `HH:mm`, 24-hour. Several are allowed. |
+| `min-players` | That start is skipped while fewer players are online. `0` never skips. |
+
+Times follow the timezone set in ExyliaLib's settings, not the machine's. A time or a day that cannot be
+read is named in the console and left out, and an entry left with no time at all does nothing. The entry's
+name — `weekend_rush` — is yours to choose; only the boost it points at matters. `/minesadmin reload`
+applies an edited schedule at once.
+
+## What players see
+
+- **When it starts and ends**, the `boosts.started` and `boosts.ended` lines go to whom
+  `announcements.boosts` in `config.yml` says: `SERVER` by default, `NEARBY` for players within
+  `announcements.radius` blocks of any boosted mine, or `OFF`.
+- **Inside a boosted mine**, a boss bar, `boosts.bossbar`, names the boost and the multipliers and
+  empties as it runs out. With several boosts on one mine it names the one that ends last and shows the
+  multipliers of all of them combined.
+- **In menus**, the `/mines` menu and the mine's **Rewards** section show the drop multiplier and the time
+  left.
+- **In placeholders**, `%mine_boost_<id>%`, `%mine_boost_name_<id>%` and `%mine_boost_time_<id>%`. See
+  [Placeholders](/docs/exyliamines/placeholders).
+
+Every boost line may use `%boost%`, `%id%`, `%drops%`, `%experience%`, `%money%`, `%time%` (left),
+`%duration%` and, in the start announcement, `%mines%` — the mines' names, or `boosts.all-mines`, "every
+mine". The boss bar also takes `%mine_name%`.
+
+## Restarts and networks
+
+A running boost is stored in the database (`mines_boosts`) with when it started and when it ends. After a
+restart it carries on with the time it had left; one that ran out while the server was off is cleared
+without an announcement.
+
+A boost belongs to the server it was started on, as the mines it boosts do. On a network sharing one
+database, starting Gold Rush on one server leaves the others alone.
+
+## And ExyliaSurvivalCore's boosters?
+
+They are separate and they stack. A mine's boost applies first, then — with ExyliaSurvivalCore installed —
+the miner's own drop, experience and money boosters for the `mines` source. See
+[Integrations](/docs/exyliamines/integrations).

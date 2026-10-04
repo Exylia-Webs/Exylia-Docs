@@ -1,0 +1,175 @@
+---
+title: "Monedas"
+description: "Monedas almacenadas, de ítem, de experiencia y solo visuales, cada campo de una moneda, los ajustes de la economía y los comandos por moneda."
+---
+
+Una moneda es una fila en la base de datos, creada y editada dentro del juego con `/economyadmin`. No hay
+archivo de monedas que editar: el que importó el primer arranque se renombra a `currencies.yml.imported`
+y no se vuelve a leer.
+
+## Tipos
+
+| Tipo | Qué es |
+|---|---|
+| **Almacenada** | Un saldo guardado en la base de datos. Funciona con jugadores desconectados o en otro servidor. Es el único tipo con reglas, registro, clasificación, intereses y billetes. |
+| **Ítem** | Un ítem exacto en el inventario del jugador. El saldo es cuántos lleva; pagar los saca, cobrar los mete. |
+| **Solo visual** | Sin saldo propio: el nombre, el símbolo, los decimales y el formato con los que se muestra la moneda de otro plugin, como `vault` o `points`. |
+
+La experiencia es una cuarta fuente, que se activa en los ajustes de la economía en lugar de crearse:
+`xp_levels` y `xp_points` pasan a ser IDs de moneda con los que una tienda puede poner precios.
+
+<Callout type="note" title="Los ítems y la experiencia viven en el jugador">
+Una moneda de ítem o de experiencia solo tiene saldo mientras el jugador está en este servidor. Un pago a
+alguien que no está — o cuyo inventario está lleno — se guarda y se le entrega la próxima vez que entra,
+con *"Delivered N payments that were waiting for you."* Quitarle a alguien que no está falla.
+</Callout>
+
+Una moneda de ítem es el ítem entero — nombre, lore, modelo y encantamientos — y solo cuenta una pila
+exactamente igual. Una copia renombrada es otro ítem.
+
+## Qué tiene una moneda
+
+| Campo | Tipos | Moneda nueva | Qué hace |
+|---|---|---|---|
+| ID | todos | se escribe al crearla | `a-z`, `0-9` y `_`, hasta 32. La clave bajo la que se guardan los saldos, así que nunca cambia. |
+| Icono | todos | `GOLD_INGOT`; una moneda de ítem usa su ítem | Lo que dibujan las billeteras y las listas. Se elige en un selector de iconos. |
+| Nombre, plural | todos | vacío | Una unidad y varias. Admite colores. |
+| Símbolo | todos | vacío | Vacío para ninguno. |
+| Decimales | todos | `0`; solo visual `-1` | De `0` a `8`. `-1` en una moneda solo visual mantiene lo que diga el proveedor. |
+| Formato | todos | `%amount% %name%` | `%amount%`, `%symbol%` y `%name%`. |
+| Formato compacto | todos | vacío | Lo mismo para scoreboards, donde `%amount%` se ve como `1.2k`. |
+| Nombres del comando | almacenada, ítem | el ID | El primero es el comando, el resto sus alias. |
+| Orden | todos | después de la última | Menor se muestra primero, en billeteras, listas y en el selector de monedas de cualquier otro plugin. |
+| Ítem | ítem | se pide al crearla | El ítem exacto. |
+| Saldo inicial | almacenada | `0` | Con lo que empieza un jugador la primera vez que se le crea un saldo. |
+| Saldo máximo | almacenada | `-1` | Lo máximo que puede tener un saldo. `-1`, o cualquier valor no mayor que cero, para ninguno. |
+| Permiso | almacenada | vacío | Necesario para ver y usar la moneda en absoluto. Vacío: nadie lo necesita. |
+| Mínimo que un jugador puede enviar | almacenada | `1` | El mínimo de `/pay`. |
+| Impuesto de transferencia | almacenada | `0` | Un porcentaje, de `0` a `100`, que se cobra al que paga **además de** la cantidad. |
+| Tasas de cambio | almacenada | ninguna | `otro_id=tasa`: `shards=0.01` significa que 1 de esta vale 0.01 shards. |
+| Transferencias | almacenada | activado | Si los jugadores pueden pagarse entre sí. |
+| Cambio | almacenada | desactivado | Si se puede cambiar según sus tasas. |
+| Clasificación | almacenada | activado | Si funcionan su top, su posición y su dinero en circulación. |
+| Compartida entre servidores | almacenada | activado | Un saldo para toda la red, o uno por servidor. Ver [Red](/docs/exyliaeconomy/red). |
+| Comandos activados | almacenada | activado | Si sus nombres de comando existen siquiera. |
+| Economía de Vault | almacenada | desactivado | Si es la moneda publicada en Vault. Ver [Vault](/docs/exyliaeconomy/vault). |
+
+<Callout type="warning" title="El permiso oculta la moneda en todas partes">
+La pista del editor dice que el permiso es "necesario para usar sus comandos". Hace bastante más: un
+jugador sin él no ve la moneda en su billetera ni en las sugerencias de comandos, no la recibe con
+`/economyadmin giveall`, no puede canjear sus billetes ni gana intereses en ella, y todos los comandos lo
+rechazan con *"You may not use …"*. Los plugins que preguntan a ExyliaLib si un jugador puede usar una
+moneda obtienen la misma respuesta.
+</Callout>
+
+<Callout type="warning" title="El impuesto no se retiene">
+La pista del editor dice que el impuesto "se retiene de cada transferencia". No es así: el receptor
+recibe la cantidad completa, y el que paga abona el impuesto encima. `/pay 100` con un impuesto del 5 %
+le cuesta 105 al que paga. El impuesto no va a nadie. Ver [Pagos](/docs/exyliaeconomy/pagos).
+</Callout>
+
+### Saldos máximos
+
+Un ingreso que llevaría un saldo por encima de su máximo se rechaza entero, nunca se recorta: *"That would
+take the balance over its ceiling of …"*, o *"The balance is at its ceiling of …"* cuando ya está ahí. Un
+pago rechazado así no le cobra nada al que paga.
+
+Un cambio para un jugador que no está en este servidor se compara con el último saldo leído de él. Si aun
+así llega por encima del máximo — dos servidores le pagaron a la vez —, se recorta al máximo al aplicarse:
+la parte de un pago que no cabía vuelve al que pagó, y cualquier otra cosa queda anotada en consola con la
+cantidad.
+
+Diga lo que diga la moneda, ningún saldo puede superar 10<sup>18</sup> (1.000.000.000.000.000.000), el
+número más grande que cabe con holgura en la columna de la base de datos. `-1` significa sin máximo propio
+de la moneda, no sin máximo en absoluto.
+
+### Tasas de cambio
+
+Las tasas se escriben como `otro_id=tasa`, separadas por comas: `shards=0.01, gems=2`. Una tasa debe ser
+un número positivo; cualquier otra cosa se rechaza indicando qué no se pudo leer. El destino puede ser
+cualquier moneda del servidor: almacenada, de ítem, de experiencia o de otro plugin.
+
+`/economy exchange <amount> <from> <to>` cambia según la tasa de la moneda de origen, y necesita **Cambio**
+activado en el origen. Lo que se recibe es la cantidad, recortada a los decimales del origen, por la tasa,
+recortada a los decimales del destino; solo se cobra lo que eso cuesta, así que la fracción que los
+decimales del destino redondean se queda con el jugador. Primero se cobra el origen, y si el destino lo
+rechaza se devuelve.
+
+## Crear, editar y eliminar
+
+`/economyadmin` abre la lista de todas las monedas, por orden. Clic izquierdo en una para editarla, clic
+derecho para eliminarla. **Crear moneda** pide un ID, después el tipo y — para una moneda de ítem — el
+propio ítem.
+
+La pantalla de edición muestra solo lo que usa el tipo de la moneda: una almacenada tiene reglas, tasas e
+interruptores; una de ítem, su ítem y sus nombres de comando; una solo visual, solo su aspecto.
+
+| Botón | Qué pide |
+|---|---|
+| Icono | Un selector de iconos. |
+| Apariencia | Nombre, plural, símbolo, decimales, formato, formato compacto. |
+| Comandos | Nombres de comando, separados por comas, sin la barra. Lo que no sea `a-z`, `0-9` o `_` se descarta. |
+| Reglas | Saldo inicial, máximo, permiso, mínimo, impuesto. |
+| Ítem | El ítem, desde tu mano o tu inventario. |
+| Tasas de cambio | Las tasas de cambio. |
+| Orden | Un número. |
+| Interruptores | Transferencias, cambio, clasificación, compartida entre servidores, comandos activados, economía de Vault. Un clic cambia uno. |
+| Eliminar | Pregunta primero. |
+
+Cada cambio se escribe en la base de datos, se registra al momento en este servidor y se anuncia a los
+demás servidores del mismo Redis, que lo vuelven a leer y reinstalan los comandos de las monedas. Una
+escritura que la base de datos rechaza se avisa: *"Could not save … to the database."*
+
+**Eliminar** una moneda almacenada deja sus saldos en la base de datos, sin usar hasta que vuelva a existir
+una moneda con ese ID. Eliminar la moneda publicada en Vault la despublica.
+
+<Callout type="warning" title="Compartida entre servidores se bloquea cuando hay saldos">
+La descripción del interruptor dice que al volver a cambiarlo se recupera cada conjunto de saldos. En la
+práctica se rechaza en cuanto la moneda tiene algún saldo distinto del inicial: *"… already holds
+balances, so it cannot switch between networked and per-server."* Decídelo antes de que los jugadores
+ganen nada.
+</Callout>
+
+## Los ajustes de la economía
+
+**Ajustes de economía**, en la lista de monedas, son los interruptores que no pertenecen a ninguna moneda
+concreta. Son una fila en la base de datos, compartida por todos los servidores.
+
+| Ajuste | Servidor nuevo | Qué hace |
+|---|---|---|
+| Niveles de experiencia | desactivado | Convierte `xp_levels` en moneda. |
+| Puntos de experiencia | activado | Convierte `xp_points` en moneda. |
+| Registro | activado | Anota cada movimiento de una moneda almacenada. Ver [Registro](/docs/exyliaeconomy/registro). |
+| Vault por encima | desactivado | Sirve Vault aunque haya otro plugin de economía instalado. |
+| Retención del registro | 90 días | Rota entre 30, 90, 180, 365 días y para siempre. Las líneas más antiguas se borran cada hora. |
+| Economía de Vault | `dollars` | Qué moneda está publicada; se muestra aquí y se elige en la pantalla de una moneda almacenada. |
+
+## Un comando por moneda
+
+Cada moneda almacenada con **Comandos activados** y al menos un nombre de comando recibe su propio
+comando, instalado en el momento en que se guarda y retirado en cuanto se desactiva:
+
+```text
+/shards                              tu saldo
+/shards <player>                     el de otro (necesita exyliaeconomy.others)
+/shards pay <player> <amount>        pagar en shards (necesita exyliaeconomy.pay)
+/shards top [page]                   su clasificación
+/shards history [player]             su registro
+/shards exchange <amount> <to>       cambiar shards por otra moneda
+/shards give|take|set <player> <amount>   administradores
+/shards reset <player>                    administradores
+```
+
+Necesita `exyliaeconomy.use`, más el permiso propio de la moneda cuando tiene uno. Un nombre que ya tiene
+otro plugin sigue respondiendo como `/exyliaeconomy:<name>`, y la consola lo avisa.
+
+<Callout type="note" title="Las monedas de ítem no tienen comando">
+Una moneda de ítem tiene nombres de comando en su pantalla, y se guardan, pero solo las monedas
+almacenadas reciben un comando.
+</Callout>
+
+## Qué hacen los decimales
+
+Toda cantidad se recorta a los decimales de la moneda antes de moverse: `/pay Steve 10.567` en una moneda
+con dos decimales envía `10.56`. Una moneda con `0` decimales solo admite números enteros, y una cantidad
+que se redondea a nada se rechaza por no ser una cantidad.

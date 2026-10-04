@@ -1,0 +1,106 @@
+---
+title: "API"
+description: "Romper bloques a través de una mina desde otro plugin, preguntar en qué mina está un punto o un jugador, y escuchar las roturas y los rellenos."
+badge: "dev"
+---
+
+`MinesService` es la forma en que otro plugin rompe bloques dentro de una mina igual que lo haría el golpe de
+un jugador, y hace las dos preguntas que hace un scoreboard o un holograma: qué mina hay aquí, y cuándo se
+rellena.
+
+```java
+ExyliaAPI.get(MinesService.class).ifPresent(mines -> {
+    MineBreakResult result = mines.breakBlock(player, block);
+    if (result == MineBreakResult.UNCLAIMED) block.breakNaturally(tool);
+});
+```
+
+<Callout type="note" title="Añadirla a tu proyecto">
+El artefacto, el repositorio y la línea de `plugin.yml` son los mismos para cada plugin de Exylia y están en
+la [página de la API pública](/docs/exylialib/api). El contrato de minas llegó en la API pública **1.8.0**,
+en el paquete `net.exylia.lib.api.mines`.
+</Callout>
+
+Un `Optional` vacío significa que el servidor no tiene ExyliaMines, no que algo haya fallado. El servicio se
+registra cuando todas las partes del plugin están en marcha y desaparece cuando se desactiva, así que quien
+llama nunca se encuentra un plugin a medio arrancar.
+
+## Lo que la mayoría de integraciones quiere de verdad
+
+Un plugin que rompe bloques en nombre de un jugador — un pico 3x3, un vein miner, un encantamiento
+explosivo — tiene que pasar **cada** bloque primero por `breakBlock`. Dentro de una mina el evento de rotura
+del servidor siempre se cancela y la mina quita el bloque ella misma; un bloque roto de cualquier otra forma
+se salta el permiso de la mina, da drops vanilla en lugar de su botín, y deja un hueco que la mina nunca
+rellena.
+
+Rompe el bloque tú mismo solo cuando la respuesta sea `UNCLAIMED`.
+
+## Métodos
+
+| Método | Qué hace |
+|---|---|
+| `MineBreakResult breakBlock(Player player, Block block)` | Rompe el bloque como lo haría el propio golpe del jugador en una mina: el permiso de la mina, `MineBlockBreakEvent`, los drops de la herramienta de la mano principal y su durabilidad, el botín, los premios de suerte, la regeneración y el contador del jugador. |
+| `Optional<String> mineAt(Location location)` | El id de la mina activada cuya área contiene ese punto. |
+| `Optional<String> currentMine(UUID player)` | El id de la mina en la que está un jugador. |
+| `long secondsUntilReset(String mineId)` | Segundos hasta que la mina se rellena entera, o `-1` para una que no lo hace: desconocida, desactivada, sin área, o realista. |
+
+`breakBlock` no le dice nada al jugador cuando la mina se niega: quien llama, rechazado en varios bloques a la
+vez, es quien sabe si merece un mensaje. Llámalo en el hilo dueño del bloque — en Folia, el hilo de su región.
+
+`currentMine` responde para un jugador que tiene acceso a la mina en la que está; uno dentro de una mina cuyo
+permiso no tiene no está en ninguna.
+
+### MineBreakResult
+
+| Valor | Significado |
+|---|---|
+| `BROKEN` | La mina lo rompió, con todo lo que recibe el golpe propio de un jugador. |
+| `UNCLAIMED` | Ninguna mina es dueña: está fuera de todas, o es un material que la mina no gestiona y deja romper libremente. Rómpelo a tu manera, con tus propias comprobaciones de protección. |
+| `NO_PERMISSION` | Al jugador le falta el permiso que pide la mina. |
+| `RESTRICTED` | La mina no gestiona ese material y tiene **Restringir rotura** activado. |
+| `CANCELLED` | Un handler canceló `MineBlockBreakEvent`, o los objetos bloqueados de ExyliaSurvivalCore prohíben el objeto que lleva en la mano. |
+
+Cualquier valor salvo `UNCLAIMED` significa que una mina es dueña del bloque: no lo rompas de otra forma.
+
+## Eventos
+
+Los dos están en `net.exylia.lib.api.mines.event`.
+
+| Evento | Cancelable | Cuándo |
+|---|---|---|
+| `MineBlockBreakEvent` | sí | Un jugador está rompiendo un bloque del que es dueña una mina. |
+| `MineResetEvent` | no | Una mina clásica se ha rellenado. |
+
+### MineBlockBreakEvent
+
+Se lanza una vez que la mina ha aceptado la rotura — el jugador tiene su permiso y el bloque es uno que
+gestiona — y **antes** de que le pase nada al bloque, así que todavía tiene el tipo que el jugador estaba
+minando. `getPlayer()`, `getMineId()` y `getBlock()` dicen quién, dónde y qué.
+
+Cancelarlo deja el bloque en su sitio y no le dice nada al jugador.
+
+<Callout type="warning" title="Escucha este, no BlockBreakEvent">
+Dentro de una mina el `BlockBreakEvent` del servidor siempre se cancela, así que un listener con
+`ignoreCancelled = true` nunca ve una rotura de mina. Este es el evento que hay que escuchar. Se lanza para el
+golpe propio de un jugador y para cada bloque que otro plugin pasa a `breakBlock` — un handler que rompe más
+bloques a través de `breakBlock` lo recibe de nuevo por cada uno, y tiene que distinguir sus propias roturas.
+</Callout>
+
+### MineResetEvent
+
+Se lanza cuando el último bloque de un relleno vuelve a su sitio, lo haya pedido quien lo haya pedido: el
+intervalo, el umbral o un admin. Los jugadores de dentro ya se han sacado de en medio. `getMineId()` nombra la
+mina.
+
+Un relleno se reparte en varios ticks, así que este evento llega un poco después de que empezara. Las minas
+realistas nunca lo lanzan: no hay un momento único en que una de ellas vuelva a estar llena.
+
+Los dos eventos se llaman en el hilo dueño del bloque — en Folia, un hilo de región en vez de un único hilo
+principal — y se lanzan como asíncronos en el sentido de Bukkit cuando ese no es el hilo primario.
+
+## Lo que no está
+
+Crear, editar y eliminar minas es trabajo de un administrador y se hace en el juego. No hay método para crear
+una mina, forzar un relleno, arrancar un potenciador o leer estadísticas; los potenciadores se arrancan con
+`/minesadmin boost` desde la consola, y las estadísticas se leen con los
+[placeholders](/docs/exyliamines/placeholders).

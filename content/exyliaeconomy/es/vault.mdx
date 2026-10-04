@@ -1,0 +1,74 @@
+---
+title: "Vault"
+description: "Publicar una moneda almacenada como la economía de Vault del servidor, por debajo de EssentialsX o CMI o por encima de ellos, y cómo responde el puente a lo que piden los plugins de Vault."
+---
+
+La mayoría de los plugins de tiendas, trabajos, subastas y rangos solo hablan Vault. ExyliaEconomy puede
+publicar una moneda almacenada como la economía de Vault del servidor, para que todos ellos funcionen con
+ella sin EssentialsX ni CMI por debajo.
+
+Vault tiene que estar instalado. Sin él no se publica nada y la consola lo avisa.
+
+## Elegir la moneda
+
+En la pantalla de una moneda almacenada en `/economyadmin`, el interruptor **Economía de Vault** la publica.
+Elegir otra moneda la sustituye; hacer clic otra vez en la publicada la despublica, y eliminarla también.
+**Ajustes de economía** muestra cuál está publicada.
+
+Un servidor nuevo publica `dollars`. Si la moneda elegida deja de existir mientras Vault está instalado y no
+hay otro plugin de economía, sirve en su lugar la primera moneda almacenada, con un aviso en consola — un
+servidor cuya moneda por defecto es `vault` se quedaría si no sin dinero. Si se despublicó a propósito,
+sigue despublicada.
+
+## Por debajo o por encima
+
+| Vault por encima | Otro plugin de economía instalado | Quién sirve Vault |
+|---|---|---|
+| desactivado (por defecto) | no | Tu moneda. |
+| desactivado (por defecto) | EssentialsX, CMI… | El otro plugin. Tu moneda queda registrada por debajo y solo sirve sin él. |
+| activado | cualquiera | Tu moneda. |
+
+**Vault por encima** está en los ajustes de la economía. La consola dice cuál de las dos cosas pasó:
+*"EssentialsX provides the Vault economy; 'dollars' is registered beneath it"*, o *"'dollars' is the
+server's Vault economy."* Cuando se instala o se quita un plugin de economía con el servidor en marcha, se
+vuelve a calcular quién sirve.
+
+<Callout type="warning" title="Dos economías, dos conjuntos de saldos">
+Usar a la vez la economía de EssentialsX y este plugin significa tener el dinero en dos sitios. Elige una
+para Vault e importa la otra — ver [Migración](/docs/exyliaeconomy/migracion#desde-vault-o-playerpoints).
+</Callout>
+
+## Plugins que cargan antes
+
+Vault se publica mientras el plugin se activa, antes incluso de leer sus monedas, así que un plugin que
+busca una economía durante su propia activación encuentra una. Hasta que las monedas llegan, un instante
+después, el puente responde un saldo vacío y rechaza los pagos con *"The economy is still loading."*, y cada
+plugin que se quedó con el puente sigue funcionando en todas las recargas posteriores.
+
+Para asegurarse de que ExyliaEconomy se activa primero, `plugin.yml` incluye estos en `loadbefore`:
+ExyliaSurvivalCore, ExyliaMines, ShopGUIPlus, EconomyShopGUI, ChestShop, QuickShop, Jobs, zAuctionHouseV3 y
+AuctionHouse.
+
+## Qué reciben los plugins de Vault
+
+| Llamada de Vault | Qué hace el puente |
+|---|---|
+| Nombre | `ExyliaEconomy:<currency>`. |
+| Saldo, has | Memoria para un jugador de este servidor. Para cualquier otro se lee la fila de la base de datos, esperando hasta dos segundos fuera del hilo principal; en el hilo principal nunca espera y responde el último saldo leído, o cero para alguien nunca leído, y trae la fila para la siguiente llamada. |
+| Ingresar | Cualquier jugador: en este servidor al momento, en cola para quien esté en otra parte. Rechazado entero en el máximo. |
+| Retirar | **Solo de un jugador de este servidor.** Cobrar a alguien desconectado o en otro servidor se rechaza: *"Only the balance of a player on this server can be charged."* |
+| Cantidades | El `double` de Vault, redondeado a la mitad hacia arriba a los decimales de la moneda, así que `2.3 × 3` es `6.90`, nunca `6.89`. |
+| Jugadores por nombre | Se buscan entre los nombres que conoce ExyliaLib. Un nombre desconocido se rechaza. |
+| Bancos | No soportados. Cada llamada de banco responde *not implemented*. |
+| Formato, nombres, decimales | Los de la moneda. |
+
+Cada movimiento por Vault es una línea del registro con el motivo `vault:<plugin>`, que nombra el plugin que
+llamó a Vault — `vault:jobs`, `vault:chestshop` —, o `vault` a secas cuando no se encuentra ningún plugin.
+
+## El ID de moneda `vault`
+
+ExyliaLib conoce la economía de Vault como el ID de moneda `vault`, y su moneda por defecto viene como
+`vault`. Mientras una de tus monedas sirve Vault, `vault` es un segundo nombre para ella en todas partes —
+un precio en `vault`, la clasificación de `vault` o el historial de `vault` significan esa moneda. Mientras
+otro plugin sirve Vault, `vault` es el dinero de ese plugin. Ver
+[Primeros pasos](/docs/exyliaeconomy/primeros-pasos#qué-moneda-lee-balance).

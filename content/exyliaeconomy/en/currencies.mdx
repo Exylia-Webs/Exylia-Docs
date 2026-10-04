@@ -1,0 +1,173 @@
+---
+title: "Currencies"
+description: "Stored, item, experience and display-only currencies, every field a currency has, the economy settings, and the per-currency commands."
+---
+
+A currency is a row in the database, created and edited in game with `/economyadmin`. There is no
+currency file to edit: the one the first start imported is renamed to `currencies.yml.imported` and
+never read again.
+
+## Kinds
+
+| Kind | What it is |
+|---|---|
+| **Stored** | A balance kept in the database. Works for players who are offline or on another server. The only kind with rules, a ledger, a leaderboard, interest and banknotes. |
+| **Item** | An exact item in the player's inventory. The balance is how many they carry; paying takes them out, being paid puts them in. |
+| **Display only** | No balance of its own: the name, symbol, decimals and format another plugin's currency is shown with, such as `vault` or `points`. |
+
+Experience is a fourth source, switched on in the economy settings rather than created: `xp_levels` and
+`xp_points` become currency ids a shop can price in.
+
+<Callout type="note" title="Items and experience live on the player">
+An item or experience currency only has a balance while the player is on this server. A payment to
+somebody who is not here — or whose inventory is full — is kept and handed over on their next join,
+with *"Delivered N payments that were waiting for you."* Taking from somebody who is not here fails.
+</Callout>
+
+An item currency is the whole item — name, lore, model and enchantments — and only a stack exactly like
+it counts. A renamed copy is a different item.
+
+## What a currency has
+
+| Field | Kinds | New currency | What it does |
+|---|---|---|---|
+| Id | all | typed on creation | `a-z`, `0-9` and `_`, up to 32. The key balances are stored under, so it never changes. |
+| Icon | all | `GOLD_INGOT`; an item currency uses its item | What wallets and lists draw. Picked from an icon chooser. |
+| Name, plural | all | empty | One unit and many. Colours work. |
+| Symbol | all | empty | Blank for none. |
+| Decimals | all | `0`; display only `-1` | `0` to `8`. `-1` on a display-only currency keeps what the provider says. |
+| Format | all | `%amount% %name%` | `%amount%`, `%symbol%` and `%name%`. |
+| Compact format | all | empty | The same for scoreboards, where `%amount%` reads `1.2k`. |
+| Command names | stored, item | the id | The first is the command, the rest its aliases. |
+| Sort order | all | after the last one | Lower is shown first, in wallets, lists and every other plugin's currency picker. |
+| Item | item | asked for on creation | The exact item. |
+| Starting balance | stored | `0` | What a player begins with the first time a balance is created for them. |
+| Balance ceiling | stored | `-1` | The most a balance may hold. `-1`, or anything not above zero, for none. |
+| Permission | stored | empty | Needed to see and use the currency at all. Blank: nobody needs one. |
+| Least a player may send | stored | `1` | The minimum for `/pay`. |
+| Transfer tax | stored | `0` | A percentage, `0` to `100`, charged to the sender **on top of** the amount. |
+| Exchange rates | stored | none | `other_id=rate`: `shards=0.01` means 1 of this is 0.01 shards. |
+| Transfers | stored | on | Whether players can pay each other. |
+| Exchange | stored | off | Whether it can be swapped at its rates. |
+| Leaderboard | stored | on | Whether its top list, rank and supply work. |
+| Shared across servers | stored | on | One balance across the network, or one per server. See [Network](/docs/exyliaeconomy/network). |
+| Commands enabled | stored | on | Whether its command names exist at all. |
+| Vault economy | stored | off | Whether it is the currency published to Vault. See [Vault](/docs/exyliaeconomy/vault). |
+
+<Callout type="warning" title="The permission hides the currency everywhere">
+The editor's hint says the permission is "needed to use its commands". It does more than that: a
+player without it does not see the currency in their wallet or in command suggestions, cannot be
+handed it by `/economyadmin giveall`, cannot redeem its banknotes and earns no interest in it, and every
+command refuses them with *"You may not use …"*. Plugins asking ExyliaLib whether a player may use a
+currency get the same answer.
+</Callout>
+
+<Callout type="warning" title="The tax is not kept back">
+The editor's hint says the tax is "kept back from every transfer". It is not: the receiver gets the
+full amount, and the sender pays the tax on top of it. `/pay 100` with a 5 % tax costs the sender 105.
+The tax goes to nobody. See [Payments](/docs/exyliaeconomy/payments).
+</Callout>
+
+### Ceilings
+
+A deposit that would take a balance past its ceiling is refused whole, never cut down: *"That would take
+the balance over its ceiling of …"*, or *"The balance is at its ceiling of …"* when it is already there.
+A payment refused this way charges the sender nothing.
+
+A change for a player who is not on this server is checked against the last balance read for them. If
+it still lands over the ceiling — two servers paid them at once — it is cut to the ceiling as it lands:
+the part of a payment that did not fit goes back to the payer, and anything else is logged in the
+console with the amount.
+
+Whatever the currency says, no balance can pass 10<sup>18</sup> (1,000,000,000,000,000,000), the
+largest number the database column holds with room to spare. `-1` means no ceiling of the currency's
+own, not no ceiling at all.
+
+### Exchange rates
+
+Rates are typed as `other_id=rate`, separated by commas: `shards=0.01, gems=2`. A rate must be a
+positive number; anything else is refused with what could not be read. The target can be any currency
+the server runs — stored, item, experience or another plugin's.
+
+`/economy exchange <amount> <from> <to>` swaps at the source currency's rate, and needs **Exchange** on
+the source. What is received is the amount, cut to the source's decimals, times the rate, cut to the
+target's decimals; only what that costs is taken, so the fraction the target's decimals round away
+stays with the player. The source is taken first, and a target that refuses gives it back.
+
+## Creating, editing and deleting
+
+`/economyadmin` opens the list of every currency, in sort order. Left-click one to edit it,
+right-click to delete it. **Create currency** asks for an id, then the kind, then — for an item
+currency — the item itself.
+
+The edit screen shows only what a currency's kind uses: a stored currency has rules, rates and
+switches; an item currency its item and command names; a display-only one only its look.
+
+| Button | What it asks |
+|---|---|
+| Icon | An icon chooser. |
+| Appearance | Name, plural, symbol, decimals, format, compact format. |
+| Commands | Command names, separated by commas, without the slash. Anything not `a-z`, `0-9` or `_` is dropped. |
+| Rules | Starting balance, ceiling, permission, minimum, tax. |
+| Item | The item, from your hand or inventory. |
+| Rates | Exchange rates. |
+| Sort order | A number. |
+| Switches | Transfers, exchange, leaderboard, shared across servers, commands enabled, Vault economy. A click flips one. |
+| Delete | Asks first. |
+
+Every change is written to the database, registered on this server at once, and announced to the other
+servers on the same Redis, which read it again and reinstall the currency commands. A write the
+database refuses is reported: *"Could not save … to the database."*
+
+**Deleting** a stored currency leaves its balances in the database, unused until a currency with that
+id exists again. Deleting the currency published to Vault unpublishes it.
+
+<Callout type="warning" title="Shared across servers locks once balances exist">
+The switch's description says switching back restores each set of balances. In practice the switch is
+refused as soon as the currency holds any balance other than the starting one: *"… already holds
+balances, so it cannot switch between networked and per-server."* Decide it before players earn any.
+</Callout>
+
+## The economy settings
+
+**Economy settings**, on the currency list, are the switches that belong to no single currency. They are
+one row in the database, shared by every server.
+
+| Setting | Fresh server | What it does |
+|---|---|---|
+| Experience levels | off | Makes `xp_levels` a currency. |
+| Experience points | on | Makes `xp_points` a currency. |
+| Ledger | on | Writes down every movement of a stored currency. See [Ledger](/docs/exyliaeconomy/ledger). |
+| Vault on top | off | Serves Vault even when another economy plugin is installed. |
+| Ledger retention | 90 days | Cycles through 30, 90, 180, 365 days and forever. Older lines are deleted every hour. |
+| Vault economy | `dollars` | Which currency is published, shown here and chosen on a stored currency's screen. |
+
+## A command per currency
+
+Every stored currency with **Commands enabled** and at least one command name gets its own command,
+installed the moment it is saved and removed the moment it is turned off:
+
+```text
+/shards                              your balance
+/shards <player>                     somebody else's (needs exyliaeconomy.others)
+/shards pay <player> <amount>        pay in shards (needs exyliaeconomy.pay)
+/shards top [page]                   its leaderboard
+/shards history [player]             its ledger
+/shards exchange <amount> <to>       swap shards for another currency
+/shards give|take|set <player> <amount>   administrators
+/shards reset <player>                    administrators
+```
+
+It needs `exyliaeconomy.use`, plus the currency's own permission when it names one. A name another
+plugin already holds still answers as `/exyliaeconomy:<name>`, and the console says so.
+
+<Callout type="note" title="Item currencies get no command">
+An item currency has command names on its screen, and they are saved, but only stored currencies are
+given a command.
+</Callout>
+
+## What decimals do
+
+Every amount is cut to the currency's decimals before it moves: `/pay Steve 10.567` in a currency with
+two decimals sends `10.56`. A currency with `0` decimals is whole numbers only, and an amount that rounds
+down to nothing is refused as not an amount.

@@ -1,0 +1,130 @@
+---
+title: "Classic mines"
+description: "The composition, the three ways a classic mine refills, what players inside see and what happens to them, and the cycle kept across restarts."
+---
+
+A classic mine is refilled as a whole from its **composition**: every block of its area is replaced by a
+block drawn at random from a weighted list.
+
+## The composition
+
+**Block composition** on the setup screen lists every entry with its weight and the chance it works out
+to: the entry's weight over the sum of all weights. Weights are relative, not percentages — stone at `70`
+and coal ore at `30` is the same mine as stone at `7` and coal ore at `3`.
+
+| Click on an entry | What it does |
+|---|---|
+| Left-click | Weight +1. |
+| Right-click | Weight −1, never below `0.1`. |
+| Shift-left-click | Asks for an exact weight, at least `0.1`. |
+| Middle-click | Opens the entry's loot table. See [Loot and effects](/docs/exyliamines/loot-and-effects). |
+| Drop key (`Q`) | Opens the entry's break effects. |
+| Shift-right-click | Removes the entry. |
+
+**Add block** asks you to pick a block; it arrives with a weight of `10`. A material that cannot be placed
+as a block is refused. The same material should appear only once: loot and effects are looked up by
+material, so a second entry for it would only ever weigh into the draw.
+
+Only the materials of the composition are the mine's own. Breaking one is a mine break, with its loot and
+its count towards the threshold; anything else inside the area is left alone, or refused with
+**restrict breaking** on. See [Mines](/docs/exyliamines/mines#mining).
+
+## When it refills
+
+Three things refill a classic mine:
+
+| Trigger | Set in | What it does |
+|---|---|---|
+| **Interval** | **Resets** → **Reset interval** | Refills it every interval. 5 minutes by default, 5 seconds at the least. Accepts `90`, `5m`, `1h30m`. |
+| **Threshold** | **Resets** → **Reset threshold** | Refills it early once this share of it has been mined since the last refill. `0`, the default, turns it off. Left- and right-click add and remove 5%, middle-click asks for an exact value from 0 to 100. |
+| **Force reset** | **Resets** → **Force reset** | Refills it now. Needs a region and at least one block in the composition. |
+
+Every refill, whatever caused it, starts the interval over. Shortening the interval applies at once;
+lengthening it applies from the next refill.
+
+The threshold counts the blocks broken **through the mine** since its last refill, against the number of
+blocks in its shape. Nothing scans the area, so a large mine costs no more to watch than a small one.
+
+<Callout type="note" title="An unloaded mine waits">
+A refill that falls due while none of the mine's chunks are loaded is held until they all are. Nobody can
+mine a mine nobody is near, and filling it would load every one of its chunks at once. It happens as soon
+as somebody comes close enough.
+</Callout>
+
+## The warning
+
+**Reset warning** sets how long before an interval refill the players inside are told: 10 seconds by
+default, `0s` to switch it off. When it starts, everyone inside sees the `visuals.reset-warning-title`
+title and the `visuals.reset-bossbar` countdown, which takes the place of the "next reset" bar until the
+refill.
+
+The warning belongs to the interval. A threshold or a forced refill happens straight away.
+
+## What happens to players inside
+
+In order, when a refill begins:
+
+<Steps>
+  <Step title="The safe teleport">
+    If **Teleports** → **Safe teleport** is set, everyone inside is sent there first.
+  </Step>
+  <Step title="Loose entities are cleared">
+    With `settings.clean-entities-on-reset` on (the default), dropped items, experience orbs,
+    projectiles, minecarts, end crystals and fireworks inside the shape are removed. Mobs, armour stands,
+    item frames and paintings are left. Players never are.
+  </Step>
+  <Step title="The area is refilled">
+    Over a few ticks: all the refills running at once share about 4 milliseconds a tick, so several mines
+    resetting together cost what one does, only spread over more ticks. A block that already is the
+    material drawn for it is not touched.
+  </Step>
+  <Step title="Buried players are lifted">
+    With **Teleports** → **Lift buried players** on (the default), anyone the new blocks buried is moved
+    up to the first gap two blocks tall above them, at most two blocks above the mine's top. Somebody
+    under a roof with no gap above goes to the safe teleport, or else the entry teleport.
+  </Step>
+  <Step title="It is announced">
+    The `sounds.reset` sound plays to the players inside, other plugins receive `MineResetEvent`, and
+    the `reset-announcement` line goes to whom `announcements.reset` says.
+  </Step>
+</Steps>
+
+<Callout type="warning" title="A refill overwrites everything in the shape">
+Every block inside the shape is redrawn from the composition, including anything a player placed there
+since the last refill. Keep decoration outside the selected box, or outside the sphere or cylinder cut
+out of it.
+</Callout>
+
+### The announcement
+
+`announcements.reset` in `config.yml` decides who reads that a mine refilled:
+
+| Value | Who |
+|---|---|
+| `OFF` | Nobody. |
+| `NEARBY` | Players within `announcements.radius` blocks of the mine's centre, 64 by default. The default. |
+| `SERVER` | Everyone online. |
+
+The default line carries a clickable **[Go]** that runs `/mine <id>`.
+
+## Entering and leaving
+
+Walking into a classic mine plays `sounds.enter`, shows the `visuals.entry-title` title and puts up the
+`visuals.bossbar` "next reset" bar, which empties as the refill comes closer. Everything is taken down on
+the way out. Empty a title's or a bar's `text` in `messages.yml` to turn it off, or set a sound to `""`.
+
+## Teleports
+
+| Button | Click | What it is |
+|---|---|---|
+| **Entry teleport** | left / shift-left | Where `/mine <id>` and the `/mines` menu send players. Set by standing on the spot; shift-left clears it. Without one, `/mine` answers "This mine has no entry point." |
+| **Safe teleport** | left / shift-left | Where players inside are sent at the start of every refill. Optional. |
+| **Lift buried players** | click | Toggles lifting players the refill buried. On by default. |
+
+## The cycle survives a restart
+
+Where each classic mine stands in its cycle is saved every 30 seconds and when the server stops: how many
+blocks were mined since the last refill, and when the next one is due. After a restart the countdown takes
+up where it was and the threshold keeps counting from the same share, rather than every mine starting over
+as if untouched. A refill that fell due while the server was off happens as soon as the mine's chunks are
+loaded.

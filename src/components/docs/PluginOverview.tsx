@@ -95,14 +95,14 @@ export function PluginOverview({
             </Link>
           </Magnetic>
 
-          {plugin.purchase && (
+          {(plugin.purchase ?? plugin.download) && (
             <a
-              href={plugin.purchase}
+              href={plugin.purchase ?? plugin.download}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex h-11 items-center rounded-full border border-white/12 px-4 text-[13.5px] font-medium text-white/65 transition-colors hover:border-white/30 hover:text-white"
             >
-              {dict.docs.buy[lang]}
+              {(plugin.purchase ? dict.docs.buy : dict.docs.download)[lang]}
               <span className="ml-2 text-white/25">↗</span>
             </a>
           )}

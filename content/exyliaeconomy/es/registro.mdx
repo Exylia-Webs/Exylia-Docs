@@ -1,0 +1,105 @@
+---
+title: "Registro y reversión"
+description: "Qué escribe y guarda el registro, cada motivo que anota, la pantalla de historial, /economyadmin log y export, y cómo una reversión deshace movimientos una sola vez."
+---
+
+Con el registro activado — por defecto — cada movimiento de una moneda almacenada escribe una línea en
+`exylia_ledger`: qué se movió, cuánto quedó en el saldo, el motivo, quién lo causó, qué servidor lo aplicó
+y cuándo. Eso incluye los cambios que llegaron de otro servidor y los que hacen otros plugins.
+
+Las monedas de ítem, de experiencia y solo visuales no llevan registro.
+
+## Qué se escribe
+
+Los movimientos consecutivos de un mismo saldo con el mismo motivo, causados por el mismo jugador, son una
+sola línea: un volcado de autoventa es una venta, no cien. Un movimiento de cero no se escribe.
+
+| Motivo | De dónde viene |
+|---|---|
+| `pay` | `/pay` y todas sus otras formas |
+| `pay:tax` | El impuesto de un pago |
+| `pay:tax-refund` | El impuesto devuelto cuando el pago falló |
+| `pay:refund` | La parte de un pago en cola que recortó el máximo del receptor, devuelta al que pagó |
+| `admin:give`, `admin:take`, `admin:set`, `admin:reset` | `/economyadmin` y los comandos de las monedas |
+| `admin:giveall` | `/economyadmin giveall` |
+| `import:<currency>` | `/economyadmin import` |
+| `exchange:<from>><to>` | Los dos lados de un cambio |
+| `exchange:refund` | El origen devuelto cuando el otro lado falló |
+| `note:withdraw`, `note:redeem` | Billetes |
+| `interest` | Intereses |
+| `rollback` | Las reversiones |
+| `vault`, `vault:<plugin>` | Un plugin que paga a través de Vault |
+| `api` | Otro plugin que no dio motivo |
+
+Los demás plugins de Exylia escriben sus propios motivos — `shop:buy`, `market:sale`, `auctions:bid`. Lo que
+lee un jugador para cada motivo es la sección `reasons` de `messages.yml`: primero el motivo exacto, después
+la parte antes de los dos puntos, y si no, el propio motivo con la primera letra en mayúscula.
+
+## Retención
+
+Las líneas más antiguas que la retención fijada en **Ajustes de economía** se borran cada hora: 30, 90, 180
+o 365 días, o para siempre. Un servidor nuevo guarda 90 días.
+
+Desactivar el **Registro** deja de escribir líneas nuevas. La pantalla de historial, `/economyadmin log`,
+`export` y `rollback` ya no tienen nada nuevo con lo que trabajar.
+
+## Leerlo
+
+| Dónde | Qué muestra |
+|---|---|
+| `/economy history [currency] [player]`, `/shards history [player]` | Un jugador recibe `menus/user/history.yml`, las últimas 90 líneas; la consola recibe las últimas 15. |
+| Clic izquierdo en una moneda en `/wallet` | La misma pantalla. |
+| `/economyadmin log <player> [currency] [page]` | Diez líneas por página, de la más reciente a la más antigua, cada una con su **ID** — el número que nombra una reversión. |
+
+El historial de otro jugador necesita `exyliaeconomy.others`. `/eadmin log Steve 2` es la página 2 de la
+moneda por defecto, no una moneda llamada 2.
+
+## Exportar
+
+```text
+/economyadmin export <currency|all> [days]
+```
+
+Escribe `plugins/ExyliaEconomy/exports/ledger-<scope>-<yyyyMMdd-HHmmss>.csv`, fuera del hilo del juego.
+`days` guarda solo las líneas escritas en esos últimos días; `0` o nada es todo. `all` incluye todas las
+monedas y las líneas por servidor de todos los servidores.
+
+```text
+id,time,player,currency,delta,balance_after,reason,initiator,server
+1042,2026-10-04T18:22:05+02:00,8667ba71-…,dollars,-105.00,895.00,pay,8667ba71-…,survival-1
+```
+
+Las horas son fechas ISO en la zona horaria del servidor. Una celda que empieza por `=`, `+`, `-`, `@` o un
+tabulador se precede de `'`, así que una hoja de cálculo que abra el archivo no ejecuta nada.
+
+## Reversión
+
+```text
+/economyadmin rollback <player> <window|#id> [currency] [confirm]
+```
+
+Revierte los movimientos de un jugador en una moneda: cada línea dentro de un periodo hacia atrás desde
+ahora (`30m`, `1h`, `2d`), o una sola línea por su ID (`#42`). Siempre pregunta primero, mostrando cuántos
+movimientos, el cambio neto y cuántas transferencias quedaron fuera; **[✔ CONFIRM]** ejecuta el mismo
+comando con `confirm` en 30 segundos, y revierte exactamente las líneas que se mostraron.
+
+Cada línea se revierte con el movimiento contrario a través de la moneda, como un cambio de administración
+con el motivo `rollback`:
+
+- un ingreso se retira, una retirada se vuelve a ingresar;
+- cada línea se reclama primero en `exylia_economy_claims`, para siempre, así que ninguna línea se revierte
+  dos veces, lo pida quien lo pida y en el servidor que sea: *"Already done: 3"*;
+- una reversión que la moneda rechaza — una retirada a alguien que ya no tiene ese dinero — se deja como
+  estaba, se cuenta como rechazada y su reclamo se libera para un intento posterior;
+- con un jugador que no está en este servidor, la reversión queda en cola como cualquier cambio de
+  administración, y una retirada no baja de cero al aplicarse.
+
+<Callout type="warning" title="Lo que una reversión nunca toca">
+Las líneas con los motivos `pay…`, `exchange…`, `note…` y `rollback` nunca se revierten, y se cuentan como
+*transferencias excluidas*. Cada una tiene otro lado que una reversión de este jugador no puede ver — el
+receptor se queda con el pago, la otra moneda se queda con su parte, el billete aún se puede canjear —, así
+que revertir un solo lado crearía dinero. Revierte esas a mano, con `give` y `take` en los dos jugadores.
+</Callout>
+
+Un periodo mira las 500 líneas más recientes del jugador en esa moneda. Como los movimientos consecutivos
+con un mismo motivo son una sola línea, una línea se revierte entera.

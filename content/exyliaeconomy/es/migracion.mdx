@@ -1,0 +1,172 @@
+---
+title: "Migración"
+description: "Venir del módulo de economía de ExyliaSurvivalCore, la importación de currencies.yml del primer arranque y traer saldos desde Vault, EssentialsX, CMI o PlayerPoints."
+---
+
+## Desde ExyliaSurvivalCore
+
+ExyliaEconomy es el módulo `economy` de ExyliaSurvivalCore convertido en plugin propio. Los saldos, los
+cambios en cola y el registro ya vivían en tablas con nombres neutros (`exylia_balances`,
+`exylia_balance_pending`, `exylia_ledger`), así que pasarse consiste en abrir la misma base de datos.
+
+<Steps>
+  <Step title="Actualiza todos los servidores a la vez">
+    Instala ExyliaEconomy junto a la versión de ExyliaSurvivalCore que le entrega la economía, en cada
+    servidor que comparte saldos, antes de que cualquiera de ellos vuelva a arrancar. Un servidor que
+    todavía usa el módulo antiguo no oye los cambios que anuncia uno con ExyliaEconomy, ni al revés.
+  </Step>
+  <Step title="Conserva la carpeta antigua para el primer arranque">
+    `plugins/ExyliaSurvivalCore/` tiene que seguir ahí: el primer arranque lee de ella.
+  </Step>
+  <Step title="Arranca una vez y lee la consola">
+    Cada paso de abajo dice qué copió. Después abre `/economyadmin`: las monedas son las que tenías.
+  </Step>
+</Steps>
+
+En su primer arranque junto a ExyliaSurvivalCore, ExyliaEconomy trae, una sola vez:
+
+| Qué | Cómo |
+|---|---|
+| `database.yml` | Se copia aquí antes de que nada abra la base de datos, así el plugin lee la base de datos donde ya están los saldos, con el mismo ID de servidor de Redis. Un archivo H2 embebido se copia a la carpeta de este plugin bajo la misma ruta, a través de un archivo temporal, para que borrar la carpeta del survival core nunca se lleve los saldos. Un archivo H2 que este plugin ya tenga nunca se sobrescribe; en ese caso sigue leyéndose el del survival core. |
+| Monedas y ajustes | Se copian de `sc_currencies` y `sc_economy_settings` a `exylia_currencies` y `exylia_economy_settings`, solo mientras las dos tablas nuevas están vacías. Las tablas antiguas se quedan exactamente como estaban. |
+| Mensajes | El `modules/economy/messages.yml` de cada idioma pasa a ser `lang/<code>/messages.yml`, donde este plugin no tenga uno. |
+| Menús de los jugadores | Las pantallas de billetera, top e historial pasan a `lang/<code>/menus/user/`, con sus botones cambiados de acciones `survivalcore:` a `exyliaeconomy:`. Las pantallas de administración se reescriben desde el jar de todas formas. |
+| `currencies.yml` | Si las tablas siguen vacías, `modules/economy/currencies.yml` se copia y se importa. |
+
+Nada de la carpeta de ExyliaSurvivalCore se cambia ni se borra nunca. Un archivo de marca,
+`.imported-survivalcore`, anota que la importación se hizo; bórralo para hacerla otra vez. Un `database.yml`
+escrito por una versión anterior que todavía abría el archivo H2 del survival core recibe su propia copia en
+el siguiente arranque, y la consola lo dice.
+
+<Callout type="danger" title="No lo apuntes a una base de datos nueva">
+Los saldos están en la base de datos del survival core. Si falla la copia de `database.yml`, la consola lo
+dice y el siguiente arranque lo vuelve a intentar en lugar de conformarse con una base de datos nueva y
+vacía. Si sigue fallando, copia `plugins/ExyliaSurvivalCore/database.yml` aquí a mano.
+</Callout>
+
+### Permisos
+
+Lo que tenía concedido el staff cuando la economía vivía en ExyliaSurvivalCore sigue funcionando: los nodos
+antiguos se declaran de nuevo, cada uno con su nodo nuevo como hijo.
+
+| Nodo antiguo | Concede | Por defecto |
+|---|---|---|
+| `exyliasurvivalcore.economy` | `exyliaeconomy.use` | todos |
+| `exyliasurvivalcore.economy.pay` | `exyliaeconomy.pay` | todos |
+| `exyliasurvivalcore.economy.others` | `exyliaeconomy.others` | operadores |
+| `exyliasurvivalcore.economy.admin` | `exyliaeconomy.admin` | operadores |
+
+### Comandos y placeholders
+
+Los comandos conservan sus nombres — `/balance`, `/pay`, `/baltop`, `/wallet`, `/economy`, `/economyadmin` y
+los comandos de las monedas —, igual que las antiguas formas de administración `/eco give`, `/eco take`,
+`/eco set`, `/eco reset` y `/eco import`, con las que están escritos los archivos de recompensas y cajas de
+los servidores en marcha.
+
+Los placeholders pertenecen ahora a este plugin: `%exyliasurvivalcore_economy_balance_<currency>%` pasa a ser
+`%exyliaeconomy_economy_balance_<currency>%`, y lo mismo para el resto. Ver
+[Placeholders](/docs/exyliaeconomy/placeholders).
+
+## El archivo de monedas del primer arranque
+
+Las monedas viven en la base de datos. La primera vez que las tablas están vacías — un servidor nuevo, o uno
+cuyo survival core no tenía monedas que copiar —, el plugin importa un `currencies.yml`, en este orden:
+
+1. `plugins/ExyliaEconomy/currencies.yml`, si pusiste uno ahí;
+2. `plugins/ExyliaSurvivalCore/modules/economy/currencies.yml`, copiado antes;
+3. las monedas de serie: `dollars`, `shards`, `netherite_ingots`, y las superposiciones `vault` y `points`.
+
+Después el archivo se renombra a `currencies.yml.imported` y no se vuelve a leer. Su formato, para un
+servidor que quiera preparar uno:
+
+```yaml title="plugins/ExyliaEconomy/currencies.yml"
+stored:
+  gems:
+    name: Gem
+    plural: Gems
+    symbol: "◆"
+    icon: EMERALD
+    decimals: 0
+    format: "%amount% %symbol%"
+    compact-format: "%amount%%symbol%"
+    aliases: [gems, gem]
+    start: 0
+    max: -1
+    permission: ""
+    transfer:
+      enabled: true
+      minimum: 1
+      tax-percent: 0
+    exchange:
+      enabled: false
+      rates: {}
+    leaderboard: true
+    networked: true
+    commands: true
+items:
+  emeralds:
+    item: EMERALD          # o una instantánea 'bytes:' de un ítem personalizado
+    name: Emerald
+    plural: Emeralds
+    icon: EMERALD
+    format: "%amount% %name%"
+    aliases: []
+experience:
+  levels: false
+  points: true
+display:
+  vault:
+    name: Dollar
+    plural: Dollars
+    symbol: "$"
+    decimals: 2
+    format: "%symbol%%amount%"
+vault:
+  provide: gems
+  force: false
+ledger:
+  enabled: true
+```
+
+Un ID de moneda almacenada que no sea `a-z`, `0-9` y `_` hasta 32, o una moneda de ítem sin ítem, se omite
+con un aviso. Un bloque almacenado sin `exchange.enabled` lo lee como **activado**.
+
+## Desde Vault o PlayerPoints
+
+`/economyadmin import <from> <into>` suma el saldo de cada jugador en una moneda a una moneda almacenada.
+`from` puede ser cualquier moneda del servidor, incluida `vault` mientras EssentialsX o CMI la sigan
+sirviendo, o `points` para PlayerPoints.
+
+<Steps>
+  <Step title="Deja la economía antigua sirviendo por ahora">
+    Mantén instalados EssentialsX, CMI o PlayerPoints, para que `vault` o `points` sigan leyendo sus
+    saldos.
+  </Step>
+  <Step title="Importa">
+    `/economyadmin import vault dollars`. Recorre cada jugador que haya entrado alguna vez a este servidor,
+    lee su saldo de uno en uno e ingresa lo que sea positivo. Los jugadores de este servidor cobran al
+    momento; los demás reciben un cambio en cola. La consola nombra cualquier saldo por encima del máximo
+    del destino, que se omite.
+  </Step>
+  <Step title="Cambia Vault">
+    Quita el plugin de economía antiguo, o activa **Vault por encima**, para que la moneda almacenada sirva
+    Vault.
+  </Step>
+</Steps>
+
+Una importación **suma**, nunca fija, así que se ejecuta una vez:
+
+- una segunda importación del mismo par se rechaza salvo que añadas `again`;
+- con `again`, solo cobran los jugadores que aún no se importaron — nadie cobra dos veces, ni tras una
+  importación que se quedó a medias ni con una lanzada en dos servidores a la vez;
+- una importación entre una moneda y ella misma se rechaza, incluido `vault` hacia la moneda que sirve
+  `vault`;
+- una segunda ejecución escrita mientras otra está leyendo se rechaza: *"That import is already running."*
+
+Cada jugador importado se anota en `exylia_balance_imports`, y el registro pone `import:<from>`.
+
+<Callout type="note" title="Solo los jugadores que ha visto este servidor">
+Ni Vault ni PlayerPoints pueden listar saldos, así que la importación recorre la lista de jugadores del
+propio servidor. Un jugador que nunca entró a este servidor no se importa; ejecuta la importación en el
+servidor donde están tus jugadores.
+</Callout>
