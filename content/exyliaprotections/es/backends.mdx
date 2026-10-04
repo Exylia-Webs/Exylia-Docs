@@ -1,0 +1,111 @@
+---
+title: "Backends"
+description: "INTERNAL y WORLDGUARD: qué hace cada uno, qué contiene una región reflejada en WorldGuard, cómo cambiar de uno a otro y cómo funciona sin WorldGuard."
+---
+
+ExyliaProtections siempre aplica las protecciones por sí mismo. El **backend** solo decide si otros
+plugins pueden verlas también. Es `settings.backend` en `config.yml`.
+
+| Backend | Qué pasa |
+|---|---|
+| `INTERNAL` | El de por defecto. El plugin lo aplica todo y ningún otro plugin ve las protecciones. |
+| `WORLDGUARD` | Cada protección de este servidor se escribe además como una región de WorldGuard, así los plugins que leen regiones de WorldGuard (comprobaciones de flags, tiendas, minijuegos) la ven. Roles, clanes, ajustes personales, baneos y parcelas los sigue aplicando ExyliaProtections. |
+
+WorldGuard no hace falta en ningún caso. Si está instalado también se usa, en **los dos** backends, para
+rechazar terreno nuevo que se solape con la región de otro plugin; ver
+[Crear protecciones](/docs/exyliaprotections/crear-protecciones#colocar-un-núcleo).
+
+| Clave | Por defecto | Qué hace |
+|---|---|---|
+| `settings.backend` | `INTERNAL` | `INTERNAL` o `WORLDGUARD`. |
+| `settings.worldguard-priority` | 10 | Prioridad de las regiones que escribe este plugin. Las regiones de parcela llevan una más. |
+| `settings.allowed-world-guard-regions` | `[]` | Ids de regiones de WorldGuard con las que una protección puede solaparse. Cualquier otra región lo impide, salvo la región global y las de este plugin. |
+
+## Qué contiene una región reflejada
+
+| Región | Valor |
+|---|---|
+| Id | `sc_ps_` seguido del id de la protección sin guiones |
+| Prioridad | `settings.worldguard-priority` |
+| Dueño | El dueño de la protección |
+| Miembros | Sus miembros, incluido el inquilino de la protección entera, y cada miembro de cada clan añadido |
+| `pvp`, `mob-spawning`, `fire-spread`, `crop-growth`, `leaf-decay` | `ALLOW` o `DENY` según la flag del mismo nombre |
+| `tnt`, `creeper-explosion`, `other-explosion` | Según `explosions` |
+| `water-flow`, `lava-flow` | Según `liquid-flow` |
+| `entry` | `DENY` para los que no son miembros mientras `visitor-entry` esté desactivada (la protección está cerrada) |
+| `build` | `ALLOW` mientras la protección esté asaltable o abandonada |
+
+Mientras una protección esté asaltable o abandonada y `raids.explosions-while-raidable` esté activado,
+sus flags de explosión son `ALLOW` diga lo que diga su propia flag `explosions`. Una región asaltable o
+abandonada nunca lleva la denegación de `entry`.
+
+El prefijo `sc_ps_` es el que usaba el módulo dentro de ExyliaSurvivalCore, conservado para que las
+regiones existentes sigan valiendo. Las regiones se guardan en el almacenamiento de WorldGuard dos segundos
+después de un cambio, una sola vez por todos los cambios que lleguen en ese tiempo.
+
+### Parcelas
+
+Mientras `submodules.subregions` esté activado, cada parcela es también una región: `<región>_<parcela>`,
+hija de la región de la protección y con una prioridad más. Contiene al dueño, a los miembros de la
+parcela y solo las flags que la parcela define por sí misma; las demás se heredan de la madre. Si una
+parcela es privada no se refleja.
+
+<Callout type="note" title="Los miembros de un clan llegan tarde a WorldGuard">
+Los miembros de clan de una región son una foto del clan tomada cuando la protección cambió por última vez
+o cuando arrancó el servidor. Quien entra al clan después construye al instante a través de
+ExyliaProtections, pero WorldGuard no lo apunta hasta el siguiente cambio.
+</Callout>
+
+<Callout type="warning" title="WorldGuard mantiene sus propias reglas de miembros">
+Una región reflejada es una región normal de WorldGuard, así que WorldGuard le aplica sus propias reglas
+además de las de ExyliaProtections. Lo que WorldGuard niega a quien no es miembro de una región —
+construir, usar puertas y contenedores— sigue negado a un jugador que no es miembro de la región, aunque
+el rol `visitor` de la protección o un ajuste personal se lo permitan. Un jugador que solo pertenece a una
+parcela es miembro de la región de la parcela, no de la de la protección, así que la denegación de `entry`
+de una protección cerrada le impide llegar a su parcela cruzando el resto del terreno. Usa `INTERNAL`
+cuando importen el rol de visitante o los miembros que solo lo son de una parcela.
+</Callout>
+
+## Cambiar de backend
+
+```
+/protections admin migrate <INTERNAL|WORLDGUARD>
+```
+
+Necesita `exyliaprotections.admin`. Escribe `settings.backend` en `config.yml` y lo aplica al momento:
+
+| A | Qué hace |
+|---|---|
+| `WORLDGUARD` | Escribe una región por cada protección de este servidor en cada mundo cargado, sustituyendo cualquier copia anterior, y quita toda región `sc_ps_` que ya no pertenezca a una protección. |
+| `INTERNAL` | Quita toda región `sc_ps_` de cada mundo cargado. |
+
+Responde "El backend ahora es … » N protección(es) de este servidor sincronizadas." Nada de las
+protecciones en sí cambia; solo se reescribe el lado de WorldGuard.
+
+La misma puesta al día se hace cada vez que arranca el servidor, en cuanto se cargan las protecciones.
+Así, un servidor en `INTERNAL` con WorldGuard instalado quita las regiones `sc_ps_` que encuentre, y uno en
+`WORLDGUARD` las reconstruye todas desde la base de datos. Editar `settings.backend` a mano en el archivo
+surte efecto en el siguiente reinicio; `migrate` es la forma de cambiarlo en caliente.
+
+<Callout type="note" title="Cada servidor tiene su propio backend">
+`config.yml` es de cada servidor, y un servidor solo escribe regiones para las protecciones que le
+pertenecen. En una red, ejecuta `migrate` en cada servidor que deba cambiar.
+</Callout>
+
+Las regiones se escriben en los mundos cargados en ese momento. Una protección de un mundo que se carga
+después —con Multiverse-Core o Worlds, por ejemplo— la aplica ExyliaProtections en cuanto el mundo se
+carga, pero no recibe su región de WorldGuard hasta que esa protección cambie o el servidor se reinicie.
+
+## Sin WorldGuard
+
+ExyliaProtections arranca y funciona con normalidad sin WorldGuard ni WorldEdit; no se carga nada
+relacionado con WorldGuard.
+
+| Situación | Qué pasa |
+|---|---|
+| `settings.backend: WORLDGUARD` y falta WorldGuard | El plugin funciona en `INTERNAL` y registra en consola "Protections are set to the WORLDGUARD backend, but WorldGuard is not enabled. Falling back to INTERNAL." en cada arranque. La clave se queda como está. |
+| `/protections admin migrate WORLDGUARD` | Se rechaza con "WorldGuard no está activado en este servidor." El archivo no se toca. |
+| Solapamiento con regiones de otros plugins | No se comprueba: no hay regiones que comprobar. |
+| `/protections admin import protectionstones` | Se rechaza: la importación lee regiones de WorldGuard. Ver [Migración](/docs/exyliaprotections/migracion). |
+
+Instalar WorldGuard más tarde requiere reiniciar; el plugin lo busca al activarse.

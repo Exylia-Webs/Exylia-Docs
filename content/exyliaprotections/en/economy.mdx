@@ -1,0 +1,396 @@
+---
+title: "Economy"
+description: "The bank of each protection, upkeep and the decay of unpaid or inactive land, selling and giving protections, renting plots and whole protections, the currencies used, and every key."
+---
+
+Four features put money into protections. Each one is off by default and turned on with its own switch
+under `submodules` in `config.yml`:
+
+| Switch | Feature |
+|---|---|
+| `bank` | A shared bank per protection |
+| `upkeep` | Protections pay every period; unpaid or inactive land is abandoned, then deleted |
+| `market` | Selling protections to other players, and giving them away |
+| `rent` | Renting plots, or whole protections, for a number of periods |
+
+Level upgrades also cost money; they are on [Land tools](/docs/exyliaprotections/land-tools#level-upgrades).
+Raids sell lives back for `raids.restore-price`; see [Raids](/docs/exyliaprotections/raids#lives).
+
+## Currencies
+
+Every amount goes through ExyliaLib's economy, which serves the currencies of
+[ExyliaEconomy](/docs/exyliaeconomy/currencies) and of any Vault economy. A currency key left blank is
+ExyliaLib's default currency, `default-currency` in `plugins/ExyliaLib/economy.yml`; any other value is a
+currency id from there.
+
+| Key | Used for |
+|---|---|
+| `bank.currency` | What banks hold, and what upkeep is paid in |
+| `market.currency` | Sale prices |
+| `rent.currency` | Rent |
+| `upgrades.currency` | Level upgrades |
+| `raids.restore-currency` | Buying a life back |
+| `settings.move-currency`, `selection.currency`, `tiers.<id>.currency` | Moving a core, selections and the shop |
+
+Money always leaves a player before it is used, and goes back to them when what they paid for does not
+happen. A currency with fewer decimals than the amount asked rounds it down, and only what actually left
+the player is credited or paid back. Without any economy installed, every payment is refused as not
+enough money.
+
+<Callout type="note" title="The bank and another currency">
+The bank only takes rent, and only pays upgrades, when `rent.currency` or `upgrades.currency` is the same
+as `bank.currency`. Otherwise that money goes to, or comes from, the owner. Changing `bank.currency` does not
+convert what banks already hold: the numbers are read in the new currency.
+</Callout>
+
+## The bank
+
+Every protection has one shared bank, created with the protection. Members put money in, and it pays the
+upkeep first, and rent and upgrades when you set it to.
+
+| Key | Default | What it does |
+|---|---|---|
+| `bank.currency` | blank | The currency banks hold and upkeep is paid in |
+| `bank.max-balance` | `0` | The most one bank may hold. `0` is no limit |
+
+| Command | Who |
+|---|---|
+| `/protections bank` | Shows the balance. Needs `bank-deposit` or `bank-withdraw` |
+| `/protections bank deposit <amount>` | Role permission `bank-deposit` |
+| `/protections bank withdraw <amount>` | Role permission `bank-withdraw` |
+
+All three act on the protection the player stands in. In the protection's **Economy** section, left-click
+**Bank** to deposit and right-click it to withdraw; both ask for an amount. The default `member` and
+`trusted` roles have `bank-deposit`. No default role has `bank-withdraw`, so only the owner withdraws until
+a role is given it. Each movement is written to the protection's log.
+
+- A deposit leaves the player first. If the bank would go over `max-balance`, or is busy, the money goes
+  back.
+- A withdrawal is cut to the decimals the currency keeps. If the bank does not hold it nothing moves; if
+  the player cannot receive it, it goes back into the bank.
+- A bank is **busy** when another server is changing it at the same moment and it could not wait its turn.
+  Nothing moves and the player is told to try again.
+
+A bank is changed by one server at a time, under a lock held in the database, so two servers depositing at
+once queue instead of overwriting each other.
+
+When a protection is deleted, for any reason, tenants still renting in it are paid back first (see
+[Rent](#rent)), and what is left in the bank is paid to the owner, online or not. Merging two protections
+moves the second bank into the first before the land is joined.
+
+## Upkeep
+
+With upkeep on, protections pay every period. One that stops paying, or whose players stop playing, is
+**abandoned**: open to everyone for a few days, then deleted.
+
+| Key | Default | What it does |
+|---|---|---|
+| `upkeep.period-hours` | `24` | Hours between two payments |
+| `upkeep.tier-costs` | `small: 15`, `medium: 40`, `large: 100` | What one period costs per tier |
+| `upkeep.default-cost` | `15` | Cost of a tier left out of `tier-costs` |
+| `upkeep.cost-per-block` | `0` | Added to every period per block of protected area |
+| `upkeep.charge-owner` | `true` | Whether an owner online on the protection's server pays what its bank cannot |
+| `upkeep.grace-periods` | `3` | Unpaid periods that abandon a protection |
+| `upkeep.inactive-days` | `30` | Days without the owner or a member playing that abandon it. `0` turns it off |
+| `upkeep.abandoned-days` | `3` | Days an abandoned protection stays open to everyone before it is deleted |
+| `upkeep.warn-hours` | `12` | Hours before a payment the bank cannot cover when members are warned |
+| `upkeep.check-minutes` | `10` | Minutes between two checks of this server's protections. Read when the server starts |
+| `upkeep.announce` | `false` | Whether an abandonment is announced to everyone with raid announcements on |
+
+### The arithmetic
+
+One period costs the tier's cost plus `cost-per-block` × the protected area (width × depth). A protection by
+selection pays as the tier `selection.tier` names. Upkeep is always paid in `bank.currency`.
+
+The first period is free. A protection made while upkeep is on owes its first payment one period after it
+was made. One that already existed owes it one period after upkeep first checks it.
+
+Every `check-minutes`, the server a protection belongs to works out how many periods are due. Only that
+server charges it: a protection on a server that is down is not charged until it is back.
+
+1. **The bank pays** every due period it can cover in full. With 50 in the bank, a cost of 20 and two
+   periods due, it pays both and keeps 10. With 30, it pays one and one stays owed.
+2. **The owner pays the rest** when `charge-owner` is on and the owner is online on that server. All the
+   periods still owed are charged at once; if their balance cannot cover all of them, nothing is charged and
+   they stay owed. The owner is told what was paid.
+3. **Abandonment.** The protection is abandoned once it owes `grace-periods` periods, or once
+   `inactive-days` have passed since the owner or any player member last joined or left a server. It stops
+   being abandoned the moment neither is true.
+
+A period counts as owed from the moment it is due. With 24-hour periods and 3 grace periods, a protection
+whose bank is empty is abandoned 48 hours after its payment was due, as the third period falls due.
+
+Only the owner and players added as members count towards activity, not clan members or plot members.
+"Last played" is kept in the database for every server of the network, and is now while one of them is
+online on the protection's server. When protections load, an owner or member without a record counts as
+seen at that moment, so nobody is inactive before the plugin has watched them.
+
+### Warnings and paying
+
+- Within `warn-hours` of a payment the bank cannot cover, the owner and members online on the protection's
+  server are told once for that payment, at the first check inside the window.
+- An owner or member joining is told, two seconds in, which of their protections owe upkeep or are
+  abandoned.
+- Any member pays what is owed with `/protections upkeep pay`, or by clicking **Upkeep** in the Economy
+  section. The full debt leaves their own balance, in `bank.currency`, not the bank.
+- `/protections upkeep` shows the state, the cost per period, the period length, the time to the next
+  payment and what is owed. Any member may run it.
+
+While upkeep is **due**, the core cannot be picked up: placing it again would start a new account and wipe
+the debt.
+
+### Abandoned
+
+While a protection is abandoned:
+
+- Every player who is not the owner or a member may do what `raids.raidable-permissions` allows there,
+  whether raids are on or not. See [Raids](/docs/exyliaprotections/raids#the-raid).
+- Anybody may enter, whatever the lock or the bans say.
+- It cannot be picked up, moved, deleted, listed for sale, given away, offered for rent, upgraded or merged.
+  A listed sale is cancelled and the seller told.
+- Member perks stop, its warp is refused or hidden, and nobody may rent in it.
+- Members online on its server are told, and with `announce` on so is every player online with raid
+  announcements on.
+- The Upkeep button and `%exyliaprotections_protections_upkeep_due%` show how long is left before it is
+  deleted. It is drawn in the `abandoned` colour on BlueMap and Dynmap.
+
+<Callout type="note" title="With the WORLDGUARD backend">
+An abandoned protection's mirrored region lets everybody build and drops its entry denial, as during a raid,
+and with `raids.explosions-while-raidable` on it lets explosions break blocks too.
+</Callout>
+
+It is restored when its debt is paid, or, when inactivity was the reason, when the owner or a member comes
+back: joining re-checks it at once, as long as that player is on the protection's server. A member can also
+clear an inactivity abandonment with nothing owed by running `/protections upkeep pay`, which charges
+nothing.
+
+Once `abandoned-days` have passed, the next check reads the account again from the database and, if it is
+still abandoned, deletes the protection. Its members online are told, tenants are paid back out of the bank,
+and the rest of the bank goes to the owner.
+
+<Callout type="warning" title="abandoned-days: 0 deletes at the next check">
+The deletion is due as soon as the protection is abandoned. The next check, within `check-minutes`, removes
+it.
+</Callout>
+
+Turning `submodules.upkeep` off stops charging and ends the effect of every abandonment. What was owed and
+when a protection was abandoned stay stored, and apply again when upkeep is turned back on.
+
+| Upkeep state | When |
+|---|---|
+| `Off` | Upkeep is off |
+| `Paid` | Nothing owed |
+| `Due` | At least one period owed |
+| `Abandoned` | Abandoned |
+
+The labels are `state-upkeep-paid`, `state-upkeep-due` and `state-upkeep-abandoned` in the messages file;
+`state-upkeep-overdue` is what the due time reads once a payment is late. Admins forgive an abandonment
+from the admin screen, and the tier editor writes a tier's `upkeep.tier-costs` entry. See
+[Administration](/docs/exyliaprotections/administration).
+
+## Selling a protection
+
+| Key | Default | What it does |
+|---|---|---|
+| `market.currency` | blank | Currency protections are sold in |
+| `market.tax-percent` | `5` | Percent of the price kept as tax; the seller gets the rest. Kept between 0 and 100 |
+| `market.max-price` | `500000` | The highest price. `0` is no limit |
+| `market.keep-members` | `false` | Whether members, clans and overrides stay when the protection changes owner |
+
+| Command | What it does |
+|---|---|
+| `/protections market` | Opens every protection for sale, on any server, newest first |
+| `/protections sell <price>` | Lists the protection you stand in. Owner only. Run again, it replaces the price |
+| `/protections unsell` | Takes it off sale |
+
+In the Economy section, left-click **Sell or give away** to list the protection, typing the price, or to
+cancel its sale when it is listed. **For sale** in `/protections` opens the market.
+
+**Listing.** The price must be above 0 and at most `max-price`. It is refused while the protection is
+raidable, its core is damaged, it is abandoned, or somebody rents in it. The listing keeps the currency
+`market.currency` names at that moment. It is cancelled on its own, and the seller told, when the protection
+becomes raidable or abandoned, or changes owner. While a protection is listed, it cannot be offered for rent
+or rented, and it cannot be merged.
+
+**Buying.** In the market, left-click buys and right-click teleports to the protection's home to look
+first. The buyer cannot be the owner, and must pass the same checks as placing that tier: its permission,
+their protection limit, the tier's limit and the world's limit. After a confirmation the price leaves the
+buyer. If somebody else bought it first, it stopped being for sale, or the change of owner cannot be
+written, the money goes back.
+
+The seller receives the price minus `tax-percent`: a protection sold for 10,000 at 5% pays 9,500. The seller
+is paid even when offline, and both players are told. With the survival core installed, the sale counts
+`protections.sold` for the seller and `protections.bought` for the buyer.
+
+## Giving a protection away
+
+| Command | What it does |
+|---|---|
+| `/protections transfer <player>` | Gives the protection you stand in to a player. Owner only |
+
+Or right-click **Sell or give away** in the Economy section and type the name. It also needs
+`submodules.market`. The new owner must be online on the same server, since their limits are read from their
+permissions. The tier's permission and every limit are checked against them. After a confirmation marked as
+dangerous the protection is theirs, for free. It is refused while the protection is raidable, damaged,
+abandoned or rented.
+
+Admins hand a protection to anybody, whatever their limits, from the admin screen.
+
+## What changes hands
+
+A sale, a gift or an admin transfer keeps with the land its bank, its upkeep, its lives and raid, its level,
+its flags, bans, greeting and farewell, its plots, its perks, time and weather. The new owner is never left
+banned from, or a member of, their own land.
+
+| `market.keep-members` | What happens to the people |
+|---|---|
+| `false` | Players, clans and their overrides are removed, plot members too, and the roles go back to the `roles` of `config.yml`. Whoever sold it keeps no way in |
+| `true` | Members, clans, overrides, roles and plot members all stay |
+
+Every rent running ends with the old owner: each tenant is paid back for the time left out of the bank, as
+far as it holds it, and every rent offer is withdrawn.
+
+## Rent
+
+An owner rents out a plot, or with `rent.whole-protection` the whole protection, for a price per period. The
+tenant becomes a member of what they rent until it ends.
+
+| Key | Default | What it does |
+|---|---|---|
+| `rent.whole-protection` | `false` | Whether whole protections may be rented, not only plots |
+| `rent.currency` | blank | Currency rent is paid in |
+| `rent.max-price` | `50000` | The highest rent per period. `0` is no limit |
+| `rent.min-period-minutes` | `60` | The shortest period an offer may have |
+| `rent.max-periods` | `4` | The most periods one rent may be paid for, the first included |
+| `rent.tenant-role` | `tenant` | The role tenants hold. A protection without it gets it |
+| `rent.tenant-permissions` | `break`, `place`, `containers`, `doors`, `redstone`, `buckets`, `animals`, `ride`, `decorations`, `trade`, `leash` | What that role starts with when it is created |
+| `rent.pay-to-bank` | `true` | Whether rent goes into the protection's bank |
+| `rent.owner-can-evict` | `false` | Whether a tenant can be evicted before the rent ends |
+| `rent.relist` | `true` | Whether a target is offered again, on the same terms, when its rent ends |
+
+### Offering
+
+`/protections rent offer <price> <period>` offers the plot you stand in, or the whole protection when you
+stand outside every plot or plots are off. The period is a duration such as `12h`, `1d` or `7d`. Run again,
+it replaces the offer. `/protections rent cancel` withdraws it. Both need the role permission `manage-rent`.
+
+In menus, **Rent out** on a plot's screen, and in the Economy section when `whole-protection` is on, asks
+for the price and the period in one form with a summary at the end, the period starting at
+`min-period-minutes`. Clicking it again while an offer exists cancels it.
+
+An offer is refused when:
+
+- it is for the whole protection and `whole-protection` is off,
+- somebody rents it right now,
+- the price is not above 0 or is over `max-price`,
+- the period is shorter than `min-period-minutes`,
+- the protection is raidable, its core is damaged, or it is abandoned,
+- the protection is listed for sale.
+
+The offer keeps `rent.currency` and `rent.max-periods` as they stand when it is made.
+
+### Renting
+
+`/protections rent`, or **For rent** in `/protections`, opens the player's own rentals first and then every
+offer on any server. Left-click an offer to rent it; right-click teleports to its protection's home to look.
+
+Renting is refused to the owner, to anybody already a member of that plot or protection, to players banned
+from it, while the protection is raidable, abandoned or listed for sale, and when the target is already
+rented. After a confirmation the tenant pays one period. If somebody else took it first, or the protection
+changed meanwhile, the money goes back.
+
+The tenant then holds `tenant-role` in the plot, or in the whole protection. The role is created with
+`tenant-permissions` in a protection that lacks it. A tenant may enter the protection while it is locked,
+and teleport to its home. With the survival core installed, renting counts `protections.rented`.
+
+**Where the money goes.** Into the protection's bank when `pay-to-bank` is on, banks are on and
+`rent.currency` is the same as `bank.currency`. If the bank is full or busy, and in every other case, it goes
+to the owner.
+
+### Renewing and ending
+
+The tenant renews by left-clicking their rental in the rent menu; right-click teleports to the protection's
+home. Each renewal pays one more period, at the price agreed when the rent started, and adds one period to
+the end. A rent may be paid for `max-periods` periods in total, the first included: with the default 4, a
+tenant rents once and renews three times. A rent that has ended cannot be renewed.
+
+When the time runs out the tenant loses their permissions at once. At the next check, every
+`upkeep.check-minutes` whether upkeep is on or not, the tenant is removed and told, and with `relist` on the
+target is offered again on the same terms.
+
+While anybody rents in a protection, it cannot be picked up, moved, deleted, listed for sale, given away or
+merged. A rented plot cannot be deleted, and a tenant's role in it cannot be changed.
+
+### Eviction
+
+Removing a tenant from the members of what they rent is refused while `owner-can-evict` is `false`. With it
+on, the remover is asked to confirm, pays the tenant back for the time left, and the rent ends. Evicting
+needs `manage-members` for a whole protection and `manage-subregions` for a plot.
+
+The refund is the price × the time left ÷ one period, rounded down to cents. It counts every period paid: a
+rent of 100 a day, renewed once and evicted 12 hours in, pays back 150.00. It is paid in the rent's
+currency, from the remover's own balance, and the eviction does not happen if they cannot afford it.
+
+When a rent ends early because the protection is deleted, or changes owner, the tenant is paid back for the
+time left out of the protection's bank instead, as far as the bank holds it and only when the rent's
+currency is the bank's. A tenant the bank cannot pay is told so.
+
+## Placeholders
+
+These read the protection the player stands in, and are blank outside one.
+
+| Placeholder | What it returns |
+|---|---|
+| `%exyliaprotections_protections_bank%` | Its bank balance. Blank while banks are off |
+| `%exyliaprotections_protections_upkeep_cost%` | What one period costs. Blank while upkeep is off |
+| `%exyliaprotections_protections_upkeep_due%` | Time to the next payment, time left before deletion when abandoned, or `Overdue`. Blank while upkeep is off |
+| `%exyliaprotections_protections_sale_price%` | Its price when for sale |
+| `%exyliaprotections_protections_rent_tenant%` | Who rents the plot the player stands in, or the whole protection outside every plot |
+| `%exyliaprotections_protections_rent_expiry%` | How long that rent has left |
+
+## All keys
+
+```yaml title="plugins/ExyliaProtections/config.yml"
+submodules:
+  upkeep: false
+  bank: false
+  market: false
+  rent: false
+bank:
+  currency: ""
+  max-balance: 0.0
+upkeep:
+  period-hours: 24
+  tier-costs:
+    small: 15.0
+    medium: 40.0
+    large: 100.0
+  default-cost: 15.0
+  cost-per-block: 0.0
+  charge-owner: true
+  grace-periods: 3
+  inactive-days: 30
+  abandoned-days: 3
+  warn-hours: 12
+  check-minutes: 10
+  announce: false
+market:
+  currency: ""
+  tax-percent: 5.0
+  max-price: 500000.0
+  keep-members: false
+rent:
+  whole-protection: false
+  currency: ""
+  max-price: 50000.0
+  min-period-minutes: 60
+  max-periods: 4
+  tenant-role: tenant
+  tenant-permissions: [break, place, containers, doors, redstone, buckets, animals, ride, decorations, trade, leash]
+  pay-to-bank: true
+  owner-can-evict: false
+  relist: true
+```
+
+Banks, sales and rent offers are kept in the tables `protections_accounts`, `protections_listings` and
+`protections_rent_offers`; running rents live in the protection's own row.

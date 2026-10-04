@@ -1,0 +1,358 @@
+---
+title: "Land tools"
+description: "Plots inside a protection, level upgrades, member perks, a time and weather of its own, merging two protections, the border preview, and BlueMap and Dynmap markers."
+---
+
+What owners do with land they already have: split it into plots, grow it through levels, give their members
+perks, fix its time and weather, join two pieces into one, and see where its border runs. Each feature has a
+switch under `submodules` in `config.yml`:
+
+| Switch | Default | Feature |
+|---|---|---|
+| `subregions` | `false` | Plots |
+| `upgrades` | `false` | Level upgrades |
+| `effects` | `false` | Member perks |
+| `environment` | `false` | Time and weather |
+| `merge` | `false` | Merging |
+| `visualization` | `true` | The border preview and the web map markers |
+
+A switch that is off hides its buttons, refuses its commands and stops acting. In a protection's screen,
+plots, upgrades and merging sit in the **Growth** section, perks, time and weather in **Extras**, and the
+border preview in **Land**.
+
+## Plots
+
+With `submodules.subregions`, a player with the role permission `manage-subregions` splits a protection into
+**plots**: boxes inside it with members, personal access and flags of their own.
+
+| Key | Default | What it does |
+|---|---|---|
+| `subregions.max-per-protection` | `3` | Plots one protection holds while upgrades are off. `0` is no limit. With upgrades on, the level decides |
+| `subregions.min-side` | `3` | The shortest side a plot may have |
+| `subregions.full-height` | `true` | Whether a plot spans the protection's whole height, or only the heights selected |
+
+**Creating one.** `/protections subregion create`, or **Create plot** on the plots screen (**Growth** →
+**Plots**), hands out the selector, standing on the protection's server and world. The selector is the
+`selection.full-height-tool` item (`GOLDEN_HOE`) when `full-height` is on and `selection.normal-height-tool`
+(`GOLDEN_AXE`) otherwise. It is an item only that player's client sees, so it needs PacketEvents. After the
+two corners the player types the plot's name: up to 16 of `a-z`, `0-9`, `-` and `_`.
+
+A plot must have both horizontal sides at least `min-side`, lie fully inside the protection, overlap no other
+plot, and fit under the protection's plot limit. Plots are kept as offsets from the core, so they move with
+it, and travel inside a picked-up core.
+
+**The plot screen** opens from the plots list:
+
+| Button | What it does |
+|---|---|
+| Add plot member | Type a player's name, then pick one of the protection's roles. The owner and yourself cannot be added |
+| A member, left-click | Change their role in the plot |
+| A member, shift-click | Their personal access: overrides of single permissions inside the plot |
+| A member, right-click | Remove them |
+| Plot flags | Each flag follows the protection, or is set on or off for the plot. `visitor-entry` is the protection's alone |
+| Private plot | Switch between shared and private |
+| Rent out | Offer the plot for rent, or cancel the offer. See [Economy](/docs/exyliaprotections/economy#rent) |
+| Delete plot | After a confirmation. Refused while somebody rents it |
+
+How rights work inside a plot:
+
+- A **plot member** acts with the role and overrides they hold in that plot, nowhere else. A plot member may
+  walk into the protection while it is locked.
+- In a **shared** plot everybody else falls back to their rights in the protection.
+- In a **private** plot only its members, the owner and players with `manage-subregions` act inside it.
+
+`/protections subregion info` describes the plot the player stands in: its size, members, whether it is
+private and its rent. `/protections subregion delete <name>` removes one after a confirmation, needing
+`manage-subregions`. Plot names are completed from the protection the player stands in.
+
+## Level upgrades
+
+With `submodules.upgrades`, each tier is upgraded through levels that grow the land and raise its limits.
+
+| Key | Default | What it does |
+|---|---|---|
+| `upgrades.pay-from-bank` | `false` | Whether the protection's bank pays upgrades, when banks are on and the currency matches |
+| `upgrades.currency` | blank | Currency upgrades cost |
+| `upgrades.base-max-members` | `8` | Members, players and clans together, before any upgrade. `0` is no limit |
+| `upgrades.base-max-subregions` | `2` | Plots before any upgrade. `0` is no limit |
+| `upgrades.tiers` | see below | The levels of each tier |
+
+```yaml title="plugins/ExyliaProtections/config.yml"
+upgrades:
+  tiers:
+    small:
+      levels:
+        '1': { cost: 3000.0, radius-bonus: 5, max-members: 12, max-subregions: 3, bonus-lives: 1, permission: "" }
+        '2': { cost: 6000.0, radius-bonus: 10, max-members: 16, max-subregions: 4, bonus-lives: 2, permission: "" }
+```
+
+| Tier | Level | Cost | Radius bonus | Members | Plots | Bonus lives |
+|---|---|---|---|---|---|---|
+| `small` | 1 | 3,000 | 5 | 12 | 3 | 1 |
+| `small` | 2 | 6,000 | 10 | 16 | 4 | 2 |
+| `medium` | 1 | 8,000 | 5 | 12 | 4 | 1 |
+| `medium` | 2 | 16,000 | 10 | 16 | 6 | 2 |
+| `large` | 1 | 20,000 | 5 | 16 | 6 | 1 |
+| `large` | 2 | 40,000 | 10 | 24 | 8 | 2 |
+
+Levels are numbered from 1; level 0 is a protection never upgraded, with the `base-` limits. `radius-bonus`
+and `bonus-lives` are totals at that level, not additions to the level before. `max-members` and
+`max-subregions` are the limits at that level, `0` for none. `permission` is needed to reach the level; blank
+needs none. A tier without levels cannot be upgraded.
+
+**Upgrading.** `/protections upgrade`, or **Upgrade** in the Growth section, takes the protection to its
+next level. Only the owner may, standing on the protection's server and world. The button shows the level,
+the next one, what it costs and what it adds: radius, members, plots and lives.
+
+The upgrade is refused when there is no next level, without the level's `permission`, and while the
+protection is raidable, its core is damaged or it is abandoned. The grown land must stay inside the world
+border and pass every check new land passes: no overlap, `settings.min-distance` to other owners, allowed
+worlds and foreign WorldGuard regions.
+
+The land grows by the difference in `radius-bonus` on all four sides, around where it already is. A `small`
+protection of radius 10 covers 21 × 21 blocks; level 1 makes it 31 × 31 and level 2 makes it 41 × 41. Its
+height does not change.
+
+After a confirmation, the bank pays when `pay-from-bank` is on, banks are on and `upgrades.currency` is the
+same as `bank.currency`; a bank that does not hold the price refuses the upgrade. Otherwise the owner pays.
+If the land changed while the confirmation was open, the payment goes back where it came from. A border the
+owner is looking at is redrawn to the new land. With the survival core installed, each upgrade counts
+`protections.upgrades`.
+
+**What a level gives.**
+
+- **Land:** the radius bonus, always, whether upgrades are on or not. Turning upgrades off never shrinks land,
+  and a picked-up core keeps its level.
+- **Members:** while upgrades are on, adding a player or a clan past `max-members` is refused.
+- **Plots:** while upgrades are on, the level's `max-subregions`. With upgrades off,
+  `subregions.max-per-protection` applies instead.
+- **Lives:** while upgrades are on, `bonus-lives` is added to the tier's lives. See
+  [Raids](/docs/exyliaprotections/raids#lives).
+- **Perks:** the level unlocks perks, below, whether upgrades are on or not.
+
+A protection whose level no longer exists in the config counts as the highest level its tier still has.
+Admins set any level from the admin screen; see [Administration](/docs/exyliaprotections/administration).
+
+## Member perks
+
+With `submodules.effects`, people standing in their protection get perks: `fly`, `no-hunger`,
+`keep-inventory`, and the potion effects of `effects.potions`. A tier unlocks perks level by level, each
+level keeping every perk of the ones below. The owner turns the unlocked ones on from **Perks & atmosphere**
+in the Extras section.
+
+```yaml title="plugins/ExyliaProtections/config.yml"
+effects:
+  tenants: false
+  fall-protection-seconds: 5
+  no-flight-during-siege: true
+  potions:
+    night-vision: NIGHT_VISION 0
+    haste: HASTE 0
+    speed: SPEED 0
+    jump-boost: JUMP_BOOST 0
+  tiers:
+    small:
+      levels:
+        '0': { perks: [night-vision] }
+        '1': { perks: [haste, no-hunger] }
+        '2': { perks: [speed, fly] }
+    medium:
+      levels:
+        '0': { perks: [night-vision, haste] }
+        '1': { perks: [no-hunger, speed] }
+        '2': { perks: [fly, keep-inventory] }
+    large:
+      levels:
+        '0': { perks: [night-vision, haste, no-hunger] }
+        '1': { perks: [speed, fly] }
+        '2': { perks: [keep-inventory, jump-boost] }
+```
+
+| Key | Default | What it does |
+|---|---|---|
+| `effects.tenants` | `false` | Whether tenants get the perks of the protection they rent in, not only members |
+| `effects.fall-protection-seconds` | `5` | Seconds without fall damage after a player's perk flight stops mid-air |
+| `effects.no-flight-during-siege` | `true` | Whether flight stops while a siege window is open |
+| `effects.potions` | four effects | Potion perks: a key of your choice to `EFFECT amplifier`, the amplifier counting from 0 |
+| `effects.tiers` | see above | The perks each tier unlocks, keyed by level from `0` |
+
+A potion key you add becomes a perk of its own, shown after the three built-in ones. A potion line that is not
+an effect is ignored. A level key that is not a number unlocks nothing, and a tier left out unlocks nothing.
+
+**Who gets them.** The owner, members, members of an added clan, and tenants with `tenants` on. Nobody gets
+them while the protection is raidable or abandoned. A perk applies when the level unlocks it and the owner
+turned it on. Perks are worked out again when a player crosses into another protection, teleports, respawns,
+changes world or joins, and every five seconds for everybody inside.
+
+| Perk | What it does |
+|---|---|
+| `fly` | Lets them fly. Only given to a player who could not fly already, and only that flight is taken back, in survival and adventure. Leaving mid-air gives `fall-protection-seconds` without fall damage. Logging out ends it |
+| `no-hunger` | Their hunger does not go down |
+| `keep-inventory` | Dying inside the protection that gave it keeps the inventory and the experience level, with nothing dropped |
+| Potions | The effect, short and ambient, topped up while they stay and gone a few seconds after they leave. A longer potion of their own is not removed |
+
+The perks screen lists every perk with its state, **On**, **Off** or locked by level. Only the owner sees and
+uses the switches; a perk that is on but no longer unlocked can still be turned off. Perk names and icons are
+`utility.notices.labels.perks` in the messages file; a key left out there reads from the key, so
+`night-vision` reads "Night vision".
+
+## Time and weather
+
+With `submodules.environment`, a player with the role permission `edit-environment` sets what everybody
+standing inside sees, members or not. They are the last two buttons of the **Perks & atmosphere** screen,
+which opens for the owner and for `edit-environment`; each click moves to the next value.
+
+| Setting | Values |
+|---|---|
+| Time of day | the world's own → day → noon → sunset → night |
+| Weather | the world's own → clear → rain |
+
+The time is fixed while a player stays inside, and walking out gives them the world's back. Only the player's
+own view changes; the world does not.
+
+## Merging
+
+With `submodules.merge`, the owner joins two of their protections that touch into one, from **Merge** in the
+Growth section or `/protections merge`, standing on the server and world of the one that stays. The screen
+lists the owner's protections on this server that touch it, with each one's size, where its core is and the
+size the two would have together. With none, the player is told so.
+
+The box holding both becomes the land, so it may cover nothing neither of them did: two pieces lined up side
+by side, the same width and height where they meet. The merge is refused when:
+
+- the two do not share a side, or the box would cover land neither did,
+- the box would reach any other protection, or come closer than `settings.min-distance` to another owner's,
+- it would overlap a foreign WorldGuard region,
+- either one is for sale or has a rent offer,
+- either one is raidable, has a damaged core, is abandoned or is rented.
+
+The list only checks that the two touch and line up; the rest is checked when one is picked. After a confirmation marked
+as dangerous, the other protection's bank is moved over first. If that fails, nothing is merged.
+
+What the merged protection keeps:
+
+- Its own name, home, core, tier, flags, greeting, farewell, perks, time, weather and rents.
+- The roles, members, clans, overrides and bans of both; where both say something about the same key, the one
+  kept wins.
+- Every plot of both; a plot whose name is taken gets `-2`, `-3` and so on.
+- The higher level of the two, and the raid of whichever has fewer lives left, so merging never heals a raid.
+
+The other protection is deleted: its core block is removed and not given back, and its warp is taken down.
+
+## The border preview
+
+With `submodules.visualization`, a member sees a protection's border with **Show border** in the Land section
+or `/protections show`, standing on its server and world.
+
+- Each corner of the land gets a pillar of glass and diamond blocks in the air of its column, faked for that
+  player only: the world does not change.
+- Particles trace the sides of the protection and of each plot in a band around the player's eyes, so land
+  spanning the whole world height is not drawn as four endless lines.
+
+| Key | Default | What it does |
+|---|---|---|
+| `visualization.seconds` | `10` | Seconds the border stays drawn |
+| `visualization.particle` | `END_ROD` | The particle of the protection's border |
+| `visualization.plot-particle` | `WAX_OFF` | The particle of a plot's border |
+| `visualization.show-on-create` | `true` | Whether the border is drawn to whoever protects new land |
+
+Showing a border again replaces the one shown. A particle name that does not exist is logged and its lines are
+not drawn; the pillars still are. Plots are drawn only while plots are on.
+
+## BlueMap and Dynmap
+
+With `submodules.visualization`, every protection of this server is drawn on BlueMap and Dynmap when they are
+installed, as a box in a marker set called **Protections**.
+
+| Key | Default | What it does |
+|---|---|---|
+| `visualization.bluemap` | `true` | Whether protections are drawn on BlueMap, when it is installed |
+| `visualization.dynmap` | `true` | Whether protections are drawn on Dynmap, when it is installed |
+| `visualization.map-refresh-minutes` | `5` | Minutes between two redraws of every marker |
+| `visualization.map-colors` | see below | Marker colours by state, in hex |
+
+A marker is redrawn whenever its protection is written, and every marker every `map-refresh-minutes`, which
+picks up sales, rents and raids that changed without a write and drops protections that are gone. Each server
+draws only its own protections. On BlueMap each marker is a box from the protection's lowest to highest block,
+on every map of its world; on Dynmap it is an area marker with that height range.
+
+The colour is the most urgent state, in this order:
+
+| State | Default |
+|---|---|
+| `raidable` | `#a33b53` |
+| `abandoned` | `#6c757d` |
+| `for-sale` | `#8fffc1` |
+| `for-rent` | `#59a4ff` |
+| `normal` | `#8a51c4` |
+
+`for-rent` means any rent offer of the protection or one of its plots. A state left out, or a colour that is
+not hex, uses `normal`. The marker's label and the set's name are text, so they live in the messages file:
+`visualization.map-label` (`%name% (%owner%)`, the only two placeholders it takes) and `visualization.map-set-label`
+(`Protections`). Web maps cannot read colour tokens, so labels are drawn as plain text.
+
+<Callout type="note" title="Read when the server starts">
+Whether BlueMap and Dynmap are drawn on is decided when the plugin enables: `submodules.visualization`,
+`visualization.bluemap` and `visualization.dynmap` must be on then, and the map plugin installed.
+`map-refresh-minutes` is also read at start. Changing them needs a restart.
+</Callout>
+
+## Placeholders
+
+These read the protection, or the plot, the player stands in.
+
+| Placeholder | What it returns |
+|---|---|
+| `%exyliaprotections_protections_level%` | The protection's level |
+| `%exyliaprotections_protections_subregion%` | The plot's name. Blank outside a plot or while plots are off |
+| `%exyliaprotections_protections_effects_active%` | The perks active on the player, by name, comma-separated |
+
+## All keys
+
+```yaml title="plugins/ExyliaProtections/config.yml"
+submodules:
+  subregions: false
+  upgrades: false
+  visualization: true
+  effects: false
+  environment: false
+  merge: false
+subregions:
+  max-per-protection: 3
+  min-side: 3
+  full-height: true
+upgrades:
+  pay-from-bank: false
+  currency: ""
+  base-max-members: 8
+  base-max-subregions: 2
+  tiers:
+    small:
+      levels:
+        '1': { cost: 3000.0, radius-bonus: 5, max-members: 12, max-subregions: 3, bonus-lives: 1, permission: "" }
+        '2': { cost: 6000.0, radius-bonus: 10, max-members: 16, max-subregions: 4, bonus-lives: 2, permission: "" }
+    medium:
+      levels:
+        '1': { cost: 8000.0, radius-bonus: 5, max-members: 12, max-subregions: 4, bonus-lives: 1, permission: "" }
+        '2': { cost: 16000.0, radius-bonus: 10, max-members: 16, max-subregions: 6, bonus-lives: 2, permission: "" }
+    large:
+      levels:
+        '1': { cost: 20000.0, radius-bonus: 5, max-members: 16, max-subregions: 6, bonus-lives: 1, permission: "" }
+        '2': { cost: 40000.0, radius-bonus: 10, max-members: 24, max-subregions: 8, bonus-lives: 2, permission: "" }
+visualization:
+  seconds: 10
+  particle: END_ROD
+  plot-particle: WAX_OFF
+  show-on-create: true
+  bluemap: true
+  dynmap: true
+  map-refresh-minutes: 5
+  map-colors:
+    normal: "#8a51c4"
+    for-sale: "#8fffc1"
+    for-rent: "#59a4ff"
+    raidable: "#a33b53"
+    abandoned: "#6c757d"
+```
+
+`effects` is shown whole under [Member perks](#member-perks).

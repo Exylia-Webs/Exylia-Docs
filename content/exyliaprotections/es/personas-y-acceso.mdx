@@ -1,0 +1,309 @@
+---
+title: "Personas y acceso"
+description: "Miembros, clanes, roles y cada permiso de rol, ajustes personales, flags, baneos, el bloqueo, bienvenidas y despedidas, el registro de auditoría y quién se salta todo."
+---
+
+Quién puede hacer qué dentro de una protección lo deciden sus **roles**. A miembros y clanes se les da un
+rol, cualquier otro es un **visitante**, y a un miembro concreto se le pueden dar **ajustes personales**
+por encima de su rol. Cómo se comporta el terreno para todos — PvP, fuego, mobs — es un conjunto de
+**flags**.
+
+Todo se edita desde la pantalla de la protección: **Personas** tiene miembros, roles y baneos, **Acceso**
+tiene las flags, el bloqueo y la bienvenida. Ver [Menús](/docs/exyliaprotections/menus).
+
+## Cómo se deciden los derechos de un jugador
+
+Para cualquier cosa que haga un jugador dentro de una protección, gana la primera regla que responde:
+
+1. Un jugador con `exyliaprotections.bypass` [definido para él](#bypass-y-admins) puede hacerlo todo.
+2. Mientras la protección esté [asaltable](/docs/exyliaprotections/asaltos), sus enemigos pueden hacer lo
+   que lista `raids.raidable-permissions`; mientras esté [abandonada](/docs/exyliaprotections/economia),
+   también todo el que no sea su dueño ni miembro.
+3. El dueño puede hacerlo todo.
+4. Dentro de una [parcela](/docs/exyliaprotections/herramientas): el ajuste personal de un miembro de la
+   parcela y después su rol en ella. Una parcela **privada** rechaza a todos los demás que no tengan
+   `manage-subregions`.
+5. Un **ajuste personal** de ese jugador, permitir o denegar.
+6. El rol propio del jugador.
+7. El rol dado a su clan.
+8. El rol `visitor`.
+
+Un jugador que es miembro y además está en un clan añadido usa su propio rol; el rol del clan solo cuenta
+para quien no tiene uno. Un inquilino cuyo alquiler terminó cuenta como visitante desde ese momento.
+
+## Miembros y clanes
+
+**Personas** → **Miembros** lista cada miembro con su rol y cuántos ajustes personales tiene, y después
+cada clan añadido.
+
+| Clic | Qué hace |
+|---|---|
+| **Agregar jugador** | Pide un nombre. El jugador tiene que haber jugado antes en la red. Después pide qué rol recibe. |
+| **Agregar clan** | Pide la etiqueta de un clan y luego el rol. Necesita un plugin de clanes; sin él, "No hay ningún plugin de clanes en este servidor." |
+| Clic izquierdo en un miembro o clan | Cambia su rol. |
+| Shift + clic izquierdo en un miembro | Abre sus [ajustes personales](#ajustes-personales). Los clanes no tienen. |
+| Clic derecho en un miembro o clan | Lo quita, con sus ajustes personales. Un inquilino no se puede quitar mientras alquila. |
+
+Todo necesita `manage-members`. La pregunta del rol solo ofrece roles cuyos permisos tenga todos el propio
+jugador: nadie salvo el dueño reparte un permiso que no tiene. `visitor` nunca se ofrece. Con las
+[mejoras de nivel](/docs/exyliaprotections/economia) activadas, cada nivel limita cuántos miembros y clanes
+juntos admite una protección (`upgrades.base-max-members`, 8, antes de cualquier mejora).
+
+El rol de un clan se aplica a cada miembro del clan, incluidos los que entren después.
+
+## Roles
+
+**Personas** → **Roles** lista cada rol con cuántos permisos concede y cuántos miembros y clanes lo
+tienen, con `visitor` al final. Necesita `manage-roles`.
+
+| Clic | Qué hace |
+|---|---|
+| **Crear rol** | Pide un nombre y abre el rol nuevo, vacío. |
+| Clic izquierdo en un rol | Abre sus interruptores de permisos. |
+| Clic derecho en un rol | Lo renombra. Todos los que lo tienen lo conservan con el nombre nuevo. |
+| Shift + clic derecho en un rol | Lo borra tras una confirmación. Todos los que lo tienen — miembros, clanes y miembros de parcela — dejan de ser miembros. |
+
+Un nombre de rol tiene hasta 16 caracteres de `a-z`, `0-9`, `-` y `_`, no puede ser `owner` ni repetir otro
+rol. `visitor` no se puede renombrar ni borrar.
+
+Las protecciones nuevas empiezan con la sección `roles` de `config.yml`:
+
+```yaml
+roles:
+  member:
+    permissions: [break, place, containers, doors, redstone, buckets, animals, ride,
+                  decorations, trade, leash, bank-deposit]
+  trusted:
+    permissions: [break, place, containers, doors, redstone, buckets, animals, ride,
+                  decorations, trade, leash, manage-members, set-home, bank-deposit]
+  visitor:
+    permissions: []
+```
+
+Las claves de flag escritas en un rol se ignoran. Cada protección guarda su propia copia de sus roles:
+editar esta sección solo cambia las protecciones nuevas.
+
+### Reglas que protegen la protección
+
+- Cambiar un permiso de un rol necesita `manage-roles` **y** tener ese permiso uno mismo.
+- Nadie salvo el dueño edita el rol que tiene, ni sus propios ajustes personales, rol o membresía: "Solo
+  el dueño puede cambiar tu propio acceso."
+- El rol `visitor` incluye a todos los que no son miembros, así que solo puede recibir los permisos del
+  terreno (de `break` a `leash` abajo). Los permisos de gestión se le rechazan, y nunca los concede aunque
+  se escriban a mano en el archivo.
+- Abrir la pantalla de la protección e ir al hogar necesitan ser miembro. Borrar, recoger el núcleo,
+  vender, regalar, mejorar, fusionar y activar ventajas son solo del dueño.
+
+## Permisos de rol
+
+| Permiso | Qué permite | Se ofrece mientras |
+|---|---|---|
+| `break` | Romper bloques, pisotear cultivos, dañar vagonetas y botes, romper bloques con un proyectil | siempre |
+| `place` | Colocar bloques, editar carteles, colocar botes, vagonetas y soportes de armadura, usar huevos de spawn, polvo de hueso, mechero y cargas ígneas, encender fuego, usar bloques clicables sin inventario (mesas de crafteo, yunques, camas…), dejar que se forme un portal | siempre |
+| `containers` | Abrir todo lo que tenga inventario (cofres, barriles, hornos, shulkers, tolvas…), atriles y coger su libro, tocadiscos, estanterías cinceladas | siempre |
+| `doors` | Puertas, trampillas y puertas de valla | siempre |
+| `redstone` | Botones, palancas, repetidores, comparadores, sensores de luz, bloques musicales, placas de presión y cuerdas trampa; las flechas y objetos lanzados sobre ellos cuentan como quien los lanzó | siempre |
+| `buckets` | Llenar y vaciar cubos | siempre |
+| `animals` | Dañar, alimentar, interactuar con y esquilar animales y otros mobs no hostiles, atraerlos con una caña | siempre |
+| `ride` | Montar caballos, botes y vagonetas | siempre |
+| `decorations` | Colocar, romper y usar marcos, cuadros y soportes de armadura | siempre |
+| `trade` | Comerciar con aldeanos y comerciantes ambulantes | siempre |
+| `leash` | Atar y desatar mobs | siempre |
+| `manage-members` | Añadir y quitar miembros y clanes, elegir su rol, definir ajustes personales | siempre |
+| `manage-roles` | Crear, renombrar, borrar y editar roles | siempre |
+| `edit-flags` | Cambiar las flags | siempre |
+| `rename` | Renombrar la protección, editar su bienvenida y despedida | siempre |
+| `set-home` | Mover el hogar a donde está, dentro de la protección | siempre |
+| `manage-core` | Ocultar, mostrar y mover el núcleo | siempre |
+| `manage-bans` | Banear y desbanear jugadores | `submodules.bans` |
+| `toggle-lock` | Cerrar y abrir | `submodules.lock` |
+| `view-logs` | Leer el registro de auditoría | `submodules.logs` |
+| `bank-deposit`, `bank-withdraw` | Usar el banco | `submodules.bank` |
+| `manage-subregions` | Crear, editar y borrar parcelas | `submodules.subregions` |
+| `manage-rent` | Ofrecer en alquiler el terreno y sus parcelas | `submodules.rent` |
+| `manage-warp` | Publicar y editar el warp público | `submodules.warps` |
+| `edit-environment` | Cambiar la hora y el clima dentro | `submodules.environment` |
+
+"Se ofrece mientras" es cuándo aparece el permiso en las pantallas de roles y de ajustes personales. Un
+permiso cuya función está desactivada se oculta, no se quita: vuelve tal como estaba al activar la
+función. Los mobs hostiles nunca están protegidos, y los ataques entre jugadores los decide la flag `pvp`,
+no un permiso.
+
+## Ajustes personales
+
+Un ajuste personal fija un permiso para un miembro, ignorando su rol. Cada clic en un permiso de la
+pantalla de ajustes de un miembro lo pasa por **ROL** (seguir el rol) → **PERMITIR** → **DENEGAR** → de
+vuelta a rol. La lista de miembros muestra cuántos ajustes tiene cada uno.
+
+Los ajustes necesitan `manage-members`, y cambiar uno necesita tener ese permiso uno mismo. Existen solo
+para jugadores, no para clanes, y desaparecen cuando se quita al miembro. Los miembros de una parcela
+tienen ajustes propios dentro de su parcela, definidos desde la pantalla de la parcela.
+
+## Flags
+
+Una flag es el interruptor del propio terreno. Se aplica a todos los que están dentro, sean miembros o no.
+**Acceso** → **Propiedades** las cambia; necesita `edit-flags`.
+
+| Flag | Mientras está desactivada |
+|---|---|
+| `pvp` | Los jugadores no pueden herirse entre sí, con armas, proyectiles, pociones o nubes dañinas, ni atraerse con una caña, cuando cualquiera de los dos está en terreno con la flag desactivada |
+| `mob-spawning` | No hay apariciones naturales: naturales, jinetes, patrullas, refuerzos, invasiones de aldea, asaltos, trampas. Los generadores, huevos y la cría siguen funcionando |
+| `explosions` | Las explosiones no rompen bloques ni decoraciones colgadas. Endermans, devastadores, withers, el dragón, zombis rompiendo puertas y lepismas tampoco cambian bloques |
+| `fire-spread` | El fuego no se extiende ni quema bloques, y solo lo enciende un mechero |
+| `liquid-flow` | El agua y la lava no fluyen |
+| `crop-growth` | Los cultivos y plantas no crecen |
+| `leaf-decay` | Las hojas no se caen |
+| `visitor-entry` | Quien no es miembro no puede entrar: la protección está [cerrada](#bloqueo) |
+
+Algunas reglas valen digan lo que digan las flags:
+
+- Los líquidos nunca fluyen dentro de una protección desde fuera.
+- Los pistones nunca mueven un bloque hacia dentro, hacia fuera ni a través de una protección que no sea
+  la suya.
+- Las tolvas y vagonetas con tolva de fuera de una protección nunca sacan de un contenedor de dentro, y
+  los dispensadores de fuera nunca disparan hacia dentro.
+- Los bloques que caen nunca aterrizan en una protección distinta de aquella de la que cayeron, y los
+  proyectiles que nadie disparó (desde un dispensador de fuera, por ejemplo) no cambian ningún bloque de
+  dentro.
+- Los mobs nunca pisotean cultivos dentro de una protección.
+
+Un jugador que enciende fuego necesita `place`. `settings.deny-message-cooldown-millis` (1500) es cuánto
+espera un jugador entre dos mensajes de "Este terreno está protegido."
+
+<Callout type="note" title="Mientras se cargan las protecciones">
+Hasta que se han leído todas las protecciones de la base de datos, los mundos donde se puede proteger
+terreno rechazan construir e interactuar, y también las explosiones, la propagación del fuego y el flujo
+de líquidos, para que una base de datos lenta nunca deje el terreno abierto. Durante ese tiempo solo
+actúa un jugador con el bypass.
+</Callout>
+
+## Baneos
+
+Con `submodules.bans`, un jugador con `manage-bans` banea a alguien de la protección. Un jugador baneado
+es empujado justo fuera del borde más cercano y no puede volver: caminar, montar, perlas de ender, fruta
+coral, comandos, teletransportes de plugins, el modo espectador y los portales hacia dentro se detienen.
+Al entrar al servidor o reaparecer dentro, se le vuelve a echar.
+
+**Personas** → **Expulsiones** lista los baneos en curso con su motivo, quién baneó y el tiempo restante;
+clic derecho en uno lo levanta. **Banear jugador** hace dos preguntas y muestra un resumen antes de
+guardar nada: el nombre del jugador, y luego "¿Por cuánto tiempo y por qué?". La respuesta es una
+duración seguida de un motivo opcional: `7d griefing`, `2h`, `30m spam`, o `permanent` (también `perm` o
+`forever`) para un baneo que no termina.
+
+Lo mismo desde el chat, de pie en la protección:
+
+```
+/protections ban <jugador> [duración] [motivo]
+/protections unban <jugador>
+```
+
+Sin duración el baneo es permanente; un motivo necesita una duración delante. Un motivo es texto plano de
+hasta `bans.reason-max-length` (64) caracteres: se quitan colores y placeholders.
+
+No se puede banear a: el dueño, los miembros (incluidos los de un clan) y los inquilinos — "es miembro.
+Quítalo primero." — ni, mientras estén conectados, a quien tenga el permiso de admin o el bypass.
+
+Un baneo vale incluso mientras la protección está abierta a visitantes. Un asalto o un abandono abre el
+terreno a todos, digan lo que digan sus baneos y su bloqueo. Desactivar `submodules.bans` deja de aplicar
+los baneos pero los conserva; vuelven a valer al activarlo de nuevo.
+
+## Bloqueo
+
+Con `submodules.lock`, un jugador con `toggle-lock` cierra la protección para que solo entren el dueño,
+los miembros, los inquilinos y los miembros de parcela. Cerrar es desactivar la flag `visitor-entry`,
+desde **Acceso** → **Bloqueo** o con `/protections lock` de pie dentro. Los visitantes que ya estén dentro
+son echados.
+
+<Callout type="note" title="Desactivar la función de bloqueo no impide cerrar">
+`submodules.lock: false` oculta el botón de bloqueo y rechaza `/protections lock`, pero `visitor-entry`
+sigue en la pantalla de flags. Cualquiera con `edit-flags` puede seguir cerrando el terreno desde ahí.
+</Callout>
+
+## Bienvenidas y despedidas
+
+Con `submodules.enter-leave`, al entrar en una protección se muestra un título y al salir una barra de
+acción. Un jugador con `rename` define los textos propios de la protección desde **Acceso** →
+**Bienvenida y despedida**:
+
+| Clic | Qué hace |
+|---|---|
+| Clic izquierdo | Pide la bienvenida. |
+| Clic derecho | Pide la despedida. |
+| Shift + clic derecho | Borra las dos y vuelve a los textos por defecto. |
+
+Ambas son texto plano, recortado a `enter-leave.message-max-length` (64) caracteres. Sin una propia, la
+protección usa `enter-default` ("Propiedad de %owner%") y `leave-default` ("« Saliste de %name%") de
+`messages.yml`.
+
+| Clave de `config.yml` | Por defecto | Qué hace |
+|---|---|---|
+| `enter-leave.enter-sound` | `BLOCK_AMETHYST_BLOCK_CHIME\|0.6\|1.4` | Suena al entrar |
+| `enter-leave.leave-sound` | vacío | Suena al salir |
+| `enter-leave.message-max-length` | 64 | Bienvenida o despedida más larga |
+| `enter-leave.cooldown-millis` | 1500 | Cruzar un borde otra vez dentro de este tiempo no muestra nada, así caminar a lo largo de uno no molesta |
+| `enter-leave.show-to-members` | `true` | Desactivado, solo se muestran a los visitantes |
+
+Los títulos en sí están en la sección `enter-leave` de `messages.yml`: `enter-title` (`%name%` sobre
+`%message%`), `enter-actionbar` (vacío), `leave-title` (vacío) y `leave-actionbar` (`%message%`).
+Placeholders: `%name%`, `%owner%` y `%message%`, que es la bienvenida o la despedida. Pasar directamente de
+una protección a otra solo saluda. Entrar en una parcela muestra `enter-subregion` en la barra de acción.
+Con ExyliaSurvivalCore instalado, los jugadores pueden silenciarlo todo con su ajuste
+`protection-messages`.
+
+## Registro de auditoría
+
+Con `submodules.logs`, cada protección guarda un historial. Un jugador con `view-logs` lo abre desde
+**Defensa** → **Registros** o con `/protections logs` de pie dentro. Clic izquierdo en **Filtrar por
+acción** recorre las acciones, clic derecho lo quita; clic izquierdo en **Filtrar por jugador** pide un
+nombre, clic derecho lo quita.
+
+| Acción | Qué se registra |
+|---|---|
+| `break` | Un bloque roto, con su tipo |
+| `place` | Un bloque colocado, con su tipo |
+| `container` | Un contenedor abierto: cofre, barril, shulker, horno, alto horno, ahumador, tolva, dispensador, soltador, soporte para pociones |
+| `member` | Un miembro o clan añadido, quitado o con otro rol, y cambios de ajustes personales |
+| `role` | Un rol creado, renombrado, borrado, o uno de sus permisos cambiado |
+| `flag` | Una flag cambiada |
+| `ban` | Un baneo o desbaneo |
+| `lock` | Cerrada o abierta |
+| `core` | El núcleo ocultado, mostrado o movido. Recoger y borrar también se registran, pero el registro de una protección que ya no existe no se puede abrir |
+| `settings` | Renombrada, hogar movido, bienvenida o despedida cambiadas |
+| `raid` | Una vida perdida, la protección asaltada, una vida recomprada, vidas fijadas o un asalto terminado por un admin |
+| `bank` | Ingresos y retiradas |
+| `upkeep` | Mantenimiento pagado por un miembro |
+| `market` | Puesta en venta, retirada, comprada, regalada (por el dueño o un admin) |
+| `rent` | Ofrecida, oferta cancelada, alquilada, renovada, inquilino desalojado |
+| `upgrade` | Mejorada, o nivel fijado por un admin |
+| `warp` | Publicado, retirado, movido, renombrado, descrito, icono cambiado |
+| `merge` | Otra protección fusionada en esta |
+
+`break`, `place` y `container` registran solo lo que realmente pasó; todo lo demás es un cambio hecho desde
+una pantalla o un comando. Cada entrada guarda quién, qué (hasta 128 caracteres), dónde, en qué servidor y
+cuándo.
+
+| Clave | Por defecto | Qué hace |
+|---|---|---|
+| `logs.retention-days` | 14 | Días que se guarda una entrada. `0` las guarda para siempre. Las antiguas se purgan cada seis horas. |
+| `logs.flush-seconds` | 10 | Segundos entre dos escrituras de las entradas en cola. |
+| `logs.skip-actions` | `[]` | Acciones que **no** se registran. Todo lo demás sí, incluidas las acciones que añadan versiones futuras. |
+| `logs.owner-blocks` | `false` | Si se registran los `break`, `place` y `container` del propio dueño. |
+| `logs.menu-rows` | 500 | Cuántas de las entradas más recientes lee la pantalla del registro. |
+
+<Callout type="note" title="Los filtros solo buscan entre las entradas más recientes">
+La pantalla del registro lee las `logs.menu-rows` entradas más nuevas y filtra esas. Una entrada más
+antigua de un jugador no aparece al filtrar por él. El filtro de jugador busca el nombre exacto.
+</Callout>
+
+## Bypass y admins
+
+| Permiso | Qué hace |
+|---|---|
+| `exyliaprotections.admin` | Abre las pantallas de cualquier protección, entra en cualquiera, no se le puede banear mientras está conectado, y cuenta como dueño en cada menú y comando. **No** permite romper, colocar ni usar nada dentro. |
+| `exyliaprotections.bypass` | Construye, abre y entra en cualquier sitio, ignorando toda protección, incluso mientras las protecciones se están cargando. |
+
+El bypass solo cuenta cuando el permiso está **definido** para el jugador, por un plugin de permisos o por
+el valor por defecto de `plugin.yml`. Ese valor por defecto da los dos permisos a los operadores, así que
+los operadores se saltan toda protección. Para que un operador juegue con las reglas, pon
+`exyliaprotections.bypass` en `false` para él en tu plugin de permisos. Los nombres antiguos
+`exyliasurvivalcore.protections.admin` y `exyliasurvivalcore.protections.bypass` conceden lo mismo.

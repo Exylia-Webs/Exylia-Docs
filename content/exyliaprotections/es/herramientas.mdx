@@ -1,0 +1,367 @@
+---
+title: "Herramientas"
+description: "Parcelas dentro de una protección, mejoras de nivel, ventajas de miembros, hora y clima propios, fusionar dos protecciones, la vista previa del borde y los marcadores de BlueMap y Dynmap."
+---
+
+Lo que los dueños hacen con el terreno que ya tienen: dividirlo en parcelas, hacerlo crecer por niveles, dar
+ventajas a sus miembros, fijar su hora y su clima, unir dos trozos en uno y ver por dónde va su borde. Cada
+función tiene un interruptor bajo `submodules` en `config.yml`:
+
+| Interruptor | Por defecto | Función |
+|---|---|---|
+| `subregions` | `false` | Parcelas |
+| `upgrades` | `false` | Mejoras de nivel |
+| `effects` | `false` | Ventajas de miembros |
+| `environment` | `false` | Hora y clima |
+| `merge` | `false` | Fusionar |
+| `visualization` | `true` | La vista previa del borde y los marcadores de los mapas web |
+
+Un interruptor desactivado oculta sus botones, rechaza sus comandos y deja de actuar. En la pantalla de una
+protección, las parcelas, las mejoras y la fusión están en la sección **Crecimiento**, las ventajas, la hora y
+el clima en **Extras**, y la vista previa del borde en **Terreno**.
+
+## Parcelas
+
+Con `submodules.subregions`, un jugador con el permiso de rol `manage-subregions` divide una protección en
+**parcelas**: cajas dentro de ella con miembros, acceso personal y flags propios.
+
+| Clave | Por defecto | Qué hace |
+|---|---|---|
+| `subregions.max-per-protection` | `3` | Parcelas que admite una protección mientras las mejoras están desactivadas. `0` es sin límite. Con las mejoras activadas, decide el nivel |
+| `subregions.min-side` | `3` | El lado más corto que puede tener una parcela |
+| `subregions.full-height` | `true` | Si una parcela ocupa toda la altura de la protección, o solo las alturas seleccionadas |
+
+**Crear una.** `/protections subregion create`, o **Crear parcela** en la pantalla de parcelas
+(**Crecimiento** → **Parcelas**), entrega el selector, estando en el servidor y el mundo de la protección. El
+selector es el objeto `selection.full-height-tool` (`GOLDEN_HOE`) cuando `full-height` está activado y
+`selection.normal-height-tool` (`GOLDEN_AXE`) si no. Es un objeto que solo ve el cliente de ese jugador, así
+que necesita PacketEvents. Tras las dos esquinas, el jugador escribe el nombre de la parcela: hasta 16 de
+`a-z`, `0-9`, `-` y `_`.
+
+Una parcela debe tener los dos lados horizontales de al menos `min-side`, quedar entera dentro de la
+protección, no solaparse con otra parcela y caber en el límite de parcelas de la protección. Las parcelas se
+guardan como desplazamientos desde el núcleo, así que se mueven con él y viajan dentro de un núcleo recogido.
+
+**La pantalla de la parcela** se abre desde la lista de parcelas:
+
+| Botón | Qué hace |
+|---|---|
+| Agregar miembro | Escribe el nombre de un jugador y elige uno de los roles de la protección. No se puede añadir al dueño ni a uno mismo |
+| Un miembro, clic izquierdo | Cambia su rol en la parcela |
+| Un miembro, shift-clic | Su acceso personal: overrides de permisos sueltos dentro de la parcela |
+| Un miembro, clic derecho | Lo quita |
+| Reglas de parcela | Cada flag sigue a la protección, o se activa o desactiva para la parcela. `visitor-entry` es solo de la protección |
+| Parcela privada | Cambia entre compartida y privada |
+| Alquilar | Ofrece la parcela en alquiler, o cancela la oferta. Ver [Economía](/docs/exyliaprotections/economia#alquiler) |
+| Eliminar parcela | Tras una confirmación. Se rechaza mientras alguien la alquila |
+
+Cómo funcionan los derechos dentro de una parcela:
+
+- Un **miembro de la parcela** actúa con el rol y los overrides que tiene en esa parcela, y en ningún otro
+  sitio. Un miembro de parcela puede entrar en la protección aunque esté bloqueada.
+- En una parcela **compartida**, todos los demás usan sus derechos en la protección.
+- En una parcela **privada** solo actúan sus miembros, el dueño y los jugadores con `manage-subregions`.
+
+`/protections subregion info` describe la parcela en la que está el jugador: su tamaño, sus miembros, si es
+privada y su alquiler. `/protections subregion delete <nombre>` borra una tras una confirmación, con
+`manage-subregions`. Los nombres de parcela se autocompletan desde la protección en la que está el jugador.
+
+## Mejoras de nivel
+
+Con `submodules.upgrades`, cada tier se mejora por niveles que hacen crecer el terreno y suben sus límites.
+
+| Clave | Por defecto | Qué hace |
+|---|---|---|
+| `upgrades.pay-from-bank` | `false` | Si el banco de la protección paga las mejoras, cuando los bancos están activados y la moneda coincide |
+| `upgrades.currency` | vacío | Moneda de las mejoras |
+| `upgrades.base-max-members` | `8` | Miembros, jugadores y clanes juntos, antes de cualquier mejora. `0` es sin límite |
+| `upgrades.base-max-subregions` | `2` | Parcelas antes de cualquier mejora. `0` es sin límite |
+| `upgrades.tiers` | ver abajo | Los niveles de cada tier |
+
+```yaml title="plugins/ExyliaProtections/config.yml"
+upgrades:
+  tiers:
+    small:
+      levels:
+        '1': { cost: 3000.0, radius-bonus: 5, max-members: 12, max-subregions: 3, bonus-lives: 1, permission: "" }
+        '2': { cost: 6000.0, radius-bonus: 10, max-members: 16, max-subregions: 4, bonus-lives: 2, permission: "" }
+```
+
+| Tier | Nivel | Coste | Bonus de radio | Miembros | Parcelas | Vidas extra |
+|---|---|---|---|---|---|---|
+| `small` | 1 | 3.000 | 5 | 12 | 3 | 1 |
+| `small` | 2 | 6.000 | 10 | 16 | 4 | 2 |
+| `medium` | 1 | 8.000 | 5 | 12 | 4 | 1 |
+| `medium` | 2 | 16.000 | 10 | 16 | 6 | 2 |
+| `large` | 1 | 20.000 | 5 | 16 | 6 | 1 |
+| `large` | 2 | 40.000 | 10 | 24 | 8 | 2 |
+
+Los niveles se numeran desde 1; el nivel 0 es una protección nunca mejorada, con los límites `base-`.
+`radius-bonus` y `bonus-lives` son totales en ese nivel, no sumas al nivel anterior. `max-members` y
+`max-subregions` son los límites en ese nivel, `0` para ninguno. `permission` hace falta para llegar al nivel;
+vacío no pide nada. Un tier sin niveles no se puede mejorar.
+
+**Mejorar.** `/protections upgrade`, o **Mejorar** en la sección Crecimiento, lleva la protección a su
+siguiente nivel. Solo puede el dueño, estando en el servidor y el mundo de la protección. El botón muestra el
+nivel, el siguiente, lo que cuesta y lo que añade: radio, miembros, parcelas y vidas.
+
+La mejora se rechaza cuando no hay siguiente nivel, sin el `permission` del nivel, y mientras la protección es
+saqueable, su núcleo está dañado o está abandonada. El terreno ampliado debe quedar dentro del borde del mundo
+y pasar todas las comprobaciones del terreno nuevo: sin solapes, `settings.min-distance` respecto a otros
+dueños, mundos permitidos y regiones ajenas de WorldGuard.
+
+El terreno crece la diferencia de `radius-bonus` por los cuatro lados, alrededor de donde ya está. Una
+protección `small` de radio 10 cubre 21 × 21 bloques; el nivel 1 la deja en 31 × 31 y el nivel 2 en 41 × 41.
+Su altura no cambia.
+
+Tras una confirmación, paga el banco cuando `pay-from-bank` está activado, los bancos están activados y
+`upgrades.currency` es la misma que `bank.currency`; un banco que no tiene el precio rechaza la mejora. Si no,
+paga el dueño. Si el terreno cambió mientras la confirmación estaba abierta, el pago vuelve a donde salió. Un
+borde que el dueño esté mirando se redibuja con el terreno nuevo. Con el survival core instalado, cada mejora
+cuenta `protections.upgrades`.
+
+**Lo que da un nivel.**
+
+- **Terreno:** el bonus de radio, siempre, estén las mejoras activadas o no. Desactivar las mejoras nunca
+  encoge el terreno, y un núcleo recogido conserva su nivel.
+- **Miembros:** con las mejoras activadas, añadir un jugador o un clan por encima de `max-members` se rechaza.
+- **Parcelas:** con las mejoras activadas, el `max-subregions` del nivel. Con las mejoras desactivadas se aplica
+  `subregions.max-per-protection`.
+- **Vidas:** con las mejoras activadas, `bonus-lives` se suma a las vidas del tier. Ver
+  [Asaltos](/docs/exyliaprotections/asaltos#vidas).
+- **Ventajas:** el nivel desbloquea ventajas, abajo, estén las mejoras activadas o no.
+
+Una protección cuyo nivel ya no existe en la configuración cuenta como el nivel más alto que su tier todavía
+tiene. Los administradores fijan cualquier nivel desde la pantalla de administración; ver
+[Administración](/docs/exyliaprotections/administracion).
+
+## Ventajas de miembros
+
+Con `submodules.effects`, quienes están en su protección reciben ventajas: `fly`, `no-hunger`,
+`keep-inventory` y los efectos de poción de `effects.potions`. Un tier desbloquea ventajas nivel a nivel, y
+cada nivel conserva todas las de los anteriores. El dueño activa las desbloqueadas desde **Ventajas y
+ambiente** en la sección Extras.
+
+```yaml title="plugins/ExyliaProtections/config.yml"
+effects:
+  tenants: false
+  fall-protection-seconds: 5
+  no-flight-during-siege: true
+  potions:
+    night-vision: NIGHT_VISION 0
+    haste: HASTE 0
+    speed: SPEED 0
+    jump-boost: JUMP_BOOST 0
+  tiers:
+    small:
+      levels:
+        '0': { perks: [night-vision] }
+        '1': { perks: [haste, no-hunger] }
+        '2': { perks: [speed, fly] }
+    medium:
+      levels:
+        '0': { perks: [night-vision, haste] }
+        '1': { perks: [no-hunger, speed] }
+        '2': { perks: [fly, keep-inventory] }
+    large:
+      levels:
+        '0': { perks: [night-vision, haste, no-hunger] }
+        '1': { perks: [speed, fly] }
+        '2': { perks: [keep-inventory, jump-boost] }
+```
+
+| Clave | Por defecto | Qué hace |
+|---|---|---|
+| `effects.tenants` | `false` | Si los inquilinos reciben las ventajas de la protección en la que alquilan, no solo los miembros |
+| `effects.fall-protection-seconds` | `5` | Segundos sin daño por caída cuando el vuelo de la ventaja se corta en el aire |
+| `effects.no-flight-during-siege` | `true` | Si el vuelo se detiene mientras hay una ventana de asedio abierta |
+| `effects.potions` | cuatro efectos | Ventajas de poción: una clave a tu elección y `EFECTO amplificador`, contando el amplificador desde 0 |
+| `effects.tiers` | ver arriba | Las ventajas que desbloquea cada tier, por nivel desde `0` |
+
+Una clave de poción que añadas se convierte en una ventaja propia, que aparece después de las tres
+integradas. Una línea de poción que no es un efecto se ignora. Una clave de nivel que no es un número no
+desbloquea nada, y un tier que no aparece tampoco.
+
+**Quién las recibe.** El dueño, los miembros, los miembros de un clan añadido y los inquilinos con `tenants`
+activado. Nadie las recibe mientras la protección es saqueable o está abandonada. Una ventaja se aplica cuando
+el nivel la desbloquea y el dueño la activó. Las ventajas se recalculan cuando un jugador pasa a otra
+protección, se teletransporta, reaparece, cambia de mundo o entra, y cada cinco segundos para todos los que
+están dentro.
+
+| Ventaja | Qué hace |
+|---|---|
+| `fly` | Le deja volar. Solo se da a un jugador que no podía volar ya, y solo ese vuelo se quita, en supervivencia y aventura. Salir en el aire da `fall-protection-seconds` sin daño por caída. Desconectarse lo termina |
+| `no-hunger` | Su hambre no baja |
+| `keep-inventory` | Morir dentro de la protección que la da conserva el inventario y el nivel de experiencia, sin soltar nada |
+| Pociones | El efecto, corto y ambiental, renovado mientras sigue dentro y que desaparece pocos segundos después de salir. Una poción propia más larga no se quita |
+
+La pantalla de ventajas lista todas con su estado: activada, desactivada o bloqueada por nivel. Solo el dueño
+ve y usa los interruptores; una ventaja activada que ya no está desbloqueada se puede seguir desactivando. Los
+nombres e iconos de las ventajas son `utility.notices.labels.perks` en el archivo de mensajes; una clave que no
+aparece ahí se lee de la propia clave, así que `night-vision` se lee "Night vision".
+
+## Hora y clima
+
+Con `submodules.environment`, un jugador con el permiso de rol `edit-environment` fija lo que ve todo el que
+está dentro, sea miembro o no. Son los dos últimos botones de la pantalla **Ventajas y ambiente**, que se abre
+para el dueño y para `edit-environment`; cada clic pasa al valor siguiente.
+
+| Ajuste | Valores |
+|---|---|
+| Hora del día | la del mundo → día → mediodía → atardecer → noche |
+| Clima | el del mundo → despejado → lluvia |
+
+La hora se queda fija mientras el jugador sigue dentro, y al salir recupera la del mundo. Solo cambia lo que ve
+el jugador; el mundo no.
+
+## Fusionar
+
+Con `submodules.merge`, el dueño une dos de sus protecciones que se tocan en una, desde **Fusionar** en la
+sección Crecimiento o con `/protections merge`, estando en el servidor y el mundo de la que se queda. La
+pantalla lista las protecciones del dueño en este servidor que la tocan, con el tamaño de cada una, dónde está
+su núcleo y el tamaño que tendrían juntas. Si no hay ninguna, se le avisa al jugador.
+
+La caja que contiene las dos pasa a ser el terreno, así que no puede cubrir nada que no cubriera alguna de
+ellas: dos trozos alineados lado a lado, con el mismo ancho y la misma altura donde se juntan. La fusión se
+rechaza cuando:
+
+- las dos no comparten un lado, o la caja cubriría terreno que ninguna cubría,
+- la caja llegaría a otra protección, o quedaría más cerca que `settings.min-distance` de la de otro dueño,
+- se solaparía con una región ajena de WorldGuard,
+- alguna de las dos está en venta o tiene una oferta de alquiler,
+- alguna de las dos es saqueable, tiene el núcleo dañado, está abandonada o alquilada.
+
+La lista solo comprueba que las dos se tocan y están alineadas; el resto se comprueba al elegir una. Tras una
+confirmación marcada como peligrosa, primero se pasa el banco de la otra protección. Si eso falla, no se
+fusiona nada.
+
+Lo que conserva la protección fusionada:
+
+- Su propio nombre, hogar, núcleo, tier, flags, saludo, despedida, ventajas, hora, clima y alquileres.
+- Los roles, miembros, clanes, overrides y baneos de las dos; donde las dos dicen algo de la misma clave, gana
+  la que se queda.
+- Todas las parcelas de las dos; una parcela cuyo nombre ya existe recibe `-2`, `-3` y así sucesivamente.
+- El nivel más alto de las dos, y el asalto de la que tenga menos vidas, así que fusionar nunca cura un asalto.
+
+La otra protección se borra: su bloque de núcleo se quita y no se devuelve, y su warp se retira.
+
+## La vista previa del borde
+
+Con `submodules.visualization`, un miembro ve el borde de una protección con **Mostrar borde** en la sección
+Terreno o `/protections show`, estando en su servidor y su mundo.
+
+- Cada esquina del terreno recibe una columna de bloques de cristal y diamante en el aire de su columna, falsa
+  y solo para ese jugador: el mundo no cambia.
+- Unas partículas recorren los lados de la protección y de cada parcela en una franja alrededor de los ojos
+  del jugador, para que un terreno que ocupa toda la altura del mundo no se dibuje como cuatro líneas
+  infinitas.
+
+| Clave | Por defecto | Qué hace |
+|---|---|---|
+| `visualization.seconds` | `10` | Segundos que se queda dibujado el borde |
+| `visualization.particle` | `END_ROD` | La partícula del borde de la protección |
+| `visualization.plot-particle` | `WAX_OFF` | La partícula del borde de una parcela |
+| `visualization.show-on-create` | `true` | Si el borde se dibuja a quien protege terreno nuevo |
+
+Mostrar un borde otra vez sustituye al que se veía. Un nombre de partícula que no existe se registra en la
+consola y sus líneas no se dibujan; las columnas sí. Las parcelas solo se dibujan con las parcelas activadas.
+
+## BlueMap y Dynmap
+
+Con `submodules.visualization`, cada protección de este servidor se dibuja en BlueMap y Dynmap cuando están
+instalados, como una caja en un conjunto de marcadores llamado **Protections**.
+
+| Clave | Por defecto | Qué hace |
+|---|---|---|
+| `visualization.bluemap` | `true` | Si las protecciones se dibujan en BlueMap, cuando está instalado |
+| `visualization.dynmap` | `true` | Si las protecciones se dibujan en Dynmap, cuando está instalado |
+| `visualization.map-refresh-minutes` | `5` | Minutos entre dos redibujados de todos los marcadores |
+| `visualization.map-colors` | ver abajo | Colores de los marcadores por estado, en hexadecimal |
+
+Un marcador se redibuja cada vez que se escribe su protección, y todos cada `map-refresh-minutes`, lo que
+recoge ventas, alquileres y asaltos que cambiaron sin escritura y quita las protecciones que ya no existen.
+Cada servidor dibuja solo sus propias protecciones. En BlueMap cada marcador es una caja del bloque más bajo al
+más alto de la protección, en todos los mapas de su mundo; en Dynmap es un marcador de área con ese rango de
+altura.
+
+El color es el estado más urgente, en este orden:
+
+| Estado | Por defecto |
+|---|---|
+| `raidable` | `#a33b53` |
+| `abandoned` | `#6c757d` |
+| `for-sale` | `#8fffc1` |
+| `for-rent` | `#59a4ff` |
+| `normal` | `#8a51c4` |
+
+`for-rent` es cualquier oferta de alquiler de la protección o de una de sus parcelas. Un estado que falta, o un
+color que no es hexadecimal, usa `normal`. La etiqueta del marcador y el nombre del conjunto son texto, así que
+están en el archivo de mensajes: `visualization.map-label` (`%name% (%owner%)`, los dos únicos placeholders que
+admite) y `visualization.map-set-label` (`Protections`). Los mapas web no leen tokens de color, así que las
+etiquetas se dibujan como texto plano.
+
+<Callout type="note" title="Se lee al arrancar el servidor">
+Si se dibuja en BlueMap y Dynmap se decide cuando el plugin arranca: `submodules.visualization`,
+`visualization.bluemap` y `visualization.dynmap` tienen que estar activados entonces, y el plugin del mapa
+instalado. `map-refresh-minutes` también se lee al arrancar. Cambiarlos necesita un reinicio.
+</Callout>
+
+## Placeholders
+
+Leen la protección, o la parcela, en la que está el jugador.
+
+| Placeholder | Qué devuelve |
+|---|---|
+| `%exyliaprotections_protections_level%` | El nivel de la protección |
+| `%exyliaprotections_protections_subregion%` | El nombre de la parcela. Vacío fuera de una parcela o con las parcelas desactivadas |
+| `%exyliaprotections_protections_effects_active%` | Las ventajas activas del jugador, por nombre, separadas por comas |
+
+## Todas las claves
+
+```yaml title="plugins/ExyliaProtections/config.yml"
+submodules:
+  subregions: false
+  upgrades: false
+  visualization: true
+  effects: false
+  environment: false
+  merge: false
+subregions:
+  max-per-protection: 3
+  min-side: 3
+  full-height: true
+upgrades:
+  pay-from-bank: false
+  currency: ""
+  base-max-members: 8
+  base-max-subregions: 2
+  tiers:
+    small:
+      levels:
+        '1': { cost: 3000.0, radius-bonus: 5, max-members: 12, max-subregions: 3, bonus-lives: 1, permission: "" }
+        '2': { cost: 6000.0, radius-bonus: 10, max-members: 16, max-subregions: 4, bonus-lives: 2, permission: "" }
+    medium:
+      levels:
+        '1': { cost: 8000.0, radius-bonus: 5, max-members: 12, max-subregions: 4, bonus-lives: 1, permission: "" }
+        '2': { cost: 16000.0, radius-bonus: 10, max-members: 16, max-subregions: 6, bonus-lives: 2, permission: "" }
+    large:
+      levels:
+        '1': { cost: 20000.0, radius-bonus: 5, max-members: 16, max-subregions: 6, bonus-lives: 1, permission: "" }
+        '2': { cost: 40000.0, radius-bonus: 10, max-members: 24, max-subregions: 8, bonus-lives: 2, permission: "" }
+visualization:
+  seconds: 10
+  particle: END_ROD
+  plot-particle: WAX_OFF
+  show-on-create: true
+  bluemap: true
+  dynmap: true
+  map-refresh-minutes: 5
+  map-colors:
+    normal: "#8a51c4"
+    for-sale: "#8fffc1"
+    for-rent: "#59a4ff"
+    raidable: "#a33b53"
+    abandoned: "#6c757d"
+```
+
+`effects` aparece entero en [Ventajas de miembros](#ventajas-de-miembros).

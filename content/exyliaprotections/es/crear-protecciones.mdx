@@ -1,0 +1,223 @@
+---
+title: "Crear protecciones"
+description: "Los tipos de núcleo y cada clave de un tipo, la tienda de protecciones, colocar un núcleo, el selector de dos esquinas, límites, reglas de solapamiento, altura, y recoger, mover o borrar una protección."
+---
+
+Una protección es una caja de bloques con un dueño. Se crea de una de dos formas: **colocando un
+núcleo**, un bloque comprado en la tienda o entregado por el staff, o **seleccionando dos esquinas** con el
+selector. Ambas pasan las mismas comprobaciones y terminan en el mismo tipo de protección; una
+seleccionada simplemente no tiene bloque núcleo.
+
+Cada protección de la red es una fila de la base de datos. Los límites de un jugador cuentan todos los
+servidores, pero las reglas de solapamiento y distancia solo comparan protecciones del servidor y el
+mundo en que está el terreno nuevo.
+
+## Tipos
+
+Un **tipo** es una clase de núcleo: el bloque que es, el ítem que sostienen los jugadores, el terreno que
+protege y las flags con las que empieza una protección nueva. `tiers` en `config.yml` los guarda, por id
+de tipo. Vienen tres:
+
+| Tipo | Bloque | `radius` | Área | Precio en tienda |
+|---|---|---|---|---|
+| `small` | `AMETHYST_BLOCK` | 10 | 21x21 | 2500 |
+| `medium` | `PURPUR_BLOCK` | 20 | 41x41 | 10000 |
+| `large` | `CRYING_OBSIDIAN` | 35 | 71x71 | 40000 |
+
+El radio se cuenta a cada lado del núcleo, así que un lado mide `radius × 2 + 1` bloques. Los tres vienen
+con `height: FULL`, sin permiso, sin límite propio y con la moneda por defecto.
+
+| Clave del tipo | Valor de un tipo nuevo | Qué hace |
+|---|---|---|
+| `material` | `AMETHYST_BLOCK` | El bloque y el ítem del núcleo. Lo que no sea un bloque colocable vuelve a `AMETHYST_BLOCK`. |
+| `name` | `{primary}&lPROTECTION CORE` | El nombre del ítem. Los tipos incluidos dicen `PROTECTION CORE [SMALL]` y así. |
+| `lore` | vacío | La descripción del ítem. Los tipos incluidos describen el área y dicen que la altura es completa. |
+| `radius` | 10 | Bloques protegidos a cada lado del núcleo. |
+| `height` | `FULL` | `FULL` protege toda la columna, del suelo del mundo a su techo. `CUBOID` protege solo `y-radius` bloques por encima y por debajo del núcleo. |
+| `y-radius` | 10 | Solo para `CUBOID`: la protección mide `y-radius × 2 + 1` bloques de alto. |
+| `price` | 0 | Precio en la tienda de protecciones. `0` deja el tipo fuera de la tienda. |
+| `currency` | vacío | Qué moneda cobra la tienda. Vacío es la moneda por defecto. |
+| `permission` | vacío | Necesario para colocar el núcleo y para comprarlo en la tienda. Vacío para ninguno. |
+| `limit` | 0 | Cuántas protecciones de este tipo puede tener un jugador. `0` para ningún límite propio. |
+| `flags` | ninguna | Las flags con las que una protección nueva de este tipo empieza **activadas**. Las que no estén empiezan desactivadas. |
+
+Los tipos incluidos empiezan con `mob-spawning`, `crop-growth`, `leaf-decay`, `liquid-flow` y
+`visitor-entry` activadas, y `pvp`, `explosions` y `fire-spread` desactivadas. Las flags se explican en
+[Personas y acceso](/docs/exyliaprotections/personas-y-acceso#flags).
+
+Los tipos se editan en el juego desde el [editor de tipos](/docs/exyliaprotections/administracion), que
+escribe estas mismas claves. Las vidas por tipo están en `raids.tier-lives` y el mantenimiento por tipo en
+`upkeep.tier-costs`, no dentro del tipo.
+
+<Callout type="note" title="Roles y flags se copian al crear la protección">
+Una protección nueva copia la sección `roles` y las `flags` de su tipo en ese momento. Editar cualquiera de
+las dos después cambia las protecciones creadas a partir de entonces, nunca las que ya existen.
+</Callout>
+
+## La tienda de protecciones
+
+`/protections` → **Tienda de protecciones** muestra cada tipo con `price` mayor que 0, con su área, su
+altura y su precio. El botón se oculta mientras ningún tipo tenga precio. Al hacer clic en un tipo:
+
+1. Se rechaza si el tipo tiene un `permission` que el jugador no tiene.
+2. Se cobra el precio en la moneda del tipo, y se rechaza si el jugador no puede pagarlo.
+3. Se entrega un núcleo. Un núcleo que no cabe en el inventario se guarda y se entrega la próxima vez que
+   el jugador entre.
+
+El staff entrega núcleos con `/protections admin give <jugador> <tipo> [cantidad]`, de 1 a 64 a la vez.
+
+## Colocar un núcleo
+
+Colocar un ítem de núcleo protege el terreno a su alrededor. La colocación se rechaza, y el núcleo se
+queda en la mano, si falla cualquiera de estas:
+
+1. El jugador puede colocar un bloque ahí. Un núcleo no se puede colocar dentro de la protección de otro
+   sin `place` en ella.
+2. El tipo del ítem sigue existiendo en `tiers`. Un núcleo de un tipo borrado se rechaza con "No existe
+   ningún tipo de protección llamado …".
+3. El `permission` del tipo, si tiene uno.
+4. El mundo no está en `settings.disabled-worlds` (`world_the_end` por defecto).
+5. Los [límites](#límites) de abajo.
+6. El terreno no se solapa con ninguna otra protección y guarda la distancia con las de otros dueños. Ver
+   [Solapamiento y distancia](#solapamiento-y-distancia).
+7. Con WorldGuard activado, el terreno no se solapa con ninguna región de WorldGuard que no sea de este
+   plugin, la región global o las de `settings.allowed-world-guard-regions`. Se comprueba en los dos
+   [backends](/docs/exyliaprotections/backends).
+
+Las comprobaciones se hacen una vez antes de que el bloque se coloque, para poder rechazarlo, y otra vez
+cuando ningún otro plugin lo canceló. Si algo cambió entre medias, el bloque se quita y el núcleo se
+devuelve.
+
+Una protección nueva se llama `Terreno de %player% #%number%` (la línea `default-name` de
+`messages.yml`), donde el número es cuántas tiene el jugador más uno. Su hogar empieza donde está el
+jugador. Con `visualization.show-on-create` activado, se le dibuja el borde al instante.
+
+## Proteger por selección
+
+El botón **Seleccionar terreno** de `/protections` da al jugador un selector. Hace clic izquierdo en una
+esquina, clic derecho en la otra y luego **shift + clic izquierdo** para confirmar, o suelta el selector
+para cancelar. Después ve el área y el precio y se le pide confirmar.
+
+El botón solo aparece mientras `selection.enabled` esté activado y el jugador tenga
+`exyliaprotections.select` (concedido a todos por defecto).
+
+<Callout type="note" title="El selector solo existe para el cliente del jugador">
+El selector se envía con PacketEvents como un ítem que solo ve el cliente de ese jugador. Nunca llega al
+inventario real, así que no se puede soltar para otro, guardar en un cofre ni vender. Sin PacketEvents la
+selección se rechaza con "Proteger terreno por selección no está disponible."
+</Callout>
+
+| Clave | Por defecto | Qué hace |
+|---|---|---|
+| `selection.enabled` | `true` | Si los jugadores pueden proteger terreno por selección. |
+| `selection.tier` | `medium` | El tipo con el que cuenta una selección: para el `limit` del tipo y sus flags iniciales. |
+| `selection.height` | `FULL` | `FULL` protege toda la columna de ambas esquinas. `NORMAL` protege solo los bloques entre las alturas de las dos esquinas. |
+| `selection.price-per-block` | 5 | Precio por bloque de área (ancho × largo, sea cual sea la altura). |
+| `selection.currency` | vacío | Vacío es la moneda por defecto. |
+| `selection.min-side` | 9 | El lado más corto que puede tener una selección. |
+| `selection.max-area` | 10000 | El área máxima que puede cubrir. |
+| `selection.full-height-tool` | `GOLDEN_HOE` | El selector para selecciones de altura completa. |
+| `selection.normal-height-tool` | `GOLDEN_AXE` | El selector para selecciones `NORMAL`. |
+
+Una selección de 20x20 cubre 400 bloques y cuesta 2000. Todo lo que comprueba un núcleo colocado se
+comprueba cuando el jugador confirma las esquinas, y otra vez después de aceptar el precio, justo antes de
+cobrarle. Una protección seleccionada **no tiene bloque núcleo**: no se puede recoger ni ocultar, solo
+mover o borrar. Su hogar es donde estaba el jugador al confirmar.
+
+<Callout type="warning" title="No se pide el permiso del tipo de la selección">
+Una selección cuenta contra el `limit` de `selection.tier`, pero no se comprueba el `permission` de ese
+tipo. Si el tipo debe estar restringido, restringe la selección misma con `exyliaprotections.select`.
+</Callout>
+
+Las dos herramientas del selector también se usan para las
+[parcelas](/docs/exyliaprotections/herramientas).
+
+## Límites
+
+A una protección nueva, colocada o seleccionada, se le aplican tres límites. Una protección movida no
+vuelve a contar contra ellos.
+
+| Límite | Dónde se define | Qué cuenta |
+|---|---|---|
+| Protecciones por jugador | El `exyliaprotections.limit.<n>` más alto que tenga el jugador, o `settings.default-limit` (3) sin ninguno | Todas las que tiene, en todos los servidores. |
+| Por tipo | El `limit` del tipo | Las suyas de ese tipo, en todos los servidores. |
+| Por mundo | `settings.world-limits`, un mapa de nombre de mundo a número | Las suyas en ese mundo **en este servidor**. Un mundo que no esté no tiene límite propio. |
+
+```yaml
+settings:
+  default-limit: 3
+  world-limits:
+    world: 2
+    world_nether: 1
+```
+
+El nodo de límite también acepta el prefijo antiguo `exyliasurvivalcore.protections.limit.<n>`, así los
+límites concedidos cuando las protecciones vivían en ExyliaSurvivalCore siguen funcionando. Si un jugador
+tiene nodos de los dos prefijos, gana el número más alto.
+
+<Callout type="warning" title="Un nodo de límite 0 no significa cero">
+Solo cuenta un número mayor que 0. Un jugador que solo tiene `exyliaprotections.limit.0` recibe
+`default-limit`, no cero protecciones. Para impedir que un jugador proteja terreno, quítale
+`exyliaprotections.use`, o baja `default-limit` y concede a los demás un nodo más alto.
+</Callout>
+
+El menú `/protections` muestra cuántas tiene un jugador sobre su límite. Los miembros de una protección no
+la cuentan en su propio límite; solo su dueño.
+
+## Solapamiento y distancia
+
+| Regla | Se aplica a |
+|---|---|
+| Las protecciones nunca se solapan. | Todas las protecciones, sea quien sea su dueño. |
+| Al menos `settings.min-distance` (8) bloques de terreno entre ellas, en horizontal. | Protecciones de **otros** dueños. Las protecciones de un mismo jugador pueden tocarse. |
+
+Las dos reglas solo comparan protecciones cuyas alturas se cruzan. Una protección `CUBOID` o `NORMAL` puede
+estar justo encima o debajo de otra, incluso de otro dueño, siempre que sus rangos de altura no compartan
+ni un bloque.
+
+## Altura
+
+| Cómo se creó | Altura |
+|---|---|
+| Núcleo de un tipo `FULL` | Toda la columna, de la altura mínima del mundo a la máxima. |
+| Núcleo de un tipo `CUBOID` | `y-radius` bloques por encima y por debajo del núcleo. |
+| Selección con `selection.height: FULL` | Toda la columna. |
+| Selección con `selection.height: NORMAL` | Desde la esquina más baja hasta la más alta. |
+
+La altura de una selección sale solo de `selection.height`, no del tipo con el que cuenta. Las mejoras de
+nivel ensanchan una protección con un bonus de radio; ver [Economía](/docs/exyliaprotections/economia).
+Una protección ampliada por una [fusión](/docs/exyliaprotections/herramientas) conserva la caja fusionada.
+
+## Quitar o mover una protección
+
+**Recoger.** Al dueño que rompe su propio núcleo se le pide confirmar. Recibe un ítem que reconstruye la
+misma protección donde lo coloque: su nombre, roles, miembros, clanes, ajustes personales, flags, baneos,
+parcelas, nivel y la caja exacta que cubría. El banco se le paga al dueño, el warp público se retira y la
+venta termina. El nivel se limita al máximo del tipo, las parcelas que sobresaldrían en el sitio nuevo se
+descartan y no sobrevive nada que alquilara un inquilino. Un núcleo transportado que se vuelve a colocar
+debe su siguiente periodo de mantenimiento al momento.
+
+A cualquier otro que rompa un núcleo se le rechaza — o, con los asaltos activados y siendo enemigo, lo
+golpea. Explosiones, pistones, fuego y líquidos nunca tocan un núcleo.
+
+**Ocultar** quita el bloque núcleo y mantiene el terreno protegido; mostrarlo lo vuelve a poner. Necesita
+`manage-core` y que el jugador esté en el servidor y el mundo de la protección. Con los asaltos activados,
+un núcleo solo se puede ocultar con `raids.allow-hidden-core`.
+
+**Mover** pone el núcleo encima del bloque que mira el jugador, a cinco bloques como mucho, en el mismo
+mundo. Toda la protección se mueve con él, con la misma forma y tamaño. Necesita `manage-core`, pasa todas
+las comprobaciones de colocación salvo los límites, cuesta `settings.move-price` (1000) en
+`settings.move-currency` y mueve el hogar a donde está el jugador. Si el movimiento no se puede guardar, se
+devuelve el precio.
+
+**Borrar**, desde la pantalla de la protección, es solo del dueño y pide confirmación. El bloque núcleo se
+quita y el banco va al dueño, después de devolver a cualquier inquilino el tiempo que le quedaba.
+
+Nada de esto funciona mientras la protección esté bajo ataque, asaltable, abandonada o alquilada. Recoger
+también se rechaza mientras se deba mantenimiento.
+
+<Callout type="warning" title="Los admins cuentan como dueños de todas las protecciones">
+Un jugador con `exyliaprotections.admin` (los operadores, por defecto) pasa toda comprobación de "solo el
+dueño". Al romper el núcleo de otro jugador se le pide recogerlo, y al confirmar el núcleo transportado se
+le entrega **a él**.
+</Callout>

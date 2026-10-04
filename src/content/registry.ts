@@ -972,6 +972,48 @@ const MINES_NAV: NavGroup[] = [
   },
 ];
 
+const PROTECTIONS_NAV: NavGroup[] = [
+  {
+    label: { en: "Getting started", es: "Empezar" },
+    pages: [
+      page("introduction", "introduction", "introduccion"),
+      page("installation", "installation", "instalacion"),
+      page("first-steps", "first-steps", "primeros-pasos"),
+    ],
+  },
+  {
+    label: { en: "Protecting land", es: "Proteger terreno" },
+    pages: [
+      page("creating-protections", "creating-protections", "crear-protecciones"),
+      page("backends", "backends", "backends"),
+      page("people-and-access", "people-and-access", "personas-y-acceso"),
+      page("menus", "menus", "menus"),
+    ],
+  },
+  {
+    label: { en: "Systems", es: "Sistemas" },
+    pages: [
+      page("raids", "raids", "asaltos"),
+      page("economy", "economy", "economia"),
+      page("land-tools", "land-tools", "herramientas"),
+      page("warps", "warps", "warps"),
+      page("administration", "administration", "administracion"),
+      page("migration", "migration", "migracion"),
+    ],
+  },
+  {
+    label: { en: "Reference", es: "Referencia" },
+    pages: [
+      page("commands", "commands", "comandos"),
+      page("permissions", "permissions", "permisos"),
+      page("placeholders", "placeholders", "placeholders"),
+      page("configuration", "configuration", "configuracion"),
+      page("api", "api", "api"),
+      page("faq", "faq", "faq"),
+    ],
+  },
+];
+
 const ECONOMY_NAV: NavGroup[] = [
   {
     label: { en: "Getting started", es: "Empezar" },
@@ -1368,6 +1410,27 @@ export const plugins: Plugin[] = [
       { en: "Folia", es: "Folia" },
     ],
     nav: MINES_NAV,
+  },
+  {
+    id: "exyliaprotections",
+    name: "ExyliaProtections",
+    tagline: { en: "Land protection run from menus", es: "Protección de terreno desde menús" },
+    summary: {
+      en: "Land protected with a core block or a two-corner selection, shared through roles, clans and per-player overrides, with raids on the core, a bank, upkeep and rent, subregions, upgrades, perks and public warps, on an internal index or mirrored into WorldGuard.",
+      es: "Terreno protegido con un bloque núcleo o una selección de dos esquinas, compartido con roles, clanes y permisos por jugador, con asaltos al núcleo, banco, mantenimiento y alquiler, subregiones, mejoras, ventajas y warps públicos, sobre un índice interno o reflejado en WorldGuard.",
+    },
+    version: "1.0.1",
+    status: "beta",
+    category: { en: "Survival", es: "Survival" },
+    minecraft: "1.21+",
+    banner: "https://s3.exylia.net/exylia-plugins/public/static/images/plugins/protections/ExyliaProtectionsBanner.webp",
+    tags: [
+      { en: "Protections", es: "Protecciones" },
+      { en: "Raids", es: "Asaltos" },
+      { en: "WorldGuard", es: "WorldGuard" },
+      { en: "Folia", es: "Folia" },
+    ],
+    nav: PROTECTIONS_NAV,
   },
   {
     id: "exyliaeconomy",

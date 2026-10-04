@@ -1,0 +1,216 @@
+---
+title: "Creating protections"
+description: "Core tiers and every tier key, the protection shop, placing a core, the two-corner selector, limits, overlap rules, height, and picking up, moving or deleting a protection."
+---
+
+A protection is a box of blocks with an owner. It is made in one of two ways: by **placing a core**, a
+block bought from the shop or handed out by staff, or by **selecting two corners** with the selector.
+Both run the same checks and end in the same kind of protection; a selected one simply has no core block.
+
+Every protection on the network is one database row. A player's limits count every server, but the
+overlap and distance rules only compare protections of the server and world the new land is on.
+
+## Tiers
+
+A **tier** is a kind of core: the block it is, the item players hold, the land it protects and the flags
+a new protection starts with. `tiers` in `config.yml` holds them, keyed by tier id. Three ship:
+
+| Tier | Block | `radius` | Area | Shop price |
+|---|---|---|---|---|
+| `small` | `AMETHYST_BLOCK` | 10 | 21x21 | 2500 |
+| `medium` | `PURPUR_BLOCK` | 20 | 41x41 | 10000 |
+| `large` | `CRYING_OBSIDIAN` | 35 | 71x71 | 40000 |
+
+The radius is counted on every side of the core, so a side is `radius × 2 + 1` blocks. All three ship
+with `height: FULL`, no permission, no limit of their own and the default currency.
+
+| Tier key | Default for a new tier | What it does |
+|---|---|---|
+| `material` | `AMETHYST_BLOCK` | The core block and item. Anything that is not a placeable block falls back to `AMETHYST_BLOCK`. |
+| `name` | `{primary}&lPROTECTION CORE` | The item's name. The shipped tiers read `PROTECTION CORE [SMALL]` and so on. |
+| `lore` | empty | The item's lore. The shipped tiers describe the area and say the height is full. |
+| `radius` | 10 | Blocks protected on every side of the core. |
+| `height` | `FULL` | `FULL` protects the whole column, from the world's floor to its ceiling. `CUBOID` protects only `y-radius` blocks above and below the core. |
+| `y-radius` | 10 | Used by `CUBOID` only: the protection is `y-radius × 2 + 1` blocks tall. |
+| `price` | 0 | Price in the protection shop. `0` keeps the tier out of the shop. |
+| `currency` | blank | Which currency the shop charges. Blank is the default currency. |
+| `permission` | blank | Needed to place the core, and to buy it from the shop. Blank for none. |
+| `limit` | 0 | How many protections of this tier one player may own. `0` for no limit of its own. |
+| `flags` | none | The flags a new protection of this tier starts with **on**. Every flag left out starts off. |
+
+The shipped tiers start with `mob-spawning`, `crop-growth`, `leaf-decay`, `liquid-flow` and
+`visitor-entry` on, and `pvp`, `explosions` and `fire-spread` off. The flags themselves are on
+[People and access](/docs/exyliaprotections/people-and-access#flags).
+
+Tiers can be edited in game from the [tier editor](/docs/exyliaprotections/administration), which writes
+these same keys. Lives per tier live in `raids.tier-lives` and upkeep per tier in `upkeep.tier-costs`, not
+inside the tier.
+
+<Callout type="note" title="Roles and flags are copied when a protection is made">
+A new protection copies the `roles` section and its tier's `flags` at that moment. Editing either later
+changes the protections made afterwards, never the ones that already exist.
+</Callout>
+
+## The protection shop
+
+`/protections` → **Protection shop** lists every tier with a `price` above 0, with its area, its height
+and its price. The button is hidden while no tier has a price. Clicking a tier:
+
+1. Refuses it when the tier has a `permission` the player lacks.
+2. Charges the price in the tier's currency, and refuses when the player cannot pay.
+3. Hands over one core. A core that does not fit in the inventory is kept and delivered the next time
+   they join.
+
+Staff hand out cores with `/protections admin give <player> <tier> [amount]`, 1 to 64 at a time.
+
+## Placing a core
+
+Placing a core item protects the land around it. The placement is refused, and the core stays in the
+hand, when any of these fails:
+
+1. The player may place a block there. A core cannot be placed inside somebody else's protection without
+   `place` there.
+2. The item's tier still exists in `tiers`. A core of a deleted tier is refused with "There is no
+   protection tier called …".
+3. The tier's `permission`, if it has one.
+4. The world is not in `settings.disabled-worlds` (`world_the_end` by default).
+5. The [limits](#limits) below.
+6. The land overlaps no other protection, and keeps its distance from other owners'. See
+   [Overlap and distance](#overlap-and-distance).
+7. With WorldGuard enabled, the land overlaps no WorldGuard region other than this plugin's own, the
+   global region and the ones in `settings.allowed-world-guard-regions`. This is checked in both
+   [backends](/docs/exyliaprotections/backends).
+
+The checks run once before the block goes down, so it can be refused, and again once no other plugin
+cancelled it. If something changed in between, the block is removed and the core handed back.
+
+A new protection is named `%player%'s land #%number%` (the `default-name` line of `messages.yml`), where
+the number is how many the player owns plus one. Its home starts where the player stands. With
+`visualization.show-on-create` on, its border is drawn to them at once.
+
+## Protecting by selection
+
+The **Select land** button of `/protections` hands the player a selector. They left-click one corner,
+right-click the other, then **shift + left-click** to confirm, or drop the selector to cancel. They are
+then shown the area and the price and asked to confirm.
+
+The button shows only while `selection.enabled` is on and the player holds `exyliaprotections.select`
+(granted to everybody by default).
+
+<Callout type="note" title="The selector exists only for the player's client">
+The selector is sent with PacketEvents as an item only that player's client sees. It never reaches the
+real inventory, so it cannot be dropped for someone else, stored in a chest or sold. Without PacketEvents
+the selection is refused with "Protecting land by selection is not available."
+</Callout>
+
+| Key | Default | What it does |
+|---|---|---|
+| `selection.enabled` | `true` | Whether players may protect land by selection. |
+| `selection.tier` | `medium` | The tier a selection counts as: for the tier's `limit` and its starting flags. |
+| `selection.height` | `FULL` | `FULL` protects the whole column of both corners. `NORMAL` protects only the blocks between the two corners' heights. |
+| `selection.price-per-block` | 5 | Price per block of area (width × length, whatever the height). |
+| `selection.currency` | blank | Blank is the default currency. |
+| `selection.min-side` | 9 | The shortest side a selection may have. |
+| `selection.max-area` | 10000 | The largest area it may cover. |
+| `selection.full-height-tool` | `GOLDEN_HOE` | The selector used for full-height selections. |
+| `selection.normal-height-tool` | `GOLDEN_AXE` | The selector used for `NORMAL` selections. |
+
+A 20x20 selection covers 400 blocks and costs 2000. Everything a placed core checks is checked when the
+player confirms the corners, and again after they accept the price, right before they are charged. A
+selected protection has **no core block**: it cannot be picked up or hidden, only moved or deleted. Its
+home is where the player stood when they confirmed.
+
+<Callout type="warning" title="The selection tier's permission is not asked">
+A selection counts against `selection.tier`'s `limit`, but that tier's `permission` is not checked. If the
+tier is meant to be restricted, restrict selecting itself with `exyliaprotections.select`.
+</Callout>
+
+Both selector tools are also used for [plots](/docs/exyliaprotections/land-tools).
+
+## Limits
+
+Three limits apply to a new protection, whether placed or selected. A moved protection is not counted
+against them again.
+
+| Limit | Where it is set | What it counts |
+|---|---|---|
+| Protections per player | The highest `exyliaprotections.limit.<n>` the player holds, or `settings.default-limit` (3) without one | Every protection they own, on every server. |
+| Per tier | The tier's `limit` | Their protections of that tier, on every server. |
+| Per world | `settings.world-limits`, a map of world name to number | Their protections in that world **on this server**. A world left out has no limit of its own. |
+
+```yaml
+settings:
+  default-limit: 3
+  world-limits:
+    world: 2
+    world_nether: 1
+```
+
+The limit node also accepts the legacy prefix `exyliasurvivalcore.protections.limit.<n>`, so limits granted
+while protections lived in ExyliaSurvivalCore keep working. When a player holds nodes of both prefixes the
+highest number wins.
+
+<Callout type="warning" title="A limit node of 0 does not mean zero">
+Only a number above 0 counts. A player holding only `exyliaprotections.limit.0` gets `default-limit`, not
+zero protections. To stop a player protecting land, take away `exyliaprotections.use` or set
+`default-limit` and grant the others a higher node.
+</Callout>
+
+The `/protections` hub shows how many a player owns out of their limit. Members of a protection do not
+count it against their own limit; only its owner does.
+
+## Overlap and distance
+
+| Rule | Applies to |
+|---|---|
+| Protections never overlap. | Every protection, whoever owns it. |
+| At least `settings.min-distance` (8) blocks of land between them, horizontally. | Protections of **other** owners. A player's own protections may touch. |
+
+Both rules only compare protections whose heights overlap. A `CUBOID` or `NORMAL` protection can sit
+directly above or below another one, even another owner's, as long as their height ranges do not share a
+single block.
+
+## Height
+
+| How it was made | Height |
+|---|---|
+| Core of a `FULL` tier | The whole column, from the world's minimum height to its maximum. |
+| Core of a `CUBOID` tier | `y-radius` blocks above and below the core. |
+| Selection with `selection.height: FULL` | The whole column. |
+| Selection with `selection.height: NORMAL` | From the lower corner to the higher one. |
+
+The selection's height comes from `selection.height` alone, not from the tier it counts as. Level
+upgrades widen a protection by a radius bonus; see [Economy](/docs/exyliaprotections/economy). A
+protection grown by a [merge](/docs/exyliaprotections/land-tools) keeps the merged box.
+
+## Removing or moving a protection
+
+**Picking up.** The owner breaking their own core is asked to confirm. They get back an item that
+rebuilds the same protection wherever it is placed: its name, roles, members, clans, overrides, flags,
+bans, plots, level and the exact box it covered. The bank is paid out to the owner, a public warp is taken
+down, and a sale ends. The level is clamped to the tier's highest, plots that would stick out of the new
+spot are dropped, and nothing a tenant rented survives. A carried core placed again owes its next upkeep
+period at once.
+
+Anybody else breaking a core is refused — or, with raids on and the player an enemy, hits it. Explosions,
+pistons, fire and liquids never touch a core.
+
+**Hiding** removes the core block and keeps the land protected; showing it puts it back. It needs
+`manage-core` and the player standing on the protection's server and world. While raids are on, a core can
+only be hidden with `raids.allow-hidden-core`.
+
+**Moving** puts the core on top of the block the player looks at, within five blocks, in the same world.
+The whole protection moves with it, same shape and size. It needs `manage-core`, runs every placement
+check except the limits, costs `settings.move-price` (1000) in `settings.move-currency`, and moves the home
+to where the player stands. If the move cannot be written, the price is paid back.
+
+**Deleting**, from the protection's screen, is the owner's alone and asks for confirmation. The core block
+is removed and the bank goes to the owner, after paying back any tenant for the time they had left.
+
+None of these work while the protection is under attack, raidable, abandoned or rented. Picking up is
+also refused while upkeep is due.
+
+<Callout type="warning" title="Admins count as the owner of every protection">
+A player with `exyliaprotections.admin` (operators, by default) passes every "owner only" check. Breaking
+another player's core asks them to pick it up, and confirming hands **them** the carried core.
+</Callout>

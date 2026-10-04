@@ -1,0 +1,51 @@
+---
+title: "API"
+description: "Ask from another plugin whether a spot is protected, and whether a protection keeps players from flying there."
+badge: "dev"
+---
+
+`ProtectionsService` answers the two questions other plugins ask about land: is this spot inside a
+protection, and does that protection stop flight right now.
+
+```java
+boolean claimed = ExyliaAPI.get(ProtectionsService.class)
+        .map(protections -> protections.protectionAt(location).isPresent())
+        .orElse(false);
+```
+
+<Callout type="note" title="Adding it to your project">
+The artifact, the repository and the `plugin.yml` line are the same for every Exylia plugin and live on
+the [public API page](/docs/exylialib/api). The protections contract arrived in the public API **1.9.0**,
+shipped with ExyliaLib **1.238.0**, in the package `net.exylia.lib.api.protections`.
+</Callout>
+
+An empty `Optional` from `ExyliaAPI.get` means the server has no ExyliaProtections. The service is
+registered once the plugin has started and goes away when it disables.
+
+## Methods
+
+| Method | What it does |
+|---|---|
+| `Optional<String> protectionAt(Location location)` | The id of the protection whose land holds that spot, or empty when none covers it. |
+| `boolean deniesFlight(Location location)` | Whether flight must stop at that spot: `effects.no-flight-during-siege` is on and the protection there is under siege or raidable. |
+
+Both read the protections this server has loaded in memory, without touching the database. Right after a
+restart, before the protections have finished loading, `protectionAt` finds none.
+
+The id is an opaque string. Keep it to compare two answers; do not parse it or show it to players.
+
+`deniesFlight` is what ExyliaSurvivalCore's `/fly` asks before letting a player fly, and once a second for
+everybody already flying. Use it the same way for any flight of your own.
+
+<Callout type="warning" title="deniesFlight does not check that raids are on">
+It reads the raid state even while `submodules.raids` is off. With raids off but
+`raids.siege-windows.enabled` on, every protection with a defender online counts as under siege while a
+window is open, and `deniesFlight` answers `true` inside them. Leave the siege windows off when raids are off.
+</Callout>
+
+## What is not there
+
+The service is read-only and deliberately small. There is no method to create, delete or edit a protection,
+to read its members, roles, flags or bank, or to ask whether a given player may build at a spot; and the
+plugin fires no events of its own. Placeholders cover the read-outs most integrations want: see
+[Placeholders](/docs/exyliaprotections/placeholders).

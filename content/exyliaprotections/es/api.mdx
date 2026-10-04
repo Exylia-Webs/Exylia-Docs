@@ -1,0 +1,54 @@
+---
+title: "API"
+description: "Preguntar desde otro plugin si un punto está protegido, y si una protección impide volar allí."
+badge: "dev"
+---
+
+`ProtectionsService` responde las dos preguntas que otros plugins hacen sobre el terreno: si este punto está
+dentro de una protección, y si esa protección impide volar ahora mismo.
+
+```java
+boolean claimed = ExyliaAPI.get(ProtectionsService.class)
+        .map(protections -> protections.protectionAt(location).isPresent())
+        .orElse(false);
+```
+
+<Callout type="note" title="Añadirla a tu proyecto">
+El artefacto, el repositorio y la línea de `plugin.yml` son los mismos para todos los plugins de Exylia y
+están en la [página de la API pública](/docs/exylialib/api). El contrato de protecciones llegó en la API
+pública **1.9.0**, que viene con ExyliaLib **1.238.0**, en el paquete `net.exylia.lib.api.protections`.
+</Callout>
+
+Un `Optional` vacío de `ExyliaAPI.get` significa que el servidor no tiene ExyliaProtections. El servicio se
+registra cuando el plugin ha arrancado y desaparece cuando se desactiva.
+
+## Métodos
+
+| Método | Qué hace |
+|---|---|
+| `Optional<String> protectionAt(Location location)` | El id de la protección cuyo terreno contiene ese punto, o vacío si ninguna lo cubre. |
+| `boolean deniesFlight(Location location)` | Si hay que cortar el vuelo en ese punto: `effects.no-flight-during-siege` está activado y la protección de allí está bajo asedio o asaltable. |
+
+Los dos leen las protecciones que este servidor tiene cargadas en memoria, sin tocar la base de datos. Justo
+después de un reinicio, antes de que las protecciones terminen de cargar, `protectionAt` no encuentra
+ninguna.
+
+El id es una cadena opaca. Guárdalo para comparar dos respuestas; no lo analices ni se lo enseñes a los
+jugadores.
+
+`deniesFlight` es lo que pregunta el `/fly` de ExyliaSurvivalCore antes de dejar volar a un jugador, y una
+vez por segundo para todos los que ya vuelan. Úsalo igual para cualquier vuelo propio.
+
+<Callout type="warning" title="deniesFlight no comprueba que los asaltos estén activados">
+Lee el estado de asalto incluso con `submodules.raids` apagado. Con los asaltos apagados pero
+`raids.siege-windows.enabled` activado, toda protección con algún defensor conectado cuenta como bajo asedio
+mientras haya una ventana abierta, y `deniesFlight` responde `true` dentro de ellas. Deja las ventanas de
+asedio apagadas si los asaltos lo están.
+</Callout>
+
+## Lo que no hay
+
+El servicio es de solo lectura y deliberadamente pequeño. No hay ningún método para crear, borrar o editar
+una protección, leer sus miembros, roles, flags o banco, ni preguntar si un jugador concreto puede construir
+en un punto; y el plugin no lanza eventos propios. Los placeholders cubren las lecturas que quieren la
+mayoría de integraciones: ver [Placeholders](/docs/exyliaprotections/placeholders).
