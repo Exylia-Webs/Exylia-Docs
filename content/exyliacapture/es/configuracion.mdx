@@ -4,12 +4,42 @@ description: "Todos los archivos que escribe el plugin y qué vive en cada uno."
 ---
 
 Los archivos viven en `plugins/ExyliaCapture/`. Todos se escriben en el primer arranque con sus
-valores por defecto y con comentarios en cada clave.
+valores por defecto y con comentarios en cada clave. `config.yml` y `database.yml` están en la raíz;
+todo lo que lee un jugador — mensajes, sidebars y menús — vive en una carpeta de idioma dentro de
+`lang/`:
+
+```text
+plugins/ExyliaCapture/
+├── config.yml
+├── database.yml
+└── lang/
+    └── <code>/
+        ├── messages.yml
+        ├── scoreboards.yml
+        └── menus/
+```
 
 ## config.yml
 
 Todo lo global. Los ajustes por evento no están aquí — viven en la base de datos y se editan desde el
 panel.
+
+### language
+
+```yaml
+language: default
+```
+
+<Field name="language" type="string" defaultValue="default">
+El idioma de los menús, mensajes y sidebars del plugin. `default` sigue el idioma configurado en el
+`config.yml` de ExyliaLib; `en`, `es`, `pt` o `fr` lo fijan solo para este plugin. Cada uno es una
+carpeta dentro de `lang/` que puedes editar.
+</Field>
+
+`custom` guarda los archivos que tenía un servidor antes de que existieran los idiomas: el primer
+arranque tras actualizar mueve los antiguos `messages.yml`, `scoreboards.yml` y `menus/` a
+`lang/custom/` y pone `language: custom`, así que no se pierde nada de lo que editó el dueño. Una
+instalación nueva no tiene ninguno y empieza en `default`.
 
 ### scheduler
 
@@ -41,8 +71,9 @@ El contorno alrededor de las zonas de un evento activo. Explicado en
 
 Un bloque por tipo de evento, con el identificador del tipo como clave — `koth`,
 `koth_points_exclusive`, `koth_points_multi`, `koth_capture_points`, `conquest`, `payload`, `dtc` y
-`bounty` —, cada uno con un `boss-bar` y un `hologram`. Un tipo que llega con una actualización escribe
-su propia entrada en el siguiente arranque. Explicados en
+`bounty` —, cada uno con un `hologram`: cómo se dibuja, no lo que dice. Un tipo que llega con una
+actualización escribe su propia entrada en el siguiente arranque. La boss bar y las líneas del
+holograma son texto, así que viven en `messages.yml`. Explicados en
 [Elementos en pantalla](/docs/exyliacapture/visuales).
 
 ### leaderboard
@@ -64,6 +95,18 @@ leaderboard:
 
 Explicado en [Estadísticas](/docs/exyliacapture/estadisticas#aspecto-del-leaderboard).
 
+### webhooks
+
+```yaml
+webhooks:
+  enabled: false
+  url: ""
+  server-name: ""
+```
+
+Inicios y resultados de eventos publicados en un canal de Discord. Explicado en
+[Webhooks de Discord](/docs/exyliacapture/webhooks).
+
 <Callout type="tip" title="Los tiempos de las pantallas de admin se escriben">
 Cada duración de las pantallas de evento, de zona y de Destroy The Core se pide como una cantidad de
 tiempo — `30s`, `2m30s`, `1h` — en vez de subirla a clics, y lo que el plugin escribe de vuelta se lee
@@ -72,14 +115,14 @@ igual.
 
 ## scoreboards.yml
 
-Tres secciones, las dos primeras con el identificador del tipo como clave: un sidebar por tipo para
+`lang/<code>/scoreboards.yml`. Tres secciones, las dos primeras con el identificador del tipo como clave: un sidebar por tipo para
 cuando corre un solo evento, las líneas compactas que aporta cada evento cuando corren varios, y el
 sidebar compartido multi-evento. Ver
 [Elementos en pantalla](/docs/exyliacapture/visuales#sidebars).
 
 ## messages.yml
 
-Todos los mensajes, agrupados por sistema:
+`lang/<code>/messages.yml`. Todos los mensajes, agrupados por sistema:
 
 | Sección | Contiene |
 |---|---|
@@ -99,6 +142,10 @@ Todos los mensajes, agrupados por sistema:
 | `holograms` | Lo que muestra un holograma antes de que el evento tenga un valor: empieza en, inactivo, zona vacía, carro parado. |
 | `event-types` | El nombre de cada tipo, sus tres líneas de descripción y su etiqueta de categoría, por identificador de tipo. |
 | `rewards` | `claimed`, enviado al conectarse cuando se entregan recompensas que estaban esperando, con `%amount%`. |
+| `boss-bars` | La boss bar de cada tipo — texto, color y overlay —, por identificador de tipo. |
+| `hologram-lines` | Lo que dice el holograma de cada tipo, por identificador de tipo. |
+| `setup` | Lo que lee un operador mientras configura un evento: preguntas en el chat, títulos de los editores, pasos de selección. |
+| `webhooks` | Los mensajes de Discord. Ver [Webhooks de Discord](/docs/exyliacapture/webhooks). |
 
 ## database.yml
 
@@ -110,7 +157,7 @@ Motor y credenciales. Ver
 El diseño de los menús en YAML, editable sin tocar código.
 
 ```text
-menus/
+lang/<code>/menus/
 ├── admin/    panel, lista y setup de eventos, selector de tipo, lista y editor de
 │             zonas de Conquest, horarios, comandos y recompensas, y una pantalla
 │             de ajustes por tipo: koth_settings, koth_points_settings,
@@ -122,11 +169,21 @@ menus/
 Se pueden cambiar iconos, posiciones, títulos, lore y sonidos. Las claves de acción de cada botón son
 las que lo enlazan con lo que hace: consérvalas.
 
+`menus/admin/` se reescribe desde el jar en cada arranque, así que ahí no vive nada que el dueño deba
+editar. `menus/user/` es tuyo: un archivo que falta se vuelve a escribir y nada de lo que cambiaste se
+toca.
+
 ## Migraciones
 
-`config.yml` está en la versión 3 y `scoreboards.yml` en la versión 2. Un archivo anterior se migra en
+`config.yml` está en la versión 5 y `scoreboards.yml` en la versión 2. Un archivo anterior se migra en
 el primer arranque tras actualizar, y cada valor que hubieras puesto se conserva en vez de
 regenerarse:
+
+- **De la versión 4 a la 5** — la boss bar y las líneas del holograma de cada tipo salen de
+  `config.yml` hacia `messages.yml`, en `boss-bars.<tipo>` y `hologram-lines.<tipo>`, conservando el
+  texto que hubieras escrito. Cómo se dibuja el holograma se queda en `event-visuals`.
+- **De la versión 3 a la 4** — se añade `language: custom`, que apunta el servidor a los archivos que
+  ya tenía, movidos a `lang/custom/`.
 
 - **De la versión 2 a la 3** — los bloques por tipo pasan a `event-visuals`, con el identificador del
   tipo como clave. `koth-capture-points` pasa a ser `koth_capture_points`, y `koth-points` se divide en

@@ -1,0 +1,85 @@
+---
+title: "Webhooks de Discord"
+description: "Publicar los inicios y resultados de los eventos en un canal de Discord, y cada mensaje con sus placeholders."
+---
+
+Los inicios y resultados de los eventos se pueden publicar en un canal de Discord mediante un webhook.
+Los mensajes se envían fuera del hilo principal, se respetan los límites de Discord, y los nombres de
+jugador se escapan para que nunca puedan mencionar a nadie.
+
+## Configurarlo
+
+<Steps>
+  <Step title="Copia la URL del webhook">
+    En Discord, **Ajustes del canal → Integraciones → Webhooks → Copiar URL del webhook**. Mantenla en
+    privado: cualquiera que la tenga puede publicar como el webhook.
+  </Step>
+  <Step title="Escríbela en config.yml">
+    ```yaml title="config.yml"
+    webhooks:
+      enabled: true
+      url: "https://discord.com/api/webhooks/123456789012345678/your-token"
+      server-name: "Exylia Network"
+    ```
+  </Step>
+  <Step title="Recarga">
+    Ejecuta `/captureadmin reload`.
+  </Step>
+</Steps>
+
+<Field name="enabled" type="boolean" defaultValue="false">
+Si se publica algo.
+</Field>
+
+<Field name="url" type="string" defaultValue="vacío">
+La URL del webhook. Una que no sea una URL de webhook de Discord se rechaza con un único aviso en
+consola que dice el motivo, y no se envía nada.
+</Field>
+
+<Field name="server-name" type="string" defaultValue="vacío">
+Rellena `%server%`, que los mensajes de serie usan como pie. Aquí funciona el markdown de Discord.
+</Field>
+
+<Callout type="warning" title="Un webhook borrado deja de enviar">
+Si Discord indica que el webhook se borró o que su token es incorrecto, se registra un aviso y no se
+envía nada más hasta la siguiente recarga.
+</Callout>
+
+## Los mensajes
+
+Viven dentro de `webhooks` en `messages.yml`, así que siguen el idioma del plugin. Cada uno es una
+plantilla de webhook completa de ExyliaLib, enviada como una tarjeta Components V2 de Discord:
+`enabled`, `message`, `color`, `title`, `description`, `author`, `thumbnail`, `image`, `fields`,
+`buttons`, `footer`, `timestamp`, `coalesce` y el resto. Pon `enabled: false` para silenciar uno.
+
+| Mensaje | Se publica cuando | Placeholders |
+|---|---|---|
+| `started` | Empieza un evento. | `%time_limit%`, `%rewards%` |
+| `won` | Ganó un jugador o un clan — KOTH, Payload, Bounty. | `%winner%`, `%clan%`, `%winner_head%`, `%rewards%` |
+| `podium` | Termina un evento por puntos — los KOTH por puntos, Capture Points, DTC, Conquest. | `%top1_name%`, `%top1_pts%` … `%top3_name%`, `%top3_pts%` |
+| `no-winner` | Se acabó el tiempo sin que nadie ganara. | — |
+| `stopped` | Un operador detuvo el evento antes de que alguien ganara. | — |
+
+Todos los mensajes rellenan además `%event_name%`, `%event_type%`, `%duration%` — cuánto lleva
+corriendo el evento — y `%server%`. `%winner_head%` es la cabeza del ganador como URL de imagen, y
+queda vacío cuando gana un clan.
+
+Los botones de enlace se escriben `etiqueta|url` o `etiqueta|url|emoji`:
+
+```yaml title="messages.yml"
+webhooks:
+  started:
+    buttons:
+      - "Mapa en vivo|https://map.example.com|🗺️"
+```
+
+## Mencionar un rol
+
+Solo la línea `message` sobre la tarjeta puede mencionar, y solo con lo que escribe la propia
+plantilla:
+
+```yaml title="messages.yml"
+webhooks:
+  started:
+    message: "<@&123456789012345678> ¡Acaba de empezar una captura!"
+```

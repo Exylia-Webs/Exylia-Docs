@@ -1,0 +1,83 @@
+---
+title: "Discord webhooks"
+description: "Posting event starts and results to a Discord channel, and every message with its placeholders."
+---
+
+Event starts and results can be posted to a Discord channel through a webhook. Messages are sent off
+the main thread, Discord's rate limits are respected, and player names are escaped so they can never
+ping anyone.
+
+## Setting it up
+
+<Steps>
+  <Step title="Copy the webhook URL">
+    In Discord, **Channel settings → Integrations → Webhooks → Copy Webhook URL**. Keep it private:
+    anyone with it can post as the webhook.
+  </Step>
+  <Step title="Write it into config.yml">
+    ```yaml title="config.yml"
+    webhooks:
+      enabled: true
+      url: "https://discord.com/api/webhooks/123456789012345678/your-token"
+      server-name: "Exylia Network"
+    ```
+  </Step>
+  <Step title="Reload">
+    Run `/captureadmin reload`.
+  </Step>
+</Steps>
+
+<Field name="enabled" type="boolean" defaultValue="false">
+Whether anything is posted.
+</Field>
+
+<Field name="url" type="string" defaultValue="empty">
+The webhook URL. One that is not a Discord webhook URL is refused with a single console warning naming
+the reason, and nothing is sent.
+</Field>
+
+<Field name="server-name" type="string" defaultValue="empty">
+Fills `%server%`, which the shipped messages use as their footer. Discord markdown works here.
+</Field>
+
+<Callout type="warning" title="A deleted webhook stops sending">
+If Discord reports the webhook as deleted or its token as wrong, a warning is logged and nothing more
+is sent until the next reload.
+</Callout>
+
+## The messages
+
+They live under `webhooks` in `messages.yml`, so they follow the plugin's language. Each one is a full
+ExyliaLib webhook template, sent as a Discord Components V2 card: `enabled`, `message`, `color`,
+`title`, `description`, `author`, `thumbnail`, `image`, `fields`, `buttons`, `footer`, `timestamp`,
+`coalesce` and the rest. Set `enabled: false` to silence one.
+
+| Message | Posted when | Placeholders |
+|---|---|---|
+| `started` | An event begins. | `%time_limit%`, `%rewards%` |
+| `won` | One player or one clan won — KOTH, Payload, Bounty. | `%winner%`, `%clan%`, `%winner_head%`, `%rewards%` |
+| `podium` | A scored event ends — the points KOTHs, Capture Points, DTC, Conquest. | `%top1_name%`, `%top1_pts%` … `%top3_name%`, `%top3_pts%` |
+| `no-winner` | The clock ran out with nobody winning. | — |
+| `stopped` | An operator stopped the event before anyone won. | — |
+
+Every message also fills `%event_name%`, `%event_type%`, `%duration%` — how long the event has run —
+and `%server%`. `%winner_head%` is the winner's head as an image URL, and is empty when a clan won.
+
+Link buttons are written `label|url` or `label|url|emoji`:
+
+```yaml title="messages.yml"
+webhooks:
+  started:
+    buttons:
+      - "Live map|https://map.example.com|🗺️"
+```
+
+## Pinging a role
+
+Only the `message` line above the card can ping, and only with what the template itself writes:
+
+```yaml title="messages.yml"
+webhooks:
+  started:
+    message: "<@&123456789012345678> A capture just started!"
+```
