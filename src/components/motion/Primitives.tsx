@@ -1,13 +1,12 @@
 "use client";
 
 import {
-  motion,
+  m,
   useInView,
   useMotionValue,
   useScroll,
   useSpring,
   useTransform,
-  type Variants,
 } from "framer-motion";
 import { useRef, type ReactNode, type CSSProperties } from "react";
 
@@ -31,7 +30,7 @@ export function Reveal({
 }) {
   const ref = useRef(null);
   const inView = useInView(ref, { once, margin: "-12% 0px -12% 0px" });
-  const MC = motion[as];
+  const MC = m[as];
   return (
     <MC
       ref={ref}
@@ -59,7 +58,7 @@ export function BlurIn({
   const ref = useRef(null);
   const inView = useInView(ref, { once: true, margin: "-10% 0px" });
   return (
-    <motion.div
+    <m.div
       ref={ref}
       className={className}
       initial={{ opacity: 0, filter: "blur(14px)", y: 16 }}
@@ -68,21 +67,16 @@ export function BlurIn({
       style={{ willChange: "transform, opacity, filter" }}
     >
       {children}
-    </motion.div>
+    </m.div>
   );
 }
 
-/* ---------------- Stagger container + word/line items ---------------- */
-export const staggerParent: Variants = {
-  hidden: {},
-  show: { transition: { staggerChildren: 0.08, delayChildren: 0.1 } },
-};
-export const staggerChild: Variants = {
-  hidden: { opacity: 0, y: 24, filter: "blur(8px)" },
-  show: { opacity: 1, y: 0, filter: "blur(0px)", transition: { duration: 0.9, ease: EASE } },
-};
-
-/** Split a string into animated words. */
+/**
+ * Split a string into animated words.
+ *
+ * Pure CSS (`.word-in` in globals.css): headlines are usually the largest paint,
+ * and a JavaScript-driven fade would keep them invisible until hydration.
+ */
 export function AnimatedWords({
   text,
   className,
@@ -96,27 +90,20 @@ export function AnimatedWords({
 }) {
   const words = text.split(" ");
   return (
-    <motion.span
-      className={className}
-      variants={staggerParent}
-      initial="hidden"
-      animate="show"
-      style={{ display: "inline-block" }}
-    >
+    <span className={className} style={{ display: "inline-block" }}>
       {words.map((w, i) => (
         <span key={i} style={{ display: "inline-block", overflow: "hidden" }}>
-          <motion.span
-            variants={staggerChild}
-            className={`${wordClassName ?? ""} ${
+          <span
+            className={`word-in ${wordClassName ?? ""} ${
               gradientLast && i === words.length - 1 ? "accent-ink" : ""
             }`}
-            style={{ display: "inline-block", paddingRight: "0.25em", willChange: "transform, opacity, filter" }}
+            style={{ paddingRight: "0.25em", animationDelay: `${0.1 + i * 0.08}s` }}
           >
             {w}
-          </motion.span>
+          </span>
         </span>
       ))}
-    </motion.span>
+    </span>
   );
 }
 
@@ -154,7 +141,7 @@ export function Magnetic({
   }
 
   return (
-    <motion.div
+    <m.div
       ref={ref}
       onMouseMove={onMove}
       onMouseEnter={() => glowOpacity.set(1)}
@@ -162,13 +149,13 @@ export function Magnetic({
       style={{ "--pointer-x": sx, "--pointer-y": sy } as CSSProperties}
       className={`group/pointer relative overflow-visible ${className ?? ""}`}
     >
-      <motion.span
+      <m.span
         aria-hidden
         className="pointer-events-none absolute -inset-3 rounded-full bg-[radial-gradient(circle_at_var(--pointer-x)_var(--pointer-y),rgba(124,92,255,0.3),transparent_42%)] blur-xl"
         style={{ opacity: sGlowOpacity }}
       />
       {children}
-    </motion.div>
+    </m.div>
   );
 }
 
@@ -204,7 +191,7 @@ export function Tilt({
     ry.set(0);
   }
   return (
-    <motion.div
+    <m.div
       ref={ref}
       onMouseMove={onMove}
       onMouseLeave={reset}
@@ -212,7 +199,7 @@ export function Tilt({
       style={{ rotateX: srx, rotateY: sry, transformPerspective: 900, transformStyle: "preserve-3d", ...style }}
     >
       {children}
-    </motion.div>
+    </m.div>
   );
 }
 
@@ -231,14 +218,14 @@ export function Floating({
   className?: string;
 }) {
   return (
-    <motion.div
+    <m.div
       className={className}
       animate={{ y: [0, -amplitude, 0] }}
       transition={{ duration, delay, repeat: Infinity, ease: "easeInOut" }}
       style={{ willChange: "transform" }}
     >
       {children}
-    </motion.div>
+    </m.div>
   );
 }
 
@@ -256,7 +243,7 @@ export function TextReveal({
 }) {
   const ref = useRef(null);
   const inView = useInView(ref, { once: true, margin: "-8% 0px" });
-  const MC = motion[as];
+  const MC = m[as];
   return (
     <span ref={ref} style={{ display: "inline-block", overflow: "hidden", paddingBottom: "0.08em" }}>
       <MC
@@ -277,7 +264,7 @@ export function LineReveal({ delay = 0, className = "" }: { delay?: number; clas
   const ref = useRef(null);
   const inView = useInView(ref, { once: true, margin: "-10% 0px" });
   return (
-    <motion.span
+    <m.span
       ref={ref}
       className={`block h-px w-full origin-left bg-white/10 ${className}`}
       initial={{ scaleX: 0 }}
@@ -302,7 +289,7 @@ export function AnimatedChars({
   const ref = useRef(null);
   const inView = useInView(ref, { once: true, margin: "-8% 0px" });
   return (
-    <motion.span
+    <m.span
       ref={ref}
       className={className}
       initial="hidden"
@@ -311,7 +298,7 @@ export function AnimatedChars({
       style={{ display: "inline-block" }}
     >
       {chars.map((c, i) => (
-        <motion.span
+        <m.span
           key={i}
           variants={{
             hidden: { opacity: 0, y: "0.5em" },
@@ -320,9 +307,9 @@ export function AnimatedChars({
           style={{ display: "inline-block", whiteSpace: c === " " ? "pre" : "normal", willChange: "transform" }}
         >
           {c}
-        </motion.span>
+        </m.span>
       ))}
-    </motion.span>
+    </m.span>
   );
 }
 
@@ -349,14 +336,14 @@ export function HoverLift({
   lift?: number;
 }) {
   return (
-    <motion.div
+    <m.div
       className={className}
       whileHover={{ y: lift }}
       transition={{ type: "spring", stiffness: 300, damping: 20 }}
       style={{ willChange: "transform" }}
     >
       {children}
-    </motion.div>
+    </m.div>
   );
 }
 

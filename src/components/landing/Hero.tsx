@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { AnimatePresence, motion, useScroll, useTransform } from "framer-motion";
+import { AnimatePresence, m, useScroll, useTransform } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
 import { Aurora } from "@/components/motion/Backdrops";
 import { AnimatedWords, Magnetic } from "@/components/motion/Primitives";
@@ -32,20 +32,15 @@ export function Hero({ lang }: { lang: Lang }) {
       <div className="noise" />
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-32 bg-gradient-to-b from-transparent to-ink-950" />
 
-      <motion.div
+      <m.div
         style={{ y: contentY, opacity: contentOpacity }}
         className="relative z-10 mx-auto grid max-w-content grid-cols-1 gap-16 px-6 lg:grid-cols-[1.05fr_0.95fr] lg:items-center lg:gap-10"
       >
         <div className="max-w-2xl lg:pt-6">
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.7, delay: 0.05 }}
-            className="flex items-center gap-3"
-          >
+          <div className="fade-up flex items-center gap-3" style={{ animationDelay: "0.05s" }}>
             <span className="h-px w-8 bg-white/25" />
             <span className="eyebrow">{l.kicker[lang]}</span>
-          </motion.div>
+          </div>
 
           <h1 className="mt-8 font-display text-[clamp(2.6rem,6.4vw,4.9rem)] font-medium leading-[0.98] tracking-tight2 text-white">
             <span className="block">
@@ -59,16 +54,14 @@ export function Hero({ lang }: { lang: Lang }) {
             </span>
           </h1>
 
-          <motion.p
-            initial={{ opacity: 0, y: 14 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.9, delay: 0.6 }}
-            className="mt-8 max-w-lg text-[16px] leading-relaxed text-white/50"
+          <p
+            className="fade-up mt-8 max-w-lg text-[16px] leading-relaxed text-white/50"
+            style={{ animationDelay: "0.6s" }}
           >
             {l.lead[lang]}
-          </motion.p>
+          </p>
 
-          <motion.div
+          <m.div
             initial={{ opacity: 0, y: 14 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.78 }}
@@ -94,9 +87,9 @@ export function Hero({ lang }: { lang: Lang }) {
               {l.ctaSecondary[lang]}
               <span className="ml-2 text-white/25">↗</span>
             </a>
-          </motion.div>
+          </m.div>
 
-          <motion.dl
+          <m.dl
             initial={{ opacity: 0, y: 14 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.9 }}
@@ -112,28 +105,28 @@ export function Hero({ lang }: { lang: Lang }) {
                 </dd>
               </div>
             ))}
-          </motion.dl>
+          </m.dl>
         </div>
 
-        <motion.div style={{ y: mockY }} className="relative hidden lg:block">
+        <m.div style={{ y: mockY }} className="relative hidden lg:block">
           <BannerDeck lang={lang} />
-        </motion.div>
-      </motion.div>
+        </m.div>
+      </m.div>
 
-      <motion.div
+      <m.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 1.3 }}
         className="absolute bottom-8 left-1/2 z-10 hidden -translate-x-1/2 items-center gap-3 sm:flex"
       >
         <span className="eyebrow">{l.scroll[lang]}</span>
-        <motion.span
+        <m.span
           className="h-8 w-px bg-gradient-to-b from-white/40 to-transparent"
           animate={{ scaleY: [0.4, 1, 0.4], opacity: [0.3, 1, 0.3] }}
           transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
           style={{ transformOrigin: "top" }}
         />
-      </motion.div>
+      </m.div>
     </section>
   );
 }
@@ -159,7 +152,7 @@ function BannerDeck({ lang }: { lang: Lang }) {
   const plugin = deck[i];
 
   return (
-    <motion.div
+    <m.div
       initial={{ opacity: 0, y: 26 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 1, delay: 0.4, ease: [0.16, 1, 0.3, 1] }}
@@ -170,7 +163,7 @@ function BannerDeck({ lang }: { lang: Lang }) {
       <div className="relative overflow-hidden rounded-xl border border-white/10 bg-ink-900/70 backdrop-blur-xl">
         <div className="relative aspect-[2/1] w-full">
           <AnimatePresence mode="popLayout">
-            <motion.div
+            <m.div
               key={plugin.id}
               initial={{ opacity: 0, scale: 1.04 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -184,14 +177,14 @@ function BannerDeck({ lang }: { lang: Lang }) {
                 rounded="rounded-none"
                 className="h-full w-full border-0"
               />
-            </motion.div>
+            </m.div>
           </AnimatePresence>
           <span className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-ink-900 via-ink-900/60 to-transparent" />
         </div>
 
         <div className="relative px-5 pb-5 pt-1">
           <AnimatePresence mode="wait">
-            <motion.div
+            <m.div
               key={plugin.id}
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
@@ -207,7 +200,7 @@ function BannerDeck({ lang }: { lang: Lang }) {
               <p className="mt-1 text-[13px] leading-relaxed text-white/45">
                 {plugin.tagline[lang]}
               </p>
-            </motion.div>
+            </m.div>
           </AnimatePresence>
 
           <div className="mt-4 flex items-center justify-between gap-4">
@@ -234,6 +227,6 @@ function BannerDeck({ lang }: { lang: Lang }) {
       </div>
 
       <div className="pointer-events-none absolute -inset-8 -z-10 rounded-3xl bg-[radial-gradient(circle_at_60%_40%,rgba(124,92,255,0.14),transparent_70%)] blur-2xl" />
-    </motion.div>
+    </m.div>
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { motion } from "framer-motion";
+import { m } from "framer-motion";
 import { useMemo, useState } from "react";
 import {
   groupByCategory,
@@ -226,7 +226,7 @@ function PluginCard({ plugin, index, lang }: { plugin: Plugin; index: number; la
   const pages = pageCount(plugin);
 
   return (
-    <motion.article
+    <m.article
       initial={{ opacity: 0, y: 18 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, margin: "-6% 0px" }}
@@ -300,6 +300,6 @@ function PluginCard({ plugin, index, lang }: { plugin: Plugin; index: number; la
           className="absolute inset-0 z-0"
         />
       )}
-    </motion.article>
+    </m.article>
   );
 }

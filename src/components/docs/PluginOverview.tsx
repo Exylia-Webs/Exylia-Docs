@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { motion } from "framer-motion";
+import { m } from "framer-motion";
 import type { NavSection } from "@/lib/docs";
 import type { Lang, Plugin } from "@/content/registry";
 import { dict } from "@/content/dictionary";
@@ -35,7 +35,7 @@ export function PluginOverview({
   return (
     <div className="pb-6">
       <header className="pb-12">
-        <motion.div
+        <m.div
           initial={{ opacity: 0, scale: 1.01 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.8, ease: EASE }}
@@ -47,9 +47,9 @@ export function PluginOverview({
             rounded="rounded-xl"
             className="aspect-[2/1] w-full sm:aspect-[3/1]"
           />
-        </motion.div>
+        </m.div>
 
-        <motion.div
+        <m.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, ease: EASE }}
@@ -57,27 +57,27 @@ export function PluginOverview({
         >
           <span className="h-px w-6 bg-[rgb(var(--accent))]/50" />
           <span className="eyebrow">{dict.docs.documentation[lang]}</span>
-        </motion.div>
+        </m.div>
 
-        <motion.h1
+        <m.h1
           initial={{ opacity: 0, y: 16, filter: "blur(8px)" }}
           animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
           transition={{ duration: 0.8, delay: 0.06, ease: EASE }}
           className="mt-5 font-display text-[clamp(2.3rem,5.4vw,3.6rem)] font-medium leading-[1.02] tracking-tight2 text-white"
         >
           {plugin.name}
-        </motion.h1>
+        </m.h1>
 
-        <motion.p
+        <m.p
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.7, delay: 0.16, ease: EASE }}
           className="mt-4 max-w-2xl text-[16.5px] leading-relaxed text-white/50"
         >
           {plugin.summary[lang]}
-        </motion.p>
+        </m.p>
 
-        <motion.div
+        <m.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.7, delay: 0.26, ease: EASE }}
@@ -116,9 +116,9 @@ export function PluginOverview({
             {dict.docs.support[lang]}
             <span className="ml-2 text-white/25">↗</span>
           </a>
-        </motion.div>
+        </m.div>
 
-        <motion.dl
+        <m.dl
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.8, delay: 0.34 }}
@@ -132,12 +132,12 @@ export function PluginOverview({
               <dd className="mt-1.5 font-display text-[15px] font-medium text-white">{fact.value}</dd>
             </div>
           ))}
-        </motion.dl>
+        </m.dl>
       </header>
 
       <div className="flex flex-col gap-12">
         {sections.map((section, si) => (
-          <motion.section
+          <m.section
             key={section.label}
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
@@ -174,7 +174,7 @@ export function PluginOverview({
                 </Link>
               ))}
             </div>
-          </motion.section>
+          </m.section>
         ))}
       </div>
     </div>

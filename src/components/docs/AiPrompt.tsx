@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, m } from "framer-motion";
 import { promptText, type PromptId } from "@/content/aiPrompts";
 import { dict } from "@/content/dictionary";
 import type { Lang } from "@/content/registry";
@@ -43,7 +43,7 @@ export function AiPrompt({ id, lang = "en" }: { id: PromptId; lang?: Lang }) {
   }
 
   return (
-    <motion.div
+    <m.div
       initial={false}
       animate={{
         borderColor: ready ? "rgb(var(--accent) / 0.5)" : "rgb(var(--accent) / 0.22)",
@@ -53,7 +53,7 @@ export function AiPrompt({ id, lang = "en" }: { id: PromptId; lang?: Lang }) {
     >
       <AnimatePresence>
         {ready && (
-          <motion.div
+          <m.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -104,7 +104,7 @@ export function AiPrompt({ id, lang = "en" }: { id: PromptId; lang?: Lang }) {
 
         <div className="mt-4 flex flex-wrap items-center justify-between gap-4">
           <AnimatePresence mode="wait" initial={false}>
-            <motion.span
+            <m.span
               key={ready ? "ready" : "hint"}
               initial={{ opacity: 0, y: 4 }}
               animate={{ opacity: 1, y: 0 }}
@@ -114,7 +114,7 @@ export function AiPrompt({ id, lang = "en" }: { id: PromptId; lang?: Lang }) {
                 ready ? "text-[rgb(var(--accent))]" : "text-white/30"
               }`}
             >
-              <motion.span
+              <m.span
                 animate={ready ? { scale: [1, 1.5, 1] } : { scale: 1 }}
                 transition={{ duration: 0.5 }}
                 className={`h-1.5 w-1.5 rounded-full ${ready ? "bg-[rgb(var(--accent))]" : "bg-white/20"}`}
@@ -122,10 +122,10 @@ export function AiPrompt({ id, lang = "en" }: { id: PromptId; lang?: Lang }) {
               {ready
                 ? `${dict.ai.ready[lang]} · ${lines.toLocaleString(locale)} ${dict.ai.lines[lang]}`
                 : dict.ai.hint[lang]}
-            </motion.span>
+            </m.span>
           </AnimatePresence>
 
-          <motion.button
+          <m.button
             onClick={copy}
             whileTap={{ scale: 0.97 }}
             animate={{ opacity: ready ? 1 : 0.45 }}
@@ -133,7 +133,7 @@ export function AiPrompt({ id, lang = "en" }: { id: PromptId; lang?: Lang }) {
           >
             <AnimatePresence mode="wait" initial={false}>
               {copied ? (
-                <motion.span
+                <m.span
                   key="ok"
                   initial={{ opacity: 0, y: 6 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -145,9 +145,9 @@ export function AiPrompt({ id, lang = "en" }: { id: PromptId; lang?: Lang }) {
                     <path d="M3.5 8.5l3 3 6-7" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                   {dict.ai.copied[lang]}
-                </motion.span>
+                </m.span>
               ) : (
-                <motion.span
+                <m.span
                   key="copy"
                   initial={{ opacity: 0, y: 6 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -160,10 +160,10 @@ export function AiPrompt({ id, lang = "en" }: { id: PromptId; lang?: Lang }) {
                     <path d="M10.5 3.6A1.6 1.6 0 009 2.5H4.6A2.1 2.1 0 002.5 4.6V9c0 .7.45 1.3 1.1 1.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
                   </svg>
                   {dict.ai.copy[lang]}
-                </motion.span>
+                </m.span>
               )}
             </AnimatePresence>
-          </motion.button>
+          </m.button>
         </div>
       </div>
 
@@ -185,7 +185,7 @@ export function AiPrompt({ id, lang = "en" }: { id: PromptId; lang?: Lang }) {
 
       <AnimatePresence initial={false}>
         {open && (
-          <motion.div
+          <m.div
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
@@ -195,9 +195,9 @@ export function AiPrompt({ id, lang = "en" }: { id: PromptId; lang?: Lang }) {
             <pre className="max-h-[26rem] overflow-auto bg-ink-950/60 px-6 py-5 font-mono text-[12px] leading-relaxed text-white/45">
               {text}
             </pre>
-          </motion.div>
+          </m.div>
         )}
       </AnimatePresence>
-    </motion.div>
+    </m.div>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { m } from "framer-motion";
 import { Reveal, TextReveal, LineReveal } from "@/components/motion/Primitives";
 import { dict } from "@/content/dictionary";
 import type { Lang } from "@/content/registry";
@@ -46,7 +46,7 @@ export function Ecosystem({ lang }: { lang: Lang }) {
 
           <div className="flex flex-col">
             {l.principles.map((item, i) => (
-              <motion.div
+              <m.div
                 key={item.title.en}
                 initial={{ opacity: 0, y: 22 }}
                 whileInView={{ opacity: 1, y: 0 }}
@@ -68,7 +68,7 @@ export function Ecosystem({ lang }: { lang: Lang }) {
                     </p>
                   </div>
                 </div>
-              </motion.div>
+              </m.div>
             ))}
           </div>
         </div>

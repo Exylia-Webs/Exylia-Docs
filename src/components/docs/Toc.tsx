@@ -1,6 +1,6 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { m } from "framer-motion";
 import { useEffect, useState } from "react";
 import type { Heading } from "@/lib/docs";
 import { dict } from "@/content/dictionary";
@@ -41,7 +41,7 @@ export function Toc({ headings, lang }: { headings: Heading[]; lang: Lang }) {
           return (
             <li key={h.id} className="relative">
               {isActive && (
-                <motion.span
+                <m.span
                   layoutId="toc-active"
                   className="absolute -left-px top-0 h-full w-px bg-[rgb(var(--accent))]"
                   transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { motion } from "framer-motion";
+import { m } from "framer-motion";
 import { LANGS, translateSlug, type Lang } from "@/content/registry";
 import { rememberLang } from "@/lib/lang";
 
@@ -48,7 +48,7 @@ export function LangToggle({ lang }: { lang: Lang }) {
             }`}
           >
             {active && (
-              <motion.span
+              <m.span
                 layoutId="lang-pill"
                 className="absolute inset-0 -z-10 rounded-full bg-white/[0.08]"
                 transition={{ duration: 0.32, ease: [0.16, 1, 0.3, 1] }}

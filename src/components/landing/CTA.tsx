@@ -1,6 +1,6 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { m } from "framer-motion";
 import { SITE, type Lang } from "@/content/registry";
 import { dict } from "@/content/dictionary";
 import { Magnetic, TextReveal } from "@/components/motion/Primitives";
@@ -12,7 +12,7 @@ export function CTA({ lang }: { lang: Lang }) {
       <div className="pointer-events-none absolute inset-0 bg-grid bg-grid-fade opacity-70" />
 
       <div className="relative mx-auto max-w-content px-6 text-center">
-        <motion.div
+        <m.div
           initial={{ opacity: 0, scale: 0.9 }}
           whileInView={{ opacity: 1, scale: 1 }}
           viewport={{ once: true }}
@@ -24,7 +24,7 @@ export function CTA({ lang }: { lang: Lang }) {
           <TextReveal>{l.ctaTitle[lang]}</TextReveal>
         </h2>
 
-        <motion.p
+        <m.p
           initial={{ opacity: 0, y: 12 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
@@ -32,9 +32,9 @@ export function CTA({ lang }: { lang: Lang }) {
           className="mx-auto mt-6 max-w-xl text-[15.5px] leading-relaxed text-white/45"
         >
           {l.ctaLead[lang]}
-        </motion.p>
+        </m.p>
 
-        <motion.div
+        <m.div
           initial={{ opacity: 0, y: 12 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
@@ -63,7 +63,7 @@ export function CTA({ lang }: { lang: Lang }) {
             {l.ctaSecondaryLink[lang]}
             <span className="ml-2 text-white/25">↗</span>
           </a>
-        </motion.div>
+        </m.div>
       </div>
     </section>
   );

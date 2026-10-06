@@ -1,6 +1,6 @@
 "use client";
 
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, m } from "framer-motion";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -39,7 +39,7 @@ function PluginSwitcher({ current, lang }: { current: Plugin; lang: Lang }) {
             v{current.version}
           </span>
         </span>
-        <motion.svg
+        <m.svg
           animate={{ rotate: open ? 180 : 0 }}
           transition={{ duration: 0.3, ease: EASE }}
           className="mr-1 h-3 w-3 shrink-0 text-white/30"
@@ -47,12 +47,12 @@ function PluginSwitcher({ current, lang }: { current: Plugin; lang: Lang }) {
           fill="none"
         >
           <path d="M4 6.5l4 4 4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-        </motion.svg>
+        </m.svg>
       </button>
 
       <AnimatePresence>
         {open && (
-          <motion.div
+          <m.div
             initial={{ opacity: 0, y: -6, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -6, scale: 0.98 }}
@@ -102,7 +102,7 @@ function PluginSwitcher({ current, lang }: { current: Plugin; lang: Lang }) {
                 })}
               </div>
             ))}
-          </motion.div>
+          </m.div>
         )}
       </AnimatePresence>
     </div>
@@ -125,7 +125,7 @@ function NavTree({
   return (
     <nav className="flex flex-col gap-8">
       {sections.map((section, si) => (
-        <motion.div
+        <m.div
           key={section.label}
           initial={{ opacity: 0, x: -8 }}
           animate={{ opacity: 1, x: 0 }}
@@ -139,7 +139,7 @@ function NavTree({
               return (
                 <li key={page.slug} className="relative">
                   {active && (
-                    <motion.span
+                    <m.span
                       layoutId="sidebar-active"
                       className="absolute -left-px top-0 h-full w-px bg-[rgb(var(--accent))]"
                       transition={{ duration: 0.32, ease: EASE }}
@@ -163,7 +163,7 @@ function NavTree({
               );
             })}
           </ul>
-        </motion.div>
+        </m.div>
       ))}
     </nav>
   );
@@ -227,14 +227,14 @@ export function MobileNav({
 
       <AnimatePresence>
         {open && (
-          <motion.div
+          <m.div
             className="fixed inset-0 z-[70] lg:hidden"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           >
             <div className="absolute inset-0 bg-ink-950/80 backdrop-blur-sm" onClick={() => setOpen(false)} />
-            <motion.div
+            <m.div
               initial={{ x: "-100%" }}
               animate={{ x: 0 }}
               exit={{ x: "-100%" }}
@@ -245,8 +245,8 @@ export function MobileNav({
               <div className="mt-8">
                 <NavTree sections={sections} lang={lang} onNavigate={() => setOpen(false)} />
               </div>
-            </motion.div>
-          </motion.div>
+            </m.div>
+          </m.div>
         )}
       </AnimatePresence>
     </>
