@@ -7,10 +7,10 @@ RUN corepack enable
 
 # Dependencies first, so a content-only change reuses this layer.
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-RUN pnpm install --frozen-lockfile
+RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store pnpm install --frozen-lockfile --store-dir /pnpm/store
 
 COPY . .
-RUN pnpm run build
+RUN --mount=type=cache,id=docs-next,target=/app/.next/cache,sharing=locked pnpm run build
 
 # --- serve ------------------------------------------------------------------
 FROM nginx:1.27-alpine AS runner
