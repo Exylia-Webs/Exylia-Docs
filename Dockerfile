@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 # --- build ------------------------------------------------------------------
 FROM node:22-alpine AS builder
 
@@ -6,8 +7,10 @@ WORKDIR /app
 RUN corepack enable
 
 # Dependencies first, so a content-only change reuses this layer.
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store pnpm install --frozen-lockfile --store-dir /pnpm/store
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+# The registry token for @exylia-webs/ui is a build secret (an .npmrc line), mounted only for this
+# step so it never lands in a layer.
+RUN --mount=type=secret,id=npmrc,target=/root/.npmrc --mount=type=cache,id=pnpm-store,target=/pnpm/store pnpm install --frozen-lockfile --store-dir /pnpm/store
 
 COPY . .
 RUN --mount=type=cache,id=docs-next,target=/app/.next/cache,sharing=locked pnpm run build

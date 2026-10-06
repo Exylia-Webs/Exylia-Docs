@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ogImageFor } from "@/lib/og";
 import { notFound } from "next/navigation";
 import { MobileNav } from "@/components/docs/Sidebar";
 import { PluginOverview } from "@/components/docs/PluginOverview";
@@ -24,11 +25,8 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
       canonical: `/${lang}/docs/${entry.id}`,
       languages: Object.fromEntries(LANGS.map((code) => [code, `/${code}/docs/${entry.id}`])),
     },
-    openGraph: {
-      title: entry.name,
-      description: entry.summary[lang],
-      images: [entry.banner],
-    },
+    openGraph: { ...ogImageFor(lang, entry.id).openGraph, title: entry.name, description: entry.summary[lang] },
+    twitter: ogImageFor(lang, entry.id).twitter,
   };
 }
 

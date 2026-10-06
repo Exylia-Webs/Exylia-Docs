@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ogImageFor } from "@/lib/og";
 import { notFound } from "next/navigation";
 import { Mdx } from "@/lib/mdx";
 import { Toc } from "@/components/docs/Toc";
@@ -34,6 +35,8 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
     title: `${doc.title} — ${entry.name}`,
     description: doc.description || entry.summary[lang],
     alternates: { canonical: `/${lang}/docs/${entry.id}/${doc.slug}`, languages },
+    openGraph: { ...ogImageFor(lang, entry.id, doc.slug).openGraph, title: `${doc.title} — ${entry.name}`, description: doc.description || entry.summary[lang] },
+    twitter: ogImageFor(lang, entry.id, doc.slug).twitter,
   };
 }
 
