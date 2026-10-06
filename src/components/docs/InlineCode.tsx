@@ -1,13 +1,6 @@
-"use client";
-
-import { createContext, useContext, useState, type KeyboardEvent, type ReactNode } from "react";
-import { dict } from "@/content/dictionary";
+import type { ReactNode } from "react";
 import type { Lang } from "@/content/registry";
-
-/** Set by `CodeBlock`, so the `<code>` inside a fenced block stays untouched. */
-const InsidePre = createContext(false);
-
-export const PreBoundary = InsidePre.Provider;
+import { CopyableCode } from "./CopyableCode";
 
 /**
  * A full `%placeholder%` or an Exylia permission node such as `exyliaffa.commands.join`.
@@ -25,6 +18,7 @@ function textOf(node: ReactNode): string {
   return "";
 }
 
+/** A server component: plain `<code>` ships no JavaScript; only copyable values hydrate. */
 export function InlineCode({
   children,
   className,
@@ -35,47 +29,18 @@ export function InlineCode({
   className?: string;
   lang?: Lang;
 }) {
-  const insidePre = useContext(InsidePre);
-  const [copied, setCopied] = useState(false);
   const value = textOf(children).trim();
-  const copyable = !insidePre && COPYABLE.test(value);
 
-  if (!copyable)
+  if (!COPYABLE.test(value))
     return (
       <code className={className} {...props}>
         {children}
       </code>
     );
 
-  async function copy() {
-    try {
-      await navigator.clipboard.writeText(value);
-    } catch {
-      return;
-    }
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1400);
-  }
-
-  function onKeyDown(event: KeyboardEvent<HTMLElement>) {
-    if (event.key !== "Enter" && event.key !== " ") return;
-    event.preventDefault();
-    copy();
-  }
-
   return (
-    <code
-      {...props}
-      className={className ? `${className} copyable` : "copyable"}
-      data-copied={copied ? "" : undefined}
-      role="button"
-      tabIndex={0}
-      title={copied ? dict.docs.copied[lang] : dict.docs.copyValue[lang]}
-      aria-label={`${dict.docs.copyValue[lang]}: ${value}`}
-      onClick={copy}
-      onKeyDown={onKeyDown}
-    >
+    <CopyableCode className={className} value={value} lang={lang} {...props}>
       {children}
-    </code>
+    </CopyableCode>
   );
 }
