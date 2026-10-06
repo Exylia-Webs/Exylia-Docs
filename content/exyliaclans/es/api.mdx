@@ -1,6 +1,6 @@
 ---
 title: "API"
-description: "Leer clanes, miembros, rangos, terrenos y DTR, y ejecutar los mismos flujos que ejecutan los comandos del jugador."
+description: "Leer clanes, miembros, rangos, terrenos y DTR, ajustar EXP y DTR, escuchar eventos de clan, y ejecutar los mismos flujos que ejecutan los comandos del jugador."
 badge: "dev"
 ---
 
@@ -62,6 +62,7 @@ provocarlo.
 | `Optional<ClanRole> roleOf(UUID player)` | Su rango dentro del clan. Vacío si no está en ninguno. |
 | `String roleNameOf(UUID player)` | El nombre del rango, para mostrar. Nunca `null` ni vacío: un jugador sin clan devuelve `messages.yml` → `placeholders.none`, que viene como `{muted}None`. |
 | `int memberCount(UUID player)` | Cuántos jugadores hay en el clan de ese jugador. `0` si no está en ninguno. |
+| `List<ClanRole> roles(String clanId)` | Todos los rangos del clan, del más ligero al más pesado. Vacía si el clan no existe. Los ids de rango son de un solo clan, así que de aquí saca `setRole` su id. |
 
 ## Relaciones
 
@@ -72,6 +73,7 @@ provocarlo.
 | `boolean sameClan(UUID playerA, UUID playerB)` | Si dos jugadores comparten clan. `false` si alguno no tiene clan, así que dos jugadores sin clan nunca cuentan como compañeros. |
 | `boolean friendlyFireEnabled(UUID player)` | Si su clan deja que los miembros se hagan daño. `false` si está apagado *o* si el jugador no tiene clan. |
 | `int allyCount(UUID player)` | Cuántos aliados tiene su clan. `0` si no está en ninguno. |
+| `ClanRelation relation(UUID playerA, UUID playerB)` | `SAME_CLAN`, `ALLY`, `RIVAL` o `NONE`, en una sola lectura de caché — lo bastante barato para cada golpe. Cuenta una rivalidad declarada por cualquiera de los dos lados. `NONE` si alguno no tiene clan. |
 
 ## Progresión
 
@@ -83,7 +85,7 @@ un clan siga siendo un acierto de caché.
 | `int level(String clanId)` | El nivel del clan. `1` si el clan no existe. |
 | `long exp(String clanId)` | La experiencia acumulada. |
 | `long expForNextLevel(String clanId)` | Lo que cuesta el siguiente nivel. `0` si el clan no existe o ya está en el nivel máximo. |
-| `int maxMembers(String clanId)` | El tope de miembros en su nivel actual. |
+| `int maxMembers(String clanId)` | El tope de miembros en su nivel actual, con los huecos dados con `/clanadmin setslots`. |
 | `int maxAlliances(String clanId)` | El tope de alianzas en su nivel actual. |
 | `int maxRivals(String clanId)` | El tope de rivalidades en su nivel actual. |
 
@@ -108,6 +110,17 @@ un clan siga siendo un acierto de caché.
 |---|---|
 | `Optional<ClanClaim> claimOf(String clanId)` | El terreno del clan. Vacío si no tiene ninguno. |
 
+## Ajustes
+
+Escrituras sin un jugador detrás, para un plugin que premia o castiga a un clan por algo que lleva él
+mismo. No se comprueba ningún permiso de rango ni se avisa a nadie más allá de lo que el plugin anuncia
+por su cuenta. Llámalos en el hilo principal.
+
+| Método | Qué hace |
+|---|---|
+| `boolean addExp(String clanId, long amount)` | Suma EXP, o la quita si es negativa, por el mismo camino que una baja o una muerte: un nivel cruzado se anuncia y los topes lo siguen. Nunca baja de cero ni pasa del último nivel. `false` si el clan no existe, `levels` está apagado o `amount` es cero. |
+| `boolean adjustDtr(String clanId, double delta)` | Mueve el DTR, entre `min-dtr` y el máximo del clan. Cruzar por debajo de cero hace lo que hace una muerte al cruzarlo (el terreno se abre, se cobra la EXP del raideo); volver a cruzar hace lo que hace la regeneración. No congela la regeneración. `false` si el clan no existe, `dtr` está apagado o ya estaba en el límite. |
+
 ## Acciones
 
 Cada una de estas ejecuta el mismo flujo que el comando del propio jugador, con sus comprobaciones de
@@ -127,6 +140,9 @@ saberlo lee el estado después.
 | `void sendClanChat(Player player, String message)` | Manda un mensaje al chat del clan del jugador. |
 | `void setHome(Player player)` | Fija el home del clan donde está parado el jugador. |
 | `void teleportHome(Player player)` | Manda al jugador al home de su clan. |
+| `boolean joinClan(Player player, String clanId)` | Entra en el clan como lo hace `/clan join`: tiene que estar abierto o haberle invitado, y cada negativa se le dice al jugador. Devuelve si entró. |
+| `void setRole(Player actor, UUID target, String roleId)` | Da a un miembro uno de los rangos del clan, como el menú de rangos: `PROMOTE` o `DEMOTE` según la dirección, y el que actúa tiene que superar en peso al miembro y al rango. El liderazgo se mueve con `transferLeader`, no aquí. |
+| `void openMenu(Player player)` | Abre `/clan`: el resumen del clan para un miembro, la pantalla de crear o unirse para cualquier otro. |
 
 ## Tipos
 
@@ -167,6 +183,11 @@ inclusivas y el terreno abarca toda la altura del mundo.
 `contains(int x, int z)` comprueba una columna; `contains(Location location)` comprueba una ubicación,
 mundo incluido.
 
+### `ClanRelation`
+
+`NONE`, `SAME_CLAN`, `ALLY`, `RIVAL`. Los valores no se solapan: dos compañeros de clan son `SAME_CLAN`
+antes que cualquier otra cosa.
+
 ### `DtrState`
 
 | Valor | Significado |
@@ -176,10 +197,33 @@ mundo incluido.
 | `REGENERATING` | Recuperándose hacia su máximo. |
 | `RAIDABLE` | En cero o por debajo: el terreno del clan se puede raidear. |
 
+## Eventos
+
+Eventos de Bukkit en `net.exylia.lib.api.clans.event`, parte de la misma API pública: ellos y los métodos
+añadidos arriba necesitan `exylia-api` `v1.133.0` o posterior. Cada uno se lanza en el hilo que hizo el
+cambio, que en Folia es un hilo de región: programa todo lo que toque el mundo.
+
+| Evento | Se lanza | Cancelable |
+|---|---|---|
+| `ClanCreateEvent` | Un jugador está fundando un clan, una vez pasadas todas las comprobaciones y antes de escribir nada. `getPlayer()`, `getName()`. Cancelarlo no escribe ni dice nada: dile tú al jugador por qué. | Sí |
+| `ClanDisbandEvent` | Después de que un clan desaparece, lo disuelva el líder o un admin. `getClanId()`, `getName()`, `getActor()` (`null` para un admin). No hay evento de salida por miembro. | No |
+| `ClanMemberJoinEvent` | Después de que un jugador entra: clan abierto, invitación aceptada o `forcejoin`. Fundar no es entrar. `getPlayer()`, `getClanId()`. | No |
+| `ClanMemberLeaveEvent` | Después de borrar una membresía. `getPlayer()` (un `UUID`, puede estar desconectado), `getClanId()`, `getReason()` (`LEFT`, `KICKED`, `BANNED`), `getActor()` (`null` si se fue solo o lo sacó un admin). | No |
+| `ClanRoleChangeEvent` | Después de que cambia el rango de un miembro, por cualquier camino: ascenso, descenso, menú de rangos, `setRole`, un traspaso de liderazgo, los miembros de un rango borrado que pasan a otro. `getPlayer()`, `getPrevious()`, `getRole()`. | No |
+| `ClanDtrChangeEvent` | Después de que se mueve el DTR: una muerte, la regeneración, un admin, `adjustDtr`. `getPrevious()`, `getDtr()`, más `becameRaidable()` y `recovered()`. **Normalmente asíncrono**: la regeneración corre fuera del hilo principal. | No |
+| `ClanClaimEvent` | Un terreno nuevo pasó todas las comprobaciones y está a punto de pagarse. `getPlayer()`, `getClaim()`, `getPrice()`. Cancelarlo no cobra ni dice nada; el jugador conserva la selección. Redimensionar no lo lanza. | Sí |
+| `ClanUnclaimEvent` | Después de quitar un terreno, al liberarlo o en una disolución (justo antes de `ClanDisbandEvent`). `getClaim()`. | No |
+
+```java
+@EventHandler
+public void onJoin(ClanMemberJoinEvent event) {
+    event.getPlayer().sendMessage("Welcome to your new clan.");
+}
+```
+
 ## Lo que no expone
 
-ExyliaClans no publica eventos, y el service está curado, no es un espejo del plugin. Los abridores de
-menú, el editor de rangos, las escrituras de terreno, la gestión de aliados y rivales, los baneos y
+El service está curado, no es un espejo del plugin. El editor de rangos, las escrituras de terreno, la gestión de aliados y rivales, los baneos y
 todo lo que está bajo `/clanadmin` quedan afuera a propósito: esos son los caminos que mantienen en
 sintonía el log, los avisos, las cachés y las regiones de WorldGuard, y un método público que se los
 saltara sería una forma de corromper un clan en silencio.

@@ -1,12 +1,44 @@
 ---
 title: "Configuration"
-description: "config.yml key by key, plus what messages.yml, lfc.yml and lfp.yml hold."
+description: "config.yml key by key, the language folders, and what messages.yml, webhooks.yml, lfc.yml and lfp.yml hold."
 ---
 
-Four files, all generated from typed records on first start — comments included. A key the reader does
-not recognise is pruned, so a stray line disappears on the next start rather than being silently ignored.
-Five blocks are exempt because their keys are yours: `default-roles`, `levels.level-definitions`,
-`levels.kill-streak-bonuses`, and the `categories` block of each recruitment file.
+Five files, all generated from typed records on first start — comments included. `config.yml` sits in
+the plugin folder; `messages.yml`, `webhooks.yml`, `lfc.yml` and `lfp.yml` sit in the language folder,
+with the menus. A key the reader does not recognise is pruned, so a stray line disappears on the next
+start rather than being silently ignored. Five blocks are exempt because their keys are yours:
+`default-roles`, `levels.level-definitions`, `levels.kill-streak-bonuses`, and the `categories` block of
+each recruitment file.
+
+## language
+
+```yaml
+language: default
+```
+
+Which folder under `plugins/ExyliaClans/lang/` the menus and messages are read from. `default` follows
+the `language` set in ExyliaLib's own `config.yml`, so one line there switches every Exylia plugin;
+`en`, `es`, `pt` or `fr` set this plugin alone. Each language is a complete folder you can edit:
+
+```
+plugins/ExyliaClans/
+  config.yml
+  lang/es/messages.yml
+  lang/es/webhooks.yml
+  lang/es/lfc.yml
+  lang/es/lfp.yml
+  lang/es/menus/*.yml
+```
+
+English is the base the others are laid over, so a line not translated yet still arrives in English. Any
+other code — one you invent — starts as English for you to rewrite. A changed `language` takes effect on
+`/clanadmin reload`.
+
+<Callout type="note" title="Servers that ran 1.1.0 keep their edits">
+On the first start of 1.2.0 the old `messages.yml`, `lfc.yml`, `lfp.yml` and `menus/` move to
+`lang/custom/`, and `config.yml` is pointed at it with `language: custom`, so nothing a server edited is
+lost. Set `language` to `default` or a code to switch to the shipped translations.
+</Callout>
 
 ## settings
 
@@ -16,6 +48,8 @@ settings:
   max-alliances: 5
   max-rivals: 10
   invite-expire-seconds: 60
+  invite-cooldown-seconds: 60
+  create-cooldown-seconds: 120
   home-warmup-seconds: 5
   home-cancel-on-move: true
   home-cancel-on-damage: true
@@ -41,7 +75,9 @@ settings:
 | `max-members` | 30 | Base member cap, before level bonuses |
 | `max-alliances` | 5 | Base alliance cap |
 | `max-rivals` | 10 | Base rival cap |
-| `invite-expire-seconds` | 60 | How long an **alliance request** stays pending |
+| `invite-expire-seconds` | 60 | How long a clan invite **and** an alliance request stand. `0` never expires |
+| `invite-cooldown-seconds` | 60 | Per clan, before the same player can be invited again. `0` is off |
+| `create-cooldown-seconds` | 120 | Per player, between creating two clans. `0` is off |
 | `home-warmup-seconds` | 5 | Countdown on `/clan home`. `0` is instant |
 | `home-cancel-on-move` | `true` | Moving cancels the warmup |
 | `home-cancel-on-damage` | `true` | Damage cancels it |
@@ -52,16 +88,15 @@ settings:
 | `clan-name-min-length` | 3 | Shortest clan name |
 | `clan-name-max-length` | 16 | Longest |
 | `clan-name-regex` | `^[a-zA-Z0-9_]+$` | Pattern a name must match |
-| `visibility-mode` | `DISABLED` | `DISABLED`, `CLAN_ONLY`, `ALLY_ONLY`, `CLAN_AND_ALLY_MIXED` or `UNIFIED`. See [Relations](/docs/exyliaclans/relations#how-a-player-is-coloured) |
+| `visibility-mode` | `DISABLED` | `DISABLED`, `CLAN_ONLY`, `ALLY_ONLY`, `CLAN_AND_ALLY_MIXED` or `UNIFIED`, in any case. An unknown value is reported in the console and read as `CLAN_AND_ALLY_MIXED`. See [Relations](/docs/exyliaclans/relations#how-a-player-is-coloured) |
 | `forced-ff-worlds` | `[]` | Worlds where friendly fire is always on |
 | `chat.quick-clan-prefixes` | `["."]` | Prefixes that send one line to clan chat |
 | `chat.quick-ally-prefixes` | `["@"]` | Prefixes that send one line to clan and allies |
 
-<Callout type="warning" title="`invite-expire-seconds` does not expire clan invites">
-It is read by the alliance request cache only. A `/clan invite` is a row in `clan_invites` with no
-expiry: it stands until it is accepted, declined, cancelled, or the invited player joins a clan. Nothing
-prunes them, so a clan that invites widely accumulates rows.
-</Callout>
+An invitation is checked against `invite-expire-seconds` every time it is read, so one past its time
+never lets anybody in, and a sweep every thirty seconds deletes the expired rows and tells whoever is
+online — the invited player for an invite, the requesting clan for an alliance request. Invitations
+written before 1.2.0 carry no send time and count as sent at the update.
 
 ## modules
 
@@ -82,7 +117,11 @@ mail:
   expiry-check-interval-minutes: 30
   max-message-length: 256
   max-mails-per-clan: 100
+  send-cooldown-seconds: 30
 ```
+
+`send-cooldown-seconds` is the wait, per player, between two mails. `0` is off. See
+[Chat and mail](/docs/exyliaclans/chat-and-mail#mail).
 
 ## rivals
 
@@ -153,39 +192,57 @@ For the whole rule — who it covers and why it beats `forced-ff-worlds` — see
 
 ## relational-placeholders
 
-The four labels and four colours one player is drawn with to another. See
-[Placeholders](/docs/exyliaclans/placeholders#relational).
+The four colours one player is drawn with to another. The four labels moved to `messages.yml`, under
+`relations`. See [Placeholders](/docs/exyliaclans/placeholders#relational).
 
 ## bossbars
 
-`focus`, `camp` and `rally`, each with `enabled` and a `config` of `text`, `color` and `style`; the two
-markers also take `max-distance` and `duration-seconds`. See [War tools](/docs/exyliaclans/war-tools).
+`focus`, `camp` and `rally`, each with `enabled` and a `config` of `color` and `style`; the two markers
+also take `max-distance` and `duration-seconds`. What each bar says is in `messages.yml`, under
+`bossbars`. See [War tools](/docs/exyliaclans/war-tools).
 
 ## home-effects and regroup-effects
 
-Two identical blocks, one per teleport:
+Two identical blocks, one per teleport, holding only how long each title stays:
 
 ```yaml
 home-effects:
-  warmup-actionbar:
-    text: "{primary}⏳ Clan Home {muted}| {primary}Teleportando en {highlight}%time%"
   warmup-title:
-    title: "{highlight}%time%"
-    subtitle: "{muted}Do not move!"
     fade-in: 0
     stay: 10
     fade-out: 0
   teleport-title:
-    title: "{primary}&lCLAN HOME"
-    subtitle: "{muted}Welcome back!"
     fade-in: 10
     stay: 50
     fade-out: 15
 ```
 
-`%time%` is the seconds remaining. Timings are ticks — twenty to a second. One shipped string is still
-Spanish: `home-effects.warmup-actionbar.text` reads *Teleportando en*. Everything else in both blocks is
-English.
+Timings are ticks — twenty to a second. The words are in `messages.yml`, under `teleport.home` and
+`teleport.regroup`: `warmup-actionbar`, `warmup-title`, `warmup-subtitle`, `arrival-title` and
+`arrival-subtitle`. `%time%` is the seconds remaining.
+
+<Callout type="note" title="Text you wrote here before 1.2.0 is moved, not lost">
+The relational labels, the boss bar texts and the teleport titles used to live in `config.yml`. On the
+first start of 1.2.0 they are lifted out and written into `messages.yml` at their new keys — unless that
+file already says something there — so a server's own wording survives the move.
+</Callout>
+
+## webhooks
+
+```yaml
+webhooks:
+  enabled: true
+  set-cooldown-seconds: 30
+  test-cooldown-seconds: 10
+```
+
+| Key | Default | What it does |
+|---|---|---|
+| `enabled` | `true` | Whether clans can connect a Discord webhook at all. Off, the settings button disappears and every webhook command and action refuses |
+| `set-cooldown-seconds` | 30 | Per clan, between two submitted webhook URLs. Cancelling the prompt starts nothing. `0` is off |
+| `test-cooldown-seconds` | 10 | Per clan, between two test messages. `0` is off |
+
+See [Discord webhooks](/docs/exyliaclans/webhooks).
 
 ## default-roles
 
@@ -193,9 +250,9 @@ The ranks a new clan is built with. See [Roles](/docs/exyliaclans/roles).
 
 ## messages.yml
 
-Thirteen sections under a `prefix`: `clan`, `claim`, `errors`, `level`, `dtr`, `placeholders`, `logs`,
-`lfc`, `lfp`, `mail`, `admin` and `confirm`. Around 460 keys between them — every line the plugin can
-send is in here, and nothing player-facing is hardcoded.
+Fifteen sections under a `prefix`: `clan`, `claim`, `errors`, `level`, `dtr`, `placeholders`, `logs`,
+`lfc`, `lfp`, `mail`, `admin`, `confirm`, `relations`, `bossbars` and `teleport`. Every line the plugin
+can send is in here, and nothing player-facing is hardcoded. It lives in `lang/<language>/`.
 
 | Section | What is in it |
 |---|---|
@@ -210,6 +267,9 @@ send is in here, and nothing player-facing is hardcoded.
 | `mail` | The clan mailbox |
 | `admin` | Everything `/clanadmin` says |
 | `confirm` | The wording of the shared confirmation screen |
+| `relations` | The four relational labels: `member`, `ally`, `enemy`, `none` |
+| `bossbars` | What the `focus`, `camp` and `rally` bars say |
+| `teleport` | The countdown and arrival lines of `home` and `regroup` |
 
 Three things are worth knowing about it:
 
@@ -217,15 +277,24 @@ Three things are worth knowing about it:
   `{muted}`, `{info}`, `{letters}` — so recolouring the server never means editing this file.
 - **A line may open with an effect tag.** `[sound:ENTITY_VILLAGER_NO|1.0|1.0]` plays a sound and never
   reaches the screen. Most of the shipped lines carry one.
-- **`%prefix%` is substituted from the `prefix` key**, and MiniMessage click and hover tags work — the
-  shipped invite line is a clickable *Accept* button.
+- **`%prefix%` is substituted from the `prefix` key**, and MiniMessage click and hover tags work.
+- **A message can be a list of lines**, and a line opening with `[center]` is centred in chat. The
+  prompts that ask a player to act ship that way — the clan invitation, an alliance request, a regroup
+  call, a new mail, an expired LFC profile, a new LFP application, the claim map running out — as a
+  short centred block with a clickable button. A server that never edited those lines gets the new block
+  on update; an edited one is kept.
 
 The `placeholders` section is a bag of short words that get substituted — *Yes*, *No*, *Enabled*,
-*Online*, the progress-bar characters — so thirty-seven menu files do not each spell their own. Two of
+*Online*, the progress-bar characters — so thirty-eight menu files do not each spell their own. Two of
 its keys are also read by the **PlaceholderAPI layer**: `placeholders.none` is what
 `%exyliaclans_clan_name%` and `%exyliaclans_clan_role%` answer for a player with no clan, and
 `placeholders.na` is what an empty roster slot or an unranked leaderboard position answers. See
 [Placeholders](/docs/exyliaclans/placeholders).
+
+## webhooks.yml
+
+The in-game lines of the webhook feature (`messages`) and one Discord template per event (`events`). See
+[Discord webhooks](/docs/exyliaclans/webhooks#webhooksyml).
 
 ## lfc.yml and lfp.yml
 
@@ -233,6 +302,7 @@ its keys are also read by the **PlaceholderAPI layer**: `placeholders.none` is w
 
 ## Reloading
 
-`/clanadmin reload` re-reads all four files, rebuilds the level table, re-reads the recruitment
-categories, applies a changed `visibility-mode` to everybody online, and recompiles the menus. Changes
+`/clanadmin reload` re-reads all five files (from the language now named), rebuilds the level table,
+starts or stops the modules whose switch changed, re-reads the recruitment categories, applies a changed
+`visibility-mode` to everybody online, and recompiles the menus. Changes
 to `default-roles` only reach clans created afterwards.

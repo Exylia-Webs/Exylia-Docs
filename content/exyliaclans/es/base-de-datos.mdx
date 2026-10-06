@@ -1,26 +1,28 @@
 ---
 title: "Base de datos"
-description: "Las trece tablas, qué las indexa, y qué saber antes de tocarlas a mano."
+description: "Las quince tablas, qué las indexa, varios servidores sobre una base de datos, y qué saber antes de tocarlas a mano."
 ---
 
 El almacenamiento es de ExyliaLib. `database.yml` se escribe en el primer arranque y usa H2 por defecto;
 los otros motores son MySQL, MariaDB, PostgreSQL y MongoDB, con un bloque `redis` al lado. Las tablas se
 crean y migran desde las definiciones de los records, así que no hay ningún esquema que aplicar.
 
-## Las trece tablas
+## Las quince tablas
 
 | Tabla | Clave | Guarda |
 |---|---|---|
-| `clans` | `id` (UUID en texto) | Nombre, líder, saldo, abierto, friendly fire, home, baneados, DTR, congelado, EXP |
+| `clans` | `id` (UUID en texto) | Nombre, líder, saldo, abierto, friendly fire, home, baneados, DTR, congelado, última regeneración, EXP, huecos de miembro extra |
 | `clan_members` | `uuid` | El clan del jugador y su rango |
 | `clan_roles` | `id` | Cada rango de cada clan: nombre, peso, permisos, si es el rango por defecto |
 | `clan_relations` | `clanId:targetClanId` | Una opinión direccional, `ALLY` o `RIVAL` |
-| `clan_invites` | `playerUuid:clanId` | Una invitación vigente |
+| `clan_invites` | `playerUuid:clanId` | Una invitación vigente y cuándo se envió |
+| `clan_alliance_requests` | `requestingClanId:targetClanId` | Una petición de alianza pendiente y cuándo se envió |
 | `clan_claims` | `id` | Un rectángulo: mundo, `minX`, `minZ`, `maxX`, `maxZ`, `baseY` |
 | `clan_stats` | `clanId` | Bajas, muertes, segundos jugados |
 | `player_stats` | `playerUuid:clanId` | Lo mismo por jugador y clan, más el último nombre visto |
 | `clan_logs` | `id` | Acción, actor, objetivo, detalle, fecha |
 | `clan_mails` | `id` | Tipo, remitente, destinatario, asunto, cuerpo, enviado, caduca, lista de leídos, lista de borrados, fijado |
+| `clan_webhooks` | `clanId` | La URL del webhook, su nombre en Discord, los eventos apagados, si Discord lo borró |
 | `lfc_profiles` | `playerUuid` | Estado, publicado, última publicación, caduca, las respuestas |
 | `lfp_postings` | `clanId` | Estado, publicado, última publicación, caduca, descripción, las respuestas |
 | `lfp_applications` | `playerUuid:clanId` | Estado, solicitado, resuelto, mensaje |
@@ -51,24 +53,30 @@ Los dos convierten una página en una lectura acotada en vez de un escaneo.
 | `clans.bannedPlayers` | UUIDs separados por comas |
 | `clan_roles.permissions` | Nombres de permiso separados por comas. Un nombre desconocido se salta al leer |
 | `clans.homeLocation` | Una localización serializada que **lleva el servidor en el que se puso**: `servidor,mundo,x,y,z,yaw,pitch`. `null` si no está puesta |
+| `clans.extraSlots` | Huecos de miembro dados con `/clanadmin setslots`, sobre `max-members` y el bonus de nivel |
+| `clans.dtrRegenAt` | Cuándo regeneró el DTR por última vez, en milisegundos epoch — lo que evita que varios servidores lo regeneren cada uno |
+| `clan_invites.sentAt` / `clan_alliance_requests.sentAt` | Milisegundos epoch. `0` en una invitación escrita antes de 1.2.0, que cuenta como enviada en la actualización |
+| `clan_webhooks.url` | La URL completa del webhook, token incluido. Trata la tabla como un secreto; en el juego no se muestra nunca |
+| `clan_webhooks.disabledEvents` | Nombres de evento que el clan apagó, separados por comas: `JOIN`, `LEAVE`, `KICK`, `BAN`, `INVITE`, `RANK`, `LEADER`, `RENAME`, `ALLIANCE`, `RIVALRY`, `BANK`, `DISBAND` |
 | `clan_mails.readByPlayers` / `deletedByPlayers` | UUIDs separados por comas — así leído y borrado son por miembro desde una sola fila |
 | `lfc_profiles.data` / `lfp_postings.data` | Las respuestas serializadas |
 | `*.status` | `ACTIVE` / `EXPIRED` para ofertas y perfiles; `PENDING` / `ACCEPTED` / `REJECTED` para solicitudes |
 
 ## Qué no está en la base de datos
 
-- **Las peticiones de alianza.** En memoria, con caducidad de 60 segundos; un reinicio se lleva las
-  pendientes.
 - **Los canales de chat.** Por sesión; tras un reinicio todo el mundo vuelve a global.
 - **Las rachas de bajas.** Por sesión, y se reinician al morir.
-- **Los marcadores de camp, rally, focus y regroup.** Todos en memoria.
+- **Los marcadores de camp, rally, focus y regroup.** Todos en memoria. Un punto de regroup y una tregua
+  de expulsión se comparten con los demás servidores de una red, nunca se guardan.
+- **Las esperas anti-spam.** Las de crear, invitar, correo, aviso de rival y webhook viven en memoria, por
+  servidor.
 - **El nivel del clan.** Se deriva de `clans.exp` en cada lectura, nunca se guarda.
 - **Qué miembros son dueños de un terreno.** Se deriva de `clan_members`; la fila del terreno solo nombra
   al clan.
 
 ## Cachés
 
-Clanes, miembros, rangos, relaciones, terrenos e invitaciones se mantienen en memoria y se escriben al
+Clanes, miembros, rangos, relaciones, terrenos, invitaciones, peticiones de alianza y webhooks se mantienen en memoria y se escriben al
 cambiar, así que el camino caliente no toca la base de datos. Dos cosas se cachean con TTL:
 
 | Caché | TTL | Por qué |
@@ -77,10 +85,32 @@ cambiar, así que el camino caliente no toca la base de datos. Dos cosas se cach
 | La lista de conectados por clan y por alianza | 1 s | Treinta huecos × varios espectadores × cuatro veces por segundo |
 
 <Callout type="warning" title="Editar filas a mano requiere reiniciar">
-Las cachés se cargan al activar y las mantiene al día el propio plugin con sus escrituras. Una fila
-cambiada directamente en la base de datos no se detecta, y se sobrescribirá la próxima vez que ese clan
-cambie. Usa `/clanadmin` donde cubra lo que necesitas, y para el servidor donde no.
+Las cachés se cargan al activar y las mantienen al día las escrituras del propio plugin — y, en una red,
+las de los demás servidores. Una fila cambiada directamente en la base de datos no se detecta, y se
+sobrescribirá la próxima vez que ese clan cambie. Usa `/clanadmin` donde cubra lo que necesitas, y para
+los servidores donde no.
 </Callout>
+
+## Varios servidores
+
+Los servidores que comparten una base de datos funcionan como un solo sistema de clanes en cuanto todos
+activan Redis en `database.yml` (el bloque `redis`, con un `server-id` distinto en cada uno). No hay nada
+más que configurar.
+
+| Qué | Cómo |
+|---|---|
+| Todas las tablas: clanes, miembros, rangos, relaciones, invitaciones, peticiones de alianza, correo, estadísticas, terrenos, webhooks, LFC y LFP | Cada servidor tiene su copia y vuelve a leer una fila en cuanto otro servidor la escribe o la borra. Una entrada, una expulsión, un ascenso o una alianza hechos en un servidor se ven en todos en milisegundos. |
+| Chat de clan, chat de aliados, cada aviso del clan, invitaciones, expulsiones, ascensos, avisos de correo | Se publican una vez y cada servidor los entrega a los miembros que tiene, así que una línea nunca llega dos veces ni solo donde pasó. |
+| `/clan regroup` | El punto nombra su servidor; a un compañero en otro servidor se le pasa a él. |
+| Tregua de expulsión | Sigue al jugador expulsado al servidor al que se mueva. |
+| Regeneración del DTR | Una vez por intervalo para toda la red, corran el temporizador los servidores que sean. |
+| Conectados (`%exyliaclans_clan_online%`, la lista de conectados, menús, el ranking) | Cuentan a los miembros de cualquier servidor. |
+
+Lo que se queda en el servidor donde se hizo: los marcadores de camp y rally y el contorno del focus (se
+dibujan en el mapa de un servidor), las esperas anti-spam y el canal de chat que tenga puesto cada
+jugador. Un terreno solo se dibuja donde su mundo está cargado.
+
+Sin Redis todo se comporta como en un solo servidor.
 
 ## Arranque
 

@@ -1,13 +1,45 @@
 ---
 title: "Configuración"
-description: "config.yml clave por clave, más qué contienen messages.yml, lfc.yml y lfp.yml."
+description: "config.yml clave por clave, las carpetas de idioma, y qué contienen messages.yml, webhooks.yml, lfc.yml y lfp.yml."
 ---
 
-Cuatro archivos, todos generados desde records tipados en el primer arranque, comentarios incluidos. Una
-clave que el lector no reconoce se poda, así que una línea suelta desaparece en el siguiente arranque en
-vez de ignorarse en silencio. Cinco bloques están exentos porque sus claves son tuyas: `default-roles`,
-`levels.level-definitions`, `levels.kill-streak-bonuses` y el bloque `categories` de cada archivo de
-reclutamiento.
+Cinco archivos, todos generados desde records tipados en el primer arranque, comentarios incluidos.
+`config.yml` está en la carpeta del plugin; `messages.yml`, `webhooks.yml`, `lfc.yml` y `lfp.yml` están en
+la carpeta del idioma, junto a los menús. Una clave que el lector no reconoce se poda, así que una línea
+suelta desaparece en el siguiente arranque en vez de ignorarse en silencio. Cinco bloques están exentos
+porque sus claves son tuyas: `default-roles`, `levels.level-definitions`, `levels.kill-streak-bonuses` y
+el bloque `categories` de cada archivo de reclutamiento.
+
+## language
+
+```yaml
+language: default
+```
+
+De qué carpeta de `plugins/ExyliaClans/lang/` se leen los menús y los mensajes. `default` sigue el
+`language` del propio `config.yml` de ExyliaLib, así que una línea allí cambia todos los plugins de
+Exylia; `en`, `es`, `pt` o `fr` fijan solo este plugin. Cada idioma es una carpeta completa que puedes
+editar:
+
+```
+plugins/ExyliaClans/
+  config.yml
+  lang/es/messages.yml
+  lang/es/webhooks.yml
+  lang/es/lfc.yml
+  lang/es/lfp.yml
+  lang/es/menus/*.yml
+```
+
+El inglés es la base sobre la que se ponen los demás, así que una línea aún sin traducir llega en inglés.
+Cualquier otro código — uno que inventes — empieza como inglés para que lo reescribas. Un `language`
+cambiado entra con `/clanadmin reload`.
+
+<Callout type="note" title="Los servidores que venían de 1.1.0 conservan sus cambios">
+En el primer arranque de 1.2.0 los antiguos `messages.yml`, `lfc.yml`, `lfp.yml` y `menus/` se mueven a
+`lang/custom/`, y `config.yml` apunta ahí con `language: custom`, así que no se pierde nada de lo que el
+servidor editó. Pon `language` en `default` o en un código para pasar a las traducciones que vienen.
+</Callout>
 
 ## settings
 
@@ -17,6 +49,8 @@ settings:
   max-alliances: 5
   max-rivals: 10
   invite-expire-seconds: 60
+  invite-cooldown-seconds: 60
+  create-cooldown-seconds: 120
   home-warmup-seconds: 5
   home-cancel-on-move: true
   home-cancel-on-damage: true
@@ -42,7 +76,9 @@ settings:
 | `max-members` | 30 | Tope base de miembros, antes de los bonus de nivel |
 | `max-alliances` | 5 | Tope base de alianzas |
 | `max-rivals` | 10 | Tope base de rivales |
-| `invite-expire-seconds` | 60 | Cuánto dura pendiente una **petición de alianza** |
+| `invite-expire-seconds` | 60 | Cuánto duran una invitación de clan **y** una petición de alianza. `0` no caduca |
+| `invite-cooldown-seconds` | 60 | Por clan, antes de poder invitar otra vez al mismo jugador. `0` lo desactiva |
+| `create-cooldown-seconds` | 120 | Por jugador, entre crear dos clanes. `0` lo desactiva |
 | `home-warmup-seconds` | 5 | Cuenta atrás en `/clan home`. `0` es instantáneo |
 | `home-cancel-on-move` | `true` | Moverse cancela el warmup |
 | `home-cancel-on-damage` | `true` | El daño lo cancela |
@@ -53,16 +89,16 @@ settings:
 | `clan-name-min-length` | 3 | Nombre de clan más corto |
 | `clan-name-max-length` | 16 | El más largo |
 | `clan-name-regex` | `^[a-zA-Z0-9_]+$` | Patrón que debe cumplir un nombre |
-| `visibility-mode` | `DISABLED` | `DISABLED`, `CLAN_ONLY`, `ALLY_ONLY`, `CLAN_AND_ALLY_MIXED` o `UNIFIED`. Mira [Relaciones](/docs/exyliaclans/relaciones#cómo-se-pinta-a-un-jugador) |
+| `visibility-mode` | `DISABLED` | `DISABLED`, `CLAN_ONLY`, `ALLY_ONLY`, `CLAN_AND_ALLY_MIXED` o `UNIFIED`, en mayúsculas o minúsculas. Un valor desconocido se avisa en consola y se lee como `CLAN_AND_ALLY_MIXED`. Mira [Relaciones](/docs/exyliaclans/relaciones#cómo-se-pinta-a-un-jugador) |
 | `forced-ff-worlds` | `[]` | Mundos donde el friendly fire está siempre activo |
 | `chat.quick-clan-prefixes` | `["."]` | Prefijos que envían una línea al chat de clan |
 | `chat.quick-ally-prefixes` | `["@"]` | Prefijos que envían una línea al clan y a los aliados |
 
-<Callout type="warning" title="`invite-expire-seconds` no caduca las invitaciones de clan">
-Solo lo lee la caché de peticiones de alianza. Un `/clan invite` es una fila de `clan_invites` sin
-caducidad: se mantiene hasta que se acepta, se rechaza, se cancela o el jugador entra en un clan. Nada las
-poda, así que un clan que invita a mucha gente acumula filas.
-</Callout>
+Una invitación se compara con `invite-expire-seconds` cada vez que se lee, así que una pasada de tiempo
+nunca deja entrar a nadie, y una pasada cada treinta segundos borra las filas caducadas y avisa a quien
+esté conectado: al jugador invitado en una invitación, al clan que la pidió en una petición de alianza.
+Las invitaciones escritas antes de 1.2.0 no llevan hora de envío y cuentan como enviadas en la
+actualización.
 
 ## modules
 
@@ -83,7 +119,11 @@ mail:
   expiry-check-interval-minutes: 30
   max-message-length: 256
   max-mails-per-clan: 100
+  send-cooldown-seconds: 30
 ```
+
+`send-cooldown-seconds` es la espera, por jugador, entre dos correos. `0` la desactiva. Ver
+[Chat y correo](/docs/exyliaclans/chat-y-correo#correo).
 
 ## rivals
 
@@ -154,40 +194,59 @@ La regla entera — a quién cubre y por qué gana a `forced-ff-worlds` — est�
 
 ## relational-placeholders
 
-Las cuatro etiquetas y los cuatro colores con los que se dibuja a un jugador para otro. Ver
-[Placeholders](/docs/exyliaclans/placeholders#relacionales).
+Los cuatro colores con los que se dibuja a un jugador para otro. Las cuatro etiquetas pasaron a
+`messages.yml`, en `relations`. Ver [Placeholders](/docs/exyliaclans/placeholders#relacionales).
 
 ## bossbars
 
-`focus`, `camp` y `rally`, cada uno con `enabled` y un `config` de `text`, `color` y `style`; los dos
-marcadores aceptan además `max-distance` y `duration-seconds`. Ver
+`focus`, `camp` y `rally`, cada uno con `enabled` y un `config` de `color` y `style`; los dos marcadores
+aceptan además `max-distance` y `duration-seconds`. Lo que dice cada barra está en `messages.yml`, en
+`bossbars`. Ver
 [Herramientas de guerra](/docs/exyliaclans/herramientas-de-guerra).
 
 ## home-effects y regroup-effects
 
-Dos bloques idénticos, uno por teletransporte:
+Dos bloques idénticos, uno por teletransporte, que solo guardan cuánto dura cada título:
 
 ```yaml
 home-effects:
-  warmup-actionbar:
-    text: "{primary}⏳ Clan Home {muted}| {primary}Teleportando en {highlight}%time%"
   warmup-title:
-    title: "{highlight}%time%"
-    subtitle: "{muted}Do not move!"
     fade-in: 0
     stay: 10
     fade-out: 0
   teleport-title:
-    title: "{primary}&lCLAN HOME"
-    subtitle: "{muted}Welcome back!"
     fade-in: 10
     stay: 50
     fade-out: 15
 ```
 
-`%time%` son los segundos que faltan. Los tiempos van en ticks: veinte por segundo. Queda una sola
-cadena en español entre las que vienen: `home-effects.warmup-actionbar.text`, que dice *Teleportando
-en*. Todo lo demás de los dos bloques está en inglés.
+Los tiempos van en ticks: veinte por segundo. Las palabras están en `messages.yml`, en `teleport.home` y
+`teleport.regroup`: `warmup-actionbar`, `warmup-title`, `warmup-subtitle`, `arrival-title` y
+`arrival-subtitle`. `%time%` son los segundos que faltan.
+
+<Callout type="note" title="El texto que escribiste aquí antes de 1.2.0 se mueve, no se pierde">
+Las etiquetas relacionales, los textos de las bossbars y los títulos de teletransporte vivían en
+`config.yml`. En el primer arranque de 1.2.0 se sacan de ahí y se escriben en `messages.yml` en sus
+claves nuevas — salvo que ese archivo ya diga algo allí —, así que la redacción propia del servidor
+sobrevive al cambio.
+</Callout>
+
+## webhooks
+
+```yaml
+webhooks:
+  enabled: true
+  set-cooldown-seconds: 30
+  test-cooldown-seconds: 10
+```
+
+| Clave | Por defecto | Qué hace |
+|---|---|---|
+| `enabled` | `true` | Si los clanes pueden conectar un webhook de Discord. Apagado, el botón de ajustes desaparece y todo comando y acción del webhook se niega |
+| `set-cooldown-seconds` | 30 | Por clan, entre dos URLs enviadas. Cancelar la petición no arranca nada. `0` lo desactiva |
+| `test-cooldown-seconds` | 10 | Por clan, entre dos mensajes de prueba. `0` lo desactiva |
+
+Ver [Webhooks de Discord](/docs/exyliaclans/webhooks).
 
 ## default-roles
 
@@ -195,9 +254,9 @@ Los rangos con los que nace un clan. Ver [Rangos](/docs/exyliaclans/roles).
 
 ## messages.yml
 
-Trece secciones bajo un `prefix`: `clan`, `claim`, `errors`, `level`, `dtr`, `placeholders`, `logs`,
-`lfc`, `lfp`, `mail`, `admin` y `confirm`. Unas 460 claves entre todas: cada línea que puede mandar el
-plugin está aquí, y no queda nada escrito a fuego.
+Quince secciones bajo un `prefix`: `clan`, `claim`, `errors`, `level`, `dtr`, `placeholders`, `logs`,
+`lfc`, `lfp`, `mail`, `admin`, `confirm`, `relations`, `bossbars` y `teleport`. Cada línea que puede
+mandar el plugin está aquí, y no queda nada escrito a fuego. Vive en `lang/<idioma>/`.
 
 | Sección | Qué lleva |
 |---|---|
@@ -212,6 +271,9 @@ plugin está aquí, y no queda nada escrito a fuego.
 | `mail` | El buzón del clan |
 | `admin` | Todo lo que dice `/clanadmin` |
 | `confirm` | El texto de la pantalla de confirmación compartida |
+| `relations` | Las cuatro etiquetas relacionales: `member`, `ally`, `enemy`, `none` |
+| `bossbars` | Lo que dicen las barras de `focus`, `camp` y `rally` |
+| `teleport` | Las líneas de cuenta atrás y llegada de `home` y `regroup` |
 
 Tres cosas que conviene saber:
 
@@ -220,14 +282,24 @@ Tres cosas que conviene saber:
 - **Una línea puede empezar con una etiqueta de efecto.** `[sound:ENTITY_VILLAGER_NO|1.0|1.0]` reproduce
   un sonido y no llega nunca a la pantalla. Casi todas las líneas que vienen llevan una.
 - **`%prefix%` se sustituye desde la clave `prefix`**, y funcionan las etiquetas de clic y hover de
-  MiniMessage: la línea de invitación que viene es un botón *Aceptar* clicable.
+  MiniMessage.
+- **Un mensaje puede ser una lista de líneas**, y una línea que empieza con `[center]` se centra en el
+  chat. Las peticiones que piden al jugador actuar vienen así — la invitación de clan, una petición de
+  alianza, una llamada de regroup, un correo nuevo, un perfil LFC caducado, una solicitud LFP nueva, el
+  mapa de terrenos al apagarse — como un bloque corto centrado con un botón clicable. Un servidor que
+  nunca editó esas líneas recibe el bloque nuevo al actualizar; uno editado se respeta.
 
 La sección `placeholders` es un saco de palabras cortas que se sustituyen — *Sí*, *No*, *Activado*,
-*Conectado*, los caracteres de la barra de progreso — para que treinta y siete archivos de menú no
+*Conectado*, los caracteres de la barra de progreso — para que treinta y ocho archivos de menú no
 escriban cada uno los suyos. Dos de sus claves las lee además la **capa de PlaceholderAPI**:
 `placeholders.none` es lo que responden `%exyliaclans_clan_name%` y `%exyliaclans_clan_role%` para un
 jugador sin clan, y `placeholders.na` es lo que responde un hueco vacío de la plantilla o una posición
 sin clasificar. Mira [Placeholders](/docs/exyliaclans/placeholders).
+
+## webhooks.yml
+
+Las líneas del juego de la función de webhook (`messages`) y una plantilla de Discord por evento
+(`events`). Ver [Webhooks de Discord](/docs/exyliaclans/webhooks#webhooksyml).
 
 ## lfc.yml y lfp.yml
 
@@ -236,6 +308,7 @@ sin clasificar. Mira [Placeholders](/docs/exyliaclans/placeholders).
 
 ## Recargar
 
-`/clanadmin reload` vuelve a leer los cuatro archivos, reconstruye la tabla de niveles, relee las
-categorías de reclutamiento, aplica a todo el que esté conectado un `visibility-mode` cambiado, y
+`/clanadmin reload` vuelve a leer los cinco archivos (del idioma que se nombre ahora), reconstruye la
+tabla de niveles, arranca o para los módulos cuyo interruptor cambió, relee las categorías de
+reclutamiento, aplica a todo el que esté conectado un `visibility-mode` cambiado, y
 recompila los menús. Los cambios en `default-roles` solo llegan a los clanes creados después.

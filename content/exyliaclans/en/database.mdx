@@ -1,26 +1,28 @@
 ---
 title: "Database"
-description: "The thirteen tables, what keys them, and what to know before touching them by hand."
+description: "The fifteen tables, what keys them, running several servers on one database, and what to know before touching them by hand."
 ---
 
 Storage is ExyliaLib's. `database.yml` is written on first start and defaults to H2; MySQL, MariaDB,
 PostgreSQL and MongoDB are the other engines, and a `redis` block sits alongside them. Tables are
 created and migrated from the record definitions, so there is no schema file to apply.
 
-## The thirteen tables
+## The fifteen tables
 
 | Table | Key | Holds |
 |---|---|---|
-| `clans` | `id` (UUID text) | Name, leader, balance, open, friendly fire, home, banned list, DTR, DTR freeze, EXP |
+| `clans` | `id` (UUID text) | Name, leader, balance, open, friendly fire, home, banned list, DTR, DTR freeze, last regeneration, EXP, extra member slots |
 | `clan_members` | `uuid` | The player's clan and their rank |
 | `clan_roles` | `id` | Every rank of every clan: name, weight, permissions, whether it is the default |
 | `clan_relations` | `clanId:targetClanId` | One directional opinion, `ALLY` or `RIVAL` |
-| `clan_invites` | `playerUuid:clanId` | A standing invitation |
+| `clan_invites` | `playerUuid:clanId` | A standing invitation and when it was sent |
+| `clan_alliance_requests` | `requestingClanId:targetClanId` | A pending alliance request and when it was sent |
 | `clan_claims` | `id` | One rectangle: world, `minX`, `minZ`, `maxX`, `maxZ`, `baseY` |
 | `clan_stats` | `clanId` | Kills, deaths, playtime seconds |
 | `player_stats` | `playerUuid:clanId` | The same per player per clan, plus the last name seen |
 | `clan_logs` | `id` | Action, actor, target, detail, timestamp |
 | `clan_mails` | `id` | Type, sender, recipient, subject, body, sent, expires, read list, deleted list, pinned |
+| `clan_webhooks` | `clanId` | The webhook URL, its name in Discord, the events switched off, whether Discord deleted it |
 | `lfc_profiles` | `playerUuid` | Status, posted, last posted, expires, the answers |
 | `lfp_postings` | `clanId` | Status, posted, last posted, expires, description, the answers |
 | `lfp_applications` | `playerUuid:clanId` | Status, applied, decided, message |
@@ -51,22 +53,29 @@ Both make a page a bounded read rather than a scan.
 | `clans.bannedPlayers` | Comma-separated UUIDs |
 | `clan_roles.permissions` | Comma-separated permission names. An unknown name is skipped when read |
 | `clans.homeLocation` | A serialised location that **carries the server it was set on** — `server,world,x,y,z,yaw,pitch`. `null` when unset |
+| `clans.extraSlots` | Member slots granted with `/clanadmin setslots`, on top of `max-members` and the level bonus |
+| `clans.dtrRegenAt` | When the DTR last regenerated, epoch millis — what keeps several servers from each regenerating it |
+| `clan_invites.sentAt` / `clan_alliance_requests.sentAt` | Epoch millis. `0` on an invite written before 1.2.0, which counts as sent at the update |
+| `clan_webhooks.url` | The full webhook URL, token included. Treat the table as a secret; it is never shown in game |
+| `clan_webhooks.disabledEvents` | Comma-separated event names the clan switched off: `JOIN`, `LEAVE`, `KICK`, `BAN`, `INVITE`, `RANK`, `LEADER`, `RENAME`, `ALLIANCE`, `RIVALRY`, `BANK`, `DISBAND` |
 | `clan_mails.readByPlayers` / `deletedByPlayers` | Comma-separated UUIDs — which is how read and deleted are per member off one row |
 | `lfc_profiles.data` / `lfp_postings.data` | The serialised answers |
 | `*.status` | `ACTIVE` / `EXPIRED` for postings and profiles; `PENDING` / `ACCEPTED` / `REJECTED` for applications |
 
 ## What is not in the database
 
-- **Alliance requests.** Held in memory with a 60-second expiry, so a restart drops the pending ones.
 - **Chat channels.** Per session; everybody is back on global after a restart.
 - **Kill streaks.** Per session, and reset by dying.
-- **Camp, rally, focus and regroup markers.** All in memory.
+- **Camp, rally, focus and regroup markers.** All in memory. A regroup point and a kick truce are
+  shared with the other servers of a network, never stored.
+- **The anti-spam waits.** Create, invite, mail, rival-notice and webhook waits are in memory, per
+  server.
 - **The clan level.** Derived from `clans.exp` on every read, never stored.
 - **Claim ownership of members.** Derived from `clan_members`; the claim row names only the clan.
 
 ## Caches
 
-Clans, members, ranks, relations, claims and invitations are held in memory and written through on
+Clans, members, ranks, relations, claims, invitations, alliance requests and webhooks are held in memory and written through on
 change, so the hot path never touches the database. Two things are cached with a TTL instead:
 
 | Cache | TTL | Why |
@@ -75,10 +84,31 @@ change, so the hot path never touches the database. Two things are cached with a
 | The online roster per clan and per alliance | 1 s | Thirty slots × several viewers × four times a second |
 
 <Callout type="warning" title="Editing rows by hand needs a restart">
-The caches are loaded at enable and kept in step by the plugin's own writes. A row changed directly in
-the database is not noticed, and will be overwritten the next time that clan changes. Use
-`/clanadmin` where it covers what you need, and stop the server where it does not.
+The caches are loaded at enable and kept in step by the plugin's own writes — and, on a network, by the
+other servers' writes. A row changed directly in the database is not noticed, and will be overwritten
+the next time that clan changes. Use `/clanadmin` where it covers what you need, and stop the servers
+where it does not.
 </Callout>
+
+## Several servers
+
+Servers that share one database act as one clan system once every one of them enables Redis in
+`database.yml` (the `redis` block, with a different `server-id` on each). Nothing else is configured.
+
+| What | How |
+|---|---|
+| Every table: clans, members, ranks, relations, invites, alliance requests, mail, stats, claims, webhooks, LFC and LFP | Each server keeps its copy and re-reads a row the moment another server writes or deletes it. A join, a kick, a promotion or an alliance made on one server is seen on all of them within milliseconds. |
+| Clan chat, ally chat, every clan notice, invitations, kicks, promotions, mail notices | Published once and delivered by each server to the members it holds, so a line is never sent twice and never only where it happened. |
+| `/clan regroup` | The point names its server; a clanmate elsewhere is handed over to it. |
+| Kick truce | Follows the kicked player to whichever server they move to. |
+| DTR regeneration | Once per interval for the whole network, however many servers run the timer. |
+| Online counts (`%exyliaclans_clan_online%`, the online roster, menus, the leaderboard) | Count members on any server. |
+
+What stays on the server it was made on: the camp and rally markers and the focus outline (they are
+drawn on one server's map), the anti-spam waits, and which chat channel a player has toggled. A claim
+is drawn only where its world is loaded.
+
+Without Redis everything behaves as on one server.
 
 ## Startup
 

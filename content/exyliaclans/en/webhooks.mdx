@@ -1,0 +1,153 @@
+---
+title: "Discord webhooks"
+description: "Each clan connects its own Discord channel, picks which of its events are posted there, and never shows the URL to anybody."
+---
+
+A clan can post its own activity — joins, kicks, alliances, the bank — to a channel of its own Discord
+server. The clan connects it from the game; the server owner only decides whether the feature is on and
+what the messages look like.
+
+## Connecting
+
+```
+/clan webhook            open the webhook menu
+/clan webhook set        connect or replace the webhook
+/clan webhook test       post a test message
+/clan webhook remove     open the remove confirmation
+```
+
+Or **Settings » Discord Webhook** in `/clan`. Every form needs `exyliaclans.commands.webhook` (open to
+everybody by default) and the `MANAGE_WEBHOOK` rank permission, which the leader always passes.
+
+<Steps>
+  <Step title="Create the webhook in Discord">
+    In the channel's settings, **Integrations » Webhooks » New Webhook**, then **Copy Webhook URL**.
+  </Step>
+  <Step title="Click to connect">
+    The URL is asked for privately — a dialog, or a chat line nobody else sees. It is never a command
+    argument, so it never lands in the console or in another player's chat.
+  </Step>
+  <Step title="Checked with Discord">
+    The plugin asks Discord whether the webhook exists. If it does, it is stored, the webhook's name is
+    shown, and a first *Webhook connected* message is posted to the channel.
+  </Step>
+</Steps>
+
+From then on the menus show only the webhook's name and a masked address. The full URL is a secret: it is
+stored in its own table, `clan_webhooks`, and shown nowhere.
+
+| Answer | What the player is told |
+|---|---|
+| Connected | `messages.connected`, with the webhook's name |
+| Not a webhook, or Discord rejected it | `messages.failed` |
+| Discord is rate limiting | `messages.busy` |
+| Discord could not be reached | `messages.unreachable` |
+| Cancelled | Nothing. From the menu, the menu reopens |
+
+## The events
+
+Each one is a switch in the webhook menu, all on by default. Turning one off only stops the post; the
+clan's log still records the action.
+
+| Switch | Posted when |
+|---|---|
+| `join` | A player joins the clan |
+| `leave` | A member leaves |
+| `kick` | A member is kicked |
+| `ban` | A member is banned |
+| `invite` | A player is invited |
+| `rank` | A member is promoted, demoted or given a rank from the rank menu |
+| `leader` | The leadership is handed over |
+| `rename` | The clan is renamed |
+| `alliance` | An alliance is formed or ends |
+| `rivalry` | A rival is declared or removed |
+| `bank` | Money is deposited or withdrawn |
+| `disband` | The clan is disbanded |
+
+A disband is the clan's last message: the webhook is forgotten right after it is posted, whether or
+not `disband` was on. Posting does not depend on the `logs` module.
+
+## When Discord deletes it
+
+If the webhook is deleted in Discord, the plugin stops posting, marks it as deleted, logs it to the
+console and tells the online members with `MANAGE_WEBHOOK` (`messages.invalidated`). The menu shows
+*Deleted in Discord*; clicking it connects a new one.
+
+## Safety
+
+- Player and clan names are posted exactly as typed: they never format, never ping and never break the
+  message.
+- `@everyone` and `@here` never ping from a clan webhook. A ping only comes from a template's `message`,
+  which is yours — for example `<@&123456789012345678>` for a role.
+- Setting and testing have their own waits per clan, so the prompt cannot be used to probe URLs and the
+  test button cannot spam a channel.
+
+## config.yml
+
+```yaml
+webhooks:
+  enabled: true
+  set-cooldown-seconds: 30
+  test-cooldown-seconds: 10
+```
+
+| Key | Default | What it does |
+|---|---|---|
+| `enabled` | `true` | Whether clans can connect a webhook at all. Off, the settings button disappears and every webhook command refuses with `messages.disabled` |
+| `set-cooldown-seconds` | 30 | Per clan, between two submitted URLs. Cancelling the prompt starts nothing. `0` is off |
+| `test-cooldown-seconds` | 10 | Per clan, between two test messages. `0` is off |
+
+## webhooks.yml
+
+In the [language folder](/docs/exyliaclans/configuration#language), `lang/<language>/webhooks.yml`. Two
+sections:
+
+- **`messages`** — every in-game line of the feature: the prompt, the answers above, `cooldown`,
+  `removed`, `not-set`, `test-sent`, `test-failed`, `invalidated`, `disabled`, the three states the menus
+  show (`status-connected`, `status-not-set`, `status-invalid`) and the remove confirmation
+  (`remove-title`, `remove-question`, `remove-detail`).
+- **`events`** — one Discord template per event: `connected`, `test`, `member-joined`, `member-left`,
+  `member-kicked`, `member-banned`, `player-invited`, `member-promoted`, `member-demoted`,
+  `role-assigned`, `leader-transferred`, `clan-renamed`, `alliance-formed`, `alliance-ended`,
+  `rival-declared`, `rival-removed`, `bank-deposit`, `bank-withdraw`, `clan-disbanded`.
+
+```yaml
+events:
+  member-kicked:
+    enabled: true
+    message: ''
+    username: ''
+    avatar-url: ''
+    color: '{error}'
+    title: MEMBER KICKED
+    url: ''
+    description: '**%target%** was kicked by **%player%**.'
+    author:
+      name: '%player%'
+      icon: '%player_head%'
+      url: ''
+    thumbnail: ''
+    image: ''
+    fields: []
+    buttons: []
+    footer: '%clan%'
+    timestamp: true
+    coalesce: 3s
+```
+
+Each message is posted as a Discord Components V2 card. The template keys are ExyliaLib's — `color` takes
+a palette token or `#rrggbb`, `buttons` are link buttons written `label|url` or `label|url|emoji`,
+`fields` are `name|value` or `name|value|inline`, and `coalesce` merges a burst of the same event into
+one post. Joins, leaves, kicks, bans, invites and bank moves ship with `3s`.
+
+| Placeholder | Value |
+|---|---|
+| `%clan%` | The clan's name |
+| `%player%` / `%player_head%` | Who did it, and their head as an image URL |
+| `%target%` / `%target_head%` | The player or clan it was done to |
+| `%detail%` | The new rank, the amount, or `old → new` for a rename |
+
+## Several servers
+
+Webhooks are rows like everything else, so on a network sharing one database and Redis a clan's webhook
+works from every server. See [Database](/docs/exyliaclans/database#several-servers).

@@ -11,18 +11,20 @@ description: "Dependencies, the files it writes, the tables it creates, and what
   </Step>
   <Step title="Add an economy plugin">
     The bank pays for claims and is read through ExyliaLib's economy bridge. Without one,
-    `/clan deposit` and `/clan withdraw` refuse and no claim can ever be bought.
+    `/clan deposit` and `/clan withdraw` refuse and no claim can ever be bought. ExyliaEconomy is a
+    soft dependency, so its currencies are ready before ExyliaClans enables.
   </Step>
   <Step title="Decide who protects the land">
     `claims.protection-mode` ships as `WORLDGUARD`. If WorldGuard is not installed, set it to `BUILTIN`
     before anybody claims anything — see [Claims](/docs/exyliaclans/claims#protection-mode).
   </Step>
   <Step title="Start the server">
-    It writes four config files and thirty-seven menu files, and creates thirteen tables.
+    It writes five config files and thirty-eight menu files, and creates fifteen tables. The menus and
+    messages come in English, Spanish, Portuguese and French; `language: default` follows ExyliaLib's.
   </Step>
-  <Step title="Grant the command nodes">
-    Nothing is open by default: every subcommand of `/clan` checks its own permission node. See
-    [Permissions](/docs/exyliaclans/permissions).
+  <Step title="Check the permissions">
+    Every `/clan` node defaults to `true`, so players can use the plugin at once and their clan rank
+    decides the rest. `/clanadmin` defaults to operators. See [Permissions](/docs/exyliaclans/permissions).
   </Step>
 </Steps>
 
@@ -30,15 +32,19 @@ description: "Dependencies, the files it writes, the tables it creates, and what
 
 | File | Contents |
 |---|---|
-| `config.yml` | Limits, warmups, the twelve module switches, claims, DTR, levels, boss bars and `default-roles`. |
-| `messages.yml` | Every line the plugin sends, in thirteen sections. |
-| `lfc.yml` | Looking-for-clan: cooldowns, expiry, and the questions a player answers. |
-| `lfp.yml` | Looking-for-players: cooldowns, expiry, text limits, application limits, and what a clan may ask for. |
-| `menus/*.yml` | Thirty-seven screens. |
-| `database.yml` | Written by ExyliaLib. H2 by default; MySQL, MariaDB, PostgreSQL and MongoDB are the other engines, with a `redis` block alongside them. |
+| `config.yml` | `language`, limits, warmups, the twelve module switches, claims, DTR, levels, boss bars, webhooks and `default-roles`. |
+| `lang/<language>/messages.yml` | Every line the plugin sends, in fifteen sections. |
+| `lang/<language>/webhooks.yml` | What a clan's Discord webhook posts, event by event, and the in-game lines around it. |
+| `lang/<language>/lfc.yml` | Looking-for-clan: cooldowns, expiry, and the questions a player answers. |
+| `lang/<language>/lfp.yml` | Looking-for-players: cooldowns, expiry, text limits, application limits, and what a clan may ask for. |
+| `lang/<language>/menus/*.yml` | Thirty-eight screens. |
+| `database.yml` | Written by ExyliaLib. H2 by default; MySQL, MariaDB, PostgreSQL and MongoDB are the other engines, with a `redis` block alongside them that links several servers. |
+
+`<language>` is what `language` in `config.yml` resolves to — see
+[Configuration](/docs/exyliaclans/configuration#language).
 
 <Callout type="note" title="The YAML is generated, not shipped">
-`config.yml`, `messages.yml`, `lfc.yml` and `lfp.yml` are written from typed records on first start,
+`config.yml`, `messages.yml`, `webhooks.yml`, `lfc.yml` and `lfp.yml` are written from typed records on first start,
 comments included. A key the reader does not recognise is pruned — except inside `default-roles`,
 `levels.level-definitions`, `levels.kill-streak-bonuses` and the two `categories` blocks, which belong
 to you and are never touched.
@@ -52,12 +58,14 @@ to you and are never touched.
 | `clan_members` | One row per player. The player's UUID is the key, so a player is in one clan by construction. |
 | `clan_roles` | Every rank of every clan, with its weight and its comma-separated permissions. |
 | `clan_relations` | Directional. Two rows make a mutual alliance; one row makes a rivalry. |
-| `clan_invites` | Standing invitations, keyed `playerUuid:clanId`. |
+| `clan_invites` | Standing invitations, keyed `playerUuid:clanId`, with when they were sent. |
+| `clan_alliance_requests` | Pending alliance requests, keyed `requestingClanId:targetClanId`. |
 | `clan_claims` | One rectangle per clan: world, `minX`, `minZ`, `maxX`, `maxZ` and the height it was made at. |
 | `clan_stats` | Kills, deaths and playtime per clan. |
 | `player_stats` | The same per player **per clan**, keyed `playerUuid:clanId`. |
 | `clan_logs` | The audit trail, indexed by clan and timestamp descending. |
 | `clan_mails` | The mailbox, with read/deleted tracked per member as UUID lists. |
+| `clan_webhooks` | One Discord webhook per clan, kept apart from `clans` because its URL is a secret. |
 | `lfc_profiles` | One row per player advertising themselves. |
 | `lfp_postings` | One row per clan advertising for members. |
 | `lfp_applications` | Applications, keyed `playerUuid:clanId`. |
@@ -69,8 +77,10 @@ to you and are never touched.
 | `PlaceholderAPI` | Registers the `exyliaclans` expansion, relational placeholders included. |
 | `WorldGuard` | Becomes the claim enforcer under `protection-mode: WORLDGUARD`, and blocks claiming over an existing region. |
 | `TAB` | Its team handling is paused for a player while this plugin is colouring them, and resumed when they leave a clan. |
-| Economy | The bank. |
+| Economy | The bank. `ExyliaEconomy` is a soft dependency so it loads first. |
 | `Apollo` / `FeatherServerAPI` | Client waypoints for the clan home and for camp and rally markers. |
+| SurvivalCore client | Read through ExyliaLib, nothing to install on the server: a native rally, home and camp icons on the map, **Clan** and **Allies** chat tabs, team panels with the clan's name and ranks, and two keybinds. |
+| Redis | Set in `database.yml` on every server sharing the database, and the servers act as one clan system. See [Database](/docs/exyliaclans/database#several-servers). |
 
 ## The first start
 
@@ -84,9 +94,19 @@ Read the console. Three things are reported there and nowhere else:
 
 ## Updating
 
-Replace the jar and restart. `/clanadmin reload` re-reads `config.yml`, `messages.yml`, `lfc.yml` and
-`lfp.yml`, rebuilds the level table and recompiles every menu. `/exylialib reload` also recompiles the
-menus, so a palette change made through the library is picked up without a restart.
+Replace the jar and restart. `/clanadmin reload` re-reads the five config files, rebuilds the level table,
+starts or stops modules and recompiles every menu. `/exylialib reload` also recompiles the menus, so a
+palette change made through the library is picked up without a restart.
+
+A new key a release adds to a menu reaches your file at once; a changed default waits in
+`/exylialib updates` for you to apply or keep; anything you changed is never touched. See
+[Menus](/docs/exyliaclans/menus#updates).
+
+<Callout type="note" title="Coming from 1.1.0">
+The first start of 1.2.0 moves your edited `messages.yml`, `lfc.yml`, `lfp.yml` and `menus/` into
+`lang/custom/` and sets `language: custom`, moves the text that used to sit in `config.yml` into
+`messages.yml`, and grants every existing rank `FOCUS`, `CAMP` and `RALLY`. Nothing to do by hand.
+</Callout>
 
 <Callout type="warning" title="Reload does not rewrite existing clans">
 Changing `default-roles` only affects clans created afterwards. Clans that already exist keep the ranks

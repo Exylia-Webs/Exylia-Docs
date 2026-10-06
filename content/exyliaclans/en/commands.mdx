@@ -44,21 +44,30 @@ the clan, a **rank permission** (the clan's own). Both have to pass.
 | `/clan open` | `…commands.open` | `TOGGLE_OPEN` | — |
 | `/clan info` | `…commands.info` | — | — |
 | `/clan info <clan>` | `…commands.info` | — | — |
-| `/clan focus [player]` | `…commands.focus` | — | — |
-| `/clan camp <clan>` | `…commands.camp` | — | — |
-| `/clan rally` | `…commands.rally` | — | — |
+| `/clan focus [player]` | `…commands.focus` | `FOCUS` | — |
+| `/clan camp <clan>` | `…commands.camp` | `CAMP` | — |
+| `/clan rally` | `…commands.rally` | `RALLY` | — |
+| `/clan rally clear` | `…commands.rally` | `RALLY` | — |
 | `/clan regroup` | `…commands.regroup` | `REGROUP` | `regroup` |
 | `/clan regroup join` | `…commands.regroup` | — | `regroup` |
 | `/clan top` | `…commands.top` | — | — |
 | `/clan mail` | `…commands.mail` | — | `mail` |
 | `/clan mail send <member> <message>` | `…commands.mail` | — | `mail` |
 | `/clan mail sendclan <message>` | `…commands.mail` | `SEND_CLAN_MAIL` | `mail` |
+| `/clan webhook` | `…commands.webhook` | `MANAGE_WEBHOOK` | `webhooks.enabled` |
+| `/clan webhook set` | `…commands.webhook` | `MANAGE_WEBHOOK` | `webhooks.enabled` |
+| `/clan webhook test` | `…commands.webhook` | `MANAGE_WEBHOOK` | `webhooks.enabled` |
+| `/clan webhook remove` | `…commands.webhook` | `MANAGE_WEBHOOK` | `webhooks.enabled` |
 
-Every node above is prefixed `exyliaclans.` — `…commands.create` is `exyliaclans.commands.create`.
+Every node above is prefixed `exyliaclans.` — `…commands.create` is `exyliaclans.commands.create`. The
+webhook commands are not behind a module: `webhooks.enabled` in `config.yml` is their switch.
 
 <Callout type="note" title="Several of these open a menu rather than acting">
 `/clan` opens the main menu — a different one depending on whether you are in a clan. `/clan disband`
-and `/clan leave` open a confirmation. `/clan promote` and `/clan demote` both open the same **assign
+and `/clan leave` open a confirmation, once they have checked you are in a clan and (for disband) its
+leader, or (for leave) not its leader. `/clan webhook` opens the [webhook menu](/docs/exyliaclans/webhooks)
+and `/clan webhook remove` its confirmation; `/clan webhook set` asks for the URL privately.
+`/clan promote` and `/clan demote` both open the same **assign
 rank** menu, so the two words are a convenience rather than two operations. `/clan info` and `/clan top`
 open the info and leaderboard screens.
 </Callout>
@@ -66,6 +75,20 @@ open the info and leaderboard screens.
 Tab completion is contextual throughout: `/clan invite` suggests players you can actually invite,
 `/clan ally accept` suggests only clans with a request pending on you, `/clan unban` suggests only players
 your clan has banned.
+
+### Anti-spam waits
+
+Four actions that notify other players are spaced out, so a loop cannot flood chat with broadcasts and
+sounds:
+
+| Action | Wait | Key |
+|---|---|---|
+| `/clan create` | Per player, between two clans created | `settings.create-cooldown-seconds`, 120 |
+| `/clan invite` | Per clan, before inviting the **same** player again | `settings.invite-cooldown-seconds`, 60 |
+| `/clan mail send` / `sendclan` | Per player, between two mails | `mail.send-cooldown-seconds`, 30 |
+| `/clan rival add` | The declared-on clan is told at most once every two minutes per declaring clan | fixed |
+
+`0` turns any of the three configurable waits off. The waits live in memory, per server.
 
 ## /clanadmin
 
@@ -85,6 +108,7 @@ needs **both**.
 | `/clanadmin setdtr <clan> <SET\|ADD\|REMOVE> <value>` | `…admin.setdtr` |
 | `/clanadmin setexp <clan> <SET\|ADD\|REMOVE> <value>` | `…admin.setexp` |
 | `/clanadmin setlevel <clan> <level>` | `…admin.setlevel` |
+| `/clanadmin setslots <clan> <SET\|ADD\|REMOVE> <amount>` | `…admin.setslots` |
 | `/clanadmin playerstat <player> <KILLS\|DEATHS\|PLAYTIME> <SET\|ADD\|REMOVE> <value>` | `…admin.stats` |
 | `/clanadmin clanstat <clan> <KILLS\|DEATHS\|PLAYTIME> <SET\|ADD\|REMOVE> <value>` | `…admin.stats` |
 | `/clanadmin addally <clanA> <clanB>` | `…admin.addally` |
@@ -105,6 +129,7 @@ needs **both**.
 | `setbalance` | Floored at zero. |
 | `setdtr` | Clamped at the clan's current maximum only — there is no lower bound, so a negative value goes through. It also clears the DTR freeze. |
 | `setlevel` | Sets the EXP to that level's `required-exp`. A level not in the table is refused with `admin.invalid-level`. Needs the `levels` module. |
+| `setslots` | Extra member slots on top of `max-members` and the level bonus. Floored at zero. Replies with the clan's new member cap. Lowering it removes nobody: a clan over the cap just cannot recruit. |
 | `playerstat` / `clanstat` | `PLAYTIME` is in seconds. Floored at zero. |
 | `logs` | Defaults to 20 entries. Needs the `logs` module. |
 | `forcekick` | Disbands the clan if the player kicked was its last member. |
@@ -126,7 +151,9 @@ permission.
 
 ## Reload
 
-`/clanadmin reload` re-reads `config.yml`, `messages.yml`, `lfc.yml` and `lfp.yml`, rebuilds the level
-table, re-reads the recruitment categories, applies a changed `visibility-mode` to everybody online, and
-recompiles every menu. `/exylialib reload` also recompiles the menus, so a palette change made through
+`/clanadmin reload` re-reads `config.yml`, `messages.yml`, `webhooks.yml`, `lfc.yml` and `lfp.yml` — from
+the language folder `config.yml` names, so a changed `language` takes effect without a restart — rebuilds
+the level table, starts the modules you switched on and stops the ones you switched off, re-reads the
+recruitment categories, applies a changed `visibility-mode` to everybody online, and recompiles every
+menu. `/exylialib reload` also recompiles the menus, so a palette change made through
 the library reaches them.

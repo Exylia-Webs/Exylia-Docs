@@ -1,0 +1,156 @@
+---
+title: "Webhooks de Discord"
+description: "Cada clan conecta su propio canal de Discord, elige qué eventos suyos se publican allí y nunca le enseña la URL a nadie."
+---
+
+Un clan puede publicar su propia actividad — entradas, expulsiones, alianzas, el banco — en un canal de
+su propio servidor de Discord. El clan lo conecta desde el juego; el dueño del servidor solo decide si la
+función está activa y cómo se ven los mensajes.
+
+## Conectar
+
+```
+/clan webhook            abre el menú del webhook
+/clan webhook set        conecta o sustituye el webhook
+/clan webhook test       publica un mensaje de prueba
+/clan webhook remove     abre la confirmación para quitarlo
+```
+
+O **Ajustes » Webhook de Discord** en `/clan`. Todas las formas necesitan `exyliaclans.commands.webhook`
+(abierto a todos por defecto) y el permiso de rango `MANAGE_WEBHOOK`, que el líder siempre pasa.
+
+<Steps>
+  <Step title="Crea el webhook en Discord">
+    En los ajustes del canal, **Integraciones » Webhooks » Nuevo webhook**, y luego **Copiar URL del
+    webhook**.
+  </Step>
+  <Step title="Pulsa para conectar">
+    La URL se pide en privado — un diálogo, o una línea de chat que no ve nadie más. Nunca es un argumento
+    de comando, así que nunca acaba en la consola ni en el chat de otro jugador.
+  </Step>
+  <Step title="Se comprueba con Discord">
+    El plugin pregunta a Discord si el webhook existe. Si existe, se guarda, se muestra su nombre y se
+    publica en el canal un primer mensaje de *Webhook conectado*.
+  </Step>
+</Steps>
+
+A partir de ahí los menús solo muestran el nombre del webhook y una dirección enmascarada. La URL completa
+es un secreto: se guarda en su propia tabla, `clan_webhooks`, y no se muestra en ningún sitio.
+
+| Respuesta | Qué se le dice al jugador |
+|---|---|
+| Conectado | `messages.connected`, con el nombre del webhook |
+| No es un webhook, o Discord lo rechazó | `messages.failed` |
+| Discord está limitando peticiones | `messages.busy` |
+| No se pudo contactar con Discord | `messages.unreachable` |
+| Cancelado | Nada. Desde el menú, el menú se vuelve a abrir |
+
+## Los eventos
+
+Cada uno es un interruptor del menú del webhook, todos activados por defecto. Apagar uno solo deja de
+publicarlo; el registro del clan sigue anotando la acción.
+
+| Interruptor | Se publica cuando |
+|---|---|
+| `join` | Un jugador entra en el clan |
+| `leave` | Un miembro se va |
+| `kick` | Expulsan a un miembro |
+| `ban` | Banean a un miembro |
+| `invite` | Se invita a un jugador |
+| `rank` | Un miembro asciende, desciende o recibe un rango desde el menú de rangos |
+| `leader` | Se traspasa el liderazgo |
+| `rename` | Se renombra el clan |
+| `alliance` | Se forma o se rompe una alianza |
+| `rivalry` | Se declara o se quita un rival |
+| `bank` | Se deposita o se retira dinero |
+| `disband` | Se disuelve el clan |
+
+La disolución es el último mensaje del clan: el webhook se olvida justo después de publicarlo, estuviera
+`disband` activado o no. Publicar no depende del módulo `logs`.
+
+## Cuando Discord lo borra
+
+Si el webhook se borra en Discord, el plugin deja de publicar, lo marca como borrado, lo apunta en la
+consola y avisa a los miembros conectados con `MANAGE_WEBHOOK` (`messages.invalidated`). El menú muestra
+*Eliminado en Discord*; al pulsarlo se conecta uno nuevo.
+
+## Seguridad
+
+- Los nombres de jugadores y clanes se publican tal cual se escribieron: nunca dan formato, nunca
+  mencionan y nunca rompen el mensaje.
+- `@everyone` y `@here` nunca mencionan desde el webhook de un clan. Una mención solo sale del `message`
+  de una plantilla, que es tuyo — por ejemplo `<@&123456789012345678>` para un rol.
+- Conectar y probar tienen su propia espera por clan, así que la petición no sirve para sondear URLs y
+  el botón de prueba no puede llenar un canal.
+
+## config.yml
+
+```yaml
+webhooks:
+  enabled: true
+  set-cooldown-seconds: 30
+  test-cooldown-seconds: 10
+```
+
+| Clave | Por defecto | Qué hace |
+|---|---|---|
+| `enabled` | `true` | Si los clanes pueden conectar un webhook. Apagado, el botón de ajustes desaparece y todo comando del webhook se niega con `messages.disabled` |
+| `set-cooldown-seconds` | 30 | Por clan, entre dos URLs enviadas. Cancelar la petición no arranca nada. `0` lo desactiva |
+| `test-cooldown-seconds` | 10 | Por clan, entre dos mensajes de prueba. `0` lo desactiva |
+
+## webhooks.yml
+
+En la [carpeta del idioma](/docs/exyliaclans/configuracion#language), `lang/<idioma>/webhooks.yml`. Dos
+secciones:
+
+- **`messages`** — cada línea de la función en el juego: la petición, las respuestas de arriba,
+  `cooldown`, `removed`, `not-set`, `test-sent`, `test-failed`, `invalidated`, `disabled`, los tres
+  estados que muestran los menús (`status-connected`, `status-not-set`, `status-invalid`) y la
+  confirmación para quitarlo (`remove-title`, `remove-question`, `remove-detail`).
+- **`events`** — una plantilla de Discord por evento: `connected`, `test`, `member-joined`, `member-left`,
+  `member-kicked`, `member-banned`, `player-invited`, `member-promoted`, `member-demoted`,
+  `role-assigned`, `leader-transferred`, `clan-renamed`, `alliance-formed`, `alliance-ended`,
+  `rival-declared`, `rival-removed`, `bank-deposit`, `bank-withdraw`, `clan-disbanded`.
+
+```yaml
+events:
+  member-kicked:
+    enabled: true
+    message: ''
+    username: ''
+    avatar-url: ''
+    color: '{error}'
+    title: MIEMBRO EXPULSADO
+    url: ''
+    description: '**%target%** fue expulsado por **%player%**.'
+    author:
+      name: '%player%'
+      icon: '%player_head%'
+      url: ''
+    thumbnail: ''
+    image: ''
+    fields: []
+    buttons: []
+    footer: '%clan%'
+    timestamp: true
+    coalesce: 3s
+```
+
+Cada mensaje se publica como una tarjeta Components V2 de Discord. Las claves de la plantilla son las de
+ExyliaLib — `color` acepta un token de paleta o `#rrggbb`, `buttons` son botones de enlace escritos
+`texto|url` o `texto|url|emoji`, `fields` son `nombre|valor` o `nombre|valor|inline`, y `coalesce` junta
+en una sola publicación una ráfaga del mismo evento. Entradas, salidas, expulsiones, baneos, invitaciones
+y movimientos del banco vienen con `3s`.
+
+| Placeholder | Valor |
+|---|---|
+| `%clan%` | El nombre del clan |
+| `%player%` / `%player_head%` | Quién lo hizo, y su cabeza como URL de imagen |
+| `%target%` / `%target_head%` | El jugador o clan sobre el que se hizo |
+| `%detail%` | El rango nuevo, la cantidad, o `antiguo → nuevo` en un renombrado |
+
+## Varios servidores
+
+Los webhooks son filas como todo lo demás, así que en una red que comparte base de datos y Redis el
+webhook de un clan funciona desde cualquier servidor. Ver
+[Base de datos](/docs/exyliaclans/base-de-datos#varios-servidores).

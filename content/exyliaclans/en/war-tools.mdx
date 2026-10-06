@@ -3,8 +3,9 @@ title: "War tools"
 description: "Focus, camp, rally and regroup: the four things a clan points at something, and the boss bars that track them."
 ---
 
-Four commands exist for the fight itself. None of them needs a rank permission except `/clan regroup`,
-which needs `REGROUP` — the other three are open to any member.
+Four commands exist for the fight itself, each behind its own rank permission: `FOCUS`, `CAMP`, `RALLY`
+and `REGROUP`. The shipped ranks give `FOCUS` to everybody, `CAMP` and `RALLY` to officers and leaders,
+and `REGROUP` to officers and leaders — see [Roles](/docs/exyliaclans/roles).
 
 ## Focus
 
@@ -17,7 +18,7 @@ Marks one enemy for the whole clan: they are made to **glow** for every online m
 shows their health. It is how a clan calls a target in the middle of a fight without typing a name into
 chat.
 
-There are three ways to take it off: `/clan focus` with **no name at all**, `/clan focus` on the player
+Setting and clearing both need `FOCUS`. There are three ways to take it off: `/clan focus` with **no name at all**, `/clan focus` on the player
 who is already focused, or letting it clear itself when the target dies, disconnects, or is found
 offline or dead on a bar tick. The clan is told with `clan.focus-cleared`; a clan focusing nobody is
 told `clan.focus-none`.
@@ -42,10 +43,12 @@ bossbars:
   focus:
     enabled: true
     config:
-      text: "{warning}⚔ %player%  {error}❤ %health%/%max_health%"
       color: RED
       style: NOTCHED_20
 ```
+
+What the bar says is in `messages.yml`, under `bossbars.focus`:
+`{warning}⚔ %player%  {error}❤ %health%/%max_health%`.
 
 Clearing a focus repaints the target for each viewer according to the visibility rules, so they go back
 to whatever colour they should have been — not to whatever colour they had before.
@@ -56,8 +59,9 @@ to whatever colour they should have been — not to whatever colour they had bef
 /clan camp <clan>
 ```
 
-Puts a marker on another clan's **home**, for your whole clan: a red waypoint on clients that draw them,
-and a boss bar counting the distance down. Running it again on the same clan clears the marker.
+Puts a marker on another clan's **home**, for your whole clan: a red waypoint on clients that draw them
+(with a camp icon on the map where the client has icons), and a boss bar counting the distance down.
+Running it again on the same clan clears the marker. Needs `CAMP`.
 
 It is refused if that clan has no home set, and also if their home is **on another server** or in a
 world that is not loaded here — a clan home carries the server it was set on, so a network can have a
@@ -70,26 +74,33 @@ bossbars:
     max-distance: 500
     duration-seconds: 0
     config:
-      text: "{error}⚔ Camp: {highlight}%label%  {muted}%distance% blocks  %x%, %y%, %z%"
       color: RED
       style: PROGRESS
 ```
 
-`max-distance` is where the bar reads empty, not a range limit.
+`max-distance` is where the bar reads empty, not a range limit. `duration-seconds` is how long the marker
+stays: `0`, the shipped value, keeps it until somebody runs `/clan camp` on the same clan again; any other
+value clears it on its own and tells the clan with `clan.camp-cleared`. The bar's text is
+`bossbars.camp` in `messages.yml`.
 
-<Callout type="note" title="A camp marker never expires, whatever `duration-seconds` says">
-The key is generated into the file but the camp marker schedules no expiry at all. Only `rally` reads
-its own `duration-seconds`. Clear a camp by running `/clan camp` on the same clan again.
-</Callout>
+A member who leaves the clan loses its camp and rally markers at once — they belong to the clan, not to
+whoever was in it when they were called.
 
 ## Rally
 
 ```
 /clan rally
+/clan rally clear
 ```
 
 Drops a marker at your feet for the whole clan — yellow waypoint, yellow bar, coordinates broadcast in
-chat. It is a "come here", not a teleport: nobody is moved.
+chat. It is a "come here", not a teleport: nobody is moved. Both forms need `RALLY`; a new rally replaces
+the clan's previous one, and `/clan rally clear` takes it down for everybody (`errors.rally-not-found`
+when there is none).
+
+On the SurvivalCore client the rally is drawn natively — a beam, a sound and an on-screen call — and
+every other client that draws waypoints gets a waypoint with the same name for the same time. A member
+who logs in while a rally is up is shown it with the time it has left.
 
 ```yaml
 bossbars:
@@ -98,12 +109,12 @@ bossbars:
     max-distance: 500
     duration-seconds: 120
     config:
-      text: "{success}⚑ Rally  {muted}%distance% blocks  %x%, %y%, %z%"
       color: YELLOW
       style: PROGRESS
 ```
 
-A rally expires after `duration-seconds` (120 s) and the clan is told when it does.
+A rally expires after `duration-seconds` (120 s) and the clan is told when it does. `0` keeps it up until
+`/clan rally clear`. The bar's text is `bossbars.rally` in `messages.yml`.
 
 ## Regroup
 
@@ -127,42 +138,46 @@ warmup and then teleports them to the point.
 
 The countdown is drawn by `regroup-effects`.
 
-<Callout type="warning" title="An expired point still teleports whoever is already counting down">
-The destination is captured when the warmup starts, so a member whose countdown outlives
-`regroup-expire-seconds` is teleported anyway — the expiry only drops the point and announces it. A
-warmup is stopped only by a **new** `/clan regroup` from the same clan, or by the clan disbanding.
-</Callout>
+When the point expires, every countdown still running towards it is cancelled — nobody is teleported to
+a point that no longer exists. A new `/clan regroup` from the same clan, or the clan disbanding, also
+cancels them.
+
+The regroup point carries the server it was called on. On a network sharing one database and Redis,
+clanmates on other servers see the call too, and joining it hands them over to that server.
 
 ```yaml
 regroup-effects:
-  warmup-actionbar:
-    text: "{primary}⚑ Regroup {muted}| {primary}Teleporting in {highlight}%time%"
   warmup-title:
-    title: "{highlight}%time%"
-    subtitle: "{muted}Don't move!"
     fade-in: 0
     stay: 10
     fade-out: 0
   teleport-title:
-    title: "{primary}&lREGROUP"
-    subtitle: "{muted}You joined the regroup!"
     fade-in: 10
     stay: 50
     fade-out: 15
 ```
 
-`%time%` is the seconds left. Timings are in ticks: twenty to a second.
+Only the timings live in `config.yml`, in ticks (twenty to a second). The words are in `messages.yml`
+under `teleport.regroup`: `warmup-actionbar`, `warmup-title`, `warmup-subtitle`, `arrival-title` and
+`arrival-subtitle`, with `%time%` as the seconds left.
 
 <Callout type="note" title="Rally and regroup are two different things">
-Rally is a marker anyone can drop and nobody is moved by. Regroup is a teleport, gated on a rank
-permission and a clan-wide cooldown. A clan can have both up at once.
+Rally is a marker nobody is moved by. Regroup is a teleport, with a clan-wide cooldown on top of its
+rank permission. A clan can have both up at once.
 </Callout>
 
 ## The clan home
 
-Not a war tool as such, but it shares the machinery. `/clan home` runs the same kind of warmup, drawn by
-`home-effects`, with `home-warmup-seconds`, `home-cancel-on-move`, `home-cancel-on-damage` and
-`home-warmup-tick-sound` in `settings`. The home is also a permanent waypoint for members and allies.
+Not a war tool as such, but it shares the machinery. `/clan home` runs the same kind of warmup, timed by
+`home-effects` and worded by `teleport.home` in `messages.yml`, with `home-warmup-seconds`,
+`home-cancel-on-move`, `home-cancel-on-damage` and `home-warmup-tick-sound` in `settings`. The home is
+also a permanent waypoint for members and allies, with a home icon where the client draws icons.
+
+## Keys on the SurvivalCore client
+
+A player on the SurvivalCore client finds two entries in the game's controls screen: **Clan menu** and
+**Clan rally**. Both ship unbound. Pressing one runs exactly `/clan` or `/clan rally`, permission checks
+included.
 
 ## Turning the bars off
 
