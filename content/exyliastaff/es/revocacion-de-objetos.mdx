@@ -1,0 +1,114 @@
+---
+title: "Revocación de objetos"
+description: "Recupera las copias que una restauración deja en circulación: objetos marcados al morir, revocados desde la pantalla de restaurar y quitados a quien los tenga."
+---
+
+Cuando un hacker mata a alguien y le pasa lo que suelta a sus amigos, restaurar a la víctima mete en el
+mundo una segunda copia de cada objeto. La revocación de objetos cierra ese agujero. Lo que suelta una
+muerte queda marcado; cuando un miembro del staff devuelve esa muerte, la pantalla de restaurar ofrece
+revocar las marcas. La víctima recibe copias limpias, y las marcadas que siguen ahí fuera se retiran
+allí donde aparezcan.
+
+Id de módulo `revoke`, interruptor `modules.item-revocation`, archivos en `modules/revoke/`. Necesita
+el módulo de [restaurar inventario](/docs/exyliastaff/restaurar-inventario), que es donde se copian y
+se devuelven las muertes.
+
+<Callout type="warning" title="Desactivado por defecto">
+Cambia objetos al morir y les quita objetos a los jugadores, así que viene apagado. Lee la configuración
+de abajo, y plantéate usar `mode: AUDIT` unos días para ver qué atraparía antes de que actúe.
+</Callout>
+
+## Marcas
+
+Un objeto recibe un id propio la primera vez que cae en una muerte, antes de que se tome la copia de la
+muerte. Un id que ya estaba se conserva: un objeto que murió dos veces es el mismo objeto las dos veces.
+Solo se marcan los objetos que no se apilan — espadas, armadura, herramientas, shulker boxes, tótems —
+porque un id en un diamante impediría que se apilara con cualquier otro diamante y rompería tiendas,
+tolvas e inventarios. `excluded-materials` deja fuera más.
+
+Una shulker box o un bundle se recorre: lo que lleva dentro también se marca, así que vaciar la caja no
+deja limpio el contenido.
+
+### Lo que se fabrica a partir de un objeto marcado
+
+Lo que sale de una mesa de crafteo, un yunque, una mesa de herrería, una piedra de afilar, un crafter o
+un comercio con un aldeano hereda todos los ids que entraron. Revocar una espada también alcanza a la de
+netherite en la que se mejoró. Solo hereda un resultado que podría llevar un id propio: un montón de
+esmeraldas compradas con una espada marcada queda fuera de alcance.
+
+Con `villager-trades` activado, un objeto marcado también paga un comercio con un aldeano que pide el
+mismo objeto sin la marca. Los aldeanos vanilla y Shopkeepers ya aceptan la mayoría; esto cubre el resto.
+
+## Revocar
+
+La revocación no tiene comando. Es un interruptor en la pantalla de restaurar, que se muestra para una
+copia de muerte que contiene objetos marcados, porque el único momento en que tiene sentido es el
+momento en que se devuelve una muerte. `default-revoke` decide si empieza marcado; hacer clic en un
+único objeto de la copia lo devuelve con la misma elección. La víctima recibe copias sin marca, y cada
+copia marcada que sigue en circulación queda revocada. Al miembro del staff se le dice cuántas.
+
+## Cuando aparece un objeto revocado
+
+Un objeto revocado se detecta cada vez que se recoge, se mueve, se sostiene, se lleva puesto, se
+blande, se usa o se suelta, cada vez que se abre el contenedor donde se esconde, y cuando su portador
+entra, cofre de ender incluido.
+
+| `mode` | Qué pasa |
+|---|---|
+| `QUARANTINE` | El objeto pasa a cuarentena. Con `notify-holder` activado, al portador se le dice por qué y que abra un ticket si lo consiguió de forma legítima. |
+| `AUDIT` | El objeto se queda donde está. Se avisa al staff y queda registrado. |
+
+Al staff con `exyliastaff.revoke.alerts` se le avisa en todos los servidores: quién lo tenía, de la
+muerte de quién, en qué servidor, y qué se hizo; un clic teletransporta al portador. El mismo jugador
+con el mismo objeto vuelve a avisar solo pasados `alert-cooldown-seconds`.
+
+## La pantalla de cuarentena
+
+`/revokeditems`, o `/revoked`, con `exyliastaff.revoke`.
+
+| Fila | Clics |
+|---|---|
+| Esperando en cuarentena | Izquierdo: devolverlo a quien lo tenía, que debe estar en este servidor. Derecho: quedártelo tú. Q: tirarlo para siempre. |
+| Visto en modo `AUDIT` | Izquierdo: ir al jugador que aún lo tiene, en su servidor si hace falta. |
+| Ya gestionado | Nada: quién lo gestionó y cómo. |
+
+El interruptor de abajo muestra solo lo que está esperando, o todo.
+
+## Configuración
+
+```yaml title="plugins/ExyliaStaff/modules/revoke/config.yml"
+mode: QUARANTINE
+default-revoke: true
+excluded-materials: []
+alert-cooldown-seconds: 300
+notify-holder: true
+villager-trades: true
+history-keep-days: 90
+```
+
+| Clave | Por defecto | Qué hace |
+|---|---|---|
+| `mode` | `QUARANTINE` | `QUARANTINE` o `AUDIT`. Cualquier otra cosa pone en cuarentena. |
+| `default-revoke` | `true` | El interruptor de la pantalla de restaurar empieza marcado para una muerte. |
+| `excluded-materials` | `[]` | Materiales que nunca reciben un id. Los nombres desconocidos se omiten. |
+| `alert-cooldown-seconds` | `300` | Antes de que el staff vuelva a oír hablar del mismo jugador con el mismo objeto. |
+| `notify-holder` | `true` | Decirle al jugador por qué se le quitó un objeto. |
+| `villager-trades` | `true` | Dejar que un objeto marcado pague un comercio que lo pide sin la marca. |
+| `history-keep-days` | `90` | Días que se guardan las alertas y las entradas de cuarentena gestionadas. `0` lo guarda todo. |
+
+Los objetos que siguen esperando en cuarentena y la lista de ids revocados nunca se purgan: una espada
+escondida en un cofre durante un año sigue siendo el mismo duplicado.
+
+## Mensajes
+
+`lang/<language>/modules/revoke/messages.yml`: `revoked` con `%amount%` y `%target%`; `holder-taken`
+con `%item%`, y `several` para más de un objeto a la vez; `alert` con `%player%`, `%item%`,
+`%owner%`, `%server%` y `%action%`, y las dos palabras `action-quarantined` y `action-seen`; las líneas
+de los botones de cuarentena `returned`, `returned-holder`, `holder-away`, `taken`, `discarded`,
+`already-handled`, `follow-started`, `follow-remote` y `follow-offline`; los bloques de lore
+`held-lore`, `seen-lore` y `handled-lore`; `scope-held` y `scope-all`; y el interruptor de la pantalla
+de restaurar, `toggle-on`, `toggle-off`, `toggle-note-on` y `toggle-note-off`.
+
+## Almacenamiento
+
+`staff_revoked_items` para los ids revocados, `staff_revoked_hits` para cada vez que apareció uno.

@@ -1,0 +1,171 @@
+---
+title: "Exylia Staff Web"
+description: "Vincula la red a staff.exylia.net: el vínculo, los códigos de cuenta, la configuración gestionada, los rangos de LuckPerms, las apelaciones, las cuentas alternativas y las alertas del anticheat."
+---
+
+[Exylia Staff Web](https://staff.exylia.net) es el panel desde el que trabaja el equipo fuera del juego.
+Una vez vinculada la red, cada sanción, reporte, freeze, fila de auditoría y sesión de staff llega a la
+web, y la web puede actuar en el juego como el miembro del staff que hizo clic. Esta página cubre lo que
+el dueño de un servidor configura en el lado del plugin; la web se configura en la web.
+
+Participan tres módulos:
+
+| Módulo | Interruptor | Qué hace |
+|---|---|---|
+| `web` | `modules.web` | El vínculo en sí, la bandeja de salida, los comandos que envía la web y la configuración gestionada. |
+| `alts` | `modules.alts` | Recuerda la dirección de cada entrada, sellada y con hash, para encontrar cuentas alternativas. Necesita `web`. |
+| `anticheat` | `modules.anticheat` | Suma las alertas de Grim, Vulcan o Matrix por jugador y minuto para la web, y reacciona a las ráfagas. |
+
+Los tres vienen activados por defecto y no hacen nada hasta que la red se vincula.
+
+## Antes de vincular
+
+El vínculo se guarda en la base de datos, no en un archivo: cada servidor que lee la misma base de datos
+lo encuentra y se conecta por su cuenta. En una red, apunta primero todos los servidores a la misma base
+de datos, como explica [Instalación](/docs/exyliastaff/instalacion#base-de-datos). Un servidor con su
+propia base de datos H2 es una red de uno.
+
+No hace falta abrir ningún puerto: cada servidor mantiene una conexión saliente al gateway.
+
+## Vincular
+
+<Steps>
+  <Step title="Pide un código">
+    En un servidor cualquiera, ejecuta `/staff web link`, desde la consola o en el juego con
+    `exyliastaff.web.link`. El plugin muestra un código, cuántos minutos es válido y un enlace para
+    aprobarlo.
+  </Step>
+  <Step title="Apruébalo en la web">
+    Abre el enlace, inicia sesión y elige el espacio de trabajo. El plugin espera a la aprobación y
+    responde "Network linked to `<workspace>`. Every server connects on its own."
+  </Step>
+  <Step title="Revisa cada servidor">
+    `/staff web status` en cada servidor debería decir `connected`.
+  </Step>
+</Steps>
+
+| Comando | Permiso | Qué hace |
+|---|---|---|
+| `/staff web link` | `exyliastaff.web.link` | Vincula la red. Se rechaza si ya está vinculada. |
+| `/staff web status` | `exyliastaff.web.link` | El estado de este servidor, el espacio de trabajo, si envía los snapshots, si está LuckPerms, qué anticheats están enganchados, el último problema y la configuración gestionada. |
+| `/staff web unlink` | `exyliastaff.web.link` | Desvincula la red y descarta lo que estaba pendiente de enviar. Todos los servidores se desconectan en menos de un minuto. |
+| `/staff web` | `exyliastaff.staff` | Un código de un solo uso, válido cinco minutos, que un miembro del staff escribe en la web para vincular su cuenta de Discord a su cuenta de Minecraft. |
+| `/appeal <code>` | Ninguno | Un jugador sancionado confirma una apelación que abrió en la web. |
+
+Los códigos de cuenta se pueden desactivar en la web; entonces `/staff web` lo dice. Cuando la web
+rechaza esta versión del plugin, a los jugadores conectados con `exyliastaff.web.link` se les dice que
+lo actualicen.
+
+## Qué llega a la web
+
+Cada módulo escribe lo que pasa en una tabla de bandeja de salida, `web_outbox`, y cada servidor envía
+sus propias filas en orden. No se pierde nada mientras la web o la conexión están caídas: las filas
+esperan y salen cuando vuelve. Un comando que envía la web se ejecuta una sola vez, como el miembro del
+staff que hizo clic, aunque el gateway lo entregue dos veces.
+
+## Configuración gestionada
+
+Desde la web, un espacio de trabajo puede hacerse cargo de los archivos de comportamiento del plugin.
+Un archivo gestionado:
+
+- tiene una cabecera que dice `Managed by Exylia Staff Web — local edits are ignored, edit it on the web`;
+- recibe los valores de la web escritos encima antes de cargarse, al arrancar, cuando se habilita su
+  módulo y con `/exyliastaff reload`, así que una edición en disco nunca tiene efecto;
+- sigue funcionando mientras la web está caída, desde la última revisión guardada en caché en
+  `web/managed.json`.
+
+Los archivos que la web puede gestionar son `config.yml` y el `modules/<id>/config.yml` de cada módulo.
+Nunca gestiona los mensajes, los menús ni nada más bajo `lang/`, los archivos del marcador y de
+inspección, ni `modules/web/config.yml`. En `config.yml`, `language` se queda en local; los
+interruptores de módulos los envía la web aparte de los archivos. Un archivo que la web deja de
+gestionar conserva su contenido y pierde la cabecera. `/staff web status` muestra la revisión, cuántos
+archivos están gestionados y si la última aplicación funcionó.
+
+## LuckPerms
+
+LuckPerms es opcional. Con él, la web lee quién es staff — todo el que tenga `exyliastaff.staff`,
+directamente o a través de un grupo, en cualquier servidor — y puede dar y quitar rangos desde la web,
+en toda la red o en los servidores elegidos.
+
+Un rango dado a un servidor es un nodo de LuckPerms con el contexto `server` de ese servidor. Cada
+servidor informa del suyo: el valor `server` del `config.yml` de LuckPerms. Un servidor que se quedó en
+`global` no se puede distinguir, así que pon nombre a cada backend ahí antes de dar rangos por servidor.
+
+Sin LuckPerms, solo se pueden comprobar los permisos de los jugadores conectados en ese momento, y los
+cambios de rango desde la web se rechazan.
+
+## Apelaciones
+
+Un jugador sancionado abre una apelación en la web, que le muestra un código de seis caracteres. Entra
+y escribe `/appeal <code>`; el plugin le pasa el código a la web, que lo asocia a la cuenta. No necesita
+permiso, tiene un tiempo de espera de diez segundos contra los intentos a ciegas, y responde "Appeals
+cannot be confirmed right now" mientras la red no está vinculada.
+
+## Cuentas alternativas
+
+Con `alts` activado, cada entrada guarda un hash de la dirección, para cruzar cuentas, y la dirección
+sellada bajo una clave que solo abre el secreto de la red, para la web. Las dos claves salen del secreto
+de la red, así que no se registra nada antes del vínculo, y volver a vincular empieza un historial
+nuevo. Cuánto tiempo se guarda una entrada se configura en la web: 90 días salvo que se cambie.
+
+Cuando entra una cuenta que comparte dirección con otra que tiene un ban activo, se avisa al staff
+conectado con `exyliastaff.alts`, con un clic al `/history` de la cuenta baneada. Los bans son las
+sanciones `BAN`, `TEMPBAN` e `IPBAN` que registró el módulo de [sanciones](/docs/exyliastaff/sanciones).
+
+<Callout type="warning" title="Detrás de un proxy, reenvía la dirección real">
+Un backend solo ve las direcciones reales de los jugadores con el modern forwarding de Velocity o el IP
+forwarding de BungeeCord. Sin él, todos los jugadores comparten la dirección del proxy y todas las
+cuentas parecen relacionadas.
+</Callout>
+
+```yaml title="plugins/ExyliaStaff/modules/alts/config.yml"
+alert-evasion: true
+ignored-addresses:
+  - 127.0.0.1
+```
+
+| Clave | Por defecto | Qué hace |
+|---|---|---|
+| `alert-evasion` | `true` | Avisar al staff con `exyliastaff.alts` de una posible evasión de ban. |
+| `ignored-addresses` | `127.0.0.1` | Direcciones que nunca se registran: el propio proxy, una oficina compartida, un bot de pruebas. |
+
+## Alertas del anticheat
+
+Con `anticheat` activado, GrimAC, Vulcan y Matrix se enganchan cuando están instalados, y sus alertas se
+suman por jugador, comprobación y minuto para la web. Un jugador que dispara un pico — tantas alertas en
+un minuto como el umbral de la web, todas las comprobaciones juntas, 20 salvo que se cambie, 0 para
+nunca — tiene su [repetición](/docs/exyliastaff/repeticiones) guardada y se le señala al staff con
+`exyliastaff.anticheat`, una vez por minuto, con un clic que teletransporta hasta él.
+
+```yaml title="plugins/ExyliaStaff/modules/anticheat/config.yml"
+capture-replay: true
+alert-staff: true
+```
+
+| Clave | Por defecto | Qué hace |
+|---|---|---|
+| `capture-replay` | `true` | Guardar la repetición de un jugador que dispara un pico. Necesita el módulo de repeticiones. |
+| `alert-staff` | `true` | Avisar al staff conectado con `exyliastaff.anticheat`. |
+
+## El archivo del módulo web
+
+```yaml title="plugins/ExyliaStaff/modules/web/config.yml"
+gateway-url: https://staff-gateway.exylia.net
+web-url: https://staff.exylia.net
+```
+
+Deja los dos como están salvo que el soporte de Exylia diga otra cosa. El secreto de la red nunca está
+en un archivo: está sellado en la base de datos, así que este archivo se puede pegar sin riesgo en un
+ticket de soporte.
+
+## Mensajes
+
+`lang/<language>/modules/web/messages.yml` contiene las líneas del vínculo, de cuenta, de estado y de
+apelación; `lang/<language>/modules/alts/messages.yml` tiene `evasion-alert` con `%player%`, `%banned%`
+y `%type%`; `lang/<language>/modules/anticheat/messages.yml` tiene `spike-alert` con `%player%`,
+`%alerts%`, `%anticheat%` y `%check%`.
+
+## Almacenamiento
+
+`web_link`, `web_lease`, `web_outbox` y `web_commands_done` para el vínculo, `staff_alts` para las
+entradas.

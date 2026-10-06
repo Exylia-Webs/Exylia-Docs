@@ -1,0 +1,112 @@
+---
+title: "Item revocation"
+description: "Take back the copies a restore leaves in circulation: items marked on death, revoked from the restore screen, and taken from whoever holds them."
+---
+
+When a hacker kills somebody and hands the drops to friends, restoring the victim puts a second copy
+of every item into the world. Item revocation closes that hole. What a death drops is marked; when a
+staff member hands that death back, the restore screen offers to revoke the marks. The victim gets
+clean copies, and the marked ones still out there are taken away wherever they turn up.
+
+Module id `revoke`, switch `modules.item-revocation`, files under `modules/revoke/`. Needs the
+[inventory restore](/docs/exyliastaff/inventory-restore) module, which is where deaths are copied and
+handed back.
+
+<Callout type="warning" title="Off by default">
+It changes items on death and takes items from players, so it ships off. Read the configuration below,
+and consider running `mode: AUDIT` for a few days to see what it would catch before it acts.
+</Callout>
+
+## Marks
+
+An item gets an id of its own the first time it drops on a death, before the death backup is taken.
+An id already there is kept: an item that died twice is the same item both times. Only items that
+cannot stack are marked — swords, armour, tools, shulker boxes, totems — because an id on a diamond
+would stop it stacking with every other diamond and break shops, hoppers and inventories.
+`excluded-materials` leaves more out.
+
+A shulker box or a bundle is walked: what is inside is marked too, so emptying the box does not keep
+the contents clean.
+
+### What is made from a marked item
+
+What comes out of a crafting grid, an anvil, a smithing table, a grindstone, a crafter or a villager
+trade inherits every id that went in. Revoking a sword also reaches the netherite one it was upgraded
+into. Only a result that could carry an id of its own inherits: a stack of emeralds bought with a
+marked sword is out of reach.
+
+With `villager-trades` on, a marked item also pays a villager trade that asks for the same item without
+the mark. Vanilla villagers and Shopkeepers already accept most of them; this covers the rest.
+
+## Revoking
+
+Revocation has no command. It is a switch on the restore screen, shown for a death backup that holds
+marked items, because the only moment it makes sense is the moment a death is handed back.
+`default-revoke` decides whether it starts ticked; clicking a single item in the backup hands it back
+with the same choice. The victim receives copies with no mark, and every marked copy still in
+circulation is revoked. The staff member is told how many.
+
+## When a revoked item turns up
+
+A revoked item is noticed whenever it is picked up, moved, held, worn, swung, used or dropped, whenever
+the container it hides in is opened, and when its holder logs in, ender chest included.
+
+| `mode` | What happens |
+|---|---|
+| `QUARANTINE` | The item is taken into quarantine. With `notify-holder` on, the holder is told why and to open a ticket if they got it fairly. |
+| `AUDIT` | The item stays where it is. Staff are told and it is written down. |
+
+Staff with `exyliastaff.revoke.alerts` are told on every server: who held it, from whose death, on
+which server, and what was done; a click teleports to the holder. The same player holding the same item
+alerts again only after `alert-cooldown-seconds`.
+
+## The quarantine screen
+
+`/revokeditems`, or `/revoked`, with `exyliastaff.revoke`.
+
+| Row | Clicks |
+|---|---|
+| Waiting in quarantine | Left: hand it back to whoever had it, who must be on this server. Right: take it yourself. Q: throw it away for good. |
+| Seen in `AUDIT` mode | Left: go to the player still holding it, on their server if needed. |
+| Already handled | Nothing: who handled it and how. |
+
+The switch at the bottom shows only what is waiting, or everything.
+
+## Configuration
+
+```yaml title="plugins/ExyliaStaff/modules/revoke/config.yml"
+mode: QUARANTINE
+default-revoke: true
+excluded-materials: []
+alert-cooldown-seconds: 300
+notify-holder: true
+villager-trades: true
+history-keep-days: 90
+```
+
+| Key | Default | What it does |
+|---|---|---|
+| `mode` | `QUARANTINE` | `QUARANTINE` or `AUDIT`. Anything else quarantines. |
+| `default-revoke` | `true` | The restore screen's switch starts ticked for a death. |
+| `excluded-materials` | `[]` | Materials that never get an id. Unknown names are skipped. |
+| `alert-cooldown-seconds` | `300` | Before staff hear again about the same player holding the same item. |
+| `notify-holder` | `true` | Tell the player why an item was taken. |
+| `villager-trades` | `true` | Let a marked item pay a trade that asks for it without the mark. |
+| `history-keep-days` | `90` | Days alerts and handled quarantine entries are kept. `0` keeps everything. |
+
+Items still waiting in quarantine and the list of revoked ids are never purged: a sword hidden in a
+chest for a year is still the same duplicate.
+
+## Messages
+
+`lang/<language>/modules/revoke/messages.yml`: `revoked` with `%amount%` and `%target%`; `holder-taken`
+with `%item%`, and `several` for more than one item at once; `alert` with `%player%`, `%item%`,
+`%owner%`, `%server%` and `%action%`, and the two words `action-quarantined` and `action-seen`; the
+quarantine button lines `returned`, `returned-holder`, `holder-away`, `taken`, `discarded`,
+`already-handled`, `follow-started`, `follow-remote` and `follow-offline`; the lore
+blocks `held-lore`, `seen-lore` and `handled-lore`; `scope-held` and `scope-all`; and the restore
+screen's switch, `toggle-on`, `toggle-off`, `toggle-note-on` and `toggle-note-off`.
+
+## Storage
+
+`staff_revoked_items` for the revoked ids, `staff_revoked_hits` for every time one turned up.

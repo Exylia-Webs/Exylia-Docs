@@ -68,9 +68,37 @@ hidden from a helper who is otherwise allowed to see vanished staff.
 |---|---|
 | `List<UUID> onlineStaff()` | Everybody on this server who counts as staff, in no particular order. |
 | `List<UUID> onlineInStaffMode()` | Everybody on this server with a staff session open. |
+| `List<UUID> onlineVanished()` | Everybody on this server who is vanished. What a tab list or a player counter subtracts. |
 
-Both are this server only: staff working on another server of the network are not online here and have
-no `Player` to read a permission from. Both lists are unmodifiable.
+All three are this server only: staff working on another server of the network are not online here and
+have no `Player` to read a permission from. The lists are unmodifiable. Filter `onlineVanished()` with
+`canSee` when the list is for one viewer.
+
+## Reports
+
+| Method | What it does |
+|---|---|
+| `int openReportCount()` | Reports waiting for staff, across the network: every server holds the open queue. |
+| `int openReportsAgainst(UUID target)` | Open reports naming one player. Closed reports do not count. |
+| `ReportResult report(Player reporter, Player target, String reason)` | Files a report the way `/report <player> <reason>` does. |
+
+`report` runs the same checks as the command — not themselves, the staff protection, the cooldown, the
+open-report limit — and explains a refusal to the reporter in the plugin's own words. A reason matching
+a configured reason id is stored as that reason, with its weight; anything else is free text. A blank
+reason throws `IllegalArgumentException`. Call it on the reporter's thread.
+
+| `ReportResult` | Meaning |
+|---|---|
+| `SUBMITTED` | Accepted. The staff alert and the reporter's confirmation follow once the row is written. |
+| `SELF` | The reporter named themselves. |
+| `STAFF_PROTECTED` | The target is staff and the owner does not allow reporting staff. |
+| `ON_COOLDOWN` | The reporter filed another report too recently. |
+| `TOO_MANY_OPEN` | The reporter already has as many open reports as allowed. |
+| `CANCELLED` | A listener cancelled the `PlayerReportEvent`. |
+| `MODULE_DISABLED` | The reports module is off. |
+
+Every refusal but `CANCELLED` and `MODULE_DISABLED` has already been explained to the reporter, so a
+caller only has to say something for those two.
 
 ## Modules
 
@@ -116,11 +144,18 @@ other players has to let these through.
 
 ## Events
 
-Two events, in `net.exylia.lib.api.staff.event`. Both fire after the change or the action has already
+Five events, in `net.exylia.lib.api.staff.event`. Two report what already happened; two let another
+plugin refuse a freeze or a report before it happens; one says a frozen player left.
+
+The reports and freeze additions — `onlineVanished`, the report methods, `ReportResult` and the last
+three events — need `exylia-api` from ExyliaLib `v1.133.0` or later.
+
+### What already happened
+
+`StaffStateChangeEvent` and `StaffActionEvent` fire after the change or the action has already
 happened, on the thread of the player they are about, and **neither is cancellable** — they report,
 they do not gate. Because they fire afterwards, receiving one is a guarantee: the service already
-answers the new way by the time your listener runs. To refuse a change, gate the permission that
-allows it.
+answers the new way by the time your listener runs.
 
 | Event | Fires when | Carries |
 |---|---|---|
@@ -143,6 +178,7 @@ listens to the same two.
 | `GLOBAL_CHAT` | Their chat reach changed; `isEnabled()` is false only for off. |
 | `MINING_ALERTS` | They started or stopped receiving suspicious-mining alerts. |
 | `XRAY_VISION` | They started or stopped seeing ores through stone. |
+| `REVEAL` | They started or stopped seeing players an invisibility potion hides. |
 | `SPECTATOR` | Their staff session entered or left spectator. |
 
 Every module that owns a per-player switch reports it here rather than defining an event of its own,
@@ -164,11 +200,38 @@ public void onState(StaffStateChangeEvent event) {
 are added, so treat an unfamiliar one as an action this version of the plugin has and yours does not
 know about, rather than as an error. `getTarget()` is `null` for an action about nobody in particular.
 
+### Freezes and reports
+
+| Event | Fires when | Cancellable | Carries |
+|---|---|---|---|
+| `PlayerFreezeEvent` | A player is about to be frozen, by `/freeze` or `freeze(...)`, once the plugin has agreed to it and before anything happens to them. | Yes | `getTarget()`, `getStaff()` |
+| `PlayerReportEvent` | A player is reporting another, once every check has passed and before anything is stored or anybody alerted. Fired for `/report`, the reason menu and `report(...)`. | Yes | `getReporter()`, `getTarget()`, `getTargetName()`, `getReason()` |
+| `FrozenPlayerQuitEvent` | A frozen player left the server. | No | `getPlayer()`, `getStaffId()`, `getStaffName()` |
+
+Cancelling `PlayerFreezeEvent` leaves the target free; cancelling `PlayerReportEvent` stores nothing,
+alerts nobody and starts no cooldown. In both cases nobody is told why, because the listener that
+refused is the only one that knows: a match plugin protecting a player mid-fight should say so
+itself. A release is never refused. `PlayerReportEvent` fires once, on the reporter's server, which
+makes it the one a Discord webhook or an anticheat cross-check listens to. `getReason()` is plain
+text written by a player: treat it as input.
+
+`FrozenPlayerQuitEvent` is the hook for what a server does about somebody who logs out of a
+screenshare. It fires after the freeze has ended — a disconnect releases the player, so `isFrozen`
+already answers `false` — and after the plugin's own `quit-commands` ran. `getStaffId()` is `null` when
+the console froze them. It does not fire while the server is shutting down.
+
+```java
+@EventHandler
+public void onFrozenQuit(FrozenPlayerQuitEvent event) {
+    webhook.send(event.getPlayer().getName() + " logged out while frozen by " + event.getStaffName());
+}
+```
+
 ## What it does not expose
 
-No menu openers, no editor flows, no punishment or report rows, no configuration writes. Reports,
-helpop, inspect and the punishment history are read and driven from inside the plugin, and the staff
-log is filled by `StaffActionEvent` rather than by a method you call.
+No menu openers, no editor flows, no punishment or report rows, no configuration writes. Helpop,
+inspect and the punishment history are read and driven from inside the plugin, and the staff log is
+filled by `StaffActionEvent` rather than by a method you call.
 
 If an integration genuinely needs something that is not here, ask on
 [Discord](https://discord.exylia.net) — a method added to a service is a minor release.

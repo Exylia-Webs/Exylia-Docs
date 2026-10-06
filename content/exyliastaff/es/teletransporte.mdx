@@ -1,6 +1,6 @@
 ---
 title: "Teletransporte"
-description: "Teletransportarse a un jugador en cualquier punto de la red, traer a uno, visitar a un jugador al azar, saltar a lo que miras y atravesar paredes."
+description: "Teletransportarse a un jugador en cualquier punto de la red, a coordenadas, a un mundo, a la superficie o a donde alguien se desconectó; traer a uno, visitar a un jugador al azar, saltar y atravesar paredes."
 ---
 
 Id de módulo `teleport`, interruptor `modules.teleport`, archivos en `modules/teleport/`.
@@ -10,28 +10,54 @@ Id de módulo `teleport`, interruptor `modules.teleport`, archivos en `modules/t
 | Comando | Permiso | Qué hace |
 |---|---|---|
 | `/tp <player>` | `exyliastaff.teleport` | A ese jugador, siguiéndolo a su servidor si está en otro. `/teleport`, `/stafftp` y `/tpto` son alias. |
-| `/tp <player> <destination>` | `exyliastaff.teleport.here` | Mueve al primer jugador hasta el segundo. Ambos tienen que estar en este servidor. |
+| `/tp <player> <destination>` | `exyliastaff.teleport.here` | Mueve al primer jugador hasta el segundo, que tiene que estar en este servidor. Al primero se le trae desde otro servidor si hace falta. |
+| `/tpstaff <player>` | `exyliastaff.teleport` | Entra primero en modo staff y vanish, y después se teletransporta a él. `/staffmodetp` y `/tpduty` son alias. |
+| `/tppos <x> <y> <z> [world]` | `exyliastaff.teleport` | A unas coordenadas, en este mundo o en uno indicado. `/tpcoords` es un alias. |
+| `/tpworld <world>` | `exyliastaff.teleport` | Al punto de aparición de un mundo. `/staffworld` es un alias. |
+| `/tpoffline <player>` | `exyliastaff.teleport` | A donde el jugador se desconectó. `/tpoff` es un alias. |
+| `/top` | `exyliastaff.teleport` | Hasta el bloque más alto por encima de ti. `/stafftop` es un alias. |
 | `/stafftphere <player>` | `exyliastaff.teleport.here` | Trae al jugador, desde otro servidor si hace falta. `/tphere` es un alias. |
 | `/staffrtp` | `exyliastaff.teleport.random` | A un jugador al azar que aún no hayas visitado. `/staffrandomtp` es un alias. |
 | `/staffrtp reset` | `exyliastaff.teleport.random` | Vacía tu lista de visitados. |
 | `/phase` | `exyliastaff.teleport.phase` | A través de la pared que miras. `/staffphase` es un alias. |
 | `/jumpto` | `exyliastaff.teleport.phase` | Encima del bloque que miras. `/staffjump` es un alias. |
 
-<Callout type="warning" title="/tp y /teleport están ocupados">
-El módulo registra las etiquetas `tp` y `teleport` a secas, sin coordenadas. Si otro plugin también
-las registra, la prioridad de comandos del servidor decide cuál responde; desactiva el módulo o
-renombra el otro. `/rtp` y `/randomtp` no se registran a propósito, para que un teletransporte
+<Callout type="warning" title="/tp, /teleport y /top están ocupados">
+El módulo registra las etiquetas `tp`, `teleport` y `top` a secas, y `/tp` no acepta coordenadas. Si
+otro plugin también las registra, la prioridad de comandos del servidor decide cuál responde. Pon los
+nombres que quieras dejarle al otro plugin en
+[`disabled-commands`](/docs/exyliastaff/configuracion#comandos-desactivados): `/stafftp` y `/stafftop`
+siguen funcionando. `/rtp` y `/randomtp` no se registran a propósito, para que un teletransporte
 aleatorio de survival conserve su comando.
 </Callout>
 
-Cada comando nombra a un jugador que el servidor conoce: conectado aquí, o visto aquí antes. Los
-teletransportes no tienen cooldown ni tiempo de espera; la confirmación se envía una vez que el
-teletransporte ha aterrizado.
+Cada argumento de jugador acepta a cualquiera que la red conozca, conectado en cualquier servidor o
+no, y sugiere todos los nombres del proxy. Los teletransportes no tienen cooldown ni tiempo de espera;
+la confirmación se envía una vez que el teletransporte ha aterrizado.
+
+## Coordenadas, mundos y la superficie
+
+`/tppos` lee números o `~` relativo a donde estás, como en vanilla, así que las coordenadas copiadas de
+un reporte o de un log se pegan tal cual. Las coordenadas fuera del borde del mundo se rechazan.
+`/tpworld` completa los mundos cargados y te deja en el punto de aparición de ese mundo, conservando tu
+vista. `/top` te pone sobre el bloque más alto por encima de donde estás; si no hay nada encima, es
+"There is nothing above you to stand on".
+
+## Donde alguien se desconectó
+
+`/tpoffline` lee el punto desde el que salió un jugador de los datos de jugador de este servidor: el
+agujero, el cofre, la base junto a la que se desconectó en el momento en que llegó el staff. A alguien
+conectado simplemente se le teletransporta, aquí o en su servidor, porque su posición en vivo es la
+verdadera. Un jugador cuya última sesión fue en otro servidor dejó allí su posición, y este servidor
+responde "has no record of where they left from" en vez de adivinar.
+[`/seen`](/docs/exyliastaff/inspeccion#seen) muestra el mismo punto sin ir.
 
 ## Aleatorio
 
 Los candidatos son todos los jugadores conectados menos tú, fuera de `exclude-worlds` y, cuando
-`random-skip-staff` está activado, que no estén en vanish ni tengan `exyliastaff.staff`. Cada miembro
+`random-skip-staff` está activado, que no estén en vanish ni tengan `exyliastaff.staff`. Con `random-skip-afk`
+activado y el módulo de [AFK](/docs/exyliastaff/afk) en marcha, también se saltan los jugadores
+inactivos. Cada miembro
 del staff tiene su propia lista de visitados; cuando se ha visitado a todos los candidatos la lista se
 vacía y la ronda empieza de nuevo. El mensaje dice cuántos quedan. La lista también se vacía al
 desconectarse.
@@ -51,12 +77,16 @@ bloqueado. Sin pared al alcance es "No wall within 10 blocks".
 ```yaml title="plugins/ExyliaStaff/modules/teleport/config.yml"
 exclude-worlds: []
 random-skip-staff: true
+random-skip-afk: true
 phase-max-distance: 10
 jump-max-distance: 300
 ```
 
 ## Mensajes
 
-`modules/teleport/messages.yml`: `teleported`, `brought`, `following` y `summoning` con `%target%`;
-`random` con `%target%` y `%remaining%`; `random-none`, `random-reset`; `phased`, `phase-none` y
-`jump-none` con `%distance%`; `jumped`; `target-offline`, `target-elsewhere`.
+`lang/<language>/modules/teleport/messages.yml`: `teleported`, `brought`, `following` y
+`summoning` con `%target%`; `moved` con `%target%` y `%destination%`; `random` con `%target%` y
+`%remaining%`; `random-none`, `random-reset`; `phased`, `phase-none` y `jump-none` con
+`%distance%`; `jumped`; `topped` con `%y%`, `top-none`; `positioned` con `%x%`, `%y%`, `%z%` y
+`%world%`, `position-invalid`, `position-outside`; `offline-teleported` con `%target%`, `%world%`,
+`%x%`, `%y%` y `%z%`, `offline-none`; `target-offline`.

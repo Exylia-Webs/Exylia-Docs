@@ -1,0 +1,214 @@
+---
+title: "Replays"
+description: "The last minute around any player, saved on a death, a report, a freeze or on request, and watched from any server with ping and server lag on the board."
+---
+
+The server keeps the last minute of everything around every player in memory. Nothing is written
+anywhere until something worth keeping happens: a death, a report, a freeze, a staff member or a
+player asking for it. Then that window is cut, stored in the database, and any staff member on any
+server can step into it as a flying camera, with the controls on their hotbar and a board that says
+how the server and both players' connections were doing at every moment.
+
+That board is the answer to "I died to lag": a ping of 900 or a server at 12 TPS is either on it or
+it is not.
+
+Module id `replay`, switch `modules.replays`, files under `modules/replay/`. Watching needs
+PacketEvents.
+
+## Commands
+
+| Command | Permission | What it does |
+|---|---|---|
+| `/staffreplay <player>` | `exyliastaff.replay` | Opens that player's saved replays. `/sreplay` is an alias. |
+| `/staffreplay capture <player>` | `exyliastaff.replay.capture` | Saves the last minute around a player on this server, now. |
+| `/staffreplay debug <id>` | `exyliastaff.replay` | Lists what a saved replay holds, in chat. |
+| `/staffreplay leave` | `exyliastaff.replay` | Stops watching. |
+| `/savereplay` | `exyliastaff.savereplay` | A player saves their own last minute. `/saveclip` and `/clip` are aliases. |
+
+The bare `/staffreplay` answers with its usage lines. The player argument is anybody the network
+knows, online or not; `capture` needs them on this server, because the minute is only in this
+server's memory.
+
+The command is not `/replay` on purpose: a practice server already has one, for its duels.
+
+<Callout type="tip" title="Grant /savereplay to everyone">
+`exyliastaff.savereplay` is meant for the default group, like `/report` and `/helpop`. A player who
+wants to report somebody and cannot record their own screen saves the minute instead, and the staff
+member reading the report watches it. It costs one database row and a cooldown.
+</Callout>
+
+## When a replay is saved
+
+| Cause | Saved when | Switch |
+|---|---|---|
+| Death | Somebody dies. The replay carries on `after-death` seconds past the death, so the fall is in it. | `capture.death` |
+| Report | Somebody is reported, if they are on the reporter's server. | `capture.report` |
+| Freeze | A freeze starts. | `capture.freeze` |
+| Staff save | `/staffreplay capture`, or **Save now** in the list. | Always on |
+| Player save | `/savereplay`, every `player-saves.cooldown-seconds`. | `player-saves.enabled` |
+
+The anticheat module saves one too when a player sets off a burst of alerts; see
+[Exylia Staff Web](/docs/exyliastaff/staff-web#anticheat-alerts).
+
+Everybody is recorded, staff in vanish included: only staff watch these, and a staff member reviewing
+their own fight, or a report against somebody who was spectating in vanish, needs them in it. A save
+of somebody who was not recorded on this server in that window is "Nothing of them was recorded".
+
+## Watching
+
+`/staffreplay <player>` lists their replays, newest first, each drawn with the icon of its cause and
+its length, how many players and things are in it, the date, the server and the coordinates. Left click
+watches; shift and right click deletes, with `exyliastaff.replay.delete`. **Save now** keeps the last
+minute around that player, with `exyliastaff.replay.capture`.
+
+The replay is staged on a temporary world before anybody moves, so one that cannot be shown never
+takes the viewer anywhere. They are put into it as a flying camera; leaving puts them back where they
+were. Opening another replay while watching goes straight to the next one.
+
+| Slot | Item | Left click | Right click |
+|---|---|---|---|
+| 0 | Spectral arrow | 5 seconds back | One frame back |
+| 1 | Clock | Play or pause; at the end it starts again | |
+| 2 | Arrow | 5 seconds on | One frame on |
+| 3 | Recovery compass | Previous hit, death, teleport or disconnection | |
+| 4 | Sugar | Slower | Faster |
+| 5 | Compass | Next hit, death, teleport or disconnection | |
+| 6 | Ender eye | First person, through each player in turn | The list of who is on screen |
+| 7 | Repeater | Back to the first second | |
+| 8 | Barrier | Leave | |
+
+The controls are drawn on the client, never put in the inventory: the viewer's own items stay
+underneath and come back when they leave. The layout is `lang/<language>/modules/replay/hotbar.yml`.
+
+The **players** list shows everybody on screen at that moment with their ping: left click flies to
+them, right click watches through their eyes. As the replay passes them, chat lines, deaths,
+teleports, disconnections and totems are written into the viewer's chat, and the action bar shows the
+time, the speed and whose eyes the camera is in. With `reveal-invisible` on, invisible players are
+drawn glowing, so nobody hides in a replay.
+
+## From reports and restores
+
+A replay is one click from where staff need it:
+
+- The report alert ends with **▶ Replay**, which runs `/reports replay <id>`.
+- In `/reports`, shift and left click a report; in one player's reports, press Q on a report, or open
+  **Replays** for their whole list.
+- In the inventory restore screen, a death backup has **Watch what happened**: the death replay
+  nearest to that backup.
+
+All of them need `exyliastaff.replay`. When the replay saved with a report is missing, because the
+player was not recorded or it is still being written, the click opens that player's list instead.
+
+## Across servers
+
+Replays are rows in the shared database, so a death on one server is watched from any other. With
+`terrain` on, the ground the replay happened on is stored with it, from `vertical-margin` blocks
+above and below where people went, up to `max-chunks` chunks, so it can be watched anywhere and after
+the place has changed. Without it, a replay can only be watched on the server it was recorded on,
+over whatever is there now.
+
+## Configuration
+
+```yaml title="plugins/ExyliaStaff/modules/replay/config.yml"
+seconds: 60
+radius: 32.0
+after-death: 3
+terrain: true
+vertical-margin: 24
+max-chunks: 400
+max-entities: 1500
+capture:
+  death: true
+  report: true
+  freeze: true
+player-saves:
+  enabled: true
+  cooldown-seconds: 120
+keep-days: 14
+keep-per-player: 30
+reveal-invisible: true
+board:
+  enabled: true
+  title:
+    - '{primary}&lREPLAY'
+  lines:
+    - ''
+    - '{secondary}Playback:'
+    - ' {letters_black}▎ {letters}Time {letters_black}» {info}%staff_replay_time%{letters_black}/{info}%staff_replay_length% ⌚'
+    - ' {letters_black}▎ {letters}Speed {letters_black}» {info}%staff_replay_speed% {letters_black}%staff_replay_state%'
+    - ''
+    - '{secondary}Players:'
+    - ' {letters_black}▎ {highlight}%staff_replay_player% {letters_black}» {info}%staff_replay_player_ping%'
+    - ' {letters_black}▎ {letters}%staff_replay_opponent% {letters_black}» {info}%staff_replay_opponent_ping%'
+    - ''
+    - '{secondary}Server:'
+    - ' {letters_black}▎ {letters}TPS {letters_black}» {info}%staff_replay_tps%'
+    - ' {letters_black}▎ {letters}MSPT {letters_black}» {info}%staff_replay_mspt%'
+    - ' {letters_black}▎ {letters}On {letters_black}» {info}%staff_replay_server%'
+    - ''
+  update:
+    interval: 5
+    smart: true
+icons:
+  death: SKELETON_SKULL
+  report: WRITABLE_BOOK
+  freeze: PACKED_ICE
+  manual: SPYGLASS
+  player: PLAYER_HEAD
+```
+
+| Key | Default | What it does |
+|---|---|---|
+| `seconds` | `60` | How far back a replay reaches. The server keeps this much around every player in memory at all times. |
+| `radius` | `32` | Blocks around a player that are recorded. Whoever was this close to anywhere they went is in their replay. |
+| `after-death` | `3` | Seconds a death replay carries on after the death. |
+| `terrain` | `true` | Keep the ground, so a replay can be watched on any server. |
+| `vertical-margin` | `24` | Blocks above and below where people went that the ground is kept. |
+| `max-chunks` | `400` | Chunks one replay keeps. A long chase keeps its end. |
+| `max-entities` | `1500` | Things that are not players followed at once, server-wide. |
+| `player-saves.cooldown-seconds` | `120` | Between two `/savereplay` by the same player. |
+| `keep-days` | `14` | Days a replay is kept. The ground goes with the last replay that needed it. |
+| `keep-per-player` | `30` | Replays kept per player; the oldest go first. |
+| `reveal-invisible` | `true` | Draw invisible players glowing while watching. |
+| `board` | | The sidebar shown while watching. |
+| `icons` | | The icon of each cause in the list. |
+
+Expired replays are purged when the module starts and every hour after that.
+
+## Messages
+
+`lang/<language>/modules/replay/messages.yml`: `saved` with `%target%`, `%seconds%` and `%id%`;
+`player-saved` with `%seconds%` and `%id%`; `player-cooldown` with `%time%`; `player-disabled`;
+`nothing-recorded`, `no-replays`, `no-replay-for-backup`; `loading`, `load-failed`, `unsupported`,
+`deleted`, `not-watching`; `following` with `%player%`, `following-none`, `nobody-on-screen`,
+`no-more-events`; the chat lines `line-chat`, `line-death`, `line-teleport`, `line-quit` and
+`line-totem`; `hud` with `%time%`, `%length%`, `%speed%`, `%state%`, `%bar%` and `%following%`, and
+its pieces `state-playing`, `state-paused`, `bar-done`, `bar-left`, `hud-following`; `unknown`,
+`no-opponent`; `usage`; and `causes`, the name of each cause.
+
+## Placeholders
+
+Read by the viewer, while watching; empty otherwise.
+
+| Placeholder | Value |
+|---|---|
+| `%staff_replay_time%` | Time on screen. |
+| `%staff_replay_length%` | Length of the replay. |
+| `%staff_replay_speed%` | Playback speed. |
+| `%staff_replay_state%` | `state-playing` or `state-paused`. |
+| `%staff_replay_following%` | Whose eyes the camera is in, empty for none. |
+| `%staff_replay_player%` | The player the replay is about. |
+| `%staff_replay_player_ping%` | Their ping on the tick on screen. |
+| `%staff_replay_opponent%` | Who they were last fighting on that tick, or `no-opponent`. |
+| `%staff_replay_opponent_ping%` | That player's ping. |
+| `%staff_replay_tps%` | The server's TPS on that tick. |
+| `%staff_replay_mspt%` | The server's MSPT on that tick. |
+| `%staff_replay_cause%` | Why it was saved. |
+| `%staff_replay_server%` | The server it was recorded on. |
+
+A figure that was not recorded reads as `unknown`.
+
+## Storage
+
+`staff_replays` for what was saved, `staff_replay_data` for the recordings and `staff_replay_chunks`
+for the ground.

@@ -1,6 +1,6 @@
 ---
 title: "Freeze"
-description: "El anclaje en el cliente, lo que un jugador congelado ve y no puede hacer, el chat aislado, los sidebars y la alerta cuando se desconecta."
+description: "El anclaje en el cliente, lo que un jugador congelado ve y no puede hacer, el chat del freeze, los sidebars, la repetición y lo que pasa cuando se desconecta."
 ---
 
 Congelar a un jugador lo ancla en su sitio en el cliente: cada paquete de posición se descarta y se
@@ -26,10 +26,14 @@ miras, a menos de cinco bloques. Un jugador no puede congelarse a sí mismo, y u
 ## Lo que recibe el jugador congelado
 
 - Las líneas `frozen`, con el nombre del miembro del staff, y después un recordatorio cada
-  `reminder-seconds`: un title, una action bar y un sonido.
+  `reminder-seconds`: un title, una action bar y un sonido, definidos por `reminder` en el archivo de
+  mensajes.
 - El sidebar `frozen`: quién lo congeló y desde hace cuánto.
 - Brillo, los efectos de poción de `look.effects`, y el casco, después de guardar la armadura en un
-  snapshot. La armadura vuelve al liberarlo, y tras un crash en la siguiente entrada.
+  snapshot. La armadura vuelve al liberarlo, y tras un crash en la siguiente entrada, en el servidor
+  donde se quitó: un jugador que reconecta a un lobby la recupera cuando vuelve a entrar en ese
+  servidor, no donde un plugin de hub podría vaciarle el inventario. El casco se reconoce por una
+  etiqueta, así que cambiar su nombre o el idioma a mitad del freeze sigue quitándolo.
 
 ## Lo que no puede hacer
 
@@ -44,25 +48,42 @@ funciona. La línea de "you cannot do that" se envía como mucho una vez cada do
 
 ## El chat
 
-El plugin registra una regla de chat en la librería. Un jugador congelado solo oye a los jugadores con
-`exyliastaff.freeze`, y solo ellos oyen al jugador congelado; un miembro del staff que tiene a alguien
-congelado también deja de oír a todos los demás. No se cancela nada y no se reenvía nada: el formato del
-plugin de chat sobrevive, y las líneas del jugador congelado llevan `chat-prefix` delante. El chat global
-salta esta regla como cualquier otra.
+Un screenshare es una sola conversación. Lo que el jugador congelado y el miembro del staff que lo
+retiene escriben en el chat público se saca de él, antes de que lo lea cualquier otro plugin o un puente
+de Discord, y va en su lugar al chat del freeze en todos los servidores: las líneas del jugador congelado
+en `chat-format`, las del miembro del staff en `chat-staff-format`. Todo miembro del staff con
+`exyliastaff.freeze` lee todas las sesiones, así que un compañero puede seguirlas e intervenir; el
+jugador congelado solo lee al miembro del staff que lo retiene.
+
+Mientras dura el freeze, la regla de chat del plugin también mantiene alejado el resto del chat público:
+el jugador congelado oye al staff y a nadie más, y el miembro del staff que lo retiene oye al staff y a
+los jugadores congelados. El chat global salta esta regla como cualquier otra.
 
 ## Desconectarse
 
-Al desconectarse el freeze se conserva en la base de datos, así que el jugador vuelve a quedar congelado
-en cuanto reentra, en cualquier servidor, y se avisa al staff de que ha vuelto. Si `alert-quit` está
-activado, se avisa a todos los miembros del staff con `exyliastaff.freeze` de todos los servidores de que
-se desconectó, y se ejecutan los `quit-commands` con `%player%`:
+Un freeze nunca sobrevive a una desconexión. Al salir, el freeze termina: se borra la fila, todos los
+servidores sueltan la sesión y el jugador reentra libre. Desconectarse es la forma en que un jugador
+rechaza un screenshare, así que eso es a lo que reacciona el servidor. Si `alert-quit` está activado,
+se avisa a todos los miembros del staff con `exyliastaff.freeze` de todos los servidores de que se
+desconectó, y se ejecutan los `quit-commands` con `%player%`:
 
 ```yaml
 quit-commands:
   - 'console-proxy:ban %player% Logged out while frozen'
 ```
 
-Un `/stop` no hace nada de esto: el freeze simplemente se reanuda tras el reinicio.
+Otros plugins lo reciben como `FrozenPlayerQuitEvent`; consulta la [API](/docs/exyliastaff/api#freezes-y-reportes).
+
+Un `/stop` termina todos los freezes igual, pero no ejecuta comandos de salida, no lanza ningún evento
+ni levanta ninguna alerta: un servidor que se apaga no es un jugador que huye. Una fila que deje un
+crash se descarta en la siguiente entrada, y se devuelve la armadura.
+
+## La repetición
+
+En cuanto empieza un freeze, el último minuto anterior se guarda como una
+[repetición](/docs/exyliastaff/repeticiones), con `capture.freeze` en el módulo de repeticiones: lo
+que el miembro del staff está a punto de preguntar. Otro plugin puede rechazar un freeze antes de que
+pase nada, mediante `PlayerFreezeEvent`.
 
 ## Entre servidores
 
@@ -74,22 +95,9 @@ conectado aplica o libera el freeze cuando otro lo indica.
 
 ```yaml title="plugins/ExyliaStaff/modules/freeze/config.yml"
 reminder-seconds: 5
-reminder:
-  title:
-    text: '{error}&lFROZEN'
-    subtitle: '{letters}Do not disconnect'
-    stay: 3
-    fade-out: 1
-  action-bar:
-    text: '{warning}➥ Wait for staff instructions'
-    duration: 4
-  sound:
-    name: BLOCK_NOTE_BLOCK_BASS
-    pitch: 0.6
 look:
   strip-armor: true
   helmet: PACKED_ICE
-  helmet-name: '{error}&lFROZEN'
   glow: true
   effects:
     - BLINDNESS
@@ -111,17 +119,35 @@ quit-commands: []
 |---|---|---|
 | `reminder-seconds` | `5` | Segundos entre recordatorios. |
 | `look.strip-armor` | `true` | Quitar la armadura, devolverla al liberar. |
-| `look.helmet` | `PACKED_ICE` | Se lleva en la cabeza. Vacío para ninguno. |
+| `look.helmet` | `PACKED_ICE` | Se lleva en la cabeza. Vacío para ninguno. Su nombre es `helmet-name` en el archivo de mensajes. |
 | `look.effects` | blindness, darkness | Efectos de poción mantenidos durante todo el freeze. Los nombres desconocidos se omiten. |
 | `allowed-commands` | `msg`, `r`, `reply`, `tell`, `w` | Comandos que un jugador congelado aún puede ejecutar, comparados por la etiqueta pelada. |
 | `quit-commands` | `[]` | Se ejecutan al desconectarse. `console-proxy:` necesita el puente de proxy de la librería. |
 
 ## Mensajes
 
-`modules/freeze/messages.yml`: `frozen` y `unfrozen` son listas de líneas con `%staff%`; `froze`,
-`unfroze`, `already-frozen`, `not-frozen` y `bypass` con `%target%`; `self`, `no-target`;
-las cuatro alertas `alert-frozen`, `alert-unfrozen`, `alert-quit` y `alert-rejoin` con `%staff%`,
-`%target%` y `%server%`; `chat-prefix`; `blocked-command` y `blocked-action`.
+`lang/<language>/modules/freeze/messages.yml`: `frozen` y `unfrozen` son listas de líneas con
+`%staff%`; `froze`, `unfroze`, `already-frozen`, `not-frozen` y `bypass` con `%target%`; `self`,
+`no-target`; las tres alertas `alert-frozen`, `alert-unfrozen` y `alert-quit` con `%staff%`,
+`%target%` y `%server%`; `chat-format` y `chat-staff-format` con `%server%`, `%player%` y
+`%message%`; `blocked-command` y `blocked-action`; `reminder`, el efecto de la librería que suena en
+cada recordatorio; y `helmet-name`.
+
+```yaml title="plugins/ExyliaStaff/lang/en/modules/freeze/messages.yml"
+reminder:
+  title:
+    text: '{error}&lFROZEN'
+    subtitle: '{letters}Do not disconnect'
+    stay: 3
+    fade-out: 1
+  action-bar:
+    text: '{warning}➥ Wait for staff instructions'
+    duration: 4
+  sound:
+    name: BLOCK_NOTE_BLOCK_BASS
+    pitch: 0.6
+helmet-name: '{error}&lFROZEN'
+```
 
 ## Placeholders
 

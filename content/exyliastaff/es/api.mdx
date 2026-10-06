@@ -69,9 +69,38 @@ mantiene a un admin oculto para un helper que por lo demás sí puede ver staff 
 |---|---|
 | `List<UUID> onlineStaff()` | Todo el que en este servidor cuenta como staff, sin orden particular. |
 | `List<UUID> onlineInStaffMode()` | Todo el que en este servidor tiene una sesión de staff abierta. |
+| `List<UUID> onlineVanished()` | Todo el que en este servidor está en vanish. Lo que una lista de tab o un contador de jugadores resta. |
 
-Las dos son de este servidor únicamente: el staff que trabaja en otro servidor de la red no está
-conectado acá y no tiene un `Player` del que leer un permiso. Ambas listas son inmutables.
+Las tres son de este servidor únicamente: el staff que trabaja en otro servidor de la red no está
+conectado acá y no tiene un `Player` del que leer un permiso. Las listas son inmutables. Filtrá
+`onlineVanished()` con `canSee` cuando la lista es para un solo espectador.
+
+## Reportes
+
+| Método | Qué hace |
+|---|---|
+| `int openReportCount()` | Reportes esperando al staff, en toda la red: cada servidor tiene la cola abierta. |
+| `int openReportsAgainst(UUID target)` | Reportes abiertos que nombran a un jugador. Los reportes cerrados no cuentan. |
+| `ReportResult report(Player reporter, Player target, String reason)` | Envía un reporte igual que `/report <player> <reason>`. |
+
+`report` corre las mismas comprobaciones que el comando (no a uno mismo, la protección del staff, el
+cooldown, el límite de reportes abiertos) y le explica un rechazo a quien reporta con las palabras del
+propio plugin. Una razón que coincide con un id de razón configurado se guarda como esa razón, con su
+peso; cualquier otra cosa es texto libre. Una razón en blanco lanza `IllegalArgumentException`. Llamalo
+en el hilo de quien reporta.
+
+| `ReportResult` | Significado |
+|---|---|
+| `SUBMITTED` | Aceptado. La alerta al staff y la confirmación a quien reporta llegan una vez escrita la fila. |
+| `SELF` | Quien reporta se nombró a sí mismo. |
+| `STAFF_PROTECTED` | El objetivo es staff y el dueño no permite reportar al staff. |
+| `ON_COOLDOWN` | Quien reporta envió otro reporte hace muy poco. |
+| `TOO_MANY_OPEN` | Quien reporta ya tiene tantos reportes abiertos como se permite. |
+| `CANCELLED` | Un listener canceló el `PlayerReportEvent`. |
+| `MODULE_DISABLED` | El módulo de reportes está apagado. |
+
+Todo rechazo salvo `CANCELLED` y `MODULE_DISABLED` ya se le explicó a quien reporta, así que quien llama
+solo tiene que decir algo en esos dos casos.
 
 ## Módulos
 
@@ -117,10 +146,18 @@ evento, así que un plugin que esconde líneas de otros jugadores tiene que deja
 
 ## Eventos
 
-Dos eventos, en `net.exylia.lib.api.staff.event`. Los dos se disparan después de que el cambio o la
-acción ya ocurrió, en el hilo del jugador del que tratan, y **ninguno es cancelable**: informan, no
-controlan. Justamente porque se disparan después, recibir uno es una garantía: cuando corre tu listener
-el service ya responde de la forma nueva. Para rechazar un cambio, controlá el permiso que lo permite.
+Cinco eventos, en `net.exylia.lib.api.staff.event`. Dos informan de lo que ya pasó; dos dejan que otro
+plugin rechace un freeze o un reporte antes de que ocurra; uno avisa de que un jugador congelado se fue.
+
+Lo agregado para reportes y freeze (`onlineVanished`, los métodos de reportes, `ReportResult` y los
+últimos tres eventos) necesita `exylia-api` de ExyliaLib `v1.133.0` o posterior.
+
+### Lo que ya pasó
+
+`StaffStateChangeEvent` y `StaffActionEvent` se disparan después de que el cambio o la acción ya ocurrió,
+en el hilo del jugador del que tratan, y **ninguno es cancelable**: informan, no controlan. Justamente
+porque se disparan después, recibir uno es una garantía: cuando corre tu listener el service ya responde
+de la forma nueva.
 
 | Evento | Se dispara cuando | Trae |
 |---|---|---|
@@ -143,6 +180,7 @@ scoreboard por miembro del staff escucha esos mismos dos.
 | `GLOBAL_CHAT` | Cambió el alcance de su chat; `isEnabled()` es false solo para apagado. |
 | `MINING_ALERTS` | Empezó o dejó de recibir avisos de minería sospechosa. |
 | `XRAY_VISION` | Empezó o dejó de ver minerales a través de la piedra. |
+| `REVEAL` | Empezó o dejó de ver a los jugadores que oculta una poción de invisibilidad. |
 | `SPECTATOR` | Su sesión de staff entró o salió de espectador. |
 
 Cada módulo con un interruptor por jugador lo informa acá en vez de definir un evento propio, así que
@@ -165,10 +203,39 @@ que se agregan módulos, así que tratá uno desconocido como una acción que ti
 y la tuya no conoce, no como un error. `getTarget()` es `null` para una acción que no trata sobre nadie
 en particular.
 
+### Freezes y reportes
+
+| Evento | Se dispara cuando | Cancelable | Trae |
+|---|---|---|---|
+| `PlayerFreezeEvent` | Un jugador está por ser congelado, con `/freeze` o `freeze(...)`, una vez que el plugin lo aceptó y antes de que le pase nada. | Sí | `getTarget()`, `getStaff()` |
+| `PlayerReportEvent` | Un jugador está reportando a otro, una vez superadas todas las comprobaciones y antes de guardar nada o alertar a nadie. Se dispara para `/report`, el menú de razones y `report(...)`. | Sí | `getReporter()`, `getTarget()`, `getTargetName()`, `getReason()` |
+| `FrozenPlayerQuitEvent` | Un jugador congelado salió del servidor. | No | `getPlayer()`, `getStaffId()`, `getStaffName()` |
+
+Cancelar `PlayerFreezeEvent` deja libre al objetivo; cancelar `PlayerReportEvent` no guarda nada, no
+alerta a nadie y no inicia ningún cooldown. En los dos casos no se le dice a nadie por qué, porque el
+listener que lo rechazó es el único que lo sabe: un plugin de partidas que protege a un jugador en
+plena pelea debería decirlo él mismo. Una liberación nunca se rechaza. `PlayerReportEvent` se dispara
+una sola vez, en el servidor de quien reporta, lo que lo convierte en el que escucha un webhook de
+Discord o una verificación cruzada con el anticheat. `getReason()` es texto plano escrito por un
+jugador: tratalo como entrada.
+
+`FrozenPlayerQuitEvent` es el gancho para lo que un servidor hace con alguien que se desconecta de un
+screenshare. Se dispara después de que el freeze terminó (una desconexión libera al jugador, así que
+`isFrozen` ya responde `false`) y después de que corrieron los `quit-commands` del propio plugin.
+`getStaffId()` es `null` cuando lo congeló la consola. No se dispara mientras el servidor se está
+apagando.
+
+```java
+@EventHandler
+public void onFrozenQuit(FrozenPlayerQuitEvent event) {
+    webhook.send(event.getPlayer().getName() + " logged out while frozen by " + event.getStaffName());
+}
+```
+
 ## Lo que no expone
 
 Nada de abridores de menú, flujos de editor, filas de sanciones o de reportes, ni escrituras de
-configuración. Los reportes, el helpop, la inspección y el historial de sanciones se leen y se manejan
+configuración. El helpop, la inspección y el historial de sanciones se leen y se manejan
 desde dentro del plugin, y el registro de staff se llena con `StaffActionEvent` y no con un método que
 llames tú.
 

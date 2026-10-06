@@ -1,0 +1,218 @@
+---
+title: "Repeticiones"
+description: "El último minuto alrededor de cualquier jugador, guardado en una muerte, un reporte, un freeze o cuando se pide, y visto desde cualquier servidor con el ping y el lag del servidor en el marcador."
+---
+
+El servidor guarda en memoria el último minuto de todo lo que pasa alrededor de cada jugador. No se
+escribe nada en ningún sitio hasta que ocurre algo que merece la pena conservar: una muerte, un
+reporte, un freeze, o que lo pida un miembro del staff o un jugador. Entonces se corta esa ventana, se
+guarda en la base de datos, y cualquier miembro del staff de cualquier servidor puede entrar en ella
+como una cámara voladora, con los controles en su hotbar y un marcador que dice cómo iban el servidor y
+las conexiones de los dos jugadores en cada momento.
+
+Ese marcador es la respuesta a "me he muerto por lag": un ping de 900 o un servidor a 12 TPS o aparece
+en él o no aparece.
+
+Id de módulo `replay`, interruptor `modules.replays`, archivos en `modules/replay/`. Para verlas hace
+falta PacketEvents.
+
+## Comandos
+
+| Comando | Permiso | Qué hace |
+|---|---|---|
+| `/staffreplay <player>` | `exyliastaff.replay` | Abre las repeticiones guardadas de ese jugador. `/sreplay` es un alias. |
+| `/staffreplay capture <player>` | `exyliastaff.replay.capture` | Guarda ahora el último minuto alrededor de un jugador de este servidor. |
+| `/staffreplay debug <id>` | `exyliastaff.replay` | Lista en el chat lo que contiene una repetición guardada. |
+| `/staffreplay leave` | `exyliastaff.replay` | Deja de verla. |
+| `/savereplay` | `exyliastaff.savereplay` | Un jugador guarda su propio último minuto. `/saveclip` y `/clip` son alias. |
+
+El `/staffreplay` a secas responde con sus líneas de uso. El argumento de jugador es cualquiera que
+conozca la red, conectado o no; `capture` lo necesita en este servidor, porque el minuto solo está en
+la memoria de este servidor.
+
+El comando no es `/replay` a propósito: un servidor de práctica ya tiene uno, para sus duelos.
+
+<Callout type="tip" title="Concede /savereplay a todo el mundo">
+`exyliastaff.savereplay` está pensado para el grupo por defecto, como `/report` y `/helpop`. Un jugador
+que quiere reportar a alguien y no puede grabar su pantalla guarda el minuto en su lugar, y el miembro
+del staff que lee el reporte lo ve. Cuesta una fila en la base de datos y un tiempo de espera.
+</Callout>
+
+## Cuándo se guarda una repetición
+
+| Motivo | Se guarda cuando | Interruptor |
+|---|---|---|
+| Muerte | Alguien muere. La repetición sigue `after-death` segundos después de la muerte, para que la caída salga en ella. | `capture.death` |
+| Reporte | Alguien es reportado, si está en el servidor de quien reporta. | `capture.report` |
+| Freeze | Empieza un freeze. | `capture.freeze` |
+| Guardado del staff | `/staffreplay capture`, o **Guardar ahora** en la lista. | Siempre activo |
+| Guardado del jugador | `/savereplay`, cada `player-saves.cooldown-seconds`. | `player-saves.enabled` |
+
+El módulo de anticheat también guarda una cuando un jugador dispara una ráfaga de alertas; consulta
+[Exylia Staff Web](/docs/exyliastaff/staff-web#alertas-del-anticheat).
+
+Se graba a todo el mundo, staff en vanish incluido: solo el staff ve estas repeticiones, y un miembro
+del staff que revisa su propia pelea, o un reporte contra alguien que estaba mirando en vanish,
+necesita que salgan. Un guardado de alguien que no se grabó en este servidor en esa ventana es
+"Nothing of them was recorded".
+
+## Verlas
+
+`/staffreplay <player>` lista sus repeticiones, la más reciente primero, cada una dibujada con el icono
+de su motivo y su duración, cuántos jugadores y cosas salen en ella, la fecha, el servidor y las
+coordenadas. Clic izquierdo para verla; shift y clic derecho la borra, con `exyliastaff.replay.delete`.
+**Guardar ahora** conserva el último minuto alrededor de ese jugador, con `exyliastaff.replay.capture`.
+
+La repetición se prepara en un mundo temporal antes de que nadie se mueva, así que una que no se puede
+mostrar nunca lleva al espectador a ningún sitio. Se le mete en ella como una cámara voladora; al salir
+vuelve a donde estaba. Abrir otra repetición mientras ves una pasa directamente a la siguiente.
+
+| Casilla | Objeto | Clic izquierdo | Clic derecho |
+|---|---|---|---|
+| 0 | Flecha espectral | 5 segundos atrás | Un fotograma atrás |
+| 1 | Reloj | Reproducir o pausar; al final vuelve a empezar | |
+| 2 | Flecha | 5 segundos adelante | Un fotograma adelante |
+| 3 | Brújula de recuperación | Golpe, muerte, teletransporte o desconexión anterior | |
+| 4 | Azúcar | Más lento | Más rápido |
+| 5 | Brújula | Golpe, muerte, teletransporte o desconexión siguiente | |
+| 6 | Ojo de ender | Primera persona, a través de cada jugador por turnos | La lista de quién sale en pantalla |
+| 7 | Repetidor | Volver al primer segundo | |
+| 8 | Barrera | Salir | |
+
+Los controles se dibujan en el cliente, nunca se meten en el inventario: los objetos del propio
+espectador se quedan debajo y vuelven cuando sale. La disposición es
+`lang/<language>/modules/replay/hotbar.yml`.
+
+La lista de **jugadores** muestra a todos los que salen en pantalla en ese momento con su ping: clic
+izquierdo vuela hasta ellos, clic derecho mira a través de sus ojos. A medida que la repetición pasa
+por ellas, las líneas de chat, muertes, teletransportes, desconexiones y tótems se escriben en el chat
+del espectador, y la action bar muestra el tiempo, la velocidad y en los ojos de quién está la cámara.
+Con `reveal-invisible` activado, los jugadores invisibles se dibujan brillando, así que nadie se
+esconde en una repetición.
+
+## Desde reportes y restauraciones
+
+Una repetición está a un clic de donde el staff la necesita:
+
+- La alerta de reporte termina con **▶ Replay**, que ejecuta `/reports replay <id>`.
+- En `/reports`, shift y clic izquierdo sobre un reporte; en los reportes de un jugador, pulsa Q sobre
+  un reporte, o abre **Repeticiones** para su lista completa.
+- En la pantalla de restaurar inventario, una copia de muerte tiene **Ver lo que pasó**: la repetición
+  de muerte más cercana a esa copia.
+
+Todos necesitan `exyliastaff.replay`. Cuando falta la repetición guardada con un reporte, porque el
+jugador no se grabó o todavía se está escribiendo, el clic abre en su lugar la lista de ese jugador.
+
+## Entre servidores
+
+Las repeticiones son filas en la base de datos compartida, así que una muerte en un servidor se ve desde
+cualquier otro. Con `terrain` activado, el suelo donde ocurrió la repetición se guarda con ella, desde
+`vertical-margin` bloques por encima y por debajo de por donde anduvo la gente, hasta `max-chunks`
+chunks, para que se pueda ver en cualquier sitio y después de que el lugar haya cambiado. Sin él, una
+repetición solo se puede ver en el servidor donde se grabó, sobre lo que haya ahí ahora.
+
+## Configuración
+
+```yaml title="plugins/ExyliaStaff/modules/replay/config.yml"
+seconds: 60
+radius: 32.0
+after-death: 3
+terrain: true
+vertical-margin: 24
+max-chunks: 400
+max-entities: 1500
+capture:
+  death: true
+  report: true
+  freeze: true
+player-saves:
+  enabled: true
+  cooldown-seconds: 120
+keep-days: 14
+keep-per-player: 30
+reveal-invisible: true
+board:
+  enabled: true
+  title:
+    - '{primary}&lREPLAY'
+  lines:
+    - ''
+    - '{secondary}Playback:'
+    - ' {letters_black}▎ {letters}Time {letters_black}» {info}%staff_replay_time%{letters_black}/{info}%staff_replay_length% ⌚'
+    - ' {letters_black}▎ {letters}Speed {letters_black}» {info}%staff_replay_speed% {letters_black}%staff_replay_state%'
+    - ''
+    - '{secondary}Players:'
+    - ' {letters_black}▎ {highlight}%staff_replay_player% {letters_black}» {info}%staff_replay_player_ping%'
+    - ' {letters_black}▎ {letters}%staff_replay_opponent% {letters_black}» {info}%staff_replay_opponent_ping%'
+    - ''
+    - '{secondary}Server:'
+    - ' {letters_black}▎ {letters}TPS {letters_black}» {info}%staff_replay_tps%'
+    - ' {letters_black}▎ {letters}MSPT {letters_black}» {info}%staff_replay_mspt%'
+    - ' {letters_black}▎ {letters}On {letters_black}» {info}%staff_replay_server%'
+    - ''
+  update:
+    interval: 5
+    smart: true
+icons:
+  death: SKELETON_SKULL
+  report: WRITABLE_BOOK
+  freeze: PACKED_ICE
+  manual: SPYGLASS
+  player: PLAYER_HEAD
+```
+
+| Clave | Por defecto | Qué hace |
+|---|---|---|
+| `seconds` | `60` | Hasta dónde llega hacia atrás una repetición. El servidor guarda esto alrededor de cada jugador en memoria en todo momento. |
+| `radius` | `32` | Bloques alrededor de un jugador que se graban. Quien estuvo así de cerca de cualquier sitio por donde pasó sale en su repetición. |
+| `after-death` | `3` | Segundos que sigue una repetición de muerte después de la muerte. |
+| `terrain` | `true` | Guardar el suelo, para que una repetición se pueda ver en cualquier servidor. |
+| `vertical-margin` | `24` | Bloques por encima y por debajo de por donde anduvo la gente en los que se guarda el suelo. |
+| `max-chunks` | `400` | Chunks que guarda una repetición. Una persecución larga conserva su final. |
+| `max-entities` | `1500` | Cosas que no son jugadores seguidas a la vez, en todo el servidor. |
+| `player-saves.cooldown-seconds` | `120` | Entre dos `/savereplay` del mismo jugador. |
+| `keep-days` | `14` | Días que se guarda una repetición. El suelo se va con la última repetición que lo necesitaba. |
+| `keep-per-player` | `30` | Repeticiones guardadas por jugador; las más antiguas se van primero. |
+| `reveal-invisible` | `true` | Dibujar brillando a los jugadores invisibles mientras se ve. |
+| `board` | | El sidebar que se muestra mientras se ve. |
+| `icons` | | El icono de cada motivo en la lista. |
+
+Las repeticiones caducadas se purgan al arrancar el módulo y una vez por hora después.
+
+## Mensajes
+
+`lang/<language>/modules/replay/messages.yml`: `saved` con `%target%`, `%seconds%` y `%id%`;
+`player-saved` con `%seconds%` y `%id%`; `player-cooldown` con `%time%`; `player-disabled`;
+`nothing-recorded`, `no-replays`, `no-replay-for-backup`; `loading`, `load-failed`, `unsupported`,
+`deleted`, `not-watching`; `following` con `%player%`, `following-none`, `nobody-on-screen`,
+`no-more-events`; las líneas de chat `line-chat`, `line-death`, `line-teleport`, `line-quit` y
+`line-totem`; `hud` con `%time%`, `%length%`, `%speed%`, `%state%`, `%bar%` y `%following%`, y
+sus piezas `state-playing`, `state-paused`, `bar-done`, `bar-left`, `hud-following`; `unknown`,
+`no-opponent`; `usage`; y `causes`, el nombre de cada motivo.
+
+## Placeholders
+
+Los lee el espectador, mientras ve una repetición; vacíos en caso contrario.
+
+| Placeholder | Valor |
+|---|---|
+| `%staff_replay_time%` | Tiempo en pantalla. |
+| `%staff_replay_length%` | Duración de la repetición. |
+| `%staff_replay_speed%` | Velocidad de reproducción. |
+| `%staff_replay_state%` | `state-playing` o `state-paused`. |
+| `%staff_replay_following%` | En los ojos de quién está la cámara, vacío si de nadie. |
+| `%staff_replay_player%` | El jugador del que trata la repetición. |
+| `%staff_replay_player_ping%` | Su ping en el tick en pantalla. |
+| `%staff_replay_opponent%` | Con quién peleaba por última vez en ese tick, o `no-opponent`. |
+| `%staff_replay_opponent_ping%` | El ping de ese jugador. |
+| `%staff_replay_tps%` | Los TPS del servidor en ese tick. |
+| `%staff_replay_mspt%` | Los MSPT del servidor en ese tick. |
+| `%staff_replay_cause%` | Por qué se guardó. |
+| `%staff_replay_server%` | El servidor donde se grabó. |
+
+Un dato que no se grabó se lee como `unknown`.
+
+## Almacenamiento
+
+`staff_replays` para lo que se guardó, `staff_replay_data` para las grabaciones y `staff_replay_chunks`
+para el suelo.

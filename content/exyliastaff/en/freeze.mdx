@@ -1,6 +1,6 @@
 ---
 title: "Freeze"
-description: "The client-side pin, what a frozen player sees and cannot do, the isolated chat, the sidebars, and the alert when they log out."
+description: "The client-side pin, what a frozen player sees and cannot do, the freeze chat, the sidebars, the replay, and what happens when they log out."
 ---
 
 Freezing a player pins them in place on the client: every position packet is dropped and answered
@@ -25,10 +25,13 @@ at, within five blocks. A player cannot freeze themself, and a target holding
 ## What the frozen player gets
 
 - The `frozen` lines, with the staff member's name, and then a reminder every `reminder-seconds`:
-  a title, an action bar and a sound.
+  a title, an action bar and a sound, set by `reminder` in the messages file.
 - The `frozen` sidebar: who froze them and for how long.
 - Glow, the potion effects in `look.effects`, and the helmet, after the armour is saved to a snapshot.
-  The armour comes back on release, and after a crash on the next join.
+  The armour comes back on release, and after a crash on the next join, on the server it came off:
+  a player who reconnects to a lobby gets it back when they walk into that server again, not where a
+  hub plugin might empty their inventory. The helmet is recognised by a tag, so changing its name or
+  the language mid-freeze still takes it off.
 
 ## What they cannot do
 
@@ -43,24 +46,39 @@ line is sent at most once every two seconds.
 
 ## The chat
 
-The plugin registers one chat rule with the library. A frozen player only hears players with
-`exyliastaff.freeze`, and only they hear the frozen player; a staff member who is holding somebody
-frozen also stops hearing everyone else. Nothing is cancelled and nothing is re-sent: the chat plugin's
-format survives, and the frozen player's lines get `chat-prefix` in front. Global chat bypasses this
-rule like every other.
+A screenshare is one conversation. What the frozen player and the staff member holding them type in
+public chat is taken out of it, before any other plugin or a Discord bridge reads it, and goes to the
+freeze chat on every server instead: the frozen player's lines in `chat-format`, the staff member's in
+`chat-staff-format`. Every staff member with `exyliastaff.freeze` reads every session, so a colleague
+can follow and step in; the frozen player reads only the staff member holding them.
+
+For as long as the freeze lasts, the plugin's chat rule also keeps the rest of public chat away: the
+frozen player hears staff and nobody else, and the staff member holding them hears staff and frozen
+players. Global chat bypasses this rule like every other.
 
 ## Logging out
 
-On quit the freeze is kept in the database, so the player is frozen again the moment they rejoin,
-on any server, and staff are told they came back. If `alert-quit` is on, every staff member with
-`exyliastaff.freeze` on every server is told they logged out, and `quit-commands` run with `%player%`:
+A freeze never survives a disconnect. On quit the freeze ends: the row is deleted, every server drops
+the session, and the player rejoins free. Logging out is how a player refuses a screenshare, so that is
+what the server reacts to instead. If `alert-quit` is on, every staff member with `exyliastaff.freeze`
+on every server is told they logged out, and `quit-commands` run with `%player%`:
 
 ```yaml
 quit-commands:
   - 'console-proxy:ban %player% Logged out while frozen'
 ```
 
-A `/stop` does none of this: the freeze is simply resumed after the restart.
+Other plugins hear it as `FrozenPlayerQuitEvent`; see the [API](/docs/exyliastaff/api#freezes-and-reports).
+
+A `/stop` ends every freeze the same way, but runs no quit commands, fires no event and raises no
+alert: a server going down is not a player running away. A row left behind by a crash is dropped on
+the next join, and the armour handed back.
+
+## The replay
+
+The moment a freeze starts, the last minute before it is saved as a [replay](/docs/exyliastaff/replays),
+with `capture.freeze` in the replay module: what the staff member is about to ask about. Another plugin
+can refuse a freeze before anything happens, through `PlayerFreezeEvent`.
 
 ## Across servers
 
@@ -72,22 +90,9 @@ online applies or releases the freeze when another one says so.
 
 ```yaml title="plugins/ExyliaStaff/modules/freeze/config.yml"
 reminder-seconds: 5
-reminder:
-  title:
-    text: '{error}&lFROZEN'
-    subtitle: '{letters}Do not disconnect'
-    stay: 3
-    fade-out: 1
-  action-bar:
-    text: '{warning}➥ Wait for staff instructions'
-    duration: 4
-  sound:
-    name: BLOCK_NOTE_BLOCK_BASS
-    pitch: 0.6
 look:
   strip-armor: true
   helmet: PACKED_ICE
-  helmet-name: '{error}&lFROZEN'
   glow: true
   effects:
     - BLINDNESS
@@ -109,17 +114,35 @@ quit-commands: []
 |---|---|---|
 | `reminder-seconds` | `5` | Seconds between reminders. |
 | `look.strip-armor` | `true` | Take the armour off, give it back on release. |
-| `look.helmet` | `PACKED_ICE` | Worn on the head. Empty for none. |
+| `look.helmet` | `PACKED_ICE` | Worn on the head. Empty for none. Its name is `helmet-name` in the messages file. |
 | `look.effects` | blindness, darkness | Potion effects held for the whole freeze. Unknown names are skipped. |
 | `allowed-commands` | `msg`, `r`, `reply`, `tell`, `w` | Commands a frozen player may still run, matched on the bare label. |
 | `quit-commands` | `[]` | Run on logout. `console-proxy:` needs the library's proxy bridge. |
 
 ## Messages
 
-`modules/freeze/messages.yml`: `frozen` and `unfrozen` are lists of lines with `%staff%`; `froze`,
-`unfroze`, `already-frozen`, `not-frozen` and `bypass` with `%target%`; `self`, `no-target`;
-the four alerts `alert-frozen`, `alert-unfrozen`, `alert-quit` and `alert-rejoin` with `%staff%`,
-`%target%` and `%server%`; `chat-prefix`; `blocked-command` and `blocked-action`.
+`lang/<language>/modules/freeze/messages.yml`: `frozen` and `unfrozen` are lists of lines with
+`%staff%`; `froze`, `unfroze`, `already-frozen`, `not-frozen` and `bypass` with `%target%`; `self`,
+`no-target`; the three alerts `alert-frozen`, `alert-unfrozen` and `alert-quit` with `%staff%`,
+`%target%` and `%server%`; `chat-format` and `chat-staff-format` with `%server%`, `%player%` and
+`%message%`; `blocked-command` and `blocked-action`; `reminder`, the library effect played on every
+reminder; and `helmet-name`.
+
+```yaml title="plugins/ExyliaStaff/lang/en/modules/freeze/messages.yml"
+reminder:
+  title:
+    text: '{error}&lFROZEN'
+    subtitle: '{letters}Do not disconnect'
+    stay: 3
+    fade-out: 1
+  action-bar:
+    text: '{warning}➥ Wait for staff instructions'
+    duration: 4
+  sound:
+    name: BLOCK_NOTE_BLOCK_BASS
+    pitch: 0.6
+helmet-name: '{error}&lFROZEN'
+```
 
 ## Placeholders
 

@@ -27,7 +27,8 @@ PacketEvents: la hotbar es una capa dibujada en el cliente.
 
 Mientras está de servicio, el jugador queda excluido de todos los plugins cosméticos construidos sobre la
 librería y cuenta como observador para todos los modos aislantes, de modo que una partida o un evento no
-le ocultan el servidor.
+le ocultan el servidor. El mundo también deja de reaccionar a él: consulta
+[Lo que el mundo no nota](#lo-que-el-mundo-no-nota).
 
 ## Salir
 
@@ -51,8 +52,10 @@ del staff con el uniforme puesto.
 
 ## La hotbar
 
-`modules/staffmode/hotbar.yml` se copia desde el jar una vez y después no se toca. Cada entrada nombra un
-slot, un objeto y qué ejecuta un clic; una entrada etiquetada con `module: <id>` solo se muestra mientras
+`lang/<language>/modules/staffmode/hotbar.yml` es tuyo para editarlo. Una versión nueva solo añade lo
+que le falta a tu archivo, así que una herramienta añadida en una versión nueva llega a tu hotbar sin
+deshacer tu distribución; un valor por defecto que cambió en algo que nunca editaste espera en
+`/exylialib updates`. Cada entrada nombra un slot, un objeto y qué ejecuta un clic; una entrada etiquetada con `module: <id>` solo se muestra mientras
 ese módulo está activado, y una entrada con `permission:` solo se muestra a los jugadores que lo tienen.
 
 | Slot | Objeto | Clic izquierdo | Clic derecho |
@@ -89,7 +92,7 @@ Las acciones se escriben como `staff:<name>`; los comandos como `player: <cmd>`,
 
 `/staff spectator`, o `/staff spec`, o el ojo de ender: modo de juego espectador real, para volar a
 través de paredes y seguir a un jugador. Desactivarla devuelve el modo de juego de staff configurado. El
-botón **Follow** del panel la usa.
+vuelo se conserva al cambiar de mundo mientras se está de servicio.
 
 ## Lo que el staff no puede hacer
 
@@ -99,7 +102,36 @@ botón **Follow** del panel la usa.
 | Soltar, mover o intercambiar objetos; escribir slots creativos | Romper bloques (`block-break`), colocarlos (`block-place`) |
 | | Desgastar objetos (`item-damage`), perder hambre (`hunger`) |
 
-Los mobs nunca atacan a un miembro del staff mientras `invulnerable` está activado.
+Los mobs nunca atacan a un miembro del staff mientras `invulnerable` está activado. Los interruptores
+de x-ray y de revelar de la hotbar rechazan a un miembro del staff sin `exyliastaff.xrayvision` o
+`exyliastaff.reveal`.
+
+## Lo que el mundo no nota
+
+El vanish oculta el cuerpo y el modo staff aparta sus manos del mundo, pero entre medias el juego
+seguiría reaccionando al jugador. Mientras un jugador está en vanish o en modo staff:
+
+- La noche no lo espera: no cuenta para dormir.
+- No aparecen mobs ni gira ningún spawner a su alrededor, y no vienen phantoms por sus noches sin
+  dormir.
+- Las flechas y otros proyectiles lo atraviesan en vez de detenerse en el aire.
+- Los orbes de experiencia se quedan para los jugadores de alrededor.
+- Un sensor de sculk no oye sus pasos.
+- Llevar Bad Omen por una aldea no inicia ninguna invasión.
+- Nada entra en sus estadísticas ni en sus logros, así que ninguna línea de chat anuncia lo que alguien
+  a quien nadie puede ver acaba de desbloquear. El tiempo de juego y las distancias siguen contando.
+
+La lista de servidores solo cuenta y nombra a quien muestra la lista de tab: los jugadores en vanish se
+quitan del recuento de jugadores y de la muestra.
+
+## Coordenadas en F3
+
+Con `hide-coordinates` activado, la pantalla de depuración de un miembro del staff deja de dibujar su
+posición, el bloque que mira y el chunk en el que está, así que un stream o una captura no delatan
+desde dónde está observando. Es la información de depuración reducida de vanilla, enviada solo a ese
+jugador, y se vuelve a aplicar tras una muerte o un cambio de mundo. Las coordenadas no se pueden
+falsear, solo ocultar, y un mod de cliente aún puede leerlas. Está desactivado por defecto: déjalo
+desactivado donde el staff lee coordenadas para hacer su trabajo, como al seguir un reporte de x-ray.
 
 ## Configuración
 
@@ -119,6 +151,32 @@ block:
   hunger: true
 nametag-color: AQUA
 scoreboard: true
+hide-coordinates: false
+```
+
+| Clave | Por defecto | Qué hace |
+|---|---|---|
+| `gamemode` | `ADVENTURE` | Modo de juego de servicio. Un valor desconocido cae en aventura. Creativo siempre permite volar. |
+| `fly` | `true` | Permitir el vuelo. |
+| `invulnerable` | `true` | No recibe daño, los mobs no lo atacan. |
+| `auto-vanish` | `true` | Vanish al entrar. Necesita el módulo de vanish. |
+| `restore-vanish` | `true` | Quitar el vanish al salir cuando el jugador era visible antes de entrar. |
+| `exit-on-quit` | `false` | Terminar la sesión al desconectarse en vez de reanudarla en la siguiente entrada. |
+| `restore-location` | `true` | Teletransportar de vuelta a donde empezó la sesión. |
+| `nametag-color` | `AQUA` | Color del nombre tal como lo ve el resto del staff. Vacío o desconocido para ninguno. |
+| `scoreboard` | `true` | Mostrar el sidebar `staff-mode`. Necesita el módulo de scoreboard. |
+| `hide-coordinates` | `false` | Ocultar la propia posición del miembro del staff en su pantalla F3. |
+
+## Mensajes
+
+`lang/<language>/modules/staffmode/messages.yml`: `enabled`, `disabled`, `already-enabled`,
+`already-disabled`, `enabled-other` y `disabled-other` con `%target%`, `permission-lost`,
+`session-removed`, `session-resumed` con `%time%`, `disabled-by-module`, `spectator-on`,
+`spectator-off`, `busy` con `%activity%` y `%plugin%`, y `effects.enter` y `effects.exit`, los
+efectos de la librería (title, action bar, boss bar, sonido, partícula, fuego artificial) que suenan
+al entrar y al salir.
+
+```yaml title="plugins/ExyliaStaff/lang/en/modules/staffmode/messages.yml"
 effects:
   enter:
     title:
@@ -139,26 +197,6 @@ effects:
       name: BLOCK_NOTE_BLOCK_PLING
       pitch: 0.8
 ```
-
-| Clave | Por defecto | Qué hace |
-|---|---|---|
-| `gamemode` | `ADVENTURE` | Modo de juego de servicio. Un valor desconocido cae en aventura. Creativo siempre permite volar. |
-| `fly` | `true` | Permitir el vuelo. |
-| `invulnerable` | `true` | No recibe daño, los mobs no lo atacan. |
-| `auto-vanish` | `true` | Vanish al entrar. Necesita el módulo de vanish. |
-| `restore-vanish` | `true` | Quitar el vanish al salir cuando el jugador era visible antes de entrar. |
-| `exit-on-quit` | `false` | Terminar la sesión al desconectarse en vez de reanudarla en la siguiente entrada. |
-| `restore-location` | `true` | Teletransportar de vuelta a donde empezó la sesión. |
-| `nametag-color` | `AQUA` | Color del nombre tal como lo ve el resto del staff. Vacío o desconocido para ninguno. |
-| `scoreboard` | `true` | Mostrar el sidebar `staff-mode`. Necesita el módulo de scoreboard. |
-| `effects.enter`, `effects.exit` | | Efectos de la librería: title, action bar, boss bar, sonido, partícula, fuego artificial. |
-
-## Mensajes
-
-`modules/staffmode/messages.yml`: `enabled`, `disabled`, `already-enabled`, `already-disabled`,
-`enabled-other` y `disabled-other` con `%target%`, `permission-lost`, `session-removed`,
-`session-resumed` con `%time%`, `disabled-by-module`, `spectator-on`, `spectator-off`, y `busy`
-con `%activity%` y `%plugin%`.
 
 ## Placeholders
 
