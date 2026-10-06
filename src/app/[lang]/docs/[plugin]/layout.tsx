@@ -3,7 +3,7 @@ import { Nav } from "@/components/Nav";
 import { ScrollProgress } from "@/components/ScrollProgress";
 import { Footer } from "@/components/Footer";
 import { Sidebar } from "@/components/docs/Sidebar";
-import { buildSearchIndex, getNav } from "@/lib/docs";
+import { getNav } from "@/lib/docs";
 import { documentedPlugins, LANGS, getPlugin, toLang } from "@/content/registry";
 
 export function generateStaticParams() {
@@ -25,7 +25,7 @@ export default async function DocsLayout({
   return (
     <>
       <ScrollProgress />
-      <Nav entries={buildSearchIndex(lang)} lang={lang} />
+      <Nav lang={lang} />
 
       <div className="pointer-events-none fixed inset-0 -z-10">
         <div className="absolute inset-0 bg-grid opacity-40" />

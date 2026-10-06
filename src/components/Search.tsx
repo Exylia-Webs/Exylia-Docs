@@ -1,6 +1,6 @@
 "use client";
 
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, m } from "framer-motion";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -34,13 +34,28 @@ function rank(entries: SearchEntry[], query: string): Hit[] {
   return hits.sort((a, b) => b.score - a.score).slice(0, 8);
 }
 
+/** One request per language per page load, shared by every open of the dialog. */
+const indexes = new Map<Lang, Promise<SearchEntry[]>>();
+
+function loadIndex(lang: Lang): Promise<SearchEntry[]> {
+  let index = indexes.get(lang);
+  if (!index) {
+    index = fetch(`/${lang}/search-index.json`).then((res) => {
+      if (!res.ok) throw new Error(`search index: HTTP ${res.status}`);
+      return res.json() as Promise<SearchEntry[]>;
+    });
+    // A failed download is retried on the next open instead of being remembered.
+    index.catch(() => indexes.delete(lang));
+    indexes.set(lang, index);
+  }
+  return index;
+}
+
 export function SearchDialog({
-  entries,
   lang,
   open,
   onClose,
 }: {
-  entries: SearchEntry[];
   lang: Lang;
   open: boolean;
   onClose: () => void;
@@ -48,9 +63,21 @@ export function SearchDialog({
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [cursor, setCursor] = useState(0);
+  const [entries, setEntries] = useState<SearchEntry[] | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const hits = useMemo(() => rank(entries, query), [entries, query]);
+  useEffect(() => {
+    if (!open || entries) return;
+    let live = true;
+    loadIndex(lang)
+      .then((loaded) => live && setEntries(loaded))
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [open, entries, lang]);
+
+  const hits = useMemo(() => rank(entries ?? [], query), [entries, query]);
 
   useEffect(() => setCursor(0), [query]);
 
@@ -91,7 +118,7 @@ export function SearchDialog({
   return (
     <AnimatePresence>
       {open && (
-        <motion.div
+        <m.div
           className="fixed inset-0 z-[80] flex items-start justify-center px-4 pt-[14vh]"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -104,7 +131,7 @@ export function SearchDialog({
             aria-hidden
           />
 
-          <motion.div
+          <m.div
             initial={{ opacity: 0, y: -14, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -10, scale: 0.98 }}
@@ -132,7 +159,7 @@ export function SearchDialog({
             </div>
 
             <div className="max-h-[52vh] overflow-y-auto scroll-thin p-2">
-              {query && hits.length === 0 && (
+              {query && entries && hits.length === 0 && (
                 <p className="px-3 py-8 text-center text-[13.5px] text-white/35">
                   {dict.search.noResults[lang]} <span className="text-white/70">{query}</span>
                 </p>
@@ -155,7 +182,7 @@ export function SearchDialog({
                   }`}
                 >
                   {i === cursor && (
-                    <motion.span
+                    <m.span
                       layoutId="search-cursor"
                       className="absolute left-0 top-1/2 h-5 w-px -translate-y-1/2 bg-[rgb(var(--accent))]"
                       transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
@@ -178,11 +205,11 @@ export function SearchDialog({
               <span>↑↓ {dict.search.navigate[lang]}</span>
               <span>↵ {dict.search.open[lang]}</span>
               <span className="ml-auto">
-                {entries.length} {dict.search.pages[lang]}
+                {entries ? `${entries.length} ${dict.search.pages[lang]}` : "…"}
               </span>
             </div>
-          </motion.div>
-        </motion.div>
+          </m.div>
+        </m.div>
       )}
     </AnimatePresence>
   );

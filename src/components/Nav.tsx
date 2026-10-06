@@ -1,6 +1,6 @@
 "use client";
 
-import { motion, useMotionValueEvent, useScroll } from "framer-motion";
+import { m, useMotionValueEvent, useScroll } from "framer-motion";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useState } from "react";
@@ -9,9 +9,8 @@ import { SearchDialog, useSearchHotkey } from "./Search";
 import { SITE, type Lang } from "@/content/registry";
 import { dict } from "@/content/dictionary";
 import { LangToggle } from "./LangToggle";
-import type { SearchEntry } from "@/lib/docs";
 
-export function Nav({ entries, lang }: { entries: SearchEntry[]; lang: Lang }) {
+export function Nav({ lang }: { lang: Lang }) {
   const links = [
     { label: dict.nav.plugins[lang], href: `/${lang}#plugins` },
     { label: dict.nav.ecosystem[lang], href: `/${lang}#ecosistema` },
@@ -27,7 +26,7 @@ export function Nav({ entries, lang }: { entries: SearchEntry[]; lang: Lang }) {
 
   return (
     <>
-      <motion.header
+      <m.header
         initial={{ y: -40, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1], delay: 0.1 }}
@@ -123,7 +122,7 @@ export function Nav({ entries, lang }: { entries: SearchEntry[]; lang: Lang }) {
         </nav>
 
         {open && (
-          <motion.div
+          <m.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
             className="glass-nav overflow-hidden border-t border-white/[0.06] md:hidden"
@@ -148,11 +147,11 @@ export function Nav({ entries, lang }: { entries: SearchEntry[]; lang: Lang }) {
                 Discord ↗
               </a>
             </div>
-          </motion.div>
+          </m.div>
         )}
-      </motion.header>
+      </m.header>
 
-      <SearchDialog entries={entries} lang={lang} open={search} onClose={() => setSearch(false)} />
+      <SearchDialog lang={lang} open={search} onClose={() => setSearch(false)} />
     </>
   );
 }

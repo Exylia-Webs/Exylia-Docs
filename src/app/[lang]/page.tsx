@@ -5,7 +5,6 @@ import { Hero } from "@/components/landing/Hero";
 import { Catalog } from "@/components/landing/Catalog";
 import { Ecosystem } from "@/components/landing/Ecosystem";
 import { CTA } from "@/components/landing/CTA";
-import { buildSearchIndex } from "@/lib/docs";
 import { LANGS, toLang } from "@/content/registry";
 
 export function generateStaticParams() {
@@ -14,12 +13,11 @@ export function generateStaticParams() {
 
 export default async function LandingPage({ params }: { params: Promise<{ lang: string }> }) {
   const lang = toLang((await params).lang);
-  const entries = buildSearchIndex(lang);
 
   return (
     <>
       <ScrollProgress />
-      <Nav entries={entries} lang={lang} />
+      <Nav lang={lang} />
       <main className="relative">
         <Hero lang={lang} />
         <Catalog lang={lang} />

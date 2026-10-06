@@ -161,7 +161,7 @@ export type SearchEntry = {
 };
 
 /**
- * A flat index of one language's pages, serialised into the client bundle.
+ * A flat index of one language's pages, served as `/[lang]/search-index.json`.
  *
  * Per language on purpose: searching Spanish text from an English page would
  * return results the reader cannot read, and doubles the payload for nothing.
@@ -179,7 +179,7 @@ export function buildSearchIndex(lang: Lang): SearchEntry[] {
           .replace(/```[\s\S]*?```/g, " ")
           .replace(/[#*`|>_-]/g, " ")
           .replace(/\s+/g, " ")
-          .slice(0, 4000);
+          .slice(0, 1500);
         return {
           plugin: entry.id,
           pluginName: entry.name,
