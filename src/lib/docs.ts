@@ -74,7 +74,20 @@ function locate(plugin: string, lang: Lang, slug: string) {
   return null;
 }
 
+/**
+ * Content is immutable during a build, and the nav reads every page of a plugin for each of its
+ * pages: memoised there, read live in dev so edits to the MDX still show.
+ */
+const docs = new Map<string, Doc | null>();
+
 export function readDoc(plugin: string, lang: Lang, slug: string): Doc | null {
+  if (process.env.NODE_ENV !== "production") return loadDoc(plugin, lang, slug);
+  const key = `${plugin}/${lang}/${slug}`;
+  if (!docs.has(key)) docs.set(key, loadDoc(plugin, lang, slug));
+  return docs.get(key) ?? null;
+}
+
+function loadDoc(plugin: string, lang: Lang, slug: string): Doc | null {
   const file = filePath(plugin, lang, slug);
   if (!fs.existsSync(file)) return null;
   const placed = locate(plugin, lang, slug);

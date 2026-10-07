@@ -22,6 +22,7 @@ export const dict = {
   search: {
     placeholder: { en: "Search the documentation…", es: "Buscar en la documentación…" },
     empty: { en: "Type to search", es: "Escribe para buscar" },
+    loading: { en: "Loading the index…", es: "Cargando el índice…" },
     noResults: { en: "No results for", es: "Sin resultados para" },
     navigate: { en: "navigate", es: "navegar" },
     open: { en: "open", es: "abrir" },

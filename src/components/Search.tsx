@@ -3,29 +3,39 @@
 import { AnimatePresence, m } from "framer-motion";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import type { SearchEntry } from "@/lib/docs";
 import { dict } from "@/content/dictionary";
 import type { Lang } from "@/content/registry";
 
 type Hit = SearchEntry & { score: number };
 
+/** An entry with its fields lowercased once, not on every keystroke. */
+type Prepared = { entry: SearchEntry; title: string; description: string; sections: string[] };
+
+const prepare = (entries: SearchEntry[]): Prepared[] =>
+  entries.map((entry) => ({
+    entry,
+    title: entry.title.toLowerCase(),
+    description: entry.description.toLowerCase(),
+    sections: entry.sections.map((s) => s.text.toLowerCase()),
+  }));
+
 /** Cheap ranking: title hits beat description hits beat body hits. */
-function rank(entries: SearchEntry[], query: string): Hit[] {
+function rank(prepared: Prepared[], query: string): Hit[] {
   const q = query.trim().toLowerCase();
   if (!q) return [];
   const words = q.split(/\s+/);
   const hits: Hit[] = [];
 
-  for (const entry of entries) {
+  for (const { entry, title, description, sections } of prepared) {
     let score = 0;
     for (const word of words) {
-      const title = entry.title.toLowerCase();
       if (title === word) score += 60;
       else if (title.startsWith(word)) score += 40;
       else if (title.includes(word)) score += 26;
-      if (entry.description.toLowerCase().includes(word)) score += 10;
-      if (entry.sections.some((s) => s.text.toLowerCase().includes(word))) score += 14;
+      if (description.includes(word)) score += 10;
+      if (sections.some((text) => text.includes(word))) score += 14;
       if (entry.haystack.includes(word)) score += 4;
       else score -= 12;
     }
@@ -77,7 +87,10 @@ export function SearchDialog({
     };
   }, [open, entries, lang]);
 
-  const hits = useMemo(() => rank(entries ?? [], query), [entries, query]);
+  const prepared = useMemo(() => prepare(entries ?? []), [entries]);
+  // Typing stays responsive on a phone: ranking catches up instead of blocking each key.
+  const deferredQuery = useDeferredValue(query);
+  const hits = useMemo(() => rank(prepared, deferredQuery), [prepared, deferredQuery]);
 
   useEffect(() => setCursor(0), [query]);
 
@@ -159,6 +172,12 @@ export function SearchDialog({
             </div>
 
             <div className="max-h-[52vh] overflow-y-auto scroll-thin p-2">
+              {query && !entries && (
+                <p className="px-3 py-8 text-center font-mono text-[11px] uppercase tracking-[0.18em] text-white/25 animate-pulse">
+                  {dict.search.loading[lang]}
+                </p>
+              )}
+
               {query && entries && hits.length === 0 && (
                 <p className="px-3 py-8 text-center text-[13.5px] text-white/35">
                   {dict.search.noResults[lang]} <span className="text-white/70">{query}</span>
