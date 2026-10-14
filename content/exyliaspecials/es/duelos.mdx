@@ -1,0 +1,137 @@
+---
+title: "Duelos"
+description: "Duelos 1v1 que empieza un ítem: crear una arena, snapshots y copias, las reglas dentro de una arena, cómo transcurre un duelo de la cuenta atrás al botín, qué pasa al salir, morir o reiniciar, y los ajustes de duelos."
+---
+
+Un duelo lo empieza un ítem: el ítem **1V1** incluido, o cualquier habilidad con un
+[paso `duel`](/docs/exyliaspecials/acciones#duel). Golpear a un jugador con él lleva a los dos a una arena para
+luchar. No hay petición que aceptar.
+
+## Crear una arena
+
+<Steps>
+  <Step title="Créala">
+    `/specialsadmin arena create pit`, o **Nueva arena** en la pantalla **Arenas de duelo**. Recibes una herramienta
+    de selección: haz clic en las dos esquinas opuestas de la arena y luego shift + clic izquierdo para confirmar.
+    Los ids tienen hasta 32 letras minúsculas, dígitos, `_` y `-`.
+  </Step>
+  <Step title="Pon las apariciones">
+    Colócate donde debe aparecer el primer luchador, mirando hacia donde toca, y ejecuta
+    `/specialsadmin arena setspawn pit 1`. Luego `2` para el otro. Quien reta aparece en la 1.
+  </Step>
+  <Step title="Haz una snapshot">
+    `/specialsadmin arena snapshot pit` guarda la arena tal como está. Necesita FastAsyncWorldEdit. Es opcional,
+    pero es lo que permite restaurar la arena y jugarla varias veces a la vez.
+  </Step>
+</Steps>
+
+Una arena está **lista** cuando está activada y tiene las dos apariciones puestas en mundos cargados. Los límites
+son opcionales: sin ellos no hay reglas de arena, ni límite para salir, ni copias.
+
+## Copias y snapshots
+
+| La arena tiene | Los duelos se juegan |
+|---|---|
+| Una snapshot, FastAsyncWorldEdit, `duels.copies.enabled` | Cada uno en su propia copia, pegada en el mundo temporal de ExyliaLib, hasta `duels.copies.max-per-arena` (16) a la vez. La copia se descarta tras el duelo. |
+| Cualquier cosa menos | En el sitio, de uno en uno. Con `regenerate` activado y una snapshot, la snapshot se vuelve a pegar después de cada duelo. |
+
+El mundo temporal es un vacío que se borra en cada arranque y cada apagado. En Folia se crea a través del plugin
+`Worlds`; sin él los duelos se juegan en el sitio.
+
+Las apariciones se desplazan con la copia, así que mantenlas dentro de los límites. Volver a seleccionar los límites
+no rehace la snapshot: hazla de nuevo.
+
+## Reglas de la arena
+
+Cada arena es una región de ExyliaLib cuyas reglas solo se aplican a los luchadores de esa arena. **Reglas** en la
+pantalla de la arena, o `/specialsadmin arena flags <arena>`, las edita:
+
+| Regla | Arenas nuevas |
+|---|---|
+| `pvp` | activada |
+| `build`, `break` | activadas |
+| `player_build_only` | activada: solo se pueden romper los bloques colocados durante el duelo |
+| `interact`, `item_drop`, `item_pickup`, `fall_damage` | activadas |
+| `allowed_blocks_only`, `allowed_blocks` | desactivadas |
+| `breakable_blocks_only`, `breakable_blocks` | desactivadas |
+| `temporary_blocks`, `temporary_blocks_seconds` | desactivadas |
+
+## Cómo transcurre un duelo
+
+1. **Inicio** — se reserva una arena; se avisa a los dos jugadores y se les teletransporta, quien reta a la
+   aparición 1. Donde estaban se guarda como su camino de vuelta, en el propio jugador, así que sobrevive a una
+   desconexión o a un reinicio.
+2. **Cuenta atrás** — los dos quedan congelados e invulnerables durante `countdown` segundos, con un título que
+   cuenta hacia atrás.
+3. **Combate** — una barra de jefe cuenta hacia atrás `seconds`. Los dos quedan en combate durante la pelea más 10
+   segundos. Si se acaba el tiempo, es empate.
+4. **Botín** — el ganador tiene `loot-seconds`, con una barra de jefe, para recoger lo que soltó el perdedor.
+5. **Final** — los dos vuelven a casa; un jugador muerto reaparece allí. La arena se libera. Con
+   `duels.broadcast-results` el resultado se anuncia a todos los conectados.
+
+Durante un duelo:
+
+- los luchadores no pueden herir ni ser heridos por nadie salvo su rival;
+- se rechazan los comandos salvo `duels.allowed-commands`, a menos que el jugador tenga
+  `exyliaspecials.duel.bypass`;
+- se rechazan los teletransportes fuera de los límites de la arena. Salir andando no se impide — en una copia solo
+  hay vacío alrededor.
+
+| Suceso | Resultado |
+|---|---|
+| Un luchador muere | Gana el otro. |
+| Un luchador sale | Gana el otro, que recibe un aviso; quien salió vuelve a casa en su siguiente entrada. |
+| Se acaba el tiempo | Empate. |
+| El servidor se apaga | El duelo termina sin resultado; los dos vuelven a casa. Tras un cierre inesperado vuelven a casa en su siguiente entrada, o al spawn del mundo si ese mundo ya no existe. |
+
+<Callout type="warning" title="Salir de un duelo con la marca de combate propia">
+Los luchadores están en combate, así que con la marca propia un luchador que sale a mitad de duelo es también un
+desconectado en combate: se aplica `combat.logout-punishment`, y puede aparecer un NPC de desconexión dentro de la
+arena. Las copias se vacían de entidades al liberarse. Plantéate `logout-npc.blacklisted-worlds: [exylialib_temporary]`
+para que quien salga en una copia muera en el acto en su lugar.
+</Callout>
+
+## Ajustes
+
+En `duels:` dentro de `config.yml`:
+
+| Clave | Por defecto | |
+|---|---|---|
+| `allowed-commands` | `[msg, tell, w, r, reply]` | Nombres de comando, **sin** la barra. `/msg` aquí nunca coincide. |
+| `broadcast-results` | `true` | |
+| `copies.enabled` | `true` | |
+| `copies.max-per-arena` | 16 | |
+
+La cuenta atrás, la duración del combate, el tiempo de botín y cuántos duelos puede tener un ítem a la vez van en el
+paso `duel` del ítem. Ver [Lenguaje de acciones](/docs/exyliaspecials/acciones#duel).
+
+## Comandos de arenas
+
+Todos necesitan `exyliaspecials.admin.arena`. Los marcados como **jugador** no funcionan desde la consola.
+
+| Comando | | |
+|---|---|---|
+| `/specialsadmin arena create <id>` | jugador | Crear, con una selección. |
+| `/specialsadmin arena bounds <arena>` | jugador | Volver a seleccionar los límites. |
+| `/specialsadmin arena setspawn <arena> <1\|2>` | jugador | Donde estás. |
+| `/specialsadmin arena tp <arena> [1\|2]` | jugador | A una aparición, la 1 por defecto. |
+| `/specialsadmin arena flags <arena>` | jugador | La pantalla de reglas. |
+| `/specialsadmin arena snapshot <arena>` | | Guardar la snapshot. |
+| `/specialsadmin arena regenerate <arena>` | | Activar o desactivar la restauración tras cada duelo en el sitio. |
+| `/specialsadmin arena toggle <arena>` | | Activar o desactivar. |
+| `/specialsadmin arena rename <arena> <name>` | | |
+| `/specialsadmin arena delete <arena>` | | Borra también la snapshot. |
+| `/specialsadmin arena list` | | Cada arena: libre, en duelo, desactivada o incompleta. |
+
+Límites, snapshot y borrar se rechazan mientras la arena está en uso.
+
+La pantalla **Arenas de duelo** hace lo mismo con botones: clic izquierdo en una arena para abrirla, clic derecho
+para ir a la aparición 1. Dentro de una arena, clic izquierdo en una aparición para ponerla, clic derecho para ir
+allí.
+
+Las arenas se guardan en `arenas.yml` y se vuelven a leer con `/specialsadmin reload`.
+
+## Para otros plugins
+
+`OneVsOneStartEvent` y `OneVsOneEndEvent` de ExyliaLib se lanzan en cada duelo, y la API lista y termina partidas.
+Ver [API](/docs/exyliaspecials/api).

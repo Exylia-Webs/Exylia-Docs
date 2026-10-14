@@ -1,0 +1,294 @@
+---
+title: "Objetos especiales"
+description: "El archivo de objeto clave por clave: ajustes y textos, el objeto en sí, permiso, límites por usos o por tiempo, cooldowns, reglas de región, features y triggers, el orden en que se comprueba cada uso y de qué protege el plugin a los objetos especiales."
+---
+
+Cada objeto especial — una habilidad de combate, una herramienta o las dos cosas — es un archivo en
+`plugins/ExyliaSpecials/lang/<idioma>/items/`. Los archivos se leen en orden alfabético al arrancar y con
+`/specialsadmin reload`; la consola termina con `Loaded N special items`.
+
+```yaml
+id: freeze                    # opcional; el nombre del archivo si falta
+settings:                     # valores con nombre, usados abajo como ${nombre}
+  cooldown: {value: 30, min: 1, max: 600, name: 'Cooldown (seconds)'}
+  radius: {value: 5, min: 1, max: 16, name: 'Radius (blocks)'}
+texts:                        # líneas para los jugadores, usadas como ${text.<clave>}
+  no_target: '%prefix% {error}Nobody is close enough to freeze.'
+item:                         # cómo se ve el objeto
+  material: ICE
+  name: '{primary}&lFREEZE &8[{success}%uses%&8/{warning}%max_uses%&8]'
+  display-name: '{info}FREEZE'
+  lore: [...]
+permission: ''                # nodo opcional comprobado en cada uso
+limit: {type: USES, amount: 3}
+cooldown: {seconds: '${cooldown}'}
+regions: {...}                # opcional, necesita WorldGuard
+features:                     # qué hace el objeto
+  - type: ability
+    trigger: RIGHT_CLICK
+    actions: [...]
+```
+
+Un objeto se salta, con un aviso en la consola que nombra el archivo, cuando no tiene sección `item` o ninguna
+feature se cargó. Una feature con un `type` desconocido o una clave rota se descarta con un aviso y el resto del
+objeto se carga igual. Dos archivos con el mismo id: se salta el segundo.
+
+## id
+
+La identidad del objeto: como lo llaman los comandos, los cooldowns, los placeholders y la API, y lo que se
+escribe en cada copia que se reparte. Por defecto es el nombre del archivo sin `.yml`, y no distingue mayúsculas.
+
+<Callout type="warning" title="Cambiar un id deja huérfanos los objetos ya repartidos">
+Las copias que tienen los jugadores llevan el id, no el archivo. Renombra el archivo o cambia `id:` y esas copias se
+quedan como objetos vanilla inertes. Todo lo demás — material, lore, números, features — se puede cambiar
+libremente: las copias siguen al archivo en su siguiente uso.
+</Callout>
+
+## settings
+
+Números con nombre que usa el resto del archivo. Existen para que el lore, el límite, el cooldown y las acciones
+lean todos el mismo valor, y para que el staff pueda cambiarlos desde un formulario dentro del juego.
+
+```yaml
+settings:
+  uses: 3                                                      # forma corta
+  radius: {value: 5, min: 1, max: 16, name: 'Radius (blocks)'}  # forma completa
+```
+
+| Clave | Qué hace |
+|---|---|
+| `value` | El número. Obligatorio en la forma completa. Un número entero hace que el formulario del juego solo acepte enteros. |
+| `min`, `max` | Límites que comprueba el formulario del juego. El archivo en sí no se comprueba contra ellos. |
+| `name` | La etiqueta en el formulario. Por defecto, la clave con los `_` convertidos en espacios. |
+
+Los nombres de los ajustes son letras minúsculas, dígitos y `_`. Se usan en cualquier otra parte del archivo:
+
+- `${radius}` — se sustituye por el valor. Un valor entero escrito solo (`amount: '${uses}'`) se convierte en número.
+- `${duration - 0.1}`, `${every * 20}`, `${percent / 100}` — una fórmula sobre los ajustes, calculada al cargar.
+
+Una referencia a un ajuste que no existe se deja tal cual y se registra en la consola.
+
+El botón de **ajustes** de la pantalla de administración del objeto edita estos valores: abre un formulario,
+comprueba cada valor contra sus límites, escribe `settings.<clave>` en el archivo y recarga los objetos.
+
+## texts
+
+Líneas que las features envían a los jugadores — un rechazo, el nombre de una invocación — reunidas en un sitio
+para que las traducciones puedan sustituirlas:
+
+```yaml
+texts:
+  no_target: '[sound:ENTITY_VILLAGER_NO|1.0|1.0]%prefix% {error}Nobody is close enough to freeze.'
+```
+
+Se usan en cualquier parte como `${text.no_target}`. Un texto puede contener a su vez referencias `${ajuste}`. Un
+`[sound:NOMBRE|volumen|tono]` al principio reproduce un sonido con el mensaje.
+
+## item
+
+El objeto en sí, en el formato de objetos de ExyliaLib:
+
+| Clave | Qué hace |
+|---|---|
+| `material` | Un material, o una cabeza: `basehead-<textura>`, `urlhead-<url>`, `playerhead-<nombre>`. |
+| `name` | El nombre que se ve en el objeto. |
+| `display-name` | El nombre simple que usan los mensajes, los menús y la barra de acción. Por defecto, el id. |
+| `lore` | Líneas bajo el nombre. |
+| `glow` | Brillo de encantamiento. |
+| `hide-attributes` | Oculta las líneas de atributos. Activo salvo `false`. |
+| `max-stack-size` | Cuántos se apilan. La mayoría de los objetos incluidos usan 1. |
+| `unbreakable`, `custom-model-data`, `item-model`, `tooltip-style`, `hide-tooltip`, `flags`, `enchantments`, `amount` | Como en ExyliaLib. |
+| `force-consumable`, `consumable-time`, `consumable-nutrition`, `consumable-saturation`, `consumable-sound` | Hacen comestible cualquier objeto — así se comen **Cabeza Dorada** y **Ascua del Fénix**. |
+| `potion`, `attributes`, `armor_trim`, `banner_patterns`, `nbt` | Como en ExyliaLib. |
+
+### Placeholders del nombre y el lore
+
+| Placeholder | Valor |
+|---|---|
+| `%uses%` | Usos que quedan; `∞` sin límite de usos. |
+| `%max_uses%` | Usos con los que empezó el objeto. |
+| `%time_remaining%` | Tiempo que le queda a un objeto temporal; `∞` si no lo es. |
+| `%status%` | `ACTIVADO` o `DESACTIVADO`: si el modo automático de una herramienta llevada está activo. Ver [Herramientas](/docs/exyliaspecials/herramientas#herramientas-llevadas). |
+| `%recipes%`, `%filtered%`, `%prospector_radius%`, `%uses_<material>%` | Valores de las features compresor, filtro del vacío, prospector y palanca. |
+
+Los placeholders de PlaceholderAPI se rellenan para quien lleva el objeto. Las secciones de los contadores de
+estadísticas se añaden bajo el lore — ver [Contadores](/docs/exyliaspecials/contadores).
+
+El nombre y el lore de un objeto solo se reconstruyen cuando algo cambia en él — un uso, la cuenta de un contador,
+una edición del archivo — y cada segundo mientras un objeto temporal está en la mano principal.
+
+## permission
+
+Un nodo comprobado en cada uso. Un jugador sin él recibe "No puedes usar este objeto." En blanco o sin poner:
+todos pueden usar el objeto. Ningún objeto incluido define uno. Una feature también puede tener su propio
+`permission`, que se comprueba después del del objeto.
+
+## limit
+
+| `type` | `amount` | Comportamiento |
+|---|---|---|
+| `INFINITE` | — | Por defecto. El objeto nunca se agota. |
+| `USES` | usos | Cada feature gasta sus `uses` (1 por defecto) cuando se ejecuta. Al llegar a 0 el objeto se agota: "Tu objeto se ha agotado." En un stack, se quita un objeto y el siguiente empieza lleno. |
+| `TIMED` | segundos | El objeto caduca ese tiempo después de darse, contando también mientras está en un cofre o su dueño está desconectado. |
+
+Un `amount` de 0 o menos, o un tipo desconocido, significa `INFINITE`. `/specialsadmin give` y la pantalla de
+administración del objeto pueden repartir una copia con otro límite.
+
+Un objeto temporal se quita cuando se usa después de caducar ("Tu objeto ha caducado."), o en menos de un segundo
+si está en la mano principal. Un objeto caducado guardado en cualquier otro sitio sigue ahí hasta que se coge o se
+usa.
+
+## cooldown
+
+```yaml
+cooldown:
+  seconds: 30
+  combat-seconds: 45     # opcional: se usa en su lugar mientras el jugador está en combate
+```
+
+El tiempo hasta que el objeto se puede volver a usar, que empieza cuando una feature termina su trabajo. Una
+feature puede llevar su propio bloque `cooldown:`, que sustituye a este para esa feature. Cada feature de un objeto
+lleva su propio temporizador, así que un objeto con una habilidad de clic derecho y otra de agacharse tiene dos
+cooldowns independientes.
+
+El tiempo que empieza de verdad es, en orden: el `cooldown` de la feature, si no el del objeto; `combat-seconds` en
+su lugar cuando el jugador está en combate; y una entrada de `regions.cooldowns` para una región donde esté el
+jugador sustituye a cualquiera de los dos.
+
+## regions
+
+Necesita WorldGuard; sin él todas estas reglas pasan.
+
+```yaml
+regions:
+  disable-in-non-pvp: true    # rechazado donde WorldGuard deniega el PvP
+  mode: BLACKLIST             # NONE | WHITELIST | BLACKLIST
+  list: [spawn, market]
+  cooldowns:                  # id de región -> segundos
+    arena: 5
+```
+
+| Clave | Por defecto | Qué hace |
+|---|---|---|
+| `disable-in-non-pvp` | `false` | Rechaza el objeto donde el flag `pvp` está en `deny`. |
+| `mode` | `NONE` | `WHITELIST`: solo se puede usar dentro de una región de la lista. `BLACKLIST`: rechazado dentro de una. |
+| `list` | `[]` | Ids de región, sin distinguir mayúsculas. |
+| `cooldowns` | `{}` | El cooldown que se usa estando en esa región, en lugar del del objeto. |
+
+Los rechazos dicen "No puedes usar este objeto en esta región."
+
+Cuando una feature actúa sobre otro jugador — al golpearlo, o el jugador golpeado de un combo — la posición de ese
+jugador tiene que pasar las mismas reglas, y el PvP tiene que estar permitido tanto donde está quien lo usa como
+donde está el otro jugador. Esa comprobación es silenciosa.
+
+## features
+
+La lista de lo que hace el objeto. Cada entrada tiene un `type`:
+
+- `ability` — una cadena de pasos de acción, descrita abajo y en [Lenguaje de acciones](/docs/exyliaspecials/acciones).
+- Un tipo de herramienta — `area_break`, `vein_miner`, `tree_capitator`, `auto_replant`, `till`, `seed_planter`,
+  `bonemeal_area`, `crowbar`, `infinite_bucket`, `magnet`, `prospector`, `compressor`, `void_filter`,
+  `telekinesis` o `auto_smelt`. Ver [Herramientas](/docs/exyliaspecials/herramientas).
+
+Claves que acepta cualquier feature:
+
+| Clave | Por defecto | Qué hace |
+|---|---|---|
+| `permission` | ninguno | Un nodo extra para esta feature. |
+| `cooldown` | el del objeto | `{seconds, combat-seconds}` solo para esta feature. |
+| `uses` | 1 en habilidades | Usos que gasta cada vez que se ejecuta; `0` la hace gratis. |
+| `combo` | ninguno | `{hits, window}`: en triggers de golpe, solo se ejecuta en el golpe número N seguido al **mismo** objetivo, cada golpe a menos de `window` segundos (3 por defecto) del anterior. Después vuelve a contar desde cero. |
+| `cancel-event` | ver abajo | Cancela lo que haría el clic o la acción en vanilla. |
+
+### ability
+
+```yaml
+- type: ability
+  trigger: HIT_PLAYER
+  uses: 1
+  combo: {hits: 3, window: 4}
+  cooldown: {seconds: 18}
+  actions:
+    - action: damage
+      damage: 3
+      true-damage: true
+```
+
+`trigger` es obligatorio. `cancel-event` es `true` por defecto — un objeto de clic derecho no se come, no se lanza
+y no se coloca — salvo en `CONSUME`, `PROJECTILE_LAUNCH`, `PROJECTILE_HIT` y `BOW_SHOOT`, donde es `false` para que
+la comida se coma y la flecha salga.
+
+### Triggers
+
+| Trigger | Se dispara cuando |
+|---|---|
+| `RIGHT_CLICK` | Clic derecho al aire o a un bloque con el objeto en cualquier mano. Sobre un bloque solo si el objeto no tiene una feature `RIGHT_CLICK_BLOCK`. |
+| `RIGHT_CLICK_BLOCK` | Clic derecho a un bloque. |
+| `LEFT_CLICK` | Clic izquierdo al aire o a un bloque. No cuando el mismo clic golpea a una entidad. |
+| `HIT_PLAYER` | Un golpe cuerpo a cuerpo a un jugador. Ni barridos ni proyectiles. El jugador golpeado es el objetivo. |
+| `HIT_ENTITY` | Un golpe cuerpo a cuerpo a cualquier entidad viva — y también a un jugador si el objeto no tiene una feature `HIT_PLAYER`. |
+| `TAKE_DAMAGE` | Quien lleva el objeto recibe daño **de un jugador**, cuerpo a cuerpo o con un proyectil de un jugador. El atacante es el objetivo. Los mobs, las caídas y el fuego no lo disparan. |
+| `CONSUME` | Terminar de comer o beber el objeto. |
+| `PROJECTILE_LAUNCH` | Lanzar o disparar un proyectil desde el objeto. Cancelarlo cancela el lanzamiento. |
+| `PROJECTILE_HIT` | Ese proyectil al caer. Se comprueba y se cobra al lanzarlo — un lanzamiento que sería rechazado no ocurre — y se ejecuta donde cae, con la entidad alcanzada como objetivo. |
+| `BOW_SHOOT` | Disparar un arco o una ballesta. |
+| `DROP` | Tirar el objeto. Con `cancel-event` (por defecto) el objeto se queda en la mano. |
+| `SNEAK` | Empezar a agacharse con el objeto en cualquier mano. |
+| `BLOCK_BREAK` | Romper un bloque con el objeto en la mano principal. No para los bloques que rompe una feature de herramienta. |
+| `HELD` | Una vez por segundo mientras el objeto está en cualquier mano. |
+| `CARRIED` | Features de herramienta que funcionan desde cualquier sitio del inventario. Ver [Herramientas](/docs/exyliaspecials/herramientas#herramientas-llevadas). |
+| `PASSIVE` | Solo lo usan `telekinesis` y `auto_smelt`. |
+
+Cuando el objeto de la mano secundaria responde al mismo trigger que el de la mano principal, solo se ejecuta el de
+la mano principal.
+
+<Callout type="warning" title="Dos triggers que no funcionan como habilidades">
+Una habilidad en `HELD` se ejecuta cada segundo pero **nunca gasta sus usos ni empieza su cooldown**, así que
+`uses` y `cooldown` no tienen efecto en ella. Una habilidad en `PASSIVE` se acepta al cargar pero **nunca se
+ejecuta**: nada dispara ese trigger para las habilidades.
+</Callout>
+
+## Cómo se comprueba un uso
+
+Cada uso pasa por las mismas comprobaciones en este orden. La primera que falla lo termina:
+
+1. **Silenciado** — el jugador tiene el estado `SILENCED`: "Tus objetos especiales están silenciados."
+2. **Permiso** — el del objeto y luego el de la feature: "No puedes usar este objeto."
+3. **Región** — las reglas `regions` del objeto: "No puedes usar este objeto en esta región."
+4. **El otro jugador** — sobre un jugador objetivo, su región y el PvP en las dos posiciones. Silencioso.
+5. **Combo** — todavía no es el golpe N. Silencioso.
+6. **Cooldown** — "Este objeto está en cooldown » 12s ⌚".
+7. **Caducado** — el objeto se quita: "Tu objeto ha caducado."
+8. **Usos** — no le quedan para esta feature: "A este objeto no le quedan usos."
+9. **`SpecialItemUseEvent`** — otro plugin puede cancelarlo. Ver [API](/docs/exyliaspecials/api#eventos).
+
+Después se ejecuta la feature. Los triggers de golpe, `TAKE_DAMAGE`, `HELD` y `CARRIED` no envían ninguno de los
+mensajes de arriba: una comprobación que falla ahí es silenciosa.
+
+### Cobros y devoluciones
+
+El cooldown empieza y el uso se gasta solo cuando la feature ha terminado su trabajo. Una habilidad cuya cadena
+llega a un `stop`, a un `require` que falla, o a un paso `summon` o `duel` que no pudo ocurrir no gasta nada. Una
+herramienta que no tenía nada que hacer — un minador de vetas sobre piedra, un prospector sin mineral alrededor —
+tampoco gasta nada.
+
+Una habilidad con pasos retrasados se cobra al empezar; si se detiene más tarde, el cooldown se borra y el uso se
+devuelve.
+
+## De qué se protege a los objetos especiales
+
+- Usados como ingrediente de crafteo: el resultado se vacía.
+- Colocados como bloque: rechazado.
+- Un huevo especial no eclosiona. Un tótem especial nunca salva a quien lo lleva; un tótem vanilla en la otra mano
+  sí.
+- Los objetos arrojadizos con límite de usos no se gastan al lanzarlos; en su lugar bajan sus usos.
+- Los aldeanos aceptan un objeto especial en un intercambio solo cuando es idéntico al que pide el intercambio —
+  mismo id, usos y cuentas de contadores. Los objetos temporales, nunca.
+- Las copias renombradas se siguen reconociendo; los objetos que solo se le parecen, no.
+
+## Dar objetos
+
+Los objetos se dan con `/specialsadmin give item`, los menús de administración o la API. Una entrega más grande que
+el `max-stack-size` del objeto se divide. Lo que no cabe espera en la cola de ExyliaLib y se entrega en la próxima
+conexión del jugador. Al jugador se le avisa en los dos casos: "Recibido 2x CONGELAR", o que el objeto le espera en
+su próxima conexión.

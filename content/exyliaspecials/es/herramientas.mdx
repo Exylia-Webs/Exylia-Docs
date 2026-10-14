@@ -1,0 +1,282 @@
+---
+title: "Herramientas"
+description: "Las quince funciones de herramienta — rotura en área, minero de vetas, talador, replantado, arado, sembradora, polvo de hueso, palanca, cubos infinitos, imán, prospector, compresor, filtro del vacío, telequinesis y autofundido — con cada clave, cómo rompen bloques y los editores del juego."
+---
+
+Una función de herramienta es un comportamiento ya hecho que se escribe como entrada de `features:` con su `type`
+y unas pocas claves. Va en un ítem igual que una habilidad, y un ítem puede mezclar ambas:
+
+```yaml
+features:
+  - type: area_break
+    width: 3
+    height: 3
+  - type: telekinesis
+    experience: true
+```
+
+Un ítem con al menos una función de herramienta aparece en **Herramientas** del menú de administración en vez de en
+**Ítems especiales**.
+
+## Común a todas las herramientas
+
+- Las funciones de herramienta funcionan solo desde la **mano principal**, salvo `magnet`.
+- Aceptan las claves de cualquier función: `permission`, `cooldown`, `uses`, `cancel-event`. Ver
+  [Ítems especiales](/docs/exyliaspecials/items#features).
+- Solo se gasta un uso y empieza el cooldown cuando la herramienta hizo algo. Picar piedra con un minero de vetas,
+  o un prospector sin minerales cerca, no gasta nada.
+- `magnet`, `telekinesis`, `auto_smelt` y el trabajo automático de un compresor o un filtro del vacío **nunca**
+  gastan usos ni empiezan un cooldown.
+
+| Tipo | Trigger | Usos gastados por defecto | Cancela el clic |
+|---|---|---|---|
+| `area_break` | romper un bloque | 1 | no |
+| `vein_miner` | romper un bloque | 1 | no |
+| `tree_capitator` | romper un bloque | 1 | no |
+| `auto_replant` | romper un bloque | 0 | no |
+| `till` | clic derecho en un bloque | 1 | sí |
+| `seed_planter` | clic derecho en un bloque | 1 | sí |
+| `bonemeal_area` | clic derecho en un bloque | 1 | sí |
+| `crowbar` | clic derecho en un bloque | 1 | sí |
+| `infinite_bucket` | clic derecho | 1 | sí |
+| `prospector` | clic derecho | 1 | sí |
+| `magnet` | en la mano | — | no |
+| `compressor` | llevado encima | 1 | sí |
+| `void_filter` | llevado encima | 1 | sí |
+| `telekinesis` | pasivo | — | no |
+| `auto_smelt` | pasivo | — | no |
+
+### effects
+
+Toda herramienta acepta una sección `effects` de líneas de efectos:
+
+```yaml
+- type: area_break
+  effects:
+    on-use: ['[SOUND] BLOCK_STONE_BREAK;0.6;0.8']
+    on-block-break: ['[PARTICLE] CLOUD;count:3;offset:0.3,0.3,0.3']
+    on-place: []
+```
+
+`on-use` se reproduce en el jugador una vez por ejecución; `on-block-break` y `on-place` en cada bloque, hasta ocho
+bloques por ejecución.
+
+### Cómo se rompen los bloques extra
+
+Cada bloque que rompe una herramienta, aparte del que rompió el jugador, pasa por el mismo camino:
+
+1. Dentro de una mina de **ExyliaMines**, la mina lo rompe y se encarga del drop.
+2. Si no, WorldGuard debe permitir construir ahí, y se envía un evento de rotura de bloque que cualquier plugin de
+   protección puede cancelar.
+3. El bloque suelta lo mismo que si lo rompiera la herramienta en mano, así que Fortuna y Toque de seda se
+   aplican.
+
+Nunca se rompen aire, líquidos ni bloques irrompibles como la bedrock. Los bloques extra cuentan para un contador
+`BLOCKS_MINED` de la herramienta.
+
+## Romper
+
+### area_break
+
+Rompe la zona alrededor del bloque que rompió el jugador.
+
+| Clave | Por defecto | |
+|---|---|---|
+| `shape` | `face` | `face` o `cube`. |
+| `width`, `height` | 3, 3 | `face`: el tamaño de la cara a la que mira el jugador. |
+| `depth` | 1 | `face`: capas hacia dentro. |
+| `radius` | 1 | `cube`: un cubo de `2 × radius + 1`. |
+| `blocks` | cualquiera | Solo estos materiales — incluido el bloque que rompió el jugador. |
+| `skip-immature-crops` | `false` | Deja los cultivos que no han crecido del todo. |
+
+Mirar más de 60° hacia arriba o abajo tumba la cara en horizontal. Usa tamaños impares: la zona se extiende
+`tamaño / 2` bloques a cada lado, así que `width: 4` rompe 5.
+
+### vein_miner
+
+| Clave | Por defecto | |
+|---|---|---|
+| `ores` | todos los minerales | Romper uno de estos rompe cada bloque contiguo del mismo material. |
+| `max-blocks` | 64 | |
+
+Por defecto cuentan todos los minerales vanilla, variantes de pizarra profunda, cuarzo y oro del Nether y
+escombros ancestrales incluidos.
+
+### tree_capitator
+
+| Clave | Por defecto | |
+|---|---|---|
+| `max-blocks` | 150 | |
+| `break-leaves` | `true` | |
+| `max-leaf-distance` | 4 | Cuánto se adentra en las hojas desde un tronco. |
+| `disable-when-sneaking` | `false` | Agáchate para talar un solo tronco. |
+| `log-blocks` | todos los `_LOG`, bloque de bambú, tallos carmesí y distorsionado | |
+| `leaf-blocks` | todas las hojas | |
+
+Solo empieza en un tronco. `_WOOD` y los troncos descortezados no están en la lista por defecto.
+
+### auto_replant
+
+Replanta un cultivo que rompe el jugador, sin coger semilla.
+
+```yaml
+- type: auto_replant
+  crops:
+    WHEAT: {min-age: 7}
+    NETHER_WART: {min-age: 3}
+```
+
+Romper un cultivo por debajo de `min-age` se rechaza, así que los cultivos sin madurar se quedan en pie. Sin
+`crops` maneja trigo, zanahorias, patatas (7), remolachas y verrugas del Nether (3), cactus y caña de azúcar (0).
+También replanta los cultivos que rompe un `area_break` del mismo ítem.
+
+## Cultivo
+
+### till
+
+`width` (3) × `depth` (3) de tierra, césped y caminos convertidos en tierra de cultivo con un clic derecho — la
+tierra gruesa y la enraizada pasan a tierra. Una planta baja encima no lo impide.
+
+### seed_planter
+
+Hacer clic derecho en tierra de cultivo siembra en cada tierra de cultivo libre de `width` (3) × `depth` (3),
+cogiendo una semilla por casilla del inventario del jugador: semillas de trigo, zanahorias, patatas, semillas de
+remolacha, de sandía y de calabaza. Se detiene cuando se acaban. Nunca usa ítems especiales como semilla.
+
+### bonemeal_area
+
+| Clave | Por defecto | |
+|---|---|---|
+| `radius` | 2 | Un cuadrado de 5×5 alrededor del bloque clicado. |
+| `age-steps` | 1 | |
+| `custom-growth-materials` | verruga del Nether, cactus, caña de azúcar | Crecen `age-steps` donde el polvo de hueso no hace nada. |
+| `column-growth-materials` | cactus, caña de azúcar | Crecen añadiendo bloques encima. |
+| `default-column-max-height` | 3 | |
+| `column-max-height` | ninguno | Por material: `{CACTUS: 4}`. |
+
+No gasta polvo de hueso.
+
+## Bloques y líquidos
+
+### crowbar
+
+Arranca bloques como ítems.
+
+```yaml
+- type: crowbar
+  materials:
+    SPAWNER: 1
+    END_PORTAL_FRAME: 12
+  no-uses-message: '%prefix% {error}Esta palanca ya no puede arrancar %material%.'
+  on-no-uses: ['[SOUND] ENTITY_ITEM_BREAK;1;1']
+```
+
+Cada material se gasta por separado: `SPAWNER: 1` arranca un spawner. Un spawner conserva su mob. El ítem cae en el
+bloque. Cuando se gastan todos los materiales la palanca se rompe. `%uses_<material>%` (p. ej. `%uses_spawner%`)
+muestra lo que queda en el lore.
+
+### infinite_bucket
+
+| Clave | Por defecto | |
+|---|---|---|
+| `bucket` | `WATER` | `WATER`, `LAVA` o `EMPTY`. |
+| `area-radius` | 0 | Alcance lateral. |
+| `area-height` | 0 | Alcance hacia arriba y abajo. |
+| `sound` | el del cubo | |
+
+`WATER` y `LAVA` colocan una fuente — o llenan cada bloque de aire de la zona — en la cara clicada. El agua se
+rechaza en el Nether. `EMPTY` quita cada fuente de agua y lava de la zona alrededor de la fuente a la que mira, y no
+llena nada.
+
+El cubo tiene un **cooldown propio de 1 segundo**, que manda sobre el `cooldown:` del ítem. Para cambiarlo, escribe
+`cooldown:` en la función.
+
+## Recoger
+
+### magnet
+
+Mientras el ítem está en cualquier mano, una vez por segundo, atrae hacia el jugador los ítems tirados dentro de
+`radius` (8) que pueda ver, a `speed` (0.4).
+
+### telekinesis
+
+Los drops van directos al inventario; lo que no cabe se queda en el suelo.
+
+| Clave | Por defecto | |
+|---|---|---|
+| `experience` | `true` | La experiencia va directa al jugador, primero a Reparación. |
+| `mobs` | `true` | También para los mobs que el jugador mata con el ítem. |
+
+Se aplica al bloque que rompió el jugador y a los bloques extra de las otras herramientas del ítem.
+
+### auto_smelt
+
+Los drops se funden con las recetas de horno del servidor. `ignore` lista materiales que se dejan tal como caen. No
+da experiencia de horno.
+
+Sin `telekinesis` en el mismo ítem, los drops de mobs también se funden: matar una vaca da filete cocinado.
+
+### prospector
+
+| Clave | Por defecto | |
+|---|---|---|
+| `radius` | 8 | De 1 a 12. |
+| `blocks` | todos los minerales | |
+| `max-marks` | 40 | |
+| `mark` | ninguna | Líneas de efectos dibujadas en cada bloque encontrado; `%block%` es su material. |
+
+Con un clic derecho, marca los bloques coincidentes más cercanos con `mark`, que solo ve quien lo usa, y dice
+"Marcadas N vetas" — N cuenta bloques. Si no encuentra nada, no gasta nada.
+
+## Herramientas llevadas
+
+`compressor` y `void_filter` funcionan mientras el ítem está **en cualquier sitio del inventario**, no solo en la
+mano.
+
+| Acción | Hace |
+|---|---|
+| Llevarlo encima | Modo automático: trabaja solo mientras esté activado. |
+| Clic derecho | Lo ejecuta una vez al momento, y gasta usos y cooldown si hizo algo. |
+| Agacharse + clic derecho | Pausa o reanuda el modo automático. `%status%` en el lore muestra `ON` u `OFF`. |
+
+El modo automático está activado cuando se entrega el ítem. El inventario se revisa en menos de un segundo tras un
+cambio — recoger, hacer clic, tirar — y cada cinco segundos si no.
+
+### compressor
+
+```yaml
+- type: compressor
+  every: 3
+  recipes:
+    - {input: DIAMOND, input-amount: 9, output: DIAMOND_BLOCK, output-amount: 1}
+```
+
+| Clave | Por defecto | |
+|---|---|---|
+| `every` | 3 | Segundos entre pasadas automáticas. |
+| `recipes` | ninguna | `input` y `output` son un material o un ítem exacto, así que los ítems personalizados funcionan. |
+
+Una pasada ejecuta las recetas hasta ocho veces, así que el resultado de una receta puede alimentar a la siguiente.
+Una entrada solo coincide con un ítem idéntico. `%recipes%` muestra el número de recetas.
+
+<Callout type="note" title="every es un mínimo">
+Una pasada automática solo ocurre cuando se revisa el inventario: en menos de un segundo tras un cambio, si no
+cada cinco segundos. `every: 2` con el inventario quieto comprime más o menos cada cinco segundos.
+</Callout>
+
+### void_filter
+
+`items:` — materiales o ítems exactos. Mientras está activado, recoger un ítem de la lista se rechaza y el ítem del
+suelo se borra. Un clic derecho borra cada stack de la lista que ya esté en el inventario; los ítems especiales
+nunca se tocan. `%filtered%` muestra el tamaño de la lista.
+
+## Editores en el juego
+
+La pantalla de administración del ítem tiene un botón de editor por cada `compressor` y `void_filter` del ítem:
+
+- **Recetas** — una lista de filas. Añadir una pide **qué se gasta** (coloca el coste completo: el stack que
+  colocas fija `input-amount`) y luego **en qué se convierte**.
+- **Descartes** — coloca los ítems que quieres filtrar.
+
+Guardar escribe la función de vuelta en el archivo del ítem y recarga los ítems. El archivo se reescribe entero,
+así que su formato puede cambiar.

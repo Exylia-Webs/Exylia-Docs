@@ -1,0 +1,453 @@
+---
+title: "Lenguaje de acciones"
+description: "Cada paso que puede ejecutar una habilidad: objetivos, daño, movimiento, efectos y estados, ítems, bloques, proyectiles, avisos, control de flujo, invocaciones y duelos, con cada clave y su valor por defecto."
+---
+
+Una habilidad es una lista de pasos bajo `actions:`, que se ejecutan de arriba abajo. Cada paso nombra una
+`action` y lleva sus propias claves:
+
+```yaml
+actions:
+  - action: target_radius
+    radius: 6
+  - action: require
+    check: '%targets_found% >= 1'
+    message: '${text.no_target}'
+  - action: damage
+    damage: 4
+  - action: play
+    at: targets
+    effects:
+      - '[SOUND] ENTITY_PLAYER_HURT;1;1'
+```
+
+## Claves que acepta cada paso
+
+| Clave | Por defecto | Qué hace |
+|---|---|---|
+| `action` | obligatoria | El paso. Un nombre desconocido se avisa en consola y el paso se descarta. |
+| `delay-ticks` | 0 | Espera ese tiempo antes del paso. Los pasos siguientes también esperan. |
+| `condition` | ninguna | Una condición de ExyliaLib; si es falsa, el paso se salta y la cadena sigue. |
+| `permission` | ninguno | Si quien lo usa no lo tiene, el paso se salta. |
+| `chance` | 1 | De 0 a 1: la probabilidad de que el paso se ejecute. |
+| `effects` | ninguno | Líneas de efectos, usadas por `play` y por algunos pasos que dibujan algo. |
+
+Un paso también puede nombrar una acción de ExyliaLib de otro plugin por su id completo. `condition`,
+`permission` y `chance` solo se aplican a los pasos propios de este plugin.
+
+### Números y variables
+
+Las claves numéricas aceptan placeholders y fórmulas: `'%stacks%'`, `'${radius} * 2'`. Los pasos dejan
+variables que los siguientes pueden leer:
+
+| Variable | La pone |
+|---|---|
+| `%targets_found%` | cada paso de objetivos: cuántos objetivos se eligieron |
+| `%chain_length%` | `target_chain` |
+| `%last_damage%` | `damage`: el total infligido |
+| `%stacks%`, `%stack_level%`, `%stack_full%` | `stack` |
+| `%filled%` | `refill` con `fill` |
+| `%summons%` | `summon` |
+| `%repeat_index%` | `repeat`: 0, 1, 2... |
+| `%item_id%` | siempre: el id del ítem |
+| cualquier nombre | `set_var` |
+
+<Callout type="warning" title="Dónde se rellenan las variables">
+Las variables se rellenan en las claves numéricas, en `condition`, en el `check` de `require` y en las líneas de
+pociones. **No** se rellenan en el texto de `message` — ahí solo funcionan `%player%` y PlaceholderAPI — ni en las
+líneas de efectos de `play`. Un mensaje como "Golpeaste a %targets_found% jugadores" muestra el token tal cual.
+</Callout>
+
+## Objetivos y el ancla
+
+Una cadena trabaja sobre una **lista de objetivos** y un punto **ancla**.
+
+- La lista de objetivos empieza siendo el jugador o la entidad golpeada (en `HIT_PLAYER`, `HIT_ENTITY`,
+  `PROJECTILE_HIT`), el atacante (en `TAKE_DAMAGE`) o quien usa el ítem. Los pasos de objetivos la sustituyen.
+- El ancla empieza donde cayó el proyectil o en el bloque clicado o roto; si no, en la posición de quien usa el
+  ítem.
+
+Un jugador solo puede elegirse como objetivo si no está en espectador, quien usa el ítem puede verlo y no está
+desvanecido, y WorldGuard permite el PvP tanto donde está él como donde está quien usa el ítem. Los mobs siempre
+son elegibles.
+
+### target_self
+
+Quien usa el ítem.
+
+### target_victim
+
+El jugador o la entidad golpeada, o el atacante en `TAKE_DAMAGE`. Vacío si no es elegible.
+
+### target_attacker
+
+| Clave | Por defecto | |
+|---|---|---|
+| `window` | 10 | El último jugador que golpeó a quien usa el ítem en estos segundos. |
+
+### target_clear
+
+Vacía la lista.
+
+### target_radius
+
+| Clave | Por defecto | |
+|---|---|---|
+| `radius` | 5 | Bloques. |
+| `from-anchor` | `false` | Medir desde el ancla en vez de desde quien usa el ítem. |
+| `only-players` | `true` | `false` incluye también mobs. |
+| `include-self` | `false` | |
+| `max` | 0 | Los más cercanos primero; 0 = todos. |
+| `pvp-check` | `true` | `false` también toma jugadores donde el PvP está denegado — para ítems de apoyo. |
+
+Solo se toman entidades en línea de visión.
+
+### target_look
+
+| Clave | Por defecto | |
+|---|---|---|
+| `range` | 20 | |
+| `precision` | 0.6 | El ancho del rayo. |
+
+Toma la entidad a la que mira quien usa el ítem y mueve el ancla hasta ella. Si falla, el ancla va al bloque
+alcanzado o al final del rayo.
+
+### target_chain
+
+| Clave | Por defecto | |
+|---|---|---|
+| `jumps` | 3 | |
+| `radius` | 6 | Distancia de cada salto. |
+| `only-players` | `true` | |
+
+Desde el objetivo actual, salta una y otra vez a la entidad elegible y visible más cercana que aún no esté en la
+cadena. Pone `%chain_length%`.
+
+### anchor
+
+| Clave | Por defecto | |
+|---|---|---|
+| `at` | `self` | `self`, `targets` (el primer objetivo) o `keep`. |
+| `y` | 0 | Desplazamiento en altura. |
+
+## Combate
+
+### damage
+
+| Clave | Por defecto | |
+|---|---|---|
+| `damage` | 4 | En medios corazones. |
+| `percent-of-max-health` | 0 | Por encima de 0, sustituye `damage` por esa parte de la vida máxima de cada objetivo. |
+| `falloff` | 1 | Cada objetivo siguiente recibe `damage × falloff^índice`. |
+| `min-health` | 0 | Nunca deja a un objetivo por debajo de esta vida. |
+| `true-damage` | `false` | Fija la vida directamente: ignora armadura, tótems e invulnerabilidad. |
+| `only-players` | `true` | Los mobs de la lista se saltan salvo con `false`. |
+| `include-self` | `false` | |
+
+El daño de este paso no vuelve a disparar los triggers de golpe del propio ítem.
+
+### heal
+
+`amount` (0) medios corazones, o `percent-of-max-health` (0).
+
+### ignite
+
+`seconds` (3). Si ya arde un fuego más largo, se conserva.
+
+## Movimiento
+
+### push y pull
+
+| Clave | Por defecto | |
+|---|---|---|
+| `strength` | 1 | |
+| `lift` | 0.35 | Velocidad hacia arriba. |
+| `from-anchor` | `false` | Empujar desde (atraer hacia) el ancla en vez de quien usa el ítem. |
+
+### launch
+
+`up` (1) y `forward` (0, en la dirección a la que mira el objetivo).
+
+### teleport
+
+| `mode` | Mueve | Claves |
+|---|---|---|
+| `forward` | A quien usa el ítem hacia delante, parando antes del primer bloque sólido. | `distance` 6, `lift` 0 |
+| `anchor` | A quien usa el ítem hasta el ancla, si allí se permite el PvP. | |
+| `to_target` | A quien usa el ítem detrás del primer objetivo, si el sitio es seguro y se permite el PvP. | `distance` 1.4 |
+| `to_source` | A cada objetivo hasta quien usa el ítem. | |
+| `swap` | Quien usa el ítem y el primer objetivo intercambian posiciones, si se permite el PvP en ambas. | |
+
+Se conserva la orientación. `forward` y `to_source` no comprueban WorldGuard.
+
+## Efectos y estados
+
+### potion_effect
+
+```yaml
+- action: potion_effect
+  potions:
+    - 'SPEED|2|10'                 # Velocidad II durante 10 segundos
+    - 'STRENGTH|%stacks%|4|false'  # nivel desde una variable, sin partículas
+```
+
+`NOMBRE|NIVEL|SEGUNDOS|PARTÍCULAS|ICONO|AMBIENTAL`. El nivel es el que leen los jugadores (`2` = II; `0` también
+es I). Los segundos son 10 si se omiten; `infinite` o `-1` no acaba nunca; valen duraciones como `1m30s`. También
+se aplica a mobs.
+
+### clear_effects
+
+`potions:` una lista de nombres de efecto. Vacía, quita todos los efectos.
+
+### flag y unflag
+
+```yaml
+- action: flag
+  flag: NO_BUILD
+  seconds: 10
+  only: [COBWEB]
+```
+
+| Clave | Por defecto | |
+|---|---|---|
+| `flag` | obligatoria | Un estado. Ver [Estados](/docs/exyliaspecials/estados). |
+| `seconds` | 5 | Negativo: hasta que se quite, muera o salga. |
+| `value` | 0 | Lo usan `LIFESTEAL` y `UNDYING`. |
+| `only` | `[]` | Acota `NO_BUILD`, `NO_ITEM_USE` y `EFFECT_IMMUNITY`. |
+
+`unflag` lleva `flag` y lo quita. Ambos actúan solo sobre jugadores.
+
+## Ítems e inventario
+
+### repair
+
+`percent` (1 = completa) del daño de cada pieza, en la `armor` (`true`) y la `hand` principal (`true`).
+
+### refill
+
+Dos formas:
+
+```yaml
+- action: refill        # llenar los huecos vacíos con un ítem
+  fill:
+    material: POTION
+    potion: {base_type: HEALING, upgraded: true}
+  slots: inventory      # inventory | hotbar
+  max: 0                # 0 = todos los huecos vacíos
+- action: refill        # completar hasta una cantidad
+  items:
+    - 'ENDER_PEARL|8'
+    - 'GOLDEN_APPLE|8'
+```
+
+La primera llena los huecos vacíos y pone `%filled%`. La segunda da lo que falte para llegar a cada cantidad (16
+si se omite); lo que no cabe espera a la siguiente conexión.
+
+### give
+
+`item` — un id de ítem especial o un material — y `amount` (1).
+
+### cooldown
+
+| Clave | Por defecto | |
+|---|---|---|
+| `item` | este ítem | Un id de ítem especial, un id de cooldown vanilla como `vanilla:ender_pearl`, o `all`. |
+| `seconds` | 0 | |
+| `mode` | `set` | `set`, `add`, `reduce` o `clear`. |
+
+Actúa sobre los cooldowns de los objetivos.
+
+### inventory
+
+Actúa sobre los jugadores objetivo distintos de quien usa el ítem.
+
+| `mode` | Hace |
+|---|---|
+| `open` | Muestra a quien usa el ítem una copia de solo lectura del inventario, la armadura y la mano secundaria del objetivo. Se cierra a los 10 segundos o a 12 bloques. |
+| `shuffle` | Baraja los `slots` del objetivo: `inventory` o `hotbar`. |
+| `screen` | Abre una pantalla **al objetivo**: `WORKBENCH` (por defecto), `ANVIL`, `ENCHANTING`, `ENDER_CHEST` (el suyo), `GRINDSTONE`, `STONECUTTER`, `LOOM`, `CARTOGRAPHY` o `SMITHING`. |
+
+### damage_armor
+
+`amount` por pieza o, si es 0, `percent` (0.25) de la durabilidad de cada pieza, al menos 1. `break` (`true`): una
+pieza puede romperse; `false` se detiene con 1 de durabilidad.
+
+## Mundo
+
+### blocks
+
+```yaml
+- action: blocks
+  mode: set
+  material: IRON_BARS
+  shape: wall
+  radius: 2
+  height: 4
+  distance: 2
+  seconds: 8
+```
+
+| Clave | Por defecto | |
+|---|---|---|
+| `mode` | `set` | `set` coloca, `clear` quita. |
+| `at` | `anchor` | `anchor`, `self` o `targets`. |
+| `material` | `ICE` | Solo `set`. |
+| `shape` | `wall` | `wall`, `platform`, `dome` o `sphere`. |
+| `radius` | 3 | Medio ancho de un muro. `clear` usa 5. |
+| `height` | 4 | Muros. |
+| `distance` | 2 | A qué distancia por delante se levanta un muro. |
+| `y` | -1 | Desplazamiento en altura de una plataforma. |
+| `only-air` | `true` | |
+| `seconds` | 6 | Se restauran pasado este tiempo; 0 los deja. |
+| `materials` | escombros | Solo `clear`: qué se quita. |
+
+Los bloques colocados respetan WorldGuard y las comprobaciones de construcción de otros plugins, no sueltan nada,
+resisten explosiones y pistones, y se restauran si el servidor se apaga antes.
+
+`clear` quita para siempre, sin drops, cada bloque de `materials` en una esfera, bloque a bloque pasando por las
+comprobaciones de rotura. Sin `materials` quita una lista de escombros incorporada: piedra labrada, **piedra,
+pizarra profunda, tierra, grava, arena, netherrack, piedra del End, obsidiana**, cristal, hielo, nieve, telarañas,
+andamios, escaleras de mano, tablones, magma, slime, miel y nieve en polvo. Esa lista incluye terreno natural:
+escribe `materials` cuando no sea lo que quieres.
+
+### projectile
+
+| Clave | Por defecto | |
+|---|---|---|
+| `type` | `SNOWBALL` | Cualquier entidad proyectil. |
+| `item` | ninguno | El material que muestra un proyectil lanzado. |
+| `speed` | 1.5 | |
+| `inert` | `true` | Sin daño, explosión, salpicadura ni eclosión; se elimina al caer. |
+| `seconds` | 5 | Tiempo de vida. |
+| `trail`, `trail-every` | ninguno, 2 | Líneas de efectos dibujadas cada pocos ticks. |
+| `impact` | ninguno | Líneas de efectos donde cae. |
+
+Es solo visual: no ejecuta pasos al caer.
+
+## Avisos
+
+### play
+
+`effects:` — líneas de efectos de ExyliaLib (`[SOUND]`, `[PARTICLE]`, `[CIRCLE]`, `[RING_PULSE]`, `[DISPLAY]`,
+`[LIGHTNING]`, `[DELAY]`...). `at`: `self` (se oye alrededor de quien usa el ítem), `targets`, `anchor` u
+`only_self` (solo lo ve y oye quien usa el ítem). `radius`: hasta dónde se ve.
+
+### message
+
+`text` y `to`: `self`, `targets` o `both`. `%player%` es quien usa el ítem. Con `both`, quien usa el ítem lo
+recibe dos veces si también es objetivo.
+
+### command
+
+`command` (se sustituye `%player%`), `as` `console` (por defecto) o `player`, `for` `self` (por defecto) o
+`targets`.
+
+## Flujo
+
+### require
+
+Detiene la cadena — y devuelve el uso y el cooldown — salvo que se cumplan todas las claves que lleva:
+
+| Clave | Se cumple cuando |
+|---|---|
+| `flag` | Quien usa el ítem tiene este estado. |
+| `missing-flag` | No lo tiene. |
+| `in-combat` | `true`: está en combate; `false`: no. |
+| `check` | La condición es verdadera, p. ej. `'%targets_found% >= 1'`. |
+
+`message` se envía cuando la detiene.
+
+### set_var
+
+`name`, y `value` (una fórmula) o `text`.
+
+### stack
+
+```yaml
+- action: stack
+  id: fury
+  add: 1
+  max: 5
+  seconds: 4
+```
+
+Un contador sobre quien usa el ítem que se desvanece: `add` (1), hasta `max` (0 = sin tope), olvidado `seconds`
+(0 = nunca) después de la última suma, `reset` para vaciarlo. Pone `%stacks%`, `%stack_level%` (stacks − 1) y
+`%stack_full%`. Se vacía al morir y al salir.
+
+### repeat
+
+`times` (1), `every` (10 ticks) y su propia lista `actions:`. La primera pasada se ejecuta al momento y el resto
+con el temporizador; los pasos de después de `repeat` no lo esperan.
+
+### stop
+
+Termina la cadena y devuelve el uso y el cooldown.
+
+## Invocaciones
+
+```yaml
+- action: summon
+  seconds: '${duration}'
+  max-alive: 1
+  body: {type: MANNEQUIN, fallback: ALLAY, name: '%owner%''s Bard', health: 20}
+  move: {mode: FOLLOW, distance: 3}
+  aura:
+    every: 1
+    range: 20
+    potions: ['STRENGTH|3|3']
+```
+
+| Clave | Por defecto | |
+|---|---|---|
+| `mode` | `spawn` | `spawn`, `swap` (quien usa el ítem intercambia posición con su invocación más reciente de este id) o `dismiss`. |
+| `id` | el del ítem | Las invocaciones se cuentan por id. |
+| `message` | ninguno | Se envía si falla; la cadena se detiene. |
+| `seconds` | 30 | Tiempo de vida. |
+| `max-alive` | 1 | La más antigua del mismo id desaparece cuando una nueva superaría el límite. |
+
+`body`:
+
+| Clave | Por defecto | |
+|---|---|---|
+| `type` | `DECOY` | `DECOY` (una copia por paquetes del dueño), `MANNEQUIN` (1.21.9+, si no `fallback`) o cualquier entidad viva. |
+| `fallback` | `ARMOR_STAND` | |
+| `name` | ninguno | `%owner%` es el dueño. |
+| `health`, `scale`, `speed` | 20, 1, 0.2 | |
+| `glow`, `silent` | `false`, `true` | |
+| `invulnerable` | ver abajo | |
+| `equipment` | ver abajo | `NONE` u `OWNER` (lleva el equipo del dueño). |
+| `held` | ninguno | Un material en su mano. |
+
+Sin sección `body`, la invocación es un señuelo invulnerable que lleva el equipo del dueño. Con ella,
+`invulnerable` vale `false` y `equipment` `NONE` salvo que se escriban.
+
+`move`: `mode` `STAY`, `FOLLOW` (`distance` 3) o `WANDER` (`radius` 6, un sitio nuevo cada `every` 4 segundos).
+
+`aura`: cada `every` (1) segundos, si el dueño está dentro de `range` (12), le da `potions` y reproduce `effects`.
+
+`turret` (no en señuelos): dispara `projectile` (`SNOWBALL`) a `speed` 1.8 cada `every` (1) segundos al jugador
+enemigo más cercano dentro de `range` (14) — en supervivencia o aventura, visible, con PvP permitido — y a los
+monstruos con `target-mobs: true`. Cada disparo hace `damage` (3) con `knockback` (0.4) y reproduce `trail`,
+`effects` e `impact`.
+
+`effects`: líneas `spawn`, `end` y `swap`.
+
+Las invocaciones desaparecen cuando su dueño muere, cambia de mundo o sale, y cuando el plugin se detiene. Los mobs
+no atacan al dueño. Pone `%summons%`.
+
+## duel
+
+Inicia un duelo entre quien usa el ítem y el primer objetivo que sea otro jugador — así que va tras un trigger de
+golpe o un paso de objetivos.
+
+| Clave | Por defecto | |
+|---|---|---|
+| `arena` | cualquiera | Un id de arena; en blanco elige una lista al azar. |
+| `countdown` | 3 | Segundos que ambos quedan congelados antes de la pelea. |
+| `seconds` | 120 | La duración de la pelea; al menos 10. |
+| `loot-seconds` | 15 | El tiempo del ganador para recoger el botín. |
+| `max-active` | 0 | Duelos iniciados con este ítem a la vez; 0 = sin límite. |
+
+El otro jugador no acepta: se lo llevan. Si el duelo no puede empezar — sin rival, alguno de los dos ocupado, sin
+arena libre — la cadena se detiene y no se gasta nada. Ver [Duelos](/docs/exyliaspecials/duelos).

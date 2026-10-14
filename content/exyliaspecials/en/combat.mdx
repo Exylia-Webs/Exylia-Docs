@@ -1,0 +1,148 @@
+---
+title: "Combat"
+description: "The combat tag: choosing a provider, what tags a player, every restriction while tagged, logout punishment and logout NPCs, the safe-zone barrier, and the admin commands."
+---
+
+ExyliaSpecials needs to know who is in combat — items such as **Flight** refuse to work then, cooldowns can be
+longer, and duels tag their fighters. It brings a full combat tag of its own, or reads the one of a combat plugin
+you already run.
+
+## Choosing a provider
+
+`combat.provider` in `config.yml`:
+
+| Value | Who tags |
+|---|---|
+| `AUTO` | The default. The first of DeluxeCombat, CelestCombat and PvPManager that is installed, otherwise the built-in tag. |
+| `BUILTIN` | The built-in tag, with every restriction, logout NPCs and the barrier below. |
+| `MANUAL` | Nobody automatically: only `/specialsadmin setcombat` and other plugins through the API. No restrictions, no punishment. |
+| `DELUXECOMBAT`, `CELESTCOMBAT`, `PVPMANAGER` | That plugin. If it is not installed the console says so and the built-in tag is used. |
+
+The console names the provider on start: `Combat provider: BuiltIn`. With an external plugin, its own settings
+decide tagging and restrictions; everything on this page from [What tags a player](#what-tags-a-player) down is
+the built-in tag only.
+
+With `BUILTIN`, `MANUAL` or CelestCombat, the tag is shared with every other Exylia plugin through ExyliaLib.
+On Lunar and Feather clients the combat time shows as a HUD cooldown with every provider.
+
+Changing the provider takes effect on `/specialsadmin reload`; switching away from the built-in tag drops every
+running tag.
+
+## What tags a player
+
+Both players, attacker and victim, are tagged for `combat.duration` (15 s) when a player is hurt by:
+
+- another player's hit or projectile;
+- TNT another player lit, or another player's tamed pet;
+- a splash or lingering potion with a harmful effect thrown by another player.
+
+A new hit never shortens a running tag. Nobody is tagged in `combat.blacklisted-worlds`, and moving into one
+ends a tag. Hitting a logout NPC tags the hitter.
+
+On death the victim's tag ends silently. With `untag-on-kill` (default `true`) the killer's tag ends too, if
+the victim was the one they were fighting.
+
+`exyliaspecials.combat.bypass` does not stop a player being tagged; it exempts them from every restriction below.
+
+## While tagged
+
+| Restriction | Setting | Default |
+|---|---|---|
+| Flight is taken away, and given back when the tag ends. Not in creative or spectator. | `disable-flight` | `true` |
+| Gliding stops, and a worn elytra is moved into the inventory. Putting one on is refused. | `disable-elytra` | `true` |
+| Opening these inventories is refused. | `blocked-inventories` | `[ENDER_CHEST]` |
+| Teleports with these causes are refused (`COMMAND`, `PLUGIN`, `NETHER_PORTAL`...). | `blocked-teleport-causes` | `[COMMAND]` |
+| Every command except these is refused. | `allowed-commands` | `/msg`, `/tell`, `/w`, `/r`, `/reply`, `/discord` |
+
+`allowed-commands` is compared on the command's name, with or without the slash and ignoring a `plugin:` prefix:
+`/msg` lets `/minecraft:msg` through but not `/msgtoggle`.
+
+### Safe zones
+
+With WorldGuard, a tagged player cannot reach a place where the `pvp` flag is `deny`:
+
+- walking in: pushed back — "You cannot enter safe zones while in combat!";
+- teleporting in, by any cause: refused — "You cannot teleport to safe zones while in combat!";
+- an ender pearl flying into one is removed; landing in one puts the player back where they threw it;
+- chorus fruit cannot be eaten at all while tagged.
+
+Each refusal message can be turned off under `combat.notifications`. Refused teleports and pearls use
+`on-region-blocked`. Messages are sent at most once every 1.5 seconds.
+
+## The barrier
+
+While tagged, the player sees a wall of `RED_STAINED_GLASS` at the edge of every safe zone near them. Only they see
+it, and it disappears with the tag. Needs WorldGuard and the built-in tag.
+
+| `combat.barrier.` | Default | |
+|---|---|---|
+| `enabled` | `true` | |
+| `material` | `RED_STAINED_GLASS` | |
+| `height` | 6 | Centred on the player. |
+| `preview-distance` | 10 | How far around the player it is drawn. Larger costs more. |
+| `update-interval-ticks` | 3 | |
+| `air-only` | `true` | Only shown in air. |
+| `push-back.enabled` | `true` | Pushes the player away from the wall. |
+| `push-back.trigger-distance` | 2.5 | |
+| `push-back.strength` | 0.55 | |
+| `push-back.cooldown-ticks` | 2 | |
+| `particles.enabled` | `true` | Dust over the wall. |
+| `particles.color` | `FF2222` | |
+| `particles.size`, `density`, `interval-ticks` | 1.2, 20, 6 | |
+
+## Logging out in combat
+
+When a tagged player leaves:
+
+1. `commands-on-logout` run.
+2. With `logout-punishment: NOTHING`, that is all.
+3. With `KILL` (the default) and `logout-npc.enabled: false`, or in a world of `logout-npc.blacklisted-worlds`,
+   the player is killed where they stood and `commands-on-player-death` run.
+4. Otherwise a logout NPC takes their place.
+
+A kicked player is spared unless `punish-on-kick` is `true`. A timeout always counts as leaving.
+
+Command lines take `console:` (the default) or `player:` in front, and `%player%`:
+
+```yaml
+combat:
+  commands-on-logout:
+    - 'console:broadcast %player% logged out in combat'
+```
+
+### Logout NPCs
+
+The NPC stands where the player left: a mannequin with their skin on 1.21.9 and newer, a zombie before. It
+wears their armour and items, has their health and effects, and is named after them with a countdown and their
+health. Their whole inventory goes with it.
+
+| Then | What happens |
+|---|---|
+| The NPC is killed | Their inventory drops where it died (kept with `keepInventory`). On their next join the player is killed there, and `logout-npc.commands-on-npc-death` and `commands-on-player-death` run. |
+| The NPC outlives its time | It disappears. On their next join the player gets their inventory and the NPC's health back, where it stood. |
+| The player comes back first | The NPC disappears, they get everything back where it stood, and they are tagged again for the time it had left. |
+
+| `combat.logout-npc.` | Default | |
+|---|---|---|
+| `enabled` | `true` | |
+| `reset-combat-timer` | `true` | The NPC lives a full `combat.duration`; `false` only what was left of the tag. |
+| `only-player-damage` | `true` | Only players can hurt it. |
+| `commands-on-npc-death` | `[]` | |
+| `blacklisted-worlds` | `[]` | Killed on the spot there instead. |
+
+NPCs are saved in the database, so a restart does not lose them: NPCs alive at shutdown are removed and their
+owners get everything back on their next join.
+
+## Commands
+
+| Command | |
+|---|---|
+| `/specialsadmin setcombat <seconds> <player>` | Tags the player for exactly that long. |
+| `/specialsadmin removecombat <player>` | Ends their tag. |
+
+Both need `exyliaspecials.admin.combat` and work only with `BUILTIN` or `MANUAL`; with a combat plugin they
+answer "No manual combat system available."
+
+## Placeholders
+
+`%exyliaspecials_in_combat%` and `%exyliaspecials_combat_time%`. See [Placeholders](/docs/exyliaspecials/placeholders).

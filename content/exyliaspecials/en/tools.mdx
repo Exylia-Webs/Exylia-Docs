@@ -1,0 +1,278 @@
+---
+title: "Tools"
+description: "The fifteen tool features — area break, vein miner, tree capitator, replant, till, seed planter, bone meal, crowbar, infinite buckets, magnet, prospector, compressor, void filter, telekinesis and auto smelt — with every key, how they break blocks, and the in-game editors."
+---
+
+A tool feature is a ready-made behaviour written as a `features:` entry with its `type` and a few keys. It sits
+on an item like an ability does, and an item can mix both:
+
+```yaml
+features:
+  - type: area_break
+    width: 3
+    height: 3
+  - type: telekinesis
+    experience: true
+```
+
+An item with at least one tool feature is listed under **Tools** in the admin menu instead of **Special items**.
+
+## Common to every tool
+
+- Tool features work from the **main hand** only, except `magnet`.
+- They accept the keys of every feature: `permission`, `cooldown`, `uses`, `cancel-event`. See
+  [Special items](/docs/exyliaspecials/items#features).
+- A use is spent and the cooldown started only when the tool did something. Mining stone with a vein miner, or a
+  prospector with no ore around, spends nothing.
+- `magnet`, `telekinesis`, `auto_smelt` and a compressor's or void filter's automatic work **never** spend uses or
+  start a cooldown.
+
+| Type | Trigger | Uses spent by default | Cancels the click |
+|---|---|---|---|
+| `area_break` | breaking a block | 1 | no |
+| `vein_miner` | breaking a block | 1 | no |
+| `tree_capitator` | breaking a block | 1 | no |
+| `auto_replant` | breaking a block | 0 | no |
+| `till` | right-clicking a block | 1 | yes |
+| `seed_planter` | right-clicking a block | 1 | yes |
+| `bonemeal_area` | right-clicking a block | 1 | yes |
+| `crowbar` | right-clicking a block | 1 | yes |
+| `infinite_bucket` | right-click | 1 | yes |
+| `prospector` | right-click | 1 | yes |
+| `magnet` | held | — | no |
+| `compressor` | carried | 1 | yes |
+| `void_filter` | carried | 1 | yes |
+| `telekinesis` | passive | — | no |
+| `auto_smelt` | passive | — | no |
+
+### effects
+
+Every tool takes an `effects` section of effect lines:
+
+```yaml
+- type: area_break
+  effects:
+    on-use: ['[SOUND] BLOCK_STONE_BREAK;0.6;0.8']
+    on-block-break: ['[PARTICLE] CLOUD;count:3;offset:0.3,0.3,0.3']
+    on-place: []
+```
+
+`on-use` plays on the player once per run; `on-block-break` and `on-place` at each block, up to eight blocks per
+run.
+
+### How extra blocks are broken
+
+Every block a tool breaks besides the one the player broke goes through the same path:
+
+1. Inside an **ExyliaMines** mine, the mine breaks it and handles the drop.
+2. Otherwise WorldGuard must allow building there, and a block break event is sent that any protection plugin
+   can cancel.
+3. The block drops as if broken by the held tool, so Fortune and Silk Touch apply.
+
+Air, liquids and unbreakable blocks such as bedrock are never broken. Extra blocks count towards a `BLOCKS_MINED`
+tracker on the tool.
+
+## Breaking
+
+### area_break
+
+Breaks the area around the block the player broke.
+
+| Key | Default | |
+|---|---|---|
+| `shape` | `face` | `face` or `cube`. |
+| `width`, `height` | 3, 3 | `face`: the size of the face the player is looking at. |
+| `depth` | 1 | `face`: layers going in. |
+| `radius` | 1 | `cube`: a cube of `2 × radius + 1`. |
+| `blocks` | any | Only these materials — the block the player broke included. |
+| `skip-immature-crops` | `false` | Leaves crops that are not fully grown. |
+
+Looking more than 60° up or down lays the face flat. Use odd sizes: the area spreads `size / 2` blocks to each
+side, so `width: 4` breaks 5.
+
+### vein_miner
+
+| Key | Default | |
+|---|---|---|
+| `ores` | every ore | Breaking one of these breaks every touching block of the same material. |
+| `max-blocks` | 64 | |
+
+Every vanilla ore counts by default, deepslate variants, nether quartz, nether gold and ancient debris included.
+
+### tree_capitator
+
+| Key | Default | |
+|---|---|---|
+| `max-blocks` | 150 | |
+| `break-leaves` | `true` | |
+| `max-leaf-distance` | 4 | How far into the leaves from a log it goes. |
+| `disable-when-sneaking` | `false` | Sneak to fell a single log. |
+| `log-blocks` | every `_LOG`, bamboo block, crimson and warped stems | |
+| `leaf-blocks` | every leaf | |
+
+Starts only on a log. `_WOOD` and stripped logs are not in the default list.
+
+### auto_replant
+
+Replants a crop the player breaks, without taking a seed.
+
+```yaml
+- type: auto_replant
+  crops:
+    WHEAT: {min-age: 7}
+    NETHER_WART: {min-age: 3}
+```
+
+Breaking a crop below `min-age` is refused, so unripe crops are left standing. Without `crops` it handles wheat,
+carrots, potatoes (7), beetroots and nether wart (3), cactus and sugar cane (0). It also replants crops an
+`area_break` on the same item breaks.
+
+## Farming
+
+### till
+
+`width` (3) × `depth` (3) of dirt, grass and paths turned into farmland on a right-click — coarse and rooted dirt
+into dirt. A short plant on top does not stop it.
+
+### seed_planter
+
+Right-clicking farmland plants on every free farmland in `width` (3) × `depth` (3), taking one seed each from the
+player's inventory: wheat seeds, carrots, potatoes, beetroot seeds, melon and pumpkin seeds. Stops when they run
+out. Special items are never used as seed.
+
+### bonemeal_area
+
+| Key | Default | |
+|---|---|---|
+| `radius` | 2 | A 5×5 square around the clicked block. |
+| `age-steps` | 1 | |
+| `custom-growth-materials` | nether wart, cactus, sugar cane | Grown by `age-steps` where bone meal does nothing. |
+| `column-growth-materials` | cactus, sugar cane | Grown by adding blocks on top. |
+| `default-column-max-height` | 3 | |
+| `column-max-height` | none | Per material: `{CACTUS: 4}`. |
+
+Uses no bone meal.
+
+## Blocks and liquids
+
+### crowbar
+
+Pries blocks out as items.
+
+```yaml
+- type: crowbar
+  materials:
+    SPAWNER: 1
+    END_PORTAL_FRAME: 12
+  no-uses-message: '%prefix% {error}This crowbar cannot pry %material% any more.'
+  on-no-uses: ['[SOUND] ENTITY_ITEM_BREAK;1;1']
+```
+
+Each material wears out on its own: `SPAWNER: 1` pries one spawner. A spawner keeps its mob. The item drops at the
+block. When every material is spent the crowbar breaks. `%uses_<material>%` (e.g. `%uses_spawner%`) shows what is
+left in the lore.
+
+### infinite_bucket
+
+| Key | Default | |
+|---|---|---|
+| `bucket` | `WATER` | `WATER`, `LAVA` or `EMPTY`. |
+| `area-radius` | 0 | Sideways reach. |
+| `area-height` | 0 | Up and down reach. |
+| `sound` | the bucket's | |
+
+`WATER` and `LAVA` place a source — or fill every air block of the area — on the clicked face. Water is refused in
+the Nether. `EMPTY` removes every water and lava source in the area around the source it looks at, and fills
+nothing.
+
+The bucket has a **built-in 1-second cooldown** of its own, which wins over the item's `cooldown:`. To change it,
+write `cooldown:` on the feature.
+
+## Collecting
+
+### magnet
+
+While the item is in either hand, once a second, pulls dropped items within `radius` (8) the player can see
+towards them at `speed` (0.4).
+
+### telekinesis
+
+Drops go straight into the inventory; what does not fit stays on the ground.
+
+| Key | Default | |
+|---|---|---|
+| `experience` | `true` | Experience goes straight to the player, mending first. |
+| `mobs` | `true` | Also for mobs the player kills with the item. |
+
+Applies to the block the player broke and to the extra blocks of the item's other tools.
+
+### auto_smelt
+
+Drops are smelted with the server's furnace recipes. `ignore` lists materials left as they drop. Gives no furnace
+experience.
+
+Without `telekinesis` on the same item, mob drops are smelted too: killing a cow gives cooked beef.
+
+### prospector
+
+| Key | Default | |
+|---|---|---|
+| `radius` | 8 | 1 to 12. |
+| `blocks` | every ore | |
+| `max-marks` | 40 | |
+| `mark` | none | Effect lines drawn on each found block; `%block%` is its material. |
+
+On a right-click, marks the nearest matching blocks with `mark`, seen only by the user, and says "Marked N
+veins" — N counts blocks. Nothing found spends nothing.
+
+## Carried tools
+
+`compressor` and `void_filter` work while the item is **anywhere in the inventory**, not only in the hand.
+
+| Action | Does |
+|---|---|
+| Carrying it | Automatic mode: works on its own while it is on. |
+| Right-click | Runs once now, and spends uses and cooldown if it did something. |
+| Sneak + right-click | Pauses or resumes automatic mode. `%status%` in the lore shows `ON` or `OFF`. |
+
+Automatic mode is on when the item is given. The inventory is checked within a second of a change — picking
+up, clicking, dropping — and every five seconds otherwise.
+
+### compressor
+
+```yaml
+- type: compressor
+  every: 3
+  recipes:
+    - {input: DIAMOND, input-amount: 9, output: DIAMOND_BLOCK, output-amount: 1}
+```
+
+| Key | Default | |
+|---|---|---|
+| `every` | 3 | Seconds between automatic passes. |
+| `recipes` | none | `input` and `output` are a material or an exact item, so custom items work. |
+
+A pass runs the recipes up to eight times, so one recipe's output can feed the next. An input matches only an
+identical item. `%recipes%` shows the recipe count.
+
+<Callout type="note" title="every is a minimum">
+An automatic pass only happens when the inventory is checked: within a second of a change, otherwise every five
+seconds. `every: 2` on an idle inventory compresses about every five seconds.
+</Callout>
+
+### void_filter
+
+`items:` — materials or exact items. While on, picking up a listed item is refused and the item on the ground is
+deleted. A right-click deletes every listed stack already in the inventory; special items are never touched.
+`%filtered%` shows the list's size.
+
+## In-game editors
+
+The admin item screen has an editor button for each `compressor` and `void_filter` on the item:
+
+- **Recipes** — a list of rows. Adding one asks for **what is spent** (put in the whole cost: the stack you place
+  sets `input-amount`) and then **what it becomes**.
+- **Filter** — drop in the items to filter.
+
+Saving writes the feature back into the item file and reloads the items. The file is rewritten as a whole, so
+its formatting may change.

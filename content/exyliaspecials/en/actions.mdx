@@ -1,0 +1,451 @@
+---
+title: "Action language"
+description: "Every step an ability can run: targeting, damage, movement, effects and states, items, blocks, projectiles, feedback, flow control, summons and duels, with every key and its default."
+---
+
+An ability is a list of steps under `actions:`, run top to bottom. Each step names an `action` and takes keys of
+its own:
+
+```yaml
+actions:
+  - action: target_radius
+    radius: 6
+  - action: require
+    check: '%targets_found% >= 1'
+    message: '${text.no_target}'
+  - action: damage
+    damage: 4
+  - action: play
+    at: targets
+    effects:
+      - '[SOUND] ENTITY_PLAYER_HURT;1;1'
+```
+
+## Keys every step takes
+
+| Key | Default | What it does |
+|---|---|---|
+| `action` | required | The step. An unknown name is logged and the step dropped. |
+| `delay-ticks` | 0 | Wait this long before the step. Later steps wait too. |
+| `condition` | none | An ExyliaLib condition; when false the step is skipped and the chain goes on. |
+| `permission` | none | The user lacks it: the step is skipped. |
+| `chance` | 1 | 0 to 1: the odds the step runs. |
+| `effects` | none | Effect lines, used by `play` and by a few steps that draw something. |
+
+A step may also name another plugin's ExyliaLib action by its full id. `condition`, `permission` and `chance`
+are only applied to this plugin's own steps.
+
+### Numbers and variables
+
+Number keys accept placeholders and formulas: `'%stacks%'`, `'${radius} * 2'`. Steps leave variables the next
+ones can read:
+
+| Variable | Set by |
+|---|---|
+| `%targets_found%` | every targeting step: how many targets were picked |
+| `%chain_length%` | `target_chain` |
+| `%last_damage%` | `damage`: the total dealt |
+| `%stacks%`, `%stack_level%`, `%stack_full%` | `stack` |
+| `%filled%` | `refill` with `fill` |
+| `%summons%` | `summon` |
+| `%repeat_index%` | `repeat`: 0, 1, 2... |
+| `%item_id%` | always: the item's id |
+| any name | `set_var` |
+
+<Callout type="warning" title="Where variables are filled">
+Variables are filled in number keys, `condition`, `require`'s `check` and potion lines. They are **not** filled
+in `message` text — only `%player%` and PlaceholderAPI are — and not in `play` effect lines. A message such as
+"Hit %targets_found% players" shows the raw token.
+</Callout>
+
+## Targets and the anchor
+
+A chain works on a **target list** and an **anchor** point.
+
+- The target list starts as the hit player or entity (on `HIT_PLAYER`, `HIT_ENTITY`, `PROJECTILE_HIT`), the
+  attacker (on `TAKE_DAMAGE`), or the user. Targeting steps replace it.
+- The anchor starts where the projectile landed or the block that was clicked or broken, otherwise the user's
+  position.
+
+A player can be picked as a target only when they are not in spectator, the user can see them and they are not
+vanished, and WorldGuard allows PvP both where they stand and where the user stands. Mobs are always eligible.
+
+### target_self
+
+The user.
+
+### target_victim
+
+The hit player or entity, or the attacker on `TAKE_DAMAGE`. Empty if they are not eligible.
+
+### target_attacker
+
+| Key | Default | |
+|---|---|---|
+| `window` | 10 | The last player who hit the user within this many seconds. |
+
+### target_clear
+
+Empties the list.
+
+### target_radius
+
+| Key | Default | |
+|---|---|---|
+| `radius` | 5 | Blocks. |
+| `from-anchor` | `false` | Measure from the anchor instead of the user. |
+| `only-players` | `true` | `false` takes mobs too. |
+| `include-self` | `false` | |
+| `max` | 0 | Nearest first; 0 = all. |
+| `pvp-check` | `true` | `false` takes players where PvP is denied too — for support items. |
+
+Only entities in line of sight are taken.
+
+### target_look
+
+| Key | Default | |
+|---|---|---|
+| `range` | 20 | |
+| `precision` | 0.6 | How wide the ray is. |
+
+Takes the entity the user looks at and moves the anchor to it. On a miss the anchor goes to the block hit, or to
+the end of the ray.
+
+### target_chain
+
+| Key | Default | |
+|---|---|---|
+| `jumps` | 3 | |
+| `radius` | 6 | Distance of each jump. |
+| `only-players` | `true` | |
+
+From the current target, jumps to the nearest visible eligible entity not yet chained, again and again. Sets
+`%chain_length%`.
+
+### anchor
+
+| Key | Default | |
+|---|---|---|
+| `at` | `self` | `self`, `targets` (the first target) or `keep`. |
+| `y` | 0 | Height offset. |
+
+## Combat
+
+### damage
+
+| Key | Default | |
+|---|---|---|
+| `damage` | 4 | In half hearts. |
+| `percent-of-max-health` | 0 | Above 0, replaces `damage` with that share of each target's maximum health. |
+| `falloff` | 1 | Each further target takes `damage × falloff^index`. |
+| `min-health` | 0 | Never takes a target below this health. |
+| `true-damage` | `false` | Sets health directly: ignores armour, totems and invulnerability. |
+| `only-players` | `true` | Mobs in the list are skipped unless `false`. |
+| `include-self` | `false` | |
+
+Damage dealt by this step does not fire the item's own hit triggers again.
+
+### heal
+
+`amount` (0) half hearts, or `percent-of-max-health` (0).
+
+### ignite
+
+`seconds` (3). A longer fire already burning is kept.
+
+## Movement
+
+### push and pull
+
+| Key | Default | |
+|---|---|---|
+| `strength` | 1 | |
+| `lift` | 0.35 | Upward speed. |
+| `from-anchor` | `false` | Push away from (pull towards) the anchor instead of the user. |
+
+### launch
+
+`up` (1) and `forward` (0, along the target's facing).
+
+### teleport
+
+| `mode` | Moves | Keys |
+|---|---|---|
+| `forward` | The user ahead, stopping before the first solid block. | `distance` 6, `lift` 0 |
+| `anchor` | The user to the anchor, when PvP is allowed there. | |
+| `to_target` | The user behind the first target, when the spot is safe and PvP is allowed. | `distance` 1.4 |
+| `to_source` | Every target to the user. | |
+| `swap` | The user and the first target trade places, when PvP is allowed at both. | |
+
+Facing is kept. `forward` and `to_source` do not check WorldGuard.
+
+## Effects and states
+
+### potion_effect
+
+```yaml
+- action: potion_effect
+  potions:
+    - 'SPEED|2|10'                 # Speed II for 10 seconds
+    - 'STRENGTH|%stacks%|4|false'  # level from a variable, no particles
+```
+
+`NAME|LEVEL|SECONDS|PARTICLES|ICON|AMBIENT`. The level is the one players read (`2` = II; `0` is I too).
+Seconds default to 10; `infinite` or `-1` never ends; lengths like `1m30s` work. Applies to mobs as well.
+
+### clear_effects
+
+`potions:` a list of effect names. Empty clears every effect.
+
+### flag and unflag
+
+```yaml
+- action: flag
+  flag: NO_BUILD
+  seconds: 10
+  only: [COBWEB]
+```
+
+| Key | Default | |
+|---|---|---|
+| `flag` | required | A state. See [States](/docs/exyliaspecials/states). |
+| `seconds` | 5 | Negative: until removed, death or quit. |
+| `value` | 0 | Used by `LIFESTEAL` and `UNDYING`. |
+| `only` | `[]` | Narrows `NO_BUILD`, `NO_ITEM_USE` and `EFFECT_IMMUNITY`. |
+
+`unflag` takes `flag` and removes it. Both act on players only.
+
+## Items and inventory
+
+### repair
+
+`percent` (1 = full) of each piece's damage, on `armor` (`true`) and the main `hand` (`true`).
+
+### refill
+
+Two forms:
+
+```yaml
+- action: refill        # fill empty slots with one item
+  fill:
+    material: POTION
+    potion: {base_type: HEALING, upgraded: true}
+  slots: inventory      # inventory | hotbar
+  max: 0                # 0 = every empty slot
+- action: refill        # top up to an amount
+  items:
+    - 'ENDER_PEARL|8'
+    - 'GOLDEN_APPLE|8'
+```
+
+The first fills empty slots and sets `%filled%`. The second gives what is missing to reach each amount (16 when
+omitted); what does not fit waits for the next join.
+
+### give
+
+`item` — a special item id or a material — and `amount` (1).
+
+### cooldown
+
+| Key | Default | |
+|---|---|---|
+| `item` | this item | A special item id, a vanilla cooldown id such as `vanilla:ender_pearl`, or `all`. |
+| `seconds` | 0 | |
+| `mode` | `set` | `set`, `add`, `reduce` or `clear`. |
+
+Acts on the targets' cooldowns.
+
+### inventory
+
+Acts on target players other than the user.
+
+| `mode` | Does |
+|---|---|
+| `open` | Shows the user a read-only copy of the target's inventory, armour and off hand. Closes after 10 seconds or 12 blocks. |
+| `shuffle` | Shuffles the target's `slots`: `inventory` or `hotbar`. |
+| `screen` | Opens a screen **on the target**: `WORKBENCH` (default), `ANVIL`, `ENCHANTING`, `ENDER_CHEST` (their own), `GRINDSTONE`, `STONECUTTER`, `LOOM`, `CARTOGRAPHY` or `SMITHING`. |
+
+### damage_armor
+
+`amount` per piece, or when 0 `percent` (0.25) of each piece's durability, at least 1. `break` (`true`): a piece
+may break; `false` stops at 1 durability left.
+
+## World
+
+### blocks
+
+```yaml
+- action: blocks
+  mode: set
+  material: IRON_BARS
+  shape: wall
+  radius: 2
+  height: 4
+  distance: 2
+  seconds: 8
+```
+
+| Key | Default | |
+|---|---|---|
+| `mode` | `set` | `set` places, `clear` removes. |
+| `at` | `anchor` | `anchor`, `self` or `targets`. |
+| `material` | `ICE` | `set` only. |
+| `shape` | `wall` | `wall`, `platform`, `dome` or `sphere`. |
+| `radius` | 3 | A wall's half-width. `clear` uses 5. |
+| `height` | 4 | Walls. |
+| `distance` | 2 | How far ahead a wall stands. |
+| `y` | -1 | A platform's height offset. |
+| `only-air` | `true` | |
+| `seconds` | 6 | Put back after this long; 0 leaves them. |
+| `materials` | debris | `clear` only: what is removed. |
+
+Placed blocks respect WorldGuard and other plugins' build checks, drop nothing, resist explosions and pistons, and
+are put back if the server stops first.
+
+`clear` removes for good, with no drops, every block of `materials` in a sphere, block by block through the
+break checks. Without `materials` it removes a built-in debris list: cobblestone, **stone, deepslate, dirt,
+gravel, sand, netherrack, end stone, obsidian**, glass, ice, snow, cobweb, scaffolding, ladders, planks, magma,
+slime, honey and powder snow. That list includes natural terrain — write `materials` when that is not what you
+want.
+
+### projectile
+
+| Key | Default | |
+|---|---|---|
+| `type` | `SNOWBALL` | Any projectile entity. |
+| `item` | none | The material a thrown projectile shows. |
+| `speed` | 1.5 | |
+| `inert` | `true` | No damage, explosion, splash or hatching; removed on landing. |
+| `seconds` | 5 | Lifetime. |
+| `trail`, `trail-every` | none, 2 | Effect lines drawn every few ticks. |
+| `impact` | none | Effect lines where it lands. |
+
+A visual: it runs no steps when it lands.
+
+## Feedback
+
+### play
+
+`effects:` — ExyliaLib effect lines (`[SOUND]`, `[PARTICLE]`, `[CIRCLE]`, `[RING_PULSE]`, `[DISPLAY]`,
+`[LIGHTNING]`, `[DELAY]`...). `at`: `self` (heard around the user), `targets`, `anchor` or `only_self` (only the
+user sees and hears it). `radius`: how far it is seen.
+
+### message
+
+`text` and `to`: `self`, `targets` or `both`. `%player%` is the user. With `both` a user who is also a target
+receives it twice.
+
+### command
+
+`command` (`%player%` replaced), `as` `console` (default) or `player`, `for` `self` (default) or `targets`.
+
+## Flow
+
+### require
+
+Stops the chain — and gives back the use and cooldown — unless every key it carries holds:
+
+| Key | Holds when |
+|---|---|
+| `flag` | The user has this state. |
+| `missing-flag` | The user does not have it. |
+| `in-combat` | `true`: the user is tagged; `false`: not. |
+| `check` | The condition is true, e.g. `'%targets_found% >= 1'`. |
+
+`message` is sent when it stops.
+
+### set_var
+
+`name`, and `value` (a formula) or `text`.
+
+### stack
+
+```yaml
+- action: stack
+  id: fury
+  add: 1
+  max: 5
+  seconds: 4
+```
+
+A counter on the user that decays: `add` (1), up to `max` (0 = no cap), forgotten `seconds` (0 = never) after
+the last add, `reset` to clear. Sets `%stacks%`, `%stack_level%` (stacks − 1) and `%stack_full%`. Cleared on
+death and quit.
+
+### repeat
+
+`times` (1), `every` (10 ticks) and its own `actions:` list. The first pass runs at once, the rest on the timer;
+the steps after `repeat` do not wait for it.
+
+### stop
+
+Ends the chain and gives back the use and cooldown.
+
+## Summons
+
+```yaml
+- action: summon
+  seconds: '${duration}'
+  max-alive: 1
+  body: {type: MANNEQUIN, fallback: ALLAY, name: '%owner%''s Bard', health: 20}
+  move: {mode: FOLLOW, distance: 3}
+  aura:
+    every: 1
+    range: 20
+    potions: ['STRENGTH|3|3']
+```
+
+| Key | Default | |
+|---|---|---|
+| `mode` | `spawn` | `spawn`, `swap` (the user trades places with their newest summon of this id) or `dismiss`. |
+| `id` | the item's | Summons are counted per id. |
+| `message` | none | Sent when it fails; the chain stops. |
+| `seconds` | 30 | Lifetime. |
+| `max-alive` | 1 | The oldest of the same id goes when a new one would exceed it. |
+
+`body`:
+
+| Key | Default | |
+|---|---|---|
+| `type` | `DECOY` | `DECOY` (a packet copy of the owner), `MANNEQUIN` (1.21.9+, else `fallback`) or any living entity. |
+| `fallback` | `ARMOR_STAND` | |
+| `name` | none | `%owner%` is the owner. |
+| `health`, `scale`, `speed` | 20, 1, 0.2 | |
+| `glow`, `silent` | `false`, `true` | |
+| `invulnerable` | see below | |
+| `equipment` | see below | `NONE` or `OWNER` (wears the owner's gear). |
+| `held` | none | A material in its hand. |
+
+Without a `body` section the summon is a decoy that is invulnerable and wears the owner's gear. With one,
+`invulnerable` defaults to `false` and `equipment` to `NONE` unless written.
+
+`move`: `mode` `STAY`, `FOLLOW` (`distance` 3) or `WANDER` (`radius` 6, a new spot every `every` 4 seconds).
+
+`aura`: every `every` (1) seconds, when the owner is within `range` (12), gives the owner `potions` and plays
+`effects`.
+
+`turret` (not on decoys): shoots `projectile` (`SNOWBALL`) at `speed` 1.8 every `every` (1) seconds at the
+nearest enemy player in `range` (14) — survival or adventure, visible, PvP allowed — and at monsters with
+`target-mobs: true`. Each shot deals `damage` (3) with `knockback` (0.4) and plays `trail`, `effects` and
+`impact`.
+
+`effects`: `spawn`, `end` and `swap` lines.
+
+Summons vanish when their owner dies, changes world or leaves, and when the plugin stops. Mobs do not target the
+owner. Sets `%summons%`.
+
+## duel
+
+Starts a duel between the user and the first target that is another player — so it follows a hit trigger or a
+targeting step.
+
+| Key | Default | |
+|---|---|---|
+| `arena` | any | An arena id; blank picks a random ready one. |
+| `countdown` | 3 | Seconds both are frozen before the fight. |
+| `seconds` | 120 | The fight's length; at least 10. |
+| `loot-seconds` | 15 | The winner's time to loot. |
+| `max-active` | 0 | Duels started with this item running at once; 0 = no limit. |
+
+The other player does not accept: they are taken. If the duel cannot start — no opponent, either player busy, no
+free arena — the chain stops and nothing is spent. See [Duels](/docs/exyliaspecials/duels).

@@ -41,6 +41,7 @@ scripts/doc-drift.sh exyliaevents # just one
 | `exyliaproxyutils` | `ExyliaProxyUtils` | 2.0.2 | `79c3b5b` 2026-10-12 | Current — first full documentation, thirteen pages. Free, public on GitHub with automatic releases (`download` instead of `purchase`); the repository has no LICENSE file, so the pages say "free" and name no licence. One universal jar for Velocity 3.4+ and BungeeCord, Java 21, needs ExyliaLib 1.106.0+ (the Redis bridge) on the backends. No commands, no permissions, no menus: the pages cover `config.properties` key by key, the server-name = `server-id` rule, the eight modules (`ping`, `commands`, `connect` with the `arrive` push, `player`, `players`, `kick`, `punish-sources`, `punish-import`) with every payload and refusal, the `player-proxy:`/`console-proxy:` prefixes, the LiteBans/LibertyBans/AdvancedBan/BanManager hooks and `originId` formats, the `<prefix>:punish:external` stream and the history import (`/staffadmin import`), the login check against ExyliaStaff's ban mirror, the wire protocol, the self-updater and the release workflow, and the backend `Proxy` API. Written against the source, not the README; discrepancies below. Documented as behaviour: a proxy that cannot reach Redis at startup stays inert until restarted (only a drop after a good start is retried); the updater only reads `releases/latest`, so once a new major is published older majors stop getting patches; the updater writes the new jar over the running file under its old (possibly versioned) name; on BungeeCord a `kick` with a blank legacy screen shows the MiniMessage text raw, and the login denial ignores `mini`; on Velocity a `kick` with both screens blank says "You are banned from this network.". Stale in the source: `PingModule`'s javadoc ("through the first player to join") and the README ("at startup") — ExyliaLib pings with no player a second after start and every ten seconds until answered; `BridgeModule`'s javadoc says modules run on the proxy's network thread (they run on the Redis subscriber thread); `Bridge.withBuiltIns`' javadoc lists six modules (the two punishment modules are registered by `RedisBridge`); the README says ExyliaStaff asks `punish-sources` before an import, but nothing on the backends calls it at ExyliaStaff `ab6caa1`. |
 | `exyliasandbox` | `ExyliaSandBox` | 1.1.0 | `9096008` 2026-10-14 | Current — reviewed for 1.1.0 (`7e6b005..9096008`): `language` (en, es, pt, fr, ru) with `messages.yml`, `scoreboards.yml` and `menus/` under `lang/<language>/`, 1.0.x files adopted into `lang/custom/`; the queue action bars, pad boss bar, countdown title and hologram lines and the kit-creator titles moved from `config.yml` to `messages.yml` (config version 4); new `prompts`, `wizards`, `confirm` and `screens` labels (world statuses and Active/Inactive are now editable); `rekit.cooldown-seconds` (30); combat tag refusing `/rekit`, `/back`, `/leavesandbox`, `/tpa`, `/tpaccept` and `/rtp` (`general.in-combat`); TPA refused from the kit creator or a queue, with `tpa.player-unavailable` and the centred ACCEPT/DECLINE request; kit room Q into the inventory and a 150 ms click limit; English kit-room names (ids unchanged); pads skip queued players; `{server-ip}` on the sidebar; user menus refreshed through `/exylialib updates`; RELOAD CONFIGS. API: `enter` with `EnterResult`, `openWorldSelector`, `SandboxJoinEvent`, `SandboxArriveEvent`, `SandboxLeaveEvent` with `LeaveReason` (`exylia-api` 1.3.0). Still documented as broken: the kit-room category editor never writes back, finishing a pre-generation shuts the server down, and the three `kit-creator` title blocks (now in `messages.yml`) are never read. |
 | `exyliashields` | `ExyliaShields` | 1.2.0 | `82dfafd` 2026-10-14 | Current — reviewed for 1.2.0: patterns and colours won from a crate (rarities under `crate.tiers`, a `tier` on every entry, account and item keys, crate blocks) or bought from the editor and colour picker (`shop.tier-prices`, per-entry `price`, ExyliaLib's `purchase` lines), showcases playing the 30 most taken community designs, `language` with `lang/<code>/` in five languages and the preview labels, import prompt and key item text moved to `messages.yml`, the admin `keys`/`unlocks` (offline too), `item key`, `menu crate`, `crate block` and `showcase` subcommands under `/shields`, the first placeholders, and the API's `openSlots`/`openLibrary` with the slot-select and import events. Older drift fixed: 43 patterns ship, not 41. |
+| `exyliaspecials` | `ExyliaSpecials` | 4.0.0 | `9f59ae7` 2026-10-14 | Current — first full documentation, eighteen pages, written against the source at `9f59ae7` (release v4.0.0, a rewrite with no 3.x compatibility; `ExyliaSpecialsV3` ignored) and `SpecialsService` in `exylia-api` (ExyliaLib `origin/main`, `6e9f9802`). Premium on the Lukittu loader (`Exylia-Specials-Loader.jar`, ExyliaLib 1.299.1+), BuiltByBit resource 49406 as `purchase`; the banner URL is assumed. The item file (id, `settings` with `${}` formulas and the in-game form, `texts`, item template, `permission`, `limit` INFINITE/USES/TIMED, `cooldown` with `combat-seconds`, `regions`, features and their gate keys), the sixteen triggers, the gate order and messages, charge/refund, item protections and delivery; the 37 steps of the action language with every key and default, run variables, targeting eligibility, summons and the `duel` step; the twelve states and `only` filters; the 70 bundled items with settings and ranges; the fifteen tool features, `BlockBreaker`, carried tools and the recipe/filter editors; the seven tracker stats, the 8 bundled trackers, applying, remove/reset; combat providers, built-in tagging and restrictions, safe zones, the barrier, logout NPCs and `exyliaspecials_combat_loggers`; vanilla cooldowns (triggers, world/region/combat times, region use caps, defaults) and the action bar; duel arenas (`arenas.yml`, snapshots, copies in the temporary world, policies, lifecycle, quit/death/restart); `/specialsadmin` and the admin menus, permissions (and the loader `plugin.yml` gap), placeholders, `config.yml`, messages, languages (en, es, fr, pt, ru; items read from `lang/<code>/items`), the API and `SpecialItemUseEvent`/`OneVsOne*Event`. |
 | `exyliastaff` | `ExyliaStaff` | 1.5.0 | `c4c2bb4` 2026-10-14 | Current — reviewed for 1.5.0 across `64824bb..c4c2bb4` (23 commits). **Punishments** extended: `engine: commands|exylia` (native bans refused at pre-login and mirrored to Redis for ExyliaProxyUtils, IP bans that learn the address, kicks through the proxy, mutes with `mute-blocked-commands`, warnings shown once at next join), evidence (`evidence-lines`) and `appeal-url` on the `screen-ban`/`screen-kick`/`muted`/`warned` screens, approvals (`/punish requests|approve|deny`, restrictive `exyliastaff.punish.type.<t>`/`.permanent`/`.category.<id>`/`.reason.<id>`/`.edit`/`.revoke` nodes, a blocked step becomes a request to a superior), `observe` (LiteBans, LibertyBans, AdvancedBan, BanManager recorded through the `punish:external` stream, under the plugin name as reason so no ladder climbs), `/staffadmin import`. `/exyliastaff` and `/es` replaced by `/staffadmin` with `info`, `history|reports|notes clear`, `wipe [confirm]`, `import`, `weblink` and the `exyliastaff.admin.info|history.clear|reports.clear|notes.clear|wipe` nodes. Web: `/staffadmin weblink`, `/staff web` single-use join link, join reminders, `chat-history` block. Freeze: `/freeze <player> [reason]`, `persist-on-quit` (default true), `alert-rejoin`. Helpop `claimed-timeout-minutes`; reports `punish-reasons`; replays `vertical-margin` 6, Kill entries, web-kept replays skip the purge; Russian (`ru`). Not documented (web-only): `replay.watch`, `staff.teleport`/`bring`, `freeze.chat`, web kick. `plugin.yml` softdepend lists LiteBans and AdvancedBan but not LibertyBans or BanManager. |
 | `exyliasurvivalcore` | `ExyliaSurvivalCore` | 1.2.2 | `da1b53b` 2026-09-14 | Current — reviewed across 90 commits, then again at `da1b53b` for the economy placeholders: the balance names moved here from ExyliaLib `1.162.1`, the `survivalcore` short identifier, and `vault` resolving to the stored currency Vault serves; thirty-one pages. Twelve new pages for the eighteen new modules, in two new nav groups: **Economy** (stored currencies, the Vault bridge and the ledger moved from ExyliaLib, boosters, sell wands and autosell; the shop; market, auctions and orders; trade and vaults) and **Protections** (regions on the internal or WorldGuard backend, raids, banks/upkeep/rent/upgrades, the admin side and the ProtectionStones import), plus duel rooms, optimization with the item updater, rewards and votes, missions and seasons, and graves inside Combat. Every existing page brought up to date: counters in stats, prestige, cross-server TPA and `/back`, the `teleport` section, BundledFiles-managed owner menus, fifty switches, 118 menus, 72 tables, 337 actions. The API page covers `exylia-api` `v1.133.0` (checked at `v1.160.2`). Written against the source; the stale comments and the broken behaviour are listed below. The other commits up to `da1b53b` (Vault registration at enable, cross-server auction locks, rank-up charging once, protection corner pillars, duel room borders) are not yet reflected. |
 | `exyliatotemtrainer` | `ExyliaTotemTrainer` | 1.1.0 | `0e606f0` 2026-10-14 | Current — reviewed for 1.1.0 (from `6ec68a0`): `language` and `lang/<code>/` folders (en, es, pt, fr, ru; a 1.0.0 server moves to `lang/custom`), `feedback` moved into `messages.yml`, the speed-weighted rating (`performance.speed-weights`, `reference-ticks`; `by-ticks` now ships empty) and the leaderboard speed button, `match.duel-request-cooldown`, `chat.isolation`, solo training now needing a ready arena, save-on-entry and dress-on-arrival with the held-player guards, the session summary screen (`training_result.yml`, Play again), the centred duel request, `{server-ip}` sidebars, neutral placeholder values, and the API's five `open*` menu methods and cancellable `DuelRequestEvent`. |
@@ -250,6 +251,84 @@ Found while writing that set at `dfbb500`. The pages describe what the code does
   written to the staff log; every `/cratesadmin key` command is.
 - Local `~/Java/Exylia/ExyliaLib` is 126 commits behind `origin/main` and lacks `net.exylia.lib.api.crates`;
   the API page was written from `origin/main`.
+
+### Discrepancies and broken behaviour in ExyliaSpecials
+
+Found while writing the docs against `9f59ae7`; the pages describe what the code does.
+
+- **Loader `plugin.yml` is missing two nodes.** `src/loader/resources/plugin.yml` (the one shipped in
+  `Exylia-Specials-Loader.jar`) declares neither `exyliaspecials.admin.arena` nor `exyliaspecials.duel.bypass` and
+  does not list them under `exyliaspecials.*` / `exyliaspecials.admin.*`; the inner `src/main/resources/plugin.yml`
+  does. Wildcards granted to non-operators therefore miss both. Its `libraries` list also differs from the inner one.
+- **Admin menu buttons skip the per-command nodes.** `menu/AdminButtons.java` registers the `exyliaspecials:admin_*`
+  actions without permission checks: giving items/appliers and creating, editing and deleting arenas from the menu
+  need only `exyliaspecials.admin`, though `plugin.yml` says `admin.arena` covers "the duel arena screens". The
+  actions sit in ExyliaLib's shared registry, so any action line can call them.
+- **`HELD` abilities are never charged.** `ItemEngine.pulse` (~78-90) checks `ready()` but never `charge()`: uses and
+  cooldown on a `HELD` feature are never spent. Same for `magnet`, the automatic compressor/void filter pass
+  (`CarriedTools.walk`) and `telekinesis`/`auto_smelt`.
+- **`PASSIVE` abilities never run.** `Trigger.PASSIVE` is accepted by `AbilityFactory` but nothing fires it for
+  abilities. ARCHITECTURE.md's trigger list also omits `PASSIVE`.
+- **Run variables are not filled in `message` text or `play` effect lines** (`FeedbackActions.message` passes only
+  `%player%`; effect lines are compiled once). `%targets_found%` in a message prints raw.
+- **Step `condition`/`permission`/`chance` are ignored on other plugins' actions** named in a step (`ActionLibrary`
+  ~30-32).
+- **Summon body defaults change with the presence of `body:`** (`SummonSpec` Body.read): absent = invulnerable decoy
+  wearing the owner's gear; present = vulnerable, no equipment unless written.
+- **`message to: both` messages the caster twice** when the caster is among the targets.
+- **`teleport` modes `forward` and `to_source` skip the WorldGuard PvP check** that the other modes make.
+- **Wall shape faces south after `target_look` on a block** (anchor yaw 0).
+- **`blocks mode: clear` default list includes natural terrain** (stone, deepslate, dirt, sand, gravel, netherrack,
+  end stone, obsidian, planks...; `WorldActions.java:21`); the bundled **Siege Forge** sneak "sweep away what others
+  built" uses it, so it deletes terrain within 5 blocks with no drops wherever protection plugins allow.
+- **`compressor_mint` and `compressor_vault` ship with `recipes: []`**: they do nothing until recipes are added in
+  the editor, though their lore promises currency folding.
+- **"Ally" items affect enemies.** `bards_anthem` and `cleansing_flare` use `pvp-check: false` with no team filter.
+- **Timed items are only swept in the main hand** (`TimedItems`); expired items elsewhere keep stale lore until used.
+- **`TAKE_DAMAGE` fires only for player damage** (melee or player projectile); not mobs, falls or fire.
+- **`damage`, `target_radius`, `target_chain` default to `only-players: true`.**
+- **Deleted bundled item/tracker files come back** on every start/reload (`Languages.refresh`), and items have no
+  `enabled` key.
+- **Automatic compression ignores short `every`.** Passes only run on inventory scans (≤1 s after a change, else the
+  100-tick fallback), so `pocket_furnace`'s `every: 2` runs about every 5 s on an idle inventory.
+- **`infinite_bucket`'s built-in 1 s feature cooldown overrides any item-level `cooldown:`.**
+- **`auto_smelt` without `telekinesis` smelts mob drops too** (`ToolDrops.onMobDrops`); smelted amounts are capped
+  at the result's max stack size.
+- **Extra blocks from area/vein/tree tools probably drop no XP** (`breakNaturally(tool)`; unverified against Paper).
+- **Crowbar drops bypass telekinesis.**
+- **Even area sizes give n+1** (`width: 4` breaks 5) in `area_break`, `till`, `seed_planter`.
+- **`till` accepts a passable block above** (short grass) where vanilla requires air.
+- **Prospector message says "veins" but counts blocks.**
+- **`hunter_kills` credits the main-hand item at death time**, not the bow that fired; a thrown trident's damage never
+  counts for `damage_dealt` although TRIDENT is whitelisted.
+- **Tracker `%kill_N%` above `max-kills-shown` stays literal; `stattrack remove <id>` rejects ids whose file was
+  deleted** (only `all` clears them). `remove`/`reset` act on the main hand only.
+- **Region use caps reset on `/specialsadmin reload`**, not only on restart (`VanillaCooldowns.java:39`), contrary to
+  the config comment.
+- **Default `FIREWORK_ROCKET` rule `regions: {__global__: …}` never matches** (`WorldGuardRegions.idsAt` excludes the
+  global region), so the 12 s elytra-boost cooldown applies everywhere. Defaults also ship server-specific region ids
+  (`pot`, `mazo`, `mazoswap`, `mace`, `crystal_hole`, `crystal_flat`).
+- **Vanilla `LAUNCH` covers only pearls, snowballs, eggs and potions**, all potions mapped to `SPLASH_POTION`;
+  **`RESURRECT` ignores the entry's material** and does not skip special totems (`VanillaCooldownListener` ~83-105).
+- **`duels.allowed-commands` needs names without a slash** (`Duels.java:483-486`) while `combat.allowed-commands`
+  accepts both; a `/msg` entry in the duel list never matches.
+- **Walking out of a duel arena is not blocked** — only teleports — though the arena menu says "nobody leaves it mid
+  duel"; `snapshot-saved` says the arena "is restored after every duel" although in-place restore needs `regenerate`.
+- **Starting a second arena selection throws** (`ArenaEditor.select` → `beginSelection`, uncaught
+  IllegalStateException). Spawns are not checked against bounds; reselecting bounds keeps the old snapshot.
+- **Probable duel/combat-log race**: with the built-in tag a fighter who quits is also a combat logger; the NPC spawns
+  in the copy (cleared on release) and on rejoin `LogoutNpcs.claim` and `Duels.onJoin` both teleport. Not verified at
+  runtime.
+- **Blocked teleport causes, pearls and chorus share the `on-region-blocked` notification toggle**; chorus fruit is
+  refused outright while tagged whenever WorldGuard is installed.
+- **Lunar/Feather players never see the action bar**, so region use counts are never shown to them.
+- **API**: `giveItem` caps at 64 (command 2304) and does message the player despite its javadoc; `startCooldown` with an
+  unknown id silently does nothing; `activate` runs only the first feature on the primary trigger; the
+  `SpecialsService` javadoc still says "ExyliaSpecialsV3" and that tools are not part of the contract, though
+  `itemIds()`/`allItems()` include them; `TriggerType.RADIUS` is never produced.
+- **Cooldowns menu lists only the viewer's item cooldowns, but CLEAR ALL also clears vanilla ones.**
+- **ARCHITECTURE.md** says commands root `/exyliaspecials` with aliases `/specials`, `/es`; only `/specialsadmin`
+  exists. ARCHITECTURE.md/README list languages en, es, pt, fr; `ru` ships too.
 
 ## How a review goes
 

@@ -1,0 +1,132 @@
+---
+title: "Duels"
+description: "1v1 duels started by an item: building an arena, snapshots and copies, the rules inside an arena, how a duel runs from countdown to loot, what happens on quit, death or restart, and the duel settings."
+---
+
+A duel is started by an item: the bundled **1v1** item, or any ability with a [`duel` step](/docs/exyliaspecials/actions#duel).
+Hitting a player with it takes both players into an arena for a fight. There is no request to accept.
+
+## Building an arena
+
+<Steps>
+  <Step title="Create it">
+    `/specialsadmin arena create pit`, or **New arena** on the **Duel arenas** screen. You get a selection
+    tool: click the two opposite corners of the arena, then shift + left-click to confirm. Ids are up to 32
+    lowercase letters, digits, `_` and `-`.
+  </Step>
+  <Step title="Set the spawns">
+    Stand where the first fighter should appear, facing the right way, and run `/specialsadmin arena setspawn pit 1`.
+    Then `2` for the other. The challenger gets spawn 1.
+  </Step>
+  <Step title="Take a snapshot">
+    `/specialsadmin arena snapshot pit` saves the arena as it is. Needs FastAsyncWorldEdit. Optional, but it is
+    what lets the arena be restored and played several times at once.
+  </Step>
+</Steps>
+
+An arena is **ready** when it is enabled and both spawns are set in loaded worlds. Bounds are optional: without
+them there are no arena rules, no limit on leaving and no copies.
+
+## Copies and snapshots
+
+| The arena has | Duels are played |
+|---|---|
+| A snapshot, FastAsyncWorldEdit, `duels.copies.enabled` | Each on its own copy, pasted into ExyliaLib's temporary world, up to `duels.copies.max-per-arena` (16) at once. The copy is thrown away after the duel. |
+| Anything less | In place, one at a time. With `regenerate` on and a snapshot, the snapshot is pasted back after each duel. |
+
+The temporary world is a void wiped on every start and stop. On Folia it is created through the `Worlds` plugin;
+without it duels run in place.
+
+Spawns are moved with the copy, so keep them inside the bounds. Reselecting the bounds does not retake the
+snapshot: take it again.
+
+## Arena rules
+
+Each arena is an ExyliaLib region whose rules apply to that arena's fighters only. **Rules** on the arena screen,
+or `/specialsadmin arena flags <arena>`, edits them:
+
+| Rule | New arenas |
+|---|---|
+| `pvp` | on |
+| `build`, `break` | on |
+| `player_build_only` | on: only blocks placed during the duel can be broken |
+| `interact`, `item_drop`, `item_pickup`, `fall_damage` | on |
+| `allowed_blocks_only`, `allowed_blocks` | off |
+| `breakable_blocks_only`, `breakable_blocks` | off |
+| `temporary_blocks`, `temporary_blocks_seconds` | off |
+
+## How a duel runs
+
+1. **Start** — an arena is reserved; both players are told and teleported, challenger to spawn 1. Where they
+   stood is saved as their way home, on the player, so it survives a quit or a restart.
+2. **Countdown** — both are frozen and invulnerable for `countdown` seconds, with a title counting down.
+3. **Fight** — a boss bar counts down `seconds`. Both are combat-tagged for the fight plus 10 seconds. Time running
+   out is a draw.
+4. **Loot** — the winner has `loot-seconds` with a boss bar to pick up the loser's drops.
+5. **End** — both go home; a dead player respawns there. The arena is released. With `duels.broadcast-results`
+   the result is announced to everyone online.
+
+During a duel:
+
+- fighters cannot hurt or be hurt by anyone but their opponent;
+- commands are refused except `duels.allowed-commands`, unless the player has `exyliaspecials.duel.bypass`;
+- teleports out of the arena's bounds are refused. Walking out is not stopped — on a copy there is only void
+  around it.
+
+| Event | Result |
+|---|---|
+| A fighter dies | The other wins. |
+| A fighter leaves | The other wins and is told; the one who left is sent home on their next join. |
+| Time runs out | Draw. |
+| The server stops | The duel ends without a result; both are sent home. After a crash they are sent home on their next join, or to the world spawn if that world is gone. |
+
+<Callout type="warning" title="Leaving a duel with the built-in combat tag">
+Fighters are combat-tagged, so with the built-in tag a fighter who leaves mid-duel is also a combat logger:
+`combat.logout-punishment` applies, and a logout NPC may spawn inside the arena. Copies are cleared of entities
+when released. Consider `logout-npc.blacklisted-worlds: [exylialib_temporary]` so loggers in copies are killed on
+the spot instead.
+</Callout>
+
+## Settings
+
+Under `duels:` in `config.yml`:
+
+| Key | Default | |
+|---|---|---|
+| `allowed-commands` | `[msg, tell, w, r, reply]` | Command names, **without** the slash. `/msg` here never matches. |
+| `broadcast-results` | `true` | |
+| `copies.enabled` | `true` | |
+| `copies.max-per-arena` | 16 | |
+
+The countdown, fight length, loot time and how many duels an item may run at once are on the `duel` step of the
+item. See [Action language](/docs/exyliaspecials/actions#duel).
+
+## Arena commands
+
+All need `exyliaspecials.admin.arena`. Those marked **player** cannot run from the console.
+
+| Command | | |
+|---|---|---|
+| `/specialsadmin arena create <id>` | player | Create, with a selection. |
+| `/specialsadmin arena bounds <arena>` | player | Select the bounds again. |
+| `/specialsadmin arena setspawn <arena> <1\|2>` | player | Where you stand. |
+| `/specialsadmin arena tp <arena> [1\|2]` | player | To a spawn, 1 by default. |
+| `/specialsadmin arena flags <arena>` | player | The rules screen. |
+| `/specialsadmin arena snapshot <arena>` | | Save the snapshot. |
+| `/specialsadmin arena regenerate <arena>` | | Toggle restoring after each in-place duel. |
+| `/specialsadmin arena toggle <arena>` | | Enable or disable. |
+| `/specialsadmin arena rename <arena> <name>` | | |
+| `/specialsadmin arena delete <arena>` | | Deletes the snapshot too. |
+| `/specialsadmin arena list` | | Every arena: free, in a duel, disabled or incomplete. |
+
+Bounds, snapshot and delete are refused while the arena is in use.
+
+The **Duel arenas** screen does the same with buttons: left-click an arena to open it, right-click to go to spawn
+1. In an arena, left-click a spawn to set it, right-click to go there.
+
+Arenas are saved in `arenas.yml` and re-read on `/specialsadmin reload`.
+
+## For other plugins
+
+ExyliaLib's `OneVsOneStartEvent` and `OneVsOneEndEvent` fire for every duel, and the API lists and ends matches.
+See [API](/docs/exyliaspecials/api).

@@ -1,0 +1,98 @@
+---
+title: "API"
+description: "SpecialsService de exylia-api: ítems, cooldowns, combate, estados y duelos desde otro plugin, y los eventos que se lanzan al usar un ítem y en los duelos."
+---
+
+ExyliaSpecials registra `SpecialsService`, parte de `exylia-api` de ExyliaLib. Depende de `exylia-api` y busca el
+servicio; nunca dependas del jar de ExyliaSpecials.
+
+```java
+import net.exylia.lib.api.ExyliaAPI;
+import net.exylia.lib.api.specials.SpecialsService;
+
+Optional<SpecialsService> specials = ExyliaAPI.get(SpecialsService.class);  // vacío si no está instalado
+SpecialsService required = ExyliaAPI.require(SpecialsService.class);        // lanza una excepción si no está instalado
+```
+
+También se registra en el `ServicesManager` de Bukkit. Añade `softdepend: [ExyliaSpecials]` para que se active antes
+que tu plugin.
+
+## Ítems
+
+| Método | |
+|---|---|
+| `Set<String> itemIds()` | Cada id de ítem cargado, herramientas incluidas. |
+| `Optional<SpecialItem> item(String id)` | |
+| `Collection<SpecialItem> allItems()` | |
+| `boolean isSpecial(ItemStack)` | |
+| `Optional<String> idOf(ItemStack)` | |
+| `int usesLeft(ItemStack)` | `-1` sin límite de usos, o para un ítem que no es especial. |
+| `Optional<ItemStack> createItem(String id, Player)` | Una copia con su límite por defecto, generada para ese jugador. |
+| `boolean giveItem(Player, String id, int amount)` | De 1 a 64. Lo que no cabe espera a la siguiente entrada. Al jugador **sí** se le avisa de que lo recibió. |
+| `boolean activate(Player, String id, @Nullable Player target)` | Ejecuta la primera feature del ítem en su trigger principal, como si se usara: se comprueban silencio, permiso, región y cooldown, y el cooldown empieza. No se gasta ningún uso. `true` si se ejecutó. |
+
+`SpecialItem` es un record: `id()`, `material()`, `trigger()`, `maxUses()` (`-1` salvo que el límite sea `USES`),
+`cooldownSeconds()` (el más largo de sus features) y `limitedUses()`.
+
+`trigger()` es un `TriggerType`: los ítems de clic derecho, clic izquierdo, soltar, agacharse y romper bloques dan
+`IMMEDIATE`; los triggers de golpe, `ON_HIT_PLAYER`; `TAKE_DAMAGE`, `ON_LAST_ATTACKER`; `CONSUME`,
+`AFTER_CONSUME`; los de proyectil y arco, `ON_PROJECTILE_LAUNCH`, `ON_PROJECTILE_HIT`, `ON_BOW_SHOOT`; en la mano,
+llevados y pasivos, `HOLD`.
+
+## Cooldowns
+
+| Método | |
+|---|---|
+| `boolean onCooldown(Player, String id)` | |
+| `Duration cooldownRemaining(Player, String id)` | |
+| `void startCooldown(Player, String id, Duration)` | Lo fija; cero o menos lo quita. Un id desconocido no hace nada. |
+| `void clearCooldown(Player, String id)` | |
+| `void clearCooldowns(Player)` | Todos los cooldowns, también los vanilla. |
+
+## Combate y estados
+
+| Método | |
+|---|---|
+| `boolean hasCombatSystem()` | |
+| `boolean isInCombat(Player)` | |
+| `Duration combatRemaining(Player)` | |
+| `boolean isFrozen(Player)` | El estado `FROZEN`. |
+| `boolean isInvulnerable(Player)` | El estado `INVULNERABLE`. |
+
+Para poner a un jugador en combate usa `Combat` de ExyliaLib: con el combate integrado o manual, ExyliaSpecials
+responde.
+
+## Duelos
+
+| Método | |
+|---|---|
+| `boolean isInMatch(Player)` | Durante la cuenta atrás o la pelea. |
+| `Optional<SpecialsMatch> matchOf(Player)` | |
+| `Collection<SpecialsMatch> activeMatches()` | |
+| `boolean endMatch(String matchId)` | Lo termina sin resultado. |
+
+`SpecialsMatch`: `matchId()`, `playerOne()`, `playerTwo()`, `arenaId()`, `itemId()`, `state()`,
+`durationMillis()`, `opponent(UUID)` y `contains(UUID)`. `MatchState` es `CREATED`, `PREPARING`, `FIGHTING`,
+`ENDING` o `FINISHED`.
+
+## Eventos
+
+En `net.exylia.lib.api.specials.event`.
+
+| Evento | Se lanza |
+|---|---|
+| `SpecialItemUseEvent` | Cuando un uso ha pasado todas las comprobaciones, antes de que la feature se ejecute. Cancelable: si se cancela, no se ejecuta ni se gasta nada. `player()`, `itemId()`, `trigger()`, `target()` (un jugador o `null`), `item()`. También lo lanza `activate`. |
+| `OneVsOneStartEvent` | Cuando empieza la pelea de un duelo. `match()`. |
+| `OneVsOneEndEvent` | Cuando termina un duelo. `match()`, `result()` y `winner()` (o `null`). |
+
+`MatchResult` es `PLAYER_ONE_WIN`, `PLAYER_TWO_WIN`, `DRAW`, `DISCONNECT` o `ERROR` (un duelo que no pudo empezar,
+o que se terminó desde la API o por un apagado).
+
+```java
+@EventHandler
+public void onUse(SpecialItemUseEvent event) {
+    if (event.itemId().equals("flight") && isInEvent(event.player())) {
+        event.setCancelled(true);
+    }
+}
+```

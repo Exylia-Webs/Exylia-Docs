@@ -1,0 +1,95 @@
+---
+title: "API"
+description: "SpecialsService from exylia-api: items, cooldowns, combat, states and duels from another plugin, and the events fired on item use and duels."
+---
+
+ExyliaSpecials registers `SpecialsService`, part of ExyliaLib's `exylia-api`. Depend on `exylia-api` and look the
+service up; never depend on the ExyliaSpecials jar.
+
+```java
+import net.exylia.lib.api.ExyliaAPI;
+import net.exylia.lib.api.specials.SpecialsService;
+
+Optional<SpecialsService> specials = ExyliaAPI.get(SpecialsService.class);  // empty when not installed
+SpecialsService required = ExyliaAPI.require(SpecialsService.class);        // throws when not installed
+```
+
+Also registered in Bukkit's `ServicesManager`. Add `softdepend: [ExyliaSpecials]` so it is enabled before you.
+
+## Items
+
+| Method | |
+|---|---|
+| `Set<String> itemIds()` | Every loaded item id, tools included. |
+| `Optional<SpecialItem> item(String id)` | |
+| `Collection<SpecialItem> allItems()` | |
+| `boolean isSpecial(ItemStack)` | |
+| `Optional<String> idOf(ItemStack)` | |
+| `int usesLeft(ItemStack)` | `-1` without a use limit, or for an item that is not special. |
+| `Optional<ItemStack> createItem(String id, Player)` | A copy with its default limit, rendered for that player. |
+| `boolean giveItem(Player, String id, int amount)` | 1 to 64. What does not fit waits for the next join. The player **is** told they received it. |
+| `boolean activate(Player, String id, @Nullable Player target)` | Runs the item's first feature on its main trigger, as if used: silenced, permission, region and cooldown are checked, the cooldown starts. No use is spent. `true` when it ran. |
+
+`SpecialItem` is a record: `id()`, `material()`, `trigger()`, `maxUses()` (`-1` unless the limit is `USES`),
+`cooldownSeconds()` (the longest of its features) and `limitedUses()`.
+
+`trigger()` is a `TriggerType`: right-click, left-click, drop, sneak and block-break items read `IMMEDIATE`;
+hit triggers `ON_HIT_PLAYER`; `TAKE_DAMAGE` `ON_LAST_ATTACKER`; `CONSUME` `AFTER_CONSUME`; projectile and bow
+triggers `ON_PROJECTILE_LAUNCH`, `ON_PROJECTILE_HIT`, `ON_BOW_SHOOT`; held, carried and passive `HOLD`.
+
+## Cooldowns
+
+| Method | |
+|---|---|
+| `boolean onCooldown(Player, String id)` | |
+| `Duration cooldownRemaining(Player, String id)` | |
+| `void startCooldown(Player, String id, Duration)` | Sets it; zero or less clears. An unknown id does nothing. |
+| `void clearCooldown(Player, String id)` | |
+| `void clearCooldowns(Player)` | Every cooldown, vanilla ones included. |
+
+## Combat and states
+
+| Method | |
+|---|---|
+| `boolean hasCombatSystem()` | |
+| `boolean isInCombat(Player)` | |
+| `Duration combatRemaining(Player)` | |
+| `boolean isFrozen(Player)` | The `FROZEN` state. |
+| `boolean isInvulnerable(Player)` | The `INVULNERABLE` state. |
+
+To tag a player, use ExyliaLib's `Combat`: with the built-in or manual tag, ExyliaSpecials answers it.
+
+## Duels
+
+| Method | |
+|---|---|
+| `boolean isInMatch(Player)` | During the countdown or the fight. |
+| `Optional<SpecialsMatch> matchOf(Player)` | |
+| `Collection<SpecialsMatch> activeMatches()` | |
+| `boolean endMatch(String matchId)` | Ends it without a result. |
+
+`SpecialsMatch`: `matchId()`, `playerOne()`, `playerTwo()`, `arenaId()`, `itemId()`, `state()`,
+`durationMillis()`, `opponent(UUID)` and `contains(UUID)`. `MatchState` is `CREATED`, `PREPARING`, `FIGHTING`,
+`ENDING` or `FINISHED`.
+
+## Events
+
+In `net.exylia.lib.api.specials.event`.
+
+| Event | Fired |
+|---|---|
+| `SpecialItemUseEvent` | When a use passed every check, before the feature runs. Cancellable: cancelled, nothing runs and nothing is spent. `player()`, `itemId()`, `trigger()`, `target()` (a player or `null`), `item()`. Fired by `activate` too. |
+| `OneVsOneStartEvent` | When a duel's fight begins. `match()`. |
+| `OneVsOneEndEvent` | When a duel ends. `match()`, `result()` and `winner()` (or `null`). |
+
+`MatchResult` is `PLAYER_ONE_WIN`, `PLAYER_TWO_WIN`, `DRAW`, `DISCONNECT` or `ERROR` (a duel that failed to
+start, was ended through the API or by a shutdown).
+
+```java
+@EventHandler
+public void onUse(SpecialItemUseEvent event) {
+    if (event.itemId().equals("flight") && isInEvent(event.player())) {
+        event.setCancelled(true);
+    }
+}
+```

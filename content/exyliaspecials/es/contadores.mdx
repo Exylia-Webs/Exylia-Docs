@@ -1,0 +1,131 @@
+---
+title: "Contadores de estadísticas"
+description: "Contadores que cuentan bajas, bloques, flechas, daño o peces en cualquier ítem: los ocho incluidos, cómo los aplican los jugadores, qué cuenta exactamente cada estadística, el archivo del contador, y cómo quitarlos o reiniciarlos."
+---
+
+Un contador de estadísticas es un ítem — el **aplicador** — que un jugador hace clic sobre una espada, un pico,
+un arco o una caña. Desde ese momento ese ítem cuenta algo y lo muestra en una sección añadida a su lore:
+
+```text
+Contador de bajas:
+ ▎ Bajas » 1,284
+ ▎ Últimas víctimas »
+ ▎   Notch
+ ▎   Steve
+ ▎   Alex
+```
+
+Los contadores funcionan igual en ítems vanilla que en ítems especiales, y un mismo ítem puede llevar varios.
+
+## Contadores incluidos
+
+| Id | Cuenta | Encaja en |
+|---|---|---|
+| `kills_tracker` | Jugadores abatidos, con las últimas 3 víctimas | Espadas, hachas, tridentes, mazas |
+| `hunter_kills` | Jugadores abatidos, con las últimas 3 víctimas | Arcos, ballestas |
+| `mobs_killed` | Mobs matados | Espadas, hachas, tridentes, arcos, ballestas |
+| `damage_dealt` | Daño causado, en corazones | Espadas, hachas, tridentes, arcos, ballestas |
+| `arrows_shot` | Flechas disparadas | Arcos, ballestas |
+| `blocks_mined` | Bloques minados, golpes en área incluidos | Picos, hachas, palas, azadas |
+| `farmer_planter` | Cultivos plantados desde el stack | Semillas de trigo, zanahoria, patata, remolacha, verruga del Nether, calabaza, sandía y cacao |
+| `fisher_tracker` | Capturas | Cañas de pescar |
+
+## Aplicar uno
+
+<Steps>
+  <Step title="Consigue un aplicador">
+    `/specialsadmin give stattrack kills_tracker Steve`, o la pantalla **Trackers** de `/specialsadmin` (un clic
+    te da uno).
+  </Step>
+  <Step title="Haz clic con él sobre el ítem">
+    Coge el aplicador y haz clic con él sobre el ítem en cualquier inventario. Se gasta un aplicador.
+  </Step>
+</Steps>
+
+| Resultado | Mensaje |
+|---|---|
+| Aplicado; la cuenta empieza en 0 | "Aplicado CONTADOR DE BAJAS." |
+| El ítem no está en la lista del contador | "CONTADOR DE BAJAS no encaja en este objeto." |
+| El ítem ya lo tiene | "Este objeto ya lleva CONTADOR DE BAJAS." |
+
+Los aplicadores no se pueden colocar como bloques. Hacer clic sobre un stack, como hace `farmer_planter` con las
+semillas, cuenta para todo el stack, que ya no se apila con semillas normales.
+
+## Qué cuenta cada estadística
+
+La cuenta va siempre al ítem que está en la mano en ese momento, y solo para eventos que ningún otro plugin
+canceló.
+
+| Estadística | Cuenta |
+|---|---|
+| `KILLS` | Un jugador matado por el portador: el ítem de la **mano principal** cuando muere la víctima. Se guarda el nombre de la víctima. |
+| `MOBS_KILLED` | Cualquier otra entidad viva matada por el portador: el ítem de la mano principal. |
+| `BLOCKS_MINED` | Bloques rotos con el ítem, bloques rotos dentro de una mina de ExyliaMines, y cada bloque extra que rompe una función de herramienta. |
+| `BLOCKS_PLACED` | Bloques colocados desde el ítem. Los bloques que coloca una herramienta — arar, plantar, cubos — no cuentan. |
+| `ARROWS_SHOT` | Disparos del arco o la ballesta. |
+| `DAMAGE_DEALT` | Daño cuerpo a cuerpo causado con el ítem, y daño de flechas disparadas desde un arco o ballesta en la mano, redondeado, al menos 1 por golpe. |
+| `FISH_CAUGHT` | Cada captura — peces, basura y tesoros. |
+
+<Callout type="warning" title="Las bajas van a la mano principal en el momento de la muerte">
+`hunter_kills` promete bajas a distancia, pero una baja cuenta para lo que esté en la mano principal cuando muere
+la víctima: una baja cuerpo a cuerpo sosteniendo el arco cuenta en el arco, una baja con flecha tras cambiar a la
+espada cuenta en la espada, y un arco en la mano secundaria nunca cuenta. El daño de un tridente lanzado nunca
+cuenta para `damage_dealt`; solo los golpes cuerpo a cuerpo con el tridente.
+</Callout>
+
+## El archivo del contador
+
+Los contadores viven en `plugins/ExyliaSpecials/lang/<idioma>/trackers/`, uno por archivo, y se recargan con
+`/specialsadmin reload`.
+
+```yaml
+id: kills_tracker
+stat: KILLS
+applier:
+  material: NETHER_STAR
+  name: '{primary}&lKILL TRACKER'
+  display-name: '{primary}KILL TRACKER'
+  lore: [...]
+  glow: true
+  max-stack-size: 16
+lore:
+  - '{secondary}Kill Tracker:'
+  - ' {letters_black}▎ {letters}Kills {letters_black}» {info}%value%'
+  - ' {letters_black}▎   {highlight}%kill_1%'
+whitelist: ['*_SWORD', '*_AXE', TRIDENT, MACE]
+max-kills-shown: 3
+```
+
+| Clave | Qué hace |
+|---|---|
+| `id` | Letras minúsculas, dígitos, `.`, `_` y `-`. Por defecto, el nombre del archivo. |
+| `stat` | Obligatoria: `KILLS`, `MOBS_KILLED`, `BLOCKS_MINED`, `BLOCKS_PLACED`, `ARROWS_SHOT`, `DAMAGE_DEALT` o `FISH_CAUGHT`. |
+| `applier` | Obligatoria: el ítem aplicador, en el formato de ítems de ExyliaLib. Su `display-name` es como lo nombran los mensajes. |
+| `lore` | La sección que se añade al ítem contado. `%value%` es la cuenta con separadores de miles. |
+| `whitelist` | Materiales en los que encaja; `*` es un comodín. Vacía, encaja en todo. |
+| `max-kills-shown` | Solo `KILLS`, por defecto 3: cuántas víctimas muestran `%kill_1%`, `%kill_2%`..., la más reciente primero. Una que falte se muestra como `—`. |
+
+Un `%kill_N%` por encima de `max-kills-shown` se queda tal cual.
+
+Las secciones se apilan en el orden en que se aplicaron los contadores, debajo del lore propio del ítem. En un ítem
+vanilla se conserva el lore original; quitar su último contador lo deja como estaba.
+
+## Quitar y reiniciar
+
+Ambos actúan sobre el ítem de la **mano principal** del jugador:
+
+```text
+/specialsadmin stattrack remove kills_tracker Steve
+/specialsadmin stattrack reset all Steve
+```
+
+`remove` quita el contador; `reset` pone su cuenta a 0. `all` actúa sobre todos los contadores del ítem. Reiniciar
+un contador `KILLS` borra también las víctimas. Ambos necesitan `exyliaspecials.admin.stattrack.manage`.
+
+`remove` solo acepta contadores que todavía tienen archivo. Las cuentas que deja en un ítem un contador cuyo
+archivo ya no existe se borran con `all`.
+
+## Leer una cuenta
+
+`%exyliaspecials_stattrack_<tracker>%` es la cuenta en el ítem de la mano principal de quien mira, vacía si no
+tiene. Ver [Placeholders](/docs/exyliaspecials/placeholders).

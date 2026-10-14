@@ -1139,6 +1139,47 @@ const CRATES_NAV: NavGroup[] = [
   },
 ];
 
+const SPECIALS_NAV: NavGroup[] = [
+  {
+    label: { en: "Getting started", es: "Empezar" },
+    pages: [
+      page("introduction", "introduction", "introduccion"),
+      page("installation", "installation", "instalacion"),
+      page("first-steps", "first-steps", "primeros-pasos"),
+    ],
+  },
+  {
+    label: { en: "Special items", es: "Ítems especiales" },
+    pages: [
+      page("items", "items", "items"),
+      page("actions", "actions", "acciones"),
+      page("states", "states", "estados"),
+      page("item-catalogue", "item-catalogue", "catalogo-de-items"),
+      page("tools", "tools", "herramientas"),
+      page("trackers", "trackers", "contadores"),
+    ],
+  },
+  {
+    label: { en: "Systems", es: "Sistemas" },
+    pages: [
+      page("combat", "combat", "combate"),
+      page("cooldowns", "cooldowns", "cooldowns"),
+      page("duels", "duels", "duelos"),
+    ],
+  },
+  {
+    label: { en: "Reference", es: "Referencia" },
+    pages: [
+      page("commands", "commands", "comandos"),
+      page("permissions", "permissions", "permisos"),
+      page("placeholders", "placeholders", "placeholders"),
+      page("configuration", "configuration", "configuracion"),
+      page("api", "api", "api"),
+      page("faq", "faq", "faq"),
+    ],
+  },
+];
+
 const PROTECTIONS_NAV: NavGroup[] = [
   {
     label: { en: "Getting started", es: "Empezar" },
@@ -1599,6 +1640,29 @@ export const plugins: Plugin[] = [
       { en: "Folia", es: "Folia" },
     ],
     nav: PROTECTIONS_NAV,
+  },
+  {
+    id: "exyliaspecials",
+    name: "ExyliaSpecials",
+    tagline: { en: "Special items, tools, combat tag and duels", es: "Ítems especiales, herramientas, combate y duelos" },
+    summary: {
+      en: "Special items built from YAML: abilities written in a 37-step action language, fifteen tool behaviours, limits by uses or time, cooldowns and region rules, with 70 items included and every number editable in game. Plus stat trackers, a built-in combat tag with logout NPCs and a safe-zone barrier (or DeluxeCombat, CelestCombat, PvPManager), cooldowns for vanilla items, and 1v1 duel arenas played on copies.",
+      es: "Ítems especiales hechos en YAML: habilidades escritas en un lenguaje de 37 acciones, quince comportamientos de herramienta, límites por usos o tiempo, cooldowns y reglas por región, con 70 ítems incluidos y cada número editable en el juego. Además contadores de estadísticas, un sistema de combate propio con NPCs de desconexión y una barrera en las zonas seguras (o DeluxeCombat, CelestCombat, PvPManager), cooldowns para ítems vanilla y arenas de duelos 1v1 jugadas en copias.",
+    },
+    version: "4.0.0",
+    status: "stable",
+    category: { en: "Gamemode", es: "Modo de juego" },
+    minecraft: "1.21+",
+    banner: "https://s3.exylia.net/exylia-plugins/public/static/images/plugins/specials/ExyliaSpecialsBanner.webp",
+    purchase: "https://builtbybit.com/resources/exyliaspecials.49406/",
+    tags: [
+      { en: "Items", es: "Ítems" },
+      { en: "PvP", es: "PvP" },
+      { en: "Tools", es: "Herramientas" },
+      { en: "Combat", es: "Combate" },
+      { en: "Folia", es: "Folia" },
+    ],
+    nav: SPECIALS_NAV,
   },
   {
     id: "exyliacrates",

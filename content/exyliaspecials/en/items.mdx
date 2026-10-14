@@ -1,0 +1,287 @@
+---
+title: "Special items"
+description: "The item file key by key: settings and texts, the item itself, permission, limits by uses or time, cooldowns, region rules, features and triggers, the order every use is checked in, and what the plugin protects special items from."
+---
+
+Every special item — a combat ability, a tool, or both — is one file in
+`plugins/ExyliaSpecials/lang/<language>/items/`. Files are read in alphabetical order on start and on
+`/specialsadmin reload`; the console ends with `Loaded N special items`.
+
+```yaml
+id: freeze                    # optional; the file name when absent
+settings:                     # named values, used below as ${name}
+  cooldown: {value: 30, min: 1, max: 600, name: 'Cooldown (seconds)'}
+  radius: {value: 5, min: 1, max: 16, name: 'Radius (blocks)'}
+texts:                        # player-facing lines, used as ${text.<key>}
+  no_target: '%prefix% {error}Nobody is close enough to freeze.'
+item:                         # what the item looks like
+  material: ICE
+  name: '{primary}&lFREEZE &8[{success}%uses%&8/{warning}%max_uses%&8]'
+  display-name: '{info}FREEZE'
+  lore: [...]
+permission: ''                # optional node checked on every use
+limit: {type: USES, amount: 3}
+cooldown: {seconds: '${cooldown}'}
+regions: {...}                # optional, needs WorldGuard
+features:                     # what the item does
+  - type: ability
+    trigger: RIGHT_CLICK
+    actions: [...]
+```
+
+An item is skipped, with a console warning naming the file, when it has no `item` section or no feature that
+loaded. A feature with an unknown `type` or a broken key is dropped with a warning and the rest of the item still
+loads. Two files with the same id: the second is skipped.
+
+## id
+
+The item's identity: what commands, cooldowns, placeholders and the API call it, and what is written on every
+copy handed out. It defaults to the file name without `.yml` and is case-insensitive.
+
+<Callout type="warning" title="Renaming an id orphans the items already out">
+Copies in players' hands carry the id, not the file. Rename the file or change `id:` and those copies become inert
+vanilla items. Everything else — material, lore, numbers, features — can change freely: copies follow the file
+on their next use.
+</Callout>
+
+## settings
+
+Named numbers the rest of the file uses. They exist so the lore, the limit, the cooldown and the actions all read
+the same value, and so staff can change them from a form in game.
+
+```yaml
+settings:
+  uses: 3                                                      # short form
+  radius: {value: 5, min: 1, max: 16, name: 'Radius (blocks)'}  # full form
+```
+
+| Key | What it does |
+|---|---|
+| `value` | The number. Required in the full form. A whole number makes the in-game form accept whole numbers only. |
+| `min`, `max` | Bounds checked by the in-game form. The file itself is not checked against them. |
+| `name` | The label in the form. Defaults to the key with `_` turned into spaces. |
+
+Setting names are lowercase letters, digits and `_`. They are used anywhere else in the file:
+
+- `${radius}` — replaced by the value. A whole value written alone (`amount: '${uses}'`) becomes a number.
+- `${duration - 0.1}`, `${every * 20}`, `${percent / 100}` — a formula over the settings, worked out on load.
+
+A reference to a setting that does not exist is left as written and logged.
+
+The **Settings** button on the item's admin screen edits these values: it opens one form, checks each value
+against its bounds, writes `settings.<key>` back to the file and reloads the items.
+
+## texts
+
+Lines the features send to players — a refusal, a summon's name — kept in one place so translations can replace
+them:
+
+```yaml
+texts:
+  no_target: '[sound:ENTITY_VILLAGER_NO|1.0|1.0]%prefix% {error}Nobody is close enough to freeze.'
+```
+
+Used anywhere below as `${text.no_target}`. A text may itself contain `${setting}` references. A leading
+`[sound:NAME|volume|pitch]` plays a sound with the message.
+
+## item
+
+The item itself, in ExyliaLib's item format:
+
+| Key | What it does |
+|---|---|
+| `material` | A material, or a head: `basehead-<texture>`, `urlhead-<url>`, `playerhead-<name>`. |
+| `name` | The name shown on the item. |
+| `display-name` | The plain name used in messages, menus and the action bar. Defaults to the id. |
+| `lore` | Lines under the name. |
+| `glow` | An enchantment glint. |
+| `hide-attributes` | Hides attribute lines. On unless `false`. |
+| `max-stack-size` | How many stack. Most bundled items use 1. |
+| `unbreakable`, `custom-model-data`, `item-model`, `tooltip-style`, `hide-tooltip`, `flags`, `enchantments`, `amount` | As in ExyliaLib. |
+| `force-consumable`, `consumable-time`, `consumable-nutrition`, `consumable-saturation`, `consumable-sound` | Make any item edible — how **Golden Head** and **Phoenix Ember** are eaten. |
+| `potion`, `attributes`, `armor_trim`, `banner_patterns`, `nbt` | As in ExyliaLib. |
+
+### Lore and name placeholders
+
+| Placeholder | Value |
+|---|---|
+| `%uses%` | Uses left; `∞` with no use limit. |
+| `%max_uses%` | Uses the item started with. |
+| `%time_remaining%` | Time left on a timed item; `∞` otherwise. |
+| `%status%` | `ON` or `OFF`: whether a carried tool's automatic mode is on. See [Tools](/docs/exyliaspecials/tools#carried-tools). |
+| `%recipes%`, `%filtered%`, `%prospector_radius%`, `%uses_<material>%` | Values of the compressor, void filter, prospector and crowbar features. |
+
+PlaceholderAPI placeholders are filled for the holder. Stat tracker sections are added under the lore — see
+[Stat trackers](/docs/exyliaspecials/trackers).
+
+An item's name and lore are rebuilt only when something on it changes — a use, a tracker count, an edit to the
+file — and every second while a timed item is held in the main hand.
+
+## permission
+
+A node checked on every use. A player without it gets "You are not allowed to use this item." Blank or absent:
+everybody can use the item. No bundled item sets one. A feature can also set its own `permission`, checked after
+the item's.
+
+## limit
+
+| `type` | `amount` | Behaviour |
+|---|---|---|
+| `INFINITE` | — | The default. The item never runs out. |
+| `USES` | uses | Each feature spends its `uses` (1 by default) when it runs. At 0 the item is used up: "Your item has been used up." In a stack, one item is taken and the next starts full. |
+| `TIMED` | seconds | The item expires that long after it was given, counting while it sits in a chest or its owner is offline. |
+
+An `amount` of 0 or less, or an unknown type, means `INFINITE`. `/specialsadmin give` and the admin item screen
+can hand out a copy with another limit.
+
+A timed item is removed when it is used after expiring ("Your item has expired."), or within a second if it is
+held in the main hand. An expired item kept anywhere else stays until it is held or used.
+
+## cooldown
+
+```yaml
+cooldown:
+  seconds: 30
+  combat-seconds: 45     # optional: used instead while the player is combat-tagged
+```
+
+The time before the item can be used again, started when a feature finishes its job. A feature can carry its own
+`cooldown:` block, which replaces this one for that feature. Each feature of an item keeps its own timer, so
+an item with a right-click and a sneak ability has two independent cooldowns.
+
+The time actually started is, in order: the feature's `cooldown`, else the item's; `combat-seconds` instead when
+the player is tagged; and a `regions.cooldowns` entry for a region the player stands in replaces either.
+
+## regions
+
+Needs WorldGuard; without it every rule here passes.
+
+```yaml
+regions:
+  disable-in-non-pvp: true    # refused where WorldGuard denies PvP
+  mode: BLACKLIST             # NONE | WHITELIST | BLACKLIST
+  list: [spawn, market]
+  cooldowns:                  # region id -> seconds
+    arena: 5
+```
+
+| Key | Default | What it does |
+|---|---|---|
+| `disable-in-non-pvp` | `false` | Refuses the item where the `pvp` flag is `deny`. |
+| `mode` | `NONE` | `WHITELIST`: usable only inside a listed region. `BLACKLIST`: refused inside one. |
+| `list` | `[]` | Region ids, case-insensitive. |
+| `cooldowns` | `{}` | The cooldown used while standing in that region, in place of the item's. |
+
+Refusals say "You cannot use this item in this region."
+
+When a feature acts on another player — hitting them, or the hit player of a combo — that player's position has
+to pass the same rules, and PvP has to be allowed both where the user stands and where the other player stands.
+That check is silent.
+
+## features
+
+The list of what the item does. Every entry has a `type`:
+
+- `ability` — a chain of action steps, described below and on [Action language](/docs/exyliaspecials/actions).
+- A tool type — `area_break`, `vein_miner`, `tree_capitator`, `auto_replant`, `till`, `seed_planter`,
+  `bonemeal_area`, `crowbar`, `infinite_bucket`, `magnet`, `prospector`, `compressor`, `void_filter`,
+  `telekinesis` or `auto_smelt`. See [Tools](/docs/exyliaspecials/tools).
+
+Keys every feature accepts:
+
+| Key | Default | What it does |
+|---|---|---|
+| `permission` | none | An extra node for this feature. |
+| `cooldown` | the item's | `{seconds, combat-seconds}` for this feature only. |
+| `uses` | 1 for abilities | Uses spent each time it runs; `0` makes it free. |
+| `combo` | none | `{hits, window}`: on hit triggers, runs only on the Nth consecutive hit on the **same** target, each hit within `window` seconds (default 3) of the last. Then counts from zero again. |
+| `cancel-event` | see below | Cancels what the click or action would do in vanilla. |
+
+### ability
+
+```yaml
+- type: ability
+  trigger: HIT_PLAYER
+  uses: 1
+  combo: {hits: 3, window: 4}
+  cooldown: {seconds: 18}
+  actions:
+    - action: damage
+      damage: 3
+      true-damage: true
+```
+
+`trigger` is required. `cancel-event` defaults to `true` — a right-click item is not eaten, thrown or placed —
+except on `CONSUME`, `PROJECTILE_LAUNCH`, `PROJECTILE_HIT` and `BOW_SHOOT`, where it defaults to `false` so the
+food is eaten and the arrow flies.
+
+### Triggers
+
+| Trigger | Fires when |
+|---|---|
+| `RIGHT_CLICK` | Right-clicking air or a block with the item in either hand. On a block only when the item has no `RIGHT_CLICK_BLOCK` feature. |
+| `RIGHT_CLICK_BLOCK` | Right-clicking a block. |
+| `LEFT_CLICK` | Left-clicking air or a block. Not when the same click hits an entity. |
+| `HIT_PLAYER` | A melee hit on a player. Not sweeps, not projectiles. The hit player is the target. |
+| `HIT_ENTITY` | A melee hit on any living entity — and on a player too when the item has no `HIT_PLAYER` feature. |
+| `TAKE_DAMAGE` | The holder is damaged **by a player**, in melee or by a player's projectile. The attacker is the target. Mobs, falls and fire do not fire it. |
+| `CONSUME` | Finishing eating or drinking the item. |
+| `PROJECTILE_LAUNCH` | Throwing or shooting a projectile from the item. Cancelling it cancels the throw. |
+| `PROJECTILE_HIT` | That projectile landing. Checked and charged at launch — a launch that would be refused does not happen — and run where it lands, with the hit entity as the target. |
+| `BOW_SHOOT` | Shooting a bow or crossbow. |
+| `DROP` | Dropping the item. With `cancel-event` (the default) the item stays in the hand. |
+| `SNEAK` | Starting to sneak with the item in either hand. |
+| `BLOCK_BREAK` | Breaking a block with the item in the main hand. Not for blocks a tool feature breaks. |
+| `HELD` | Once a second while the item is in either hand. |
+| `CARRIED` | Tool features that work from anywhere in the inventory. See [Tools](/docs/exyliaspecials/tools#carried-tools). |
+| `PASSIVE` | Used by `telekinesis` and `auto_smelt` only. |
+
+When the item in the off hand answers the same trigger as the one in the main hand, only the main hand runs.
+
+<Callout type="warning" title="Two triggers that do not behave as abilities">
+An ability on `HELD` runs every second but **never spends its uses or starts its cooldown**, so `uses` and
+`cooldown` on it have no effect. An ability on `PASSIVE` is accepted on load but **never runs**: nothing fires that
+trigger for abilities.
+</Callout>
+
+## How a use is checked
+
+Every use goes through the same checks in this order. The first one that fails ends it:
+
+1. **Silenced** — the player has the `SILENCED` state: "Your special items are silenced."
+2. **Permission** — the item's, then the feature's: "You are not allowed to use this item."
+3. **Region** — the item's `regions` rules: "You cannot use this item in this region."
+4. **The other player** — on a target player, their region and PvP at both positions. Silent.
+5. **Combo** — not the Nth hit yet. Silent.
+6. **Cooldown** — "This item is on cooldown » 12s ⌚".
+7. **Expired** — the item is removed: "Your item has expired."
+8. **Uses** — none left for this feature: "This item has no uses left."
+9. **`SpecialItemUseEvent`** — another plugin may cancel it. See [API](/docs/exyliaspecials/api#events).
+
+Then the feature runs. Hit triggers, `TAKE_DAMAGE`, `HELD` and `CARRIED` send none of the messages above: a
+failed check there is silent.
+
+### Charging and refunds
+
+The cooldown starts and the use is spent only when the feature finished its job. An ability whose chain hits a
+`stop`, a failed `require`, or a `summon` or `duel` step that could not happen spends nothing. A tool that had
+nothing to do — a vein miner on stone, a prospector with no ore around — spends nothing either.
+
+An ability with delayed steps is charged when it starts; if it stops later, the cooldown is cleared and the use
+given back.
+
+## What special items are protected from
+
+- Used as a crafting ingredient: the result is cleared.
+- Placed as a block: refused.
+- A special egg does not hatch. A special totem never saves its holder; a vanilla totem in the other hand does.
+- Throwables with a use limit are not used up by the throw; their uses count down instead.
+- Villagers accept a special item for a trade only when it is identical to the one the trade asks for — same id,
+  uses and tracker counts. Timed items never.
+- Renamed copies are still recognised; look-alike items are not.
+
+## Giving items
+
+Items are given with `/specialsadmin give item`, the admin menus or the API. A gift larger than the item's
+`max-stack-size` is split. What does not fit waits in ExyliaLib's queue and is handed over on the player's next
+join. The player is told either way: "Received 2x FREEZE", or that the item waits for their next join.
