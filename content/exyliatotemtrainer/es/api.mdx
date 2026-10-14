@@ -1,6 +1,6 @@
 ---
 title: "API"
-description: "Leer arenas, sesiones, duelos y récords, arrancar o cortar uno, y escuchar cada pop y cada ronda."
+description: "Leer arenas, sesiones, duelos y récords, arrancar o cortar uno, abrir las pantallas del jugador, y escuchar cada solicitud, pop y ronda."
 badge: "dev"
 ---
 
@@ -92,6 +92,21 @@ es una consulta y no una por espectador.
 Un `false` de cualquiera de estas es una negativa que al jugador ya se le explicó: modo desconocido, que
 ya esté ocupado, o que ninguna arena pueda recibirlo.
 
+## Menús
+
+Las pantallas propias del jugador, para que las abra un NPC, un ítem del hub o el menú de otro plugin.
+Seguras desde cualquier hilo: cada una se abre en el hilo dueño del jugador, y una pantalla que primero
+lee la base de datos se completa un momento después. No se comprueba ningún permiso; decidir quién ve una
+pantalla le toca a quien llama.
+
+| Método | Qué hace |
+|---|---|
+| `void openMenu(Player)` | El hub desde el que se llega a todas las demás pantallas, como lo abre `/totem`. |
+| `void openTraining(Player)` | El selector de entrenamiento en solitario: un modo y una velocidad. |
+| `void openDuel(Player, Player target)` | La pantalla de duelo contra un rival; elegir un modo ahí envía la solicitud con las mismas comprobaciones que `duel`. |
+| `void openProfile(Player viewer, UUID target)` | Un perfil, el propio o el de cualquiera; un objetivo desconectado se lee antes de la base de datos. |
+| `void openLeaderboard(Player viewer, String modeId, RecordCategory category)` | La tabla de un modo, sobre todas las velocidades, ordenada por esa categoría. Un modo desconocido abre el selector de modos. |
+
 ## Tipos
 
 Todo acá es un record inmutable o un enum, y cada colección adentro de uno es una copia.
@@ -145,10 +160,11 @@ reacción.
 
 ## Eventos
 
-Siete eventos, en `net.exylia.lib.api.totemtrainer.event`. Todos extienden `TotemTrainerEvent`, todos
+Siete eventos, en `net.exylia.lib.api.totemtrainer.event`. Todos extienden `TotemTrainerEvent`, y todos
 son síncronos y se disparan en el hilo dueño del jugador del que tratan — en Folia, el hilo de la región
-de ese jugador — y **ninguno es cancelable**. Cada uno informa algo que ya está decidido, así que
-recibir uno es la garantía de que ocurrió; acá no hay nada con lo que frenar un duelo o una sesión.
+de ese jugador. Uno es cancelable, `DuelRequestEvent`, y es el freno: se dispara antes de que exista un
+desafío. Los otros seis informan algo que ya está decidido, así que recibir uno es la garantía de que
+ocurrió.
 
 Todo evento que nombra una partida trae un `TotemMatch`, y eso es una foto: la partida viva pertenece al
 classloader y al hilo propios de este plugin, así que una referencia a ella no sería ni visible para el
@@ -156,6 +172,7 @@ plugin que la tuviera ni segura de leer. Llamá a `match(UUID)` cuando necesites
 
 | Evento | Se dispara cuando | Trae |
 |---|---|---|
+| `DuelRequestEvent` | Un jugador está por desafiar a otro; los dos estaban libres. **Cancelable.** | `from()`, `to()`, `rules()`, `bestOf()` |
 | `TrainingStartEvent` | Se aceptó una sesión en solitario; al jugador están por moverlo y equiparlo. | `player()`, `rules()` |
 | `TrainingEndEvent` | Terminó una sesión en solitario; los números son finales y están por guardarse. | `player()`, `rules()`, `summary()`, `reason()` |
 | `TotemPopEvent` | Reventó un tótem y el jugador logró llevar el siguiente a una mano. | `player()`, `reactionMillis()`, `grade()`, `inMatch()` |
@@ -165,7 +182,12 @@ plugin que la tuviera ni segura de leer. Llamá a `match(UUID)` cuando necesites
 
 `TotemTrainerEvent` es la clase base abstracta. Nunca se dispara y no tiene lista de handlers propia, así
 que no es algo para lo que registres un listener: está para que un helper pueda recibir cualquiera de
-los seis, y para que un `instanceof` los cubra a todos.
+los siete, y para que un `instanceof` los cubra a todos.
+
+`DuelRequestEvent` se dispara antes de que la solicitud se guarde o se avise a ninguno de los dos, así que
+cancelarlo no deja rastro: ni solicitud pendiente, ni caducidad, ni mensaje, ni espera para el retador.
+Explicarle el motivo al retador le toca a quien cancela. Una solicitud que pasa no arranca nada por sí
+sola; `MatchStartEvent` solo llega si se acepta.
 
 `TotemPopEvent.reactionMillis()` se mide desde el golpe hasta el reequipamiento, no desde la animación
 del tótem, e `inMatch()` es `false` en entrenamiento en solitario.

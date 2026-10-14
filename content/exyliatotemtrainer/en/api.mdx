@@ -1,6 +1,6 @@
 ---
 title: "API"
-description: "Read arenas, sessions, duels and records, start or stop one, and listen for every pop and every round."
+description: "Read arenas, sessions, duels and records, start or stop one, open the player's screens, and listen for every request, pop and round."
 badge: "dev"
 ---
 
@@ -90,6 +90,20 @@ per viewer.
 A `false` from any of these is a refusal the player has already been told about — an unknown mode, being
 busy already, or no arena able to take them.
 
+## Menus
+
+The player's own screens, for an NPC, a hub item or another plugin's menu to open. Safe from any thread:
+each one opens on the thread that owns the player, and a screen that reads the database first fills in
+a moment later. No permission is checked; deciding who sees a screen is the caller's call.
+
+| Method | What it does |
+|---|---|
+| `void openMenu(Player)` | The hub every other screen is reached from, as `/totem` opens it. |
+| `void openTraining(Player)` | The solo training picker: a mode and a speed. |
+| `void openDuel(Player, Player target)` | The duel screen against one opponent; picking a mode there sends the request through the same checks as `duel`. |
+| `void openProfile(Player viewer, UUID target)` | A profile, the viewer's own or anybody's; an offline target is read from the database first. |
+| `void openLeaderboard(Player viewer, String modeId, RecordCategory category)` | One mode's board, over every speed, sorted by that category. An unknown mode opens the mode picker. |
+
 ## Types
 
 Everything here is an immutable record or an enum, and every collection inside one is a copy.
@@ -140,11 +154,11 @@ differently on two servers. Read the grade rather than re-deriving it from a rea
 
 ## Events
 
-Seven events, in `net.exylia.lib.api.totemtrainer.event`. All of them extend `TotemTrainerEvent`, all
-are synchronous and fire on the thread that owns the player they are about — on Folia, that player's
-region thread — and **none of them is cancellable**. Every one reports something that has already been
-decided, so receiving one is a guarantee that it happened; there is nothing here to gate a duel or a
-session with.
+Seven events, in `net.exylia.lib.api.totemtrainer.event`. All of them extend `TotemTrainerEvent`, and
+all are synchronous and fire on the thread that owns the player they are about — on Folia, that
+player's region thread. One is cancellable, `DuelRequestEvent`, and it is the gate: it fires before a
+challenge exists. The other six report something that has already been decided, so receiving one is a
+guarantee that it happened.
 
 Every event that names a match carries a `TotemMatch`, and that is a snapshot: the live match belongs
 to this plugin's own classloader and its own thread, so a handle to it would be neither visible to the
@@ -152,6 +166,7 @@ plugin holding one nor safe to read. Call `match(UUID)` when you need the curren
 
 | Event | Fires when | Carries |
 |---|---|---|
+| `DuelRequestEvent` | A player is about to challenge another; both were found free. **Cancellable.** | `from()`, `to()`, `rules()`, `bestOf()` |
 | `TrainingStartEvent` | A solo session was accepted; the player is about to be moved and equipped. | `player()`, `rules()` |
 | `TrainingEndEvent` | A solo session is over; the numbers are final and about to be stored. | `player()`, `rules()`, `summary()`, `reason()` |
 | `TotemPopEvent` | A totem popped and the player got the next one into a hand. | `player()`, `reactionMillis()`, `grade()`, `inMatch()` |
@@ -160,8 +175,13 @@ plugin holding one nor safe to read. Call `match(UUID)` when you need the curren
 | `MatchEndEvent` | The match is decided or cancelled. | `match()`, `winner()`, `cancelled()` |
 
 `TotemTrainerEvent` itself is the abstract base. It is never fired and has no handler list of its own,
-so it is not something to register a listener for — it is there so a helper can take any of the six,
+so it is not something to register a listener for — it is there so a helper can take any of the seven,
 and so an `instanceof` check covers them all.
+
+`DuelRequestEvent` fires before the request is stored or either player is told, so cancelling it leaves
+no trace: no pending request, no expiry, no message, and no request cooldown for the challenger. Telling
+the challenger why is the canceller's job. A request that goes through starts nothing by itself;
+`MatchStartEvent` follows only if it is accepted.
 
 `TotemPopEvent.reactionMillis()` is measured from the hit to the re-equip, not from the pop animation,
 and `inMatch()` is `false` in solo training.

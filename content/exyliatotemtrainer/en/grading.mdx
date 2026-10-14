@@ -1,11 +1,12 @@
 ---
 title: "Grading"
-description: "The five grades, the thresholds per speed and per mode, the 0–100 score, and what a player sees and hears on every pop."
+description: "The five grades, the thresholds per speed and per mode, the 0–100 score, the speed-weighted rating, and what a player sees and hears on every pop."
 ---
 
 Every re-equip is timed from the hit to the moment a totem is back in a hand, and graded against
 thresholds in `performance`. A session's grades and fails become a score from 0 to 100, which is what
-the `rating` leaderboard ranks by, weighted by the speed it was set at. What each grade looks and sounds like is `feedback`.
+the `rating` leaderboard ranks by, weighted by the speed it was set at. What each grade looks and sounds
+like is `feedback`, in `messages.yml`.
 
 ## The grades
 
@@ -27,12 +28,7 @@ performance:
     excellent: 0.40
     good: 0.60
     ok: 0.90
-  by-ticks:
-    "10":
-      perfect: 0.15
-      excellent: 0.25
-      good: 0.35
-      ok: 0.45
+  by-ticks: {}
   by-mode: {}
   points:
     perfect: 100
@@ -42,6 +38,13 @@ performance:
     slow: 25
   fail-penalty: 15
   full-credit-pops: 20
+  speed-weights:
+    "25": 0.8
+    "20": 1.0
+    "15": 1.5
+    "10": 2.5
+    "5": 5.0
+  reference-ticks: 20
 ```
 
 ## Thresholds per speed and per mode
@@ -52,8 +55,9 @@ The thresholds a session uses are resolved once when it starts, most specific fi
 2. `by-mode.<modeId>` — the mode id.
 3. `defaults`.
 
-The shipped file grades a 10-tick session harder than a 25-tick one: at half a second between hits,
-0.45 s is the slowest reaction that still counts as `OK`. A mode entry is checked only when no entry
+Both override maps ship empty: a reaction is graded against one standard at every speed, and how hard
+a speed is lives in `speed-weights` instead (see [the rating](#rating)). Grading a fast interval harder
+here as well would charge a player twice for picking it. A mode entry is checked only when no entry
 matches the speed, so a `by-ticks` block always wins over a `by-mode` block.
 
 ## The score
@@ -78,9 +82,34 @@ makes a short session score like a short session.
 In a duel, each round is scored on its own and the match score is the average of the round scores.
 Pops, fails and the best reaction are summed across rounds.
 
+## Rating
+
+The score says how cleanly a session was played and is blind to speed, which is what a duel round is
+decided on. A leaderboard asks something else: a clean run at 10 ticks is harder than a clean run at
+20. The **rating** is the score times the weight of the interval it was played at:
+
+```text
+rating = round(score × weight(ticks))
+```
+
+`weight(ticks)` is the value under `performance.speed-weights` for that interval, written as text such
+as `"10"`. An interval with no weight of its own weighs `reference-ticks / ticks`, so with the default
+`20` a 40-tick interval would weigh 0.5. A score of 80 is a rating of **200** at 10 ticks and **80** at
+20 ticks.
+
+| Key | Default | What it does |
+|---|---|---|
+| `speed-weights` | `25: 0.8`, `20: 1.0`, `15: 1.5`, `10: 2.5`, `5: 5.0` | What one point of score is worth at each interval. The shipped weights rise a little faster than the plain ratio: the last few ticks are the hard ones. |
+| `reference-ticks` | `20` | The interval that weighs 1.0 when it has no weight of its own. |
+
+The rating is what the `rating` leaderboard sorts by and what the session summary screen shows. It is
+computed from the stored score each time a board is read, so retuning the weights re-ranks every board
+without touching a record. See [Statistics](/docs/exyliatotemtrainer/stats#leaderboards).
+
 ## Feedback
 
-Everything a player sees and hears is an ExyliaLib effect under `feedback`: a title, an action bar,
+Everything a player sees and hears is an ExyliaLib effect under `feedback` in `messages.yml`, so each
+language folder carries its own: a title, an action bar,
 a sound, and optionally a boss bar, particles or a firework. Remove a channel to keep it quiet; remove
 a whole section and nothing plays. The full shape of an effect block is documented in the
 [library's effects page](/docs/exylialib/effects).
@@ -109,7 +138,7 @@ that drops with the grade, and writes the action bar:
 
 Only `perfect` has a chat line by default: `%prefix% {success}Perfect pop! {highlight}%reaction%s`.
 
-```yaml title="plugins/ExyliaTotemTrainer/config.yml"
+```yaml title="plugins/ExyliaTotemTrainer/lang/en/messages.yml"
 feedback:
   perfect:
     effect:
@@ -129,7 +158,7 @@ feedback:
 | Section | When | Default |
 |---|---|---|
 | `fail` | No totem in hand when a hit landed | Title `{error}&lPOPPED OUT` / `{letters}You did not swap in time`, sound `ENTITY_ITEM_BREAK` 1.0 · 0.8 |
-| `countdown` | Before the first hit of a session or round | Title `{primary}&l%time%` / `{letters}Press {highlight}E {letters}and swap totems from your inventory`, action bar `{secondary}Starting in {highlight}%time%s`, sound `BLOCK_NOTE_BLOCK_HAT` 1.0 · 1.4. `%time%` is the seconds left. |
+| `countdown` | Before the first hit of a session or round | Title `{primary}&l%time%` / `{letters}Press {highlight}E {letters}and swap totems from your inventory`, action bar `{secondary}Starting in {highlight}%time_precise% ⌚`, sound `BLOCK_NOTE_BLOCK_HAT` 1.0 · 1.4. `%time%` is the seconds left, `%time_precise%` the same with its unit. |
 | `match-found` | Both duellists arrived in the arena | Title `{primary}&lMATCH FOUND` / `{letters}Teleporting…`, sound `ENTITY_EXPERIENCE_ORB_PICKUP` 1.0 · 1.2 |
 | `round-won` | A round went to you | Title `{success}&lROUND WON`, sound `ENTITY_PLAYER_LEVELUP` 1.0 · 1.4 |
 | `round-lost` | A round went to your opponent | Title `{error}&lROUND LOST`, sound `BLOCK_NOTE_BLOCK_BASS` 1.0 · 0.7 |

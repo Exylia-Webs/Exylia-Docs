@@ -35,22 +35,26 @@ sesión termina con un título y un mensaje, nunca con un respawn.
 
 <Steps>
   <Step title="Comprobaciones">
-    El modo tiene que existir y el intervalo tiene que ser uno de `training.ticks`. Un jugador que ya
+    El modo tiene que existir, el intervalo tiene que ser uno de `training.ticks`, y tiene que haber una
+    **arena lista** con sitio: sin ella el jugador lee "No arena is ready. Ask an administrator." y no se
+    le quita nada. Un inicio a menos de dos segundos del anterior se ignora. Un jugador que ya
     entrena o está en duelo lee "Finish what you are doing first."; uno retenido por otro plugin de
     Exylia lee "You are busy in %plugin%."; uno sobre el que otro plugin desaconseja lee "Not right now:
     %reason%." Ver [Compatibilidad](/docs/exyliatotemtrainer/compatibilidad).
   </Step>
   <Step title="Reclamo e instantánea">
-    El jugador queda reclamado para `TRAINING`, se recuerda su posición, su inventario se guarda y se
-    vacía, y pasa a modo **aventura** entrara como entrara.
+    El jugador queda reclamado para `TRAINING`, y se guardan su posición y su inventario. Hasta llegar a
+    la arena conserva lo que lleva, así que soltar, colocar, usar un objeto y abrir un cofre o el cofre de
+    ender se rechazan mientras tanto.
   </Step>
   <Step title="Aislamiento">
     Entra en un grupo propio: no ve a nadie y nadie lo ve, y no puede ser golpeado ni tocado desde
     fuera. Ver [Compatibilidad](/docs/exyliatotemtrainer/compatibilidad).
   </Step>
-  <Step title="Arena, o aquí mismo">
-    Se elige la arena lista con menos carga y el jugador va a su spawn A. Sin ninguna arena lista,
-    entrena **donde está**. Ver [Arenas](/docs/exyliatotemtrainer/arenas).
+  <Step title="Arena">
+    Se elige la arena lista con menos carga y el jugador va a su spawn A. Una vez ahí, su inventario, el
+    cursor y la cuadrícula de crafteo se vacían y pasa a modo **aventura** entrara como entrara. Ver
+    [Arenas](/docs/exyliatotemtrainer/arenas).
   </Step>
   <Step title="Cuenta atrás">
     `training.countdown` segundos (`3.0` por defecto) con un título y una action bar. El subtítulo por
@@ -69,9 +73,9 @@ El chat confirma el inicio: "Training started: %mode% · %ticks% ticks."
 
 | Motivo | Cuándo | Qué ve el jugador |
 |---|---|---|
-| `FAILED` | Sin tótem en la mano cuando llegó un golpe | El efecto `fail` ("POPPED OUT") y "Missed a totem after %pops% pops.", después el resumen |
-| `COMPLETED` | Un modo de inventario completo sin relleno se quedó sin tótems | El efecto `training-complete` ("COMPLETE") y "Training complete!", después el resumen |
-| `LEFT` | `/totem leave`, o el botón de salir del menú | El resumen; el comando además dice "You left." |
+| `FAILED` | Sin tótem en la mano cuando llegó un golpe | El efecto `fail` ("POPPED OUT") y "Missed a totem after %pops% pops.", después la pantalla de resumen |
+| `COMPLETED` | Un modo de inventario completo sin relleno se quedó sin tótems | El efecto `training-complete` ("COMPLETE") y "Training complete!", después la pantalla de resumen |
+| `LEFT` | `/totem leave`, o el botón de salir del menú | La pantalla de resumen; el comando además dice "You left." |
 | `DISCONNECTED` | El jugador se desconectó | Nada; los números se guardan |
 | `CANCELLED` | Otro plugin se llevó al jugador o el plugin se desactivó | Nada; los números se guardan |
 
@@ -81,20 +85,16 @@ por vida se mueve y el récord de ese modo y velocidad se fusiona. Ver
 
 ### El resumen
 
-`training.summary` en `messages.yml` es una lista de líneas, enviada tras `FAILED`, `COMPLETED` y
-`LEFT`. Conoce:
+Ya de vuelta en casa, una sesión que terminó como `FAILED`, `COMPLETED` o `LEFT` hace menos de un minuto
+abre la pantalla de **resumen de sesión**, `menus/training_result.yml`: pops, fallos y mejor racha; el
+rating, el modo, la velocidad, la puntuación de 0 a 100 y la duración; la reacción más rápida y la media.
+Dos botones le dan continuidad: **Play again** empieza el mismo modo a la misma velocidad, y **Another
+mode** abre el selector de entrenamiento. La pantalla se abre una vez; un jugador que se desconecta antes
+de que abra no la recibe.
 
-| Placeholder | Valor |
-|---|---|
-| `%mode%` | El nombre visible del modo |
-| `%ticks%` | El intervalo elegido |
-| `%pops%` | Tótems consumidos |
-| `%fails%` | Fallos, 0 o 1 en solitario |
-| `%best%` | Reacción más rápida, segundos con dos decimales |
-| `%average%` | Reacción media, segundos con dos decimales |
-| `%streak%` | Mejor racha de pops consecutivos |
-| `%score%` | La puntuación de 0 a 100 |
-| `%duration%` | Cuánto duró la sesión |
+El archivo conoce `%mode%`, `%ticks%`, `%pops%`, `%fails%`, `%best%` y `%average%` (segundos con dos
+decimales), `%streak%`, `%score%`, `%rating%` (la puntuación pesada por la velocidad, ver
+[Calificación](/docs/exyliatotemtrainer/calificacion#rating)) y `%duration%`.
 
 ## Mientras se está dentro
 
@@ -104,7 +104,8 @@ Las mismas protecciones valen para el entrenamiento en solitario y para los duel
 |---|---|
 | Daño | Todo salvo el golpe del propio motor se cancela, incluida una llamada `damage()` de otro plugin con la misma causa. |
 | Hambre | Congelada. |
-| Objetos | Soltar y recoger se cancelan. |
+| Objetos | Soltar y recoger se cancelan. Entre el reclamo y la llegada, y otra vez de camino a casa, colocar y romper bloques, usar un objeto o un bloque, y meter algo en un cofre o en el cofre de ender también se cancelan, para que nada deje una copia atrás cuando se devuelve la instantánea. |
+| Chat | Con `chat.isolation` activo (por defecto), el chat de una sesión o de un duelo se queda dentro: el jugador solo lee a los demás que están en él, y el resto del servidor no lee nada de él. |
 | Otros jugadores | Golpear, hacer clic derecho o recibir golpes de cualquiera fuera de tu grupo se cancela. Los jugadores dentro de una sesión no colisionan. |
 | Comandos | Solo corren las etiquetas de `match.allowed-commands` (`totem`, `tt`, `totemtrainer`, `msg`, `r`, `tell`, `w` por defecto). Cualquier otra lee "Leave with /totem leave before using that command." Un prefijo `plugin:comando` se quita antes de comprobar. |
 | Movimiento | Libre en solitario. **Anclado en los ejes horizontales en un duelo**, con caída permitida. |
@@ -113,9 +114,9 @@ Las mismas protecciones valen para el entrenamiento en solitario y para los duel
 
 ## Salir
 
-La salida sigue un orden fijo: el motor se detiene y se retira el equipamiento, el inventario y el modo
-de juego se restauran desde la instantánea, el jugador vuelve a donde estaba (o a
-`arena.return-location`), y el reclamo se libera **al final**, para que ningún otro modo pueda vestir
+La salida sigue un orden fijo: el motor se detiene y se retira el equipamiento, el jugador vuelve a donde
+estaba (o a `arena.return-location`), el inventario y el modo de juego se restauran desde la instantánea
+una vez ahí, y el reclamo se libera **al final**, para que ningún otro modo pueda vestir
 al jugador mientras su inventario está aún de camino.
 
 <Callout type="note" title="Después de un crash">

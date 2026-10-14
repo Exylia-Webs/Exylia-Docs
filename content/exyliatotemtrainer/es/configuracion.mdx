@@ -1,6 +1,6 @@
 ---
 title: "Configuración"
-description: "config.yml clave por clave, qué guardan messages.yml y scoreboards.yml, los archivos de menú y dónde se configura la base de datos."
+description: "config.yml clave por clave, las carpetas de idioma, qué guardan messages.yml y scoreboards.yml, los archivos de menú y dónde se configura la base de datos."
 ---
 
 Todo se genera en `plugins/ExyliaTotemTrainer/` en el primer arranque, con comentarios. Edita los
@@ -10,6 +10,8 @@ ticks; veinte ticks son un segundo. Los colores usan tokens de paleta como `{pri
 ## config.yml
 
 ```yaml title="plugins/ExyliaTotemTrainer/config.yml"
+language: default
+
 training:
   modes:
     normal:
@@ -71,12 +73,7 @@ performance:
     excellent: 0.40
     good: 0.60
     ok: 0.90
-  by-ticks:
-    "10":
-      perfect: 0.15
-      excellent: 0.25
-      good: 0.35
-      ok: 0.45
+  by-ticks: {}
   by-mode: {}
   points:
     perfect: 100
@@ -86,53 +83,13 @@ performance:
     slow: 25
   fail-penalty: 15
   full-credit-pops: 20
-
-feedback:
-  perfect:
-    effect:
-      action-bar:
-        text: "{success}⚡ PERFECT {muted}· {letters}%reaction%s"
-        duration: 2.0
-        time-style: auto
-      sound:
-        name: ENTITY_EXPERIENCE_ORB_PICKUP
-        volume: 0.8
-        pitch: 1.8
-        category: MASTER
-    chat: "%prefix% {success}Perfect pop! {highlight}%reaction%s"
-  # excellent, good, ok y slow tienen la misma forma, con la línea chat vacía.
-  fail:
-    title:
-      text: "{error}&lPOPPED OUT"
-      subtitle: "{letters}You did not swap in time"
-      fade-in: 0.0
-      stay: 2.0
-      fade-out: 0.5
-      time-style: auto
-    sound:
-      name: ENTITY_ITEM_BREAK
-      volume: 1.0
-      pitch: 0.8
-      category: MASTER
-  countdown:
-    title:
-      text: "{primary}&l%time%"
-      subtitle: "{letters}Press {highlight}E {letters}and swap totems from your inventory"
-      fade-in: 0.0
-      stay: 1.0
-      fade-out: 0.2
-      time-style: auto
-    action-bar:
-      text: "{secondary}Starting in {highlight}%time%s"
-      duration: 2.0
-      time-style: auto
-    sound:
-      name: BLOCK_NOTE_BLOCK_HAT
-      volume: 1.0
-      pitch: 1.4
-      category: MASTER
-  # match-found, round-won, round-lost, round-draw, match-won, match-lost y
-  # training-complete son efectos de la misma forma.
+  speed-weights:
+    "25": 0.8
+    "20": 1.0
+    "15": 1.5
+    "10": 2.5
+    "5": 5.0
+  reference-ticks: 20
 
 match:
   formats: [1, 3, 5, 7]
@@ -141,6 +98,7 @@ match:
   round-delay: 3.0
   result-delay: 5.0
   duel-request-expiry: 30.0
+  duel-request-cooldown: 15.0
   allowed-commands: [totem, tt, totemtrainer, msg, r, tell, w]
 
 leaderboard:
@@ -156,8 +114,35 @@ arena:
   max-matches-per-arena: 0
   return-location: ""
 
+chat:
+  isolation: true
+
 debug: false
 ```
+
+### `language`
+
+De qué carpeta bajo `plugins/ExyliaTotemTrainer/lang/` se leen los menús, `messages.yml` y
+`scoreboards.yml`. `default` sigue el `language` puesto en el propio `config.yml` de ExyliaLib, así que una
+línea ahí cambia todos los plugins de Exylia; `en`, `es`, `pt`, `fr` o `ru` fijan solo este plugin. Cada
+idioma es una carpeta completa que puedes editar:
+
+```
+plugins/ExyliaTotemTrainer/
+  config.yml
+  lang/es/messages.yml
+  lang/es/scoreboards.yml
+  lang/es/menus/*.yml
+```
+
+El inglés es la base sobre la que se ponen los demás, así que una línea aún sin traducir llega en inglés.
+
+<Callout type="note" title="Los servidores que usaban 1.0.0 conservan sus ediciones">
+En el primer arranque de 1.1.0, los antiguos `messages.yml`, `scoreboards.yml` y `menus/` se mueven a
+`lang/custom/`, y `config.yml` apunta ahí con `language: custom`, así que no se pierde nada de lo que el
+servidor editó. La sección `feedback` pasa de `config.yml` a ese `messages.yml` entera, sonidos incluidos.
+Pon `language` en `default` o en un código para pasar a las traducciones incluidas.
+</Callout>
 
 ### `training`
 
@@ -181,34 +166,15 @@ debug: false
 | Clave | Por defecto | Qué hace |
 |---|---|---|
 | `defaults` | `0.25 / 0.40 / 0.60 / 0.90` | La reacción más lenta, en segundos, que todavía gana `perfect`, `excellent`, `good` y `ok`. Más lento que `ok` es `slow`. |
-| `by-ticks` | bloque `"10"` | Sobrescrituras por intervalo de ticks, con el intervalo como texto por clave. Se mira primero. |
+| `by-ticks` | vacío | Sobrescrituras por intervalo de ticks, con el intervalo como texto por clave. Se mira primero. Vacío a propósito: la calificación es un solo estándar a cualquier velocidad, y lo difícil que es una velocidad le toca a `speed-weights`. |
 | `by-mode` | vacío | Sobrescrituras por id de modo. Se mira después de `by-ticks`. |
 | `points` | `100 / 85 / 70 / 50 / 25` | Puntos que vale cada calificación en la puntuación de 0 a 100. |
 | `fail-penalty` | `15` | Puntos que se restan a la puntuación por cada fallo. |
 | `full-credit-pops` | `20` | Pops que necesita una sesión para que su puntuación cuente entera; por debajo, la media se escala según lo que faltó. `0` puntúa la media sola. |
+| `speed-weights` | `25: 0.8`, `20: 1.0`, `15: 1.5`, `10: 2.5`, `5: 5.0` | Cuánto vale una velocidad en la tabla. El **rating** de una sesión es su puntuación de 0 a 100 por el peso del intervalo al que se jugó, con el intervalo como texto por clave. |
+| `reference-ticks` | `20` | El peso de un intervalo que falta en `speed-weights`: este intervalo pesa 1.0 y cualquier otro `reference-ticks / ticks`. |
 
 Ver [Calificación](/docs/exyliatotemtrainer/calificacion) para la fórmula.
-
-### `feedback`
-
-Cada entrada es un efecto de ExyliaLib: `title`, `action-bar`, `boss-bar`, `sound`, `particle` y
-`firework`, todos opcionales. Una subsección que no hace nada se deja fuera del archivo, y quitar una
-sección deja ese canal en silencio.
-
-| Clave | Se dispara cuando | Placeholders |
-|---|---|---|
-| `perfect`, `excellent`, `good`, `ok`, `slow` | Un pop ganó esa calificación. Cada una tiene un `effect` y una línea `chat`, vacía para ninguna. | `%grade%` (`PERFECT`…), `%reaction%` en segundos, `%pops%`, `%streak%` |
-| `fail` | No había tótem en la mano cuando llegó un golpe. | — |
-| `countdown` | La cuenta atrás antes del primer golpe; el título y la action bar se refrescan con el tiempo que queda. | `%time%` |
-| `match-found` | Ambos duelistas llegaron a la arena. | — |
-| `round-won`, `round-lost` | Se decidió una ronda. | — |
-| `round-draw` | Ambos lados soltaron el tótem en el mismo tick; la ronda se repite. | — |
-| `match-won`, `match-lost` | Se decidió el duelo. | — |
-| `training-complete` | Un modo de inventario completo sin refill usó su último tótem. | — |
-
-Las claves del efecto son las de ExyliaLib: `title { text, subtitle, fade-in, stay, fade-out, time-style }`,
-`action-bar { text, duration, time-style }`, `sound { name, volume, pitch, category }`. Ver la
-[página de efectos de la librería](/docs/exylialib/efectos) para `boss-bar`, `particle` y `firework`.
 
 ### `match`
 
@@ -220,6 +186,7 @@ Las claves del efecto son las de ExyliaLib: `title { text, subtitle, fade-in, st
 | `round-delay` | `3.0` | Segundos entre el fin de una ronda y la siguiente cuenta atrás. |
 | `result-delay` | `5.0` | Segundos que el resultado se queda en pantalla antes de devolver a los dos jugadores. |
 | `duel-request-expiry` | `30.0` | Segundos que una solicitud sigue abierta. Nunca menos de uno. |
+| `duel-request-cooldown` | `15.0` | Segundos que un jugador espera entre dos solicitudes que envió. Solo una solicitud que llegó a su destinatario empieza la espera. `0` la quita. |
 | `allowed-commands` | `[totem, tt, totemtrainer, msg, r, tell, w]` | Etiquetas de comando que un jugador aún puede ejecutar mientras entrena o está en un duelo. Un prefijo `plugin:comando` se quita antes de comprobar. |
 
 ### `leaderboard`
@@ -244,16 +211,22 @@ Las claves del efecto son las de ExyliaLib: `title { text, subtitle, fade-in, st
 | `max-matches-per-arena` | `0` | Duelos y sesiones en solitario simultáneos que aloja una arena. `0` es ilimitado. |
 | `return-location` | vacío | Adónde se envía a un jugador al salir, como `world,x,y,z` o `world,x,y,z,yaw,pitch`. Vacío lo devuelve a donde estaba. |
 
+### `chat`
+
+| Clave | Por defecto | Qué hace |
+|---|---|---|
+| `isolation` | `true` | Mantiene el chat de una sesión o de un duelo dentro de él: quien está en uno lee ese y nada más, y el resto del servidor no lee nada de él. `false` deja el chat tal como lo entrega el plugin de chat del servidor. Se lee en cada mensaje, así que una recarga lo cambia al momento. |
+
 ### `debug`
 
 `false` por defecto. `true` imprime líneas de depuración en la consola.
 
 ## messages.yml
 
-Cada línea que dice el plugin. `%prefix%` se expande al valor `prefix` de la cabecera del archivo,
+`lang/<idioma>/messages.yml`. Cada línea que dice el plugin. `%prefix%` se expande al valor `prefix` de la cabecera del archivo,
 `{primary}&lTOTEM &8•&r` por defecto. Los colores son tokens de paleta, así que recolorear la red nunca
 significa editar este archivo; las etiquetas MiniMessage también funcionan, y la solicitud de duelo usa
-`<click>` y `<hover>` para sus botones Accept y Decline.
+`<click>` y `<hover>` para sus botones ACCEPT y DECLINE, y `[center]` para centrar cada una de sus líneas.
 
 Una línea puede abrir con una etiqueta de efecto, que nunca llega a la pantalla: `[sound:NAME|volume|pitch]`
 reproduce un sonido a quien recibe la línea. Los valores por defecto usan tres de forma consistente:
@@ -264,12 +237,13 @@ reproduce un sonido a quien recibe la línea. Los valores por defecto usan tres 
 |---|---|
 | `no-permission`, `player-only`, `player-not-found` | Los tres rechazos de comando. |
 | `reload` | `started`, `done` (`%steps%`, `%ms%`), `failed`. |
-| `common` | `busy`, `busy-elsewhere` (`%plugin%`), `busy-advice` (`%reason%`), `not-in-anything`, `left`, `command-blocked`, y las palabras `yes` y `no`. |
-| `training` | `started`, `stopped`, `completed`, `failed` (`%pops%`), `unknown-mode`, `unknown-ticks`, y la lista `summary`, que conoce `%mode%`, `%ticks%`, `%pops%`, `%fails%`, `%best%`, `%average%`, `%streak%`, `%score%`, `%duration%`. |
+| `common` | `busy`, `busy-elsewhere` (`%plugin%`), `busy-advice` (`%reason%`), `not-in-anything`, `left`, `command-blocked`, `no-arena`, y las palabras `yes` y `no`. |
+| `training` | `started`, `stopped`, `completed`, `failed` (`%pops%`), `unknown-mode`, `unknown-ticks`. El resumen es una pantalla, `menus/training_result.yml`. |
 | `match` | `starting`, `round-start` (`%round%`, `%rounds%`), `round-won`, `round-lost`, `round-draw`, `ready`, `opponent-ready`, `no-arena`, `unknown-format`, `cancelled`, `opponent-left`, `forfeited`; la lista `round-summary` (`%round%`, `%winner%`, `%pops%`, `%average%`, `%best%`, `%score%`, `%score_for%`, `%score_against%`) y la lista `match-summary` (`%winner%`, `%loser%`, `%score_winner%`, `%score_loser%`, `%format%`, `%mode%`, `%ticks%`, `%pops%`, `%best%`, `%average%`, `%duration%`). |
-| `duel` | `request-sent`, la lista `request-received` (`%player%`, `%mode%`, `%ticks%`, `%format%`, `%seconds%`), `accepted`, `expired`, `expired-sent`, `no-pending`, `target-busy`, `target-not-ready` (`%target%`, `%reason%`), `self-duel`, `denied`, `denied-by`. |
-| `admin` | Lo que confirman las pantallas de administración: arena creada, borrada, ya existe, no encontrada, renombrada, spawn puesto, activada, desactivada, duelo cancelado, estadísticas reiniciadas, cancelado. |
-| `menu` | Palabras que los menús necesitan y no son una línea entera: los títulos de victoria y derrota, `none` (`—`), `loading`, los textos de vacío de cada lista, las tres etiquetas de estado, `reason-self`, `reason-busy`, `set`, `not-set`, y `categories`. |
+| `duel` | `request-sent`, `request-cooldown` (`%time%`, `%seconds%`), la lista `request-received` (`%player%`, `%mode%`, `%ticks%`, `%format%`, `%time%`, `%seconds%`), `accepted`, `expired`, `expired-sent`, `no-pending`, `target-busy`, `target-not-ready` (`%target%`, `%reason%`), `self-duel`, `denied`, `denied-by`. |
+| `admin` | Lo que confirman las pantallas de administración: arena creada, borrada, ya existe, no encontrada, renombrada, spawn puesto, activada, desactivada, duelo cancelado, estadísticas reiniciadas, cancelado; los títulos y descripciones de las tres pantallas de confirmación (`%arena%`, `%player%`); y lo que preguntan los prompts de arena y el asistente de spawn (`%spawn%`). |
+| `menu` | Palabras que los menús necesitan y no son una línea entera: los títulos de victoria y derrota, `none` (`—`), `loading`, los textos de vacío de cada lista, las tres etiquetas de estado, `reason-self`, `reason-busy`, `set`, `not-set`, `categories`, `ticks-label`, `all-speeds` (el botón de velocidad de la tabla antes de acotarlo), las líneas de regla de cada modo, y `grades`, cómo se llama cada calificación. |
+| `feedback` | Los efectos de cada pop, fallo, cuenta atrás y momento del duelo. Ver [`feedback`](#feedback) más abajo. |
 
 `menu.categories` da nombre e icono a las cinco categorías de la tabla:
 
@@ -293,14 +267,36 @@ menu:
       icon: FEATHER
 ```
 
+### `feedback`
+
+Lo que un jugador ve y oye, en `messages.yml` desde 1.1.0 para que se traduzca con el resto. Cada
+entrada es un efecto de ExyliaLib: `title`, `action-bar`, `boss-bar`, `sound`, `particle` y
+`firework`, todos opcionales. Una subsección que no hace nada se deja fuera del archivo, y quitar una
+sección deja ese canal en silencio.
+
+| Clave | Se dispara cuando | Placeholders |
+|---|---|---|
+| `perfect`, `excellent`, `good`, `ok`, `slow` | Un pop ganó esa calificación. Cada una tiene un `effect` y una línea `chat`, vacía para ninguna. | `%grade%` (`PERFECT`…), `%reaction%` en segundos, `%pops%`, `%streak%` |
+| `fail` | No había tótem en la mano cuando llegó un golpe. | — |
+| `countdown` | La cuenta atrás antes del primer golpe; el título y la action bar se refrescan con el tiempo que queda. | `%time%` (los segundos), `%time_precise%` (lo mismo con su unidad) |
+| `match-found` | Ambos duelistas llegaron a la arena. | — |
+| `round-won`, `round-lost` | Se decidió una ronda. | — |
+| `round-draw` | Ambos lados soltaron el tótem en el mismo tick; la ronda se repite. | — |
+| `match-won`, `match-lost` | Se decidió el duelo. | — |
+| `training-complete` | Un modo de inventario completo sin refill usó su último tótem. | — |
+
+Las claves del efecto son las de ExyliaLib: `title { text, subtitle, fade-in, stay, fade-out, time-style }`,
+`action-bar { text, duration, time-style }`, `sound { name, volume, pitch, category }`. Ver la
+[página de efectos de la librería](/docs/exylialib/efectos) para `boss-bar`, `particle` y `firework`.
+
 ## scoreboards.yml
 
-Dos sidebars, `training` y `match`, movidos por completo por placeholders. Ver
+`lang/<idioma>/scoreboards.yml`. Dos sidebars, `training` y `match`, movidos por completo por placeholders. Ver
 [Scoreboard](/docs/exyliatotemtrainer/scoreboard).
 
 ## menus/
 
-Cada pantalla es un archivo YAML bajo `menus/`:
+Cada pantalla es un archivo YAML bajo `lang/<idioma>/menus/`:
 
 | Archivo | Pantalla |
 |---|---|
@@ -311,10 +307,11 @@ Cada pantalla es un archivo YAML bajo `menus/`:
 | `profile.yml`, `records.yml`, `history.yml` | Los números de un jugador, sus mejores marcas por modo y velocidad, sus duelos recientes. |
 | `leaderboard_modes.yml`, `leaderboard.yml` | El selector de modos y la tabla de un modo. |
 | `result.yml` | La pantalla tras un duelo, con el botón de revancha. |
+| `training_result.yml` | La pantalla tras una sesión en solitario, con **Play again** y **Another mode**. |
 | `admin/main.yml`, `admin/arenas.yml`, `admin/arena.yml`, `admin/duels.yml`, `admin/players.yml`, `admin/confirm.yml` | Las pantallas de staff. |
 
-Los archivos de jugador se copian del jar una vez y luego se dejan en paz, así que tus ediciones
-sobreviven a una actualización. La carpeta `admin/` se **reescribe desde el jar en cada arranque**, para
+Los archivos de jugador siguen la versión sin pisarte: un archivo que falta se escribe, una clave nueva se
+añade, y un valor por defecto cambiado espera en `/exylialib updates` en lugar de sustituir tu edición. La carpeta `admin/` se **reescribe desde el jar en cada arranque**, para
 que un botón añadido en una versión te llegue; nada que debas editar vive ahí.
 
 <Callout type="warning" title="Un archivo de menú roto no tumba el plugin">

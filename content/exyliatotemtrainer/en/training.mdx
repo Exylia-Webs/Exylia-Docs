@@ -35,22 +35,26 @@ ends with a title and a message, never with a respawn.
 
 <Steps>
   <Step title="Checks">
-    The mode has to exist and the interval has to be one of `training.ticks`. A player already
+    The mode has to exist, the interval has to be one of `training.ticks`, and a **ready arena** with
+    room has to exist: without one the player reads "No arena is ready. Ask an administrator." and
+    nothing is taken from them. A start within two seconds of the last one is ignored. A player already
     training or duelling reads "Finish what you are doing first."; one held by another Exylia plugin
     reads "You are busy in %plugin%."; one another plugin advises against taking reads "Not right now:
     %reason%." See [Compatibility](/docs/exyliatotemtrainer/compatibility).
   </Step>
   <Step title="Claim and snapshot">
-    The player is claimed for `TRAINING`, their location is remembered, their inventory is saved and
-    cleared, and they are put in **adventure** mode whatever they walked in as.
+    The player is claimed for `TRAINING`, and their location and inventory are saved. Until they arrive
+    in the arena they keep what they hold, so dropping, placing, using an item and opening a chest or the
+    ender chest are refused meanwhile.
   </Step>
   <Step title="Isolation">
     They join a group of their own: they see nobody and nobody sees them, and they cannot be hit or
     touched from outside. See [Compatibility](/docs/exyliatotemtrainer/compatibility).
   </Step>
-  <Step title="Arena, or right here">
-    The least-loaded ready arena is picked and the player is sent to its spawn A. With no ready arena
-    they train **where they stand**. See [Arenas](/docs/exyliatotemtrainer/arenas).
+  <Step title="Arena">
+    The least-loaded ready arena is picked and the player is sent to its spawn A. Once they stand there,
+    their inventory, cursor and crafting grid are cleared and they are put in **adventure** mode whatever
+    they walked in as. See [Arenas](/docs/exyliatotemtrainer/arenas).
   </Step>
   <Step title="Countdown">
     `training.countdown` seconds (`3.0` by default) with a title and an action bar. The default subtitle
@@ -69,9 +73,9 @@ The chat confirms the start: "Training started: %mode% · %ticks% ticks."
 
 | Reason | When | What the player sees |
 |---|---|---|
-| `FAILED` | No totem in hand when a hit landed | The `fail` effect ("POPPED OUT") and "Missed a totem after %pops% pops.", then the summary |
-| `COMPLETED` | A full-inventory mode without refill ran out of totems | The `training-complete` effect ("COMPLETE") and "Training complete!", then the summary |
-| `LEFT` | `/totem leave`, or the leave button in the menu | The summary; the command also says "You left." |
+| `FAILED` | No totem in hand when a hit landed | The `fail` effect ("POPPED OUT") and "Missed a totem after %pops% pops.", then the summary screen |
+| `COMPLETED` | A full-inventory mode without refill ran out of totems | The `training-complete` effect ("COMPLETE") and "Training complete!", then the summary screen |
+| `LEFT` | `/totem leave`, or the leave button in the menu | The summary screen; the command also says "You left." |
 | `DISCONNECTED` | The player quit | Nothing; the numbers are stored |
 | `CANCELLED` | Another plugin took the player, or the plugin was disabled | Nothing; the numbers are stored |
 
@@ -81,20 +85,15 @@ lifetime profile moves and the record for that mode and speed is merged. See
 
 ### The summary
 
-`training.summary` in `messages.yml` is a list of lines, sent after `FAILED`, `COMPLETED` and `LEFT`.
-It knows:
+Once the player is home again, a session that ended as `FAILED`, `COMPLETED` or `LEFT` less than a
+minute ago opens the **session summary** screen, `menus/training_result.yml`: pops, fails and best
+streak; the rating, mode, speed, 0–100 score and duration; the best and average reaction. Two buttons
+follow it up: **Play again** starts the same mode at the same speed, and **Another mode** opens the
+training picker. The screen opens once; a player who quits before it opens never gets it.
 
-| Placeholder | Value |
-|---|---|
-| `%mode%` | The mode's display name |
-| `%ticks%` | The interval picked |
-| `%pops%` | Totems popped |
-| `%fails%` | Fails, 0 or 1 in solo training |
-| `%best%` | Fastest reaction, seconds with two decimals |
-| `%average%` | Average reaction, seconds with two decimals |
-| `%streak%` | Best streak of consecutive pops |
-| `%score%` | The 0 to 100 score |
-| `%duration%` | How long the session lasted |
+The file knows `%mode%`, `%ticks%`, `%pops%`, `%fails%`, `%best%` and `%average%` (seconds with two
+decimals), `%streak%`, `%score%`, `%rating%` (the score weighted by the speed, see
+[Grading](/docs/exyliatotemtrainer/grading#rating)) and `%duration%`.
 
 ## While inside
 
@@ -104,7 +103,8 @@ The same protections apply to solo training and duels.
 |---|---|
 | Damage | Everything but the engine's own hit is cancelled, including another plugin's `damage()` call with the same cause. |
 | Hunger | Frozen. |
-| Items | Dropping and picking up are cancelled. |
+| Items | Dropping and picking up are cancelled. Between the claim and the arrival, and again on the way home, placing and breaking blocks, using an item or a block, and taking anything into a chest or the ender chest are cancelled too, so nothing can leave a copy behind when the snapshot is handed back. |
+| Chat | With `chat.isolation` on (the default), a session's or a duel's chat stays inside it: the player reads only the others in it, and the rest of the server reads none of it. |
 | Other players | Hitting, right-clicking or being hit by anyone outside your group is cancelled. Players inside a session are not collidable. |
 | Commands | Only the labels in `match.allowed-commands` run (`totem`, `tt`, `totemtrainer`, `msg`, `r`, `tell`, `w` by default). Anything else reads "Leave with /totem leave before using that command." A `plugin:command` prefix is stripped before the check. |
 | Movement | Free in solo training. **Pinned on the horizontal axes in a duel**, falling allowed. |
@@ -113,10 +113,10 @@ The same protections apply to solo training and duels.
 
 ## Leaving
 
-Exit runs in a fixed order: the engine stops and the loadout is taken back, the inventory and game
-mode are restored from the snapshot, the player is teleported back to where they came from (or to
-`arena.return-location`), and the claim is released **last**, so no other mode can dress the player
-while their inventory is still on its way back.
+Exit runs in a fixed order: the engine stops and the loadout is taken back, the player is teleported
+back to where they came from (or to `arena.return-location`), the inventory and game mode are
+restored from the snapshot once they are there, and the claim is released **last**, so no other mode
+can dress the player while their inventory is still on its way back.
 
 <Callout type="note" title="After a crash">
 A snapshot left behind by a restart is restored on the player's next join, and they are sent back to

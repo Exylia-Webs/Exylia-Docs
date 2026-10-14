@@ -1,12 +1,12 @@
 ---
 title: "Calificación"
-description: "Los cinco grados, los umbrales por velocidad y por modo, la puntuación de 0 a 100 y lo que un jugador ve y oye en cada pop."
+description: "Los cinco grados, los umbrales por velocidad y por modo, la puntuación de 0 a 100, el rating pesado por velocidad y lo que un jugador ve y oye en cada pop."
 ---
 
 Cada reequipado se cronometra desde el golpe hasta el momento en que un tótem vuelve a una mano, y se
 califica contra los umbrales de `performance`. Los grados y fallos de una sesión se convierten en una
 puntuación de 0 a 100, que es por la que ordena la tabla `rating`, ponderada por la velocidad a la que
-se logró. Cómo se ve y se oye cada grado es `feedback`.
+se logró. Cómo se ve y se oye cada grado es `feedback`, en `messages.yml`.
 
 ## Los grados
 
@@ -28,12 +28,7 @@ performance:
     excellent: 0.40
     good: 0.60
     ok: 0.90
-  by-ticks:
-    "10":
-      perfect: 0.15
-      excellent: 0.25
-      good: 0.35
-      ok: 0.45
+  by-ticks: {}
   by-mode: {}
   points:
     perfect: 100
@@ -43,6 +38,13 @@ performance:
     slow: 25
   fail-penalty: 15
   full-credit-pops: 20
+  speed-weights:
+    "25": 0.8
+    "20": 1.0
+    "15": 1.5
+    "10": 2.5
+    "5": 5.0
+  reference-ticks: 20
 ```
 
 ## Umbrales por velocidad y por modo
@@ -53,8 +55,9 @@ Los umbrales que usa una sesión se resuelven una vez al empezar, de lo más esp
 2. `by-mode.<modeId>` — el id del modo.
 3. `defaults`.
 
-El archivo de serie califica más duro una sesión de 10 ticks que una de 25: a medio segundo entre
-golpes, 0.45 s es la reacción más lenta que todavía cuenta como `OK`. La entrada de un modo solo se
+Los dos mapas de sobrescritura vienen vacíos: una reacción se califica contra un solo estándar a
+cualquier velocidad, y lo difícil que es una velocidad vive en `speed-weights` (ver [el rating](#rating)).
+Calificar más duro un intervalo rápido aquí además le cobraría dos veces al jugador por elegirlo. La entrada de un modo solo se
 consulta cuando ninguna entrada coincide con la velocidad, así que un bloque `by-ticks` siempre gana a
 un bloque `by-mode`.
 
@@ -80,9 +83,34 @@ escalado por debajo de `full-credit-pops` hace que una sesión corta puntúe com
 En un duelo, cada ronda se puntúa por separado y la puntuación del duelo es la media de las
 puntuaciones de las rondas. Los pops, los fallos y la mejor reacción se suman entre rondas.
 
+## Rating
+
+La puntuación dice lo limpia que fue una sesión y no ve la velocidad, que es como se decide una ronda de
+duelo. Una tabla pregunta otra cosa: una tirada limpia a 10 ticks es más difícil que una tirada limpia a
+20. El **rating** es la puntuación por el peso del intervalo al que se jugó:
+
+```text
+rating = round(score × weight(ticks))
+```
+
+`weight(ticks)` es el valor bajo `performance.speed-weights` para ese intervalo, escrito como texto, por
+ejemplo `"10"`. Un intervalo sin peso propio pesa `reference-ticks / ticks`, así que con el `20` por
+defecto un intervalo de 40 ticks pesaría 0.5. Una puntuación de 80 es un rating de **200** a 10 ticks y
+de **80** a 20 ticks.
+
+| Clave | Por defecto | Qué hace |
+|---|---|---|
+| `speed-weights` | `25: 0.8`, `20: 1.0`, `15: 1.5`, `10: 2.5`, `5: 5.0` | Cuánto vale un punto de puntuación en cada intervalo. Los pesos de serie suben un poco más rápido que la proporción simple: los últimos ticks son los difíciles. |
+| `reference-ticks` | `20` | El intervalo que pesa 1.0 cuando no tiene peso propio. |
+
+El rating es por lo que ordena la tabla `rating` y lo que muestra la pantalla de resumen de la sesión. Se
+calcula a partir de la puntuación guardada cada vez que se lee una tabla, así que reajustar los pesos
+reordena todas las tablas sin tocar un récord. Ver [Estadísticas](/docs/exyliatotemtrainer/estadisticas#leaderboards).
+
 ## Feedback
 
-Todo lo que un jugador ve y oye es un efecto de ExyliaLib bajo `feedback`: un título, una barra de
+Todo lo que un jugador ve y oye es un efecto de ExyliaLib bajo `feedback` en `messages.yml`, así que cada
+carpeta de idioma lleva el suyo: un título, una barra de
 acción, un sonido, y opcionalmente una boss bar, partículas o un fuego artificial. Quita un canal para
 silenciarlo; quita una sección entera y no se reproduce nada. La forma completa de un bloque de efecto
 está documentada en la [página de efectos de la librería](/docs/exylialib/efectos).
@@ -111,7 +139,7 @@ tono que baja con el grado, y escribe la barra de acción:
 
 Solo `perfect` tiene línea de chat por defecto: `%prefix% {success}Perfect pop! {highlight}%reaction%s`.
 
-```yaml title="plugins/ExyliaTotemTrainer/config.yml"
+```yaml title="plugins/ExyliaTotemTrainer/lang/en/messages.yml"
 feedback:
   perfect:
     effect:
@@ -131,7 +159,7 @@ feedback:
 | Sección | Cuándo | Por defecto |
 |---|---|---|
 | `fail` | Sin tótem en la mano cuando cayó un golpe | Título `{error}&lPOPPED OUT` / `{letters}You did not swap in time`, sonido `ENTITY_ITEM_BREAK` 1.0 · 0.8 |
-| `countdown` | Antes del primer golpe de una sesión o ronda | Título `{primary}&l%time%` / `{letters}Press {highlight}E {letters}and swap totems from your inventory`, barra `{secondary}Starting in {highlight}%time%s`, sonido `BLOCK_NOTE_BLOCK_HAT` 1.0 · 1.4. `%time%` son los segundos que quedan. |
+| `countdown` | Antes del primer golpe de una sesión o ronda | Título `{primary}&l%time%` / `{letters}Press {highlight}E {letters}and swap totems from your inventory`, barra `{secondary}Starting in {highlight}%time_precise% ⌚`, sonido `BLOCK_NOTE_BLOCK_HAT` 1.0 · 1.4. `%time%` son los segundos que quedan, `%time_precise%` lo mismo con su unidad. |
 | `match-found` | Los dos duelistas llegaron a la arena | Título `{primary}&lMATCH FOUND` / `{letters}Teleporting…`, sonido `ENTITY_EXPERIENCE_ORB_PICKUP` 1.0 · 1.2 |
 | `round-won` | Una ronda fue tuya | Título `{success}&lROUND WON`, sonido `ENTITY_PLAYER_LEVELUP` 1.0 · 1.4 |
 | `round-lost` | Una ronda fue del rival | Título `{error}&lROUND LOST`, sonido `BLOCK_NOTE_BLOCK_BASS` 1.0 · 0.7 |
