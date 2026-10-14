@@ -1,6 +1,6 @@
 ---
 title: "API"
-description: "Lee arenas, controla entradas y salidas, y saca de ExyliaFFA los contadores de kills y los ajustes del jugador."
+description: "Lee arenas, controla entradas y salidas, abre las pantallas del jugador, saca los contadores de kills y los ajustes del jugador, y escucha entradas, salidas, muertes y rachas."
 badge: "dev"
 ---
 
@@ -85,6 +85,22 @@ saberlo debería leer el estado después.
 | `void respawn(Player player)` | Devuelve a la pelea a un jugador que está espectando. No hace nada si no está espectando, que es lo que responde su propio botón de reaparecer. |
 | `void kick(Player kicker, Player target)` | Saca a un jugador por autoridad de otro. Los permisos del que expulsa se comprueban igual que en su propio comando, así que esto no los salta. |
 | `void invite(Player inviter, Player target)` | Invita a un jugador a la arena del que invita. |
+| `boolean giveKit(Player player)` | Le vuelve a dar a un jugador que pelea su kit como copia nueva, con el layout que guardó, tras vaciar su inventario. Es una recarga para una recompensa o el reinicio de una ronda, no una forma de cambiar de kit. `false` si está espectando o no está en ninguna arena. Llámalo en el hilo dueño del jugador. |
+
+## Menús
+
+Las pantallas del propio jugador, para que las abra un NPC, un ítem del hub o el menú de otro plugin.
+Cada una es la pantalla que abre su comando, con las comprobaciones que hace. Llámalos en el hilo
+principal; una pantalla que primero lee la base de datos se abre un momento después, en el hilo del
+jugador.
+
+| Método | Qué abre |
+|---|---|
+| `void openArenaSelector(Player player)` | La lista de arenas, donde el jugador elige a cuál entrar. |
+| `void openSettings(Player player)` | Los ajustes propios del jugador. |
+| `void openKitEditor(Player player)` | El editor de kits. Se rechaza, con un mensaje, si el jugador ya está editando o lo tiene otro modo — el editor se queda con su inventario mientras está abierto. |
+| `void openStats(Player viewer, String targetName)` | Las estadísticas de un jugador, una fila por arena. Funciona con un objetivo desconectado por el nombre guardado en sus filas; un nombre que nunca ha jugado se le notifica al que mira como no encontrado. |
+| `void openLeaderboard(Player viewer, String arenaId)` | El leaderboard de una arena, o el de todo el servidor con `GLOBAL_ARENA`. |
 
 ## Estadísticas
 
@@ -156,12 +172,35 @@ elegir de este conjunto y no escribir el nombre de un campo cualquiera.
 `KILL_STREAK_BROADCASTS`, `KILL_DEATH_BROADCASTS`, `GLOW_LINKED_PLAYER`,
 `SPECTATOR_ACTIONBAR_HINT`.
 
+## Eventos
+
+Cuatro eventos de Bukkit en `net.exylia.lib.api.ffa.event`. Todos son síncronos, en el hilo dueño del
+jugador al que se refieren.
+
+| Evento | Cancelable | Cuándo se dispara |
+|---|---|---|
+| `FfaJoinEvent` | Sí | Un jugador está a punto de entrar en una arena, a pelear o a mirar (`spectating()`). Se dispara cuando todas las comprobaciones han pasado y antes de quitarle nada — ni claim, ni snapshot, ni teleport — así que cancelarlo lo deja exactamente como estaba. El plugin no le dice nada a un jugador cuya entrada se canceló; explicarle por qué es cosa de quien cancela. |
+| `FfaLeaveEvent` | No | Un jugador sale de una arena, una vez aceptada la salida y antes de devolverle inventario y posición. `forced()` es `true` para una desconexión, un kick y una muerte en un servidor que manda a los muertos al lobby. Un jugador en combate cuya salida se rechaza no dispara nada. |
+| `FfaDeathEvent` | No | Un jugador murió en una arena. Se dispara después de contar la muerte, la kill y las rachas, así que el service ya la incluye. `killer()` es `null` en una muerte que nadie causó; `killerStreak()` es la racha viva del asesino con esta kill, `endedStreak()` la de la víctima antes de morir. Desconectarse en combate cuenta como muerte en las estadísticas pero no dispara este evento. |
+| `FfaKillStreakEvent` | Sí | La racha de un jugador llegó a un escalón configurado en `killstreaks.yml`, antes de su anuncio y sus comandos. Cancelarlo se salta ambos; la racha sigue contando. Dos escalones con el mismo número son un solo evento. |
+
+```java
+@EventHandler
+public void onJoin(FfaJoinEvent event) {
+    if (!event.spectating() && tournament.isPlaying(event.player())) {
+        event.setCancelled(true);
+        event.player().sendMessage("You are in a tournament match.");
+    }
+}
+```
+
+Los eventos y los abridores de menú llegaron a `exylia-api` con ExyliaLib `1.133.0`, y ExyliaFFA los
+dispara e implementa desde la `1.2.0`. Compila contra un `exylia-api` reciente si los quieres.
+
 ## Lo que no expone
 
-ExyliaFFA no publica eventos.
-
-Los abridores de menú, el flujo del editor de kits y las escrituras administrativas de `/ffaadmin`
-quedan fuera a propósito, igual que la geometría cruda de las arenas y su conjunto de reglas. Las
+El flujo del editor de kits y las escrituras administrativas de `/ffaadmin` quedan fuera a propósito,
+igual que la geometría cruda de las arenas y su conjunto de reglas. Las
 invitaciones se pueden enviar pero no responder desde aquí: aceptar y rechazar son decisiones del
 jugador invitado, tomadas desde su propio cliente.
 

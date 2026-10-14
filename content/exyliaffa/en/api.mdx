@@ -1,6 +1,6 @@
 ---
 title: "API"
-description: "Read arenas, drive joins and leaves, and pull kill counters and player toggles out of ExyliaFFA."
+description: "Read arenas, drive joins and leaves, open the player's screens, pull kill counters and player toggles, and listen to joins, leaves, deaths and streaks."
 badge: "dev"
 ---
 
@@ -85,6 +85,21 @@ needs to know should read the state afterwards.
 | `void respawn(Player player)` | Brings a spectating player back into the fight. Does nothing when they are not spectating, which is what their own respawn button answers. |
 | `void kick(Player kicker, Player target)` | Removes a player on somebody else's authority. The kicker's permissions are checked exactly as they are for their own command, so this cannot bypass them. |
 | `void invite(Player inviter, Player target)` | Invites a player to the inviter's arena. |
+| `boolean giveKit(Player player)` | Hands a fighting player their kit again as a fresh copy, laid out the way they saved it, after clearing their inventory. A refill for a reward or a round reset, not a way to change kits. `false` when they are spectating or in no arena. Call it on the thread that owns the player. |
+
+## Menus
+
+The player's own screens, for an NPC, a hub item or another plugin's menu to open. Each is the screen
+their command opens, with the checks it makes. Call them on the main thread; a screen that reads the
+database first opens a moment later, on the player's own thread.
+
+| Method | What it opens |
+|---|---|
+| `void openArenaSelector(Player player)` | The arena list, where a player picks an arena to join. |
+| `void openSettings(Player player)` | The player's own settings toggles. |
+| `void openKitEditor(Player player)` | The kit editor. Refused, with a message, for a player already editing or held by another mode — the editor takes their inventory while it is open. |
+| `void openStats(Player viewer, String targetName)` | A player's statistics, one row per arena. Works for an offline target by the name stored on their rows; a name that has never played is reported to the viewer as not found. |
+| `void openLeaderboard(Player viewer, String arenaId)` | An arena's leaderboard, or the whole server's with `GLOBAL_ARENA`. |
 
 ## Statistics
 
@@ -154,12 +169,35 @@ rather than an arbitrary field name.
 `LINKED_ACTION_BAR`, `COMBAT_MESSAGES`, `KILL_STREAK_NOTIFICATIONS`, `KILL_STREAK_BROADCASTS`,
 `KILL_DEATH_BROADCASTS`, `GLOW_LINKED_PLAYER`, `SPECTATOR_ACTIONBAR_HINT`.
 
+## Events
+
+Four Bukkit events in `net.exylia.lib.api.ffa.event`. All are synchronous, on the thread that owns
+the player they are about.
+
+| Event | Cancellable | When it fires |
+|---|---|---|
+| `FfaJoinEvent` | Yes | A player is about to enter an arena, to fight or to watch (`spectating()`). Fired once every check has passed and before anything is taken from them — no claim, no snapshot, no teleport — so cancelling leaves them exactly as they were. The plugin says nothing to a player whose join was cancelled; telling them why is the canceller's job. |
+| `FfaLeaveEvent` | No | A player is leaving an arena, once the leave has been accepted and before their inventory and location are handed back. `forced()` is `true` for a disconnect, a kick, and a death on a server that sends the dead home. A combat-tagged player whose leave is refused fires nothing. |
+| `FfaDeathEvent` | No | A player died in an arena. Fired after the death, the kill and the streaks are counted, so the service already includes it. `killer()` is `null` for a death nobody caused; `killerStreak()` is the killer's live streak with this kill, `endedStreak()` the victim's before it. A combat logout counts as a death in the statistics but does not fire this event. |
+| `FfaKillStreakEvent` | Yes | A player's streak reached a rung configured in `killstreaks.yml`, before its announcement and commands run. Cancelling skips both; the streak itself still counts. Two rungs at the same count are one event. |
+
+```java
+@EventHandler
+public void onJoin(FfaJoinEvent event) {
+    if (!event.spectating() && tournament.isPlaying(event.player())) {
+        event.setCancelled(true);
+        event.player().sendMessage("You are in a tournament match.");
+    }
+}
+```
+
+The events and the menu openers arrived in `exylia-api` with ExyliaLib `1.133.0`, and ExyliaFFA fires
+and implements them from `1.2.0`. Build against a recent `exylia-api` if you want them.
+
 ## What it does not expose
 
-ExyliaFFA publishes no events.
-
-Menu openers, the kit editor flow and the administrative writes behind `/ffaadmin` are left out on
-purpose, as are the raw arena geometry and rule set. Invitations can be sent but not answered from
+The kit editor flow and the administrative writes behind `/ffaadmin` are left out on purpose, as are
+the raw arena geometry and rule set. Invitations can be sent but not answered from
 here: accepting and declining are the invited player's own choice, made from their own client.
 
 If something you need is missing, ask on [Discord](https://discord.exylia.net) — a method added to a
