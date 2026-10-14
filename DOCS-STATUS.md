@@ -67,7 +67,8 @@ ExyliaLib `befa514` — release tag `v1.113.0`, the tag JitPack builds and the o
 | Updated | `exyliasurvivalcore` on 2026-09-14 for the rtp, kit-gift, crate-key, rank-cost, bounty, mine-break and six menu-opener methods and four new events, naming `v1.133.0`. The hub's "What is not there" no longer says menu openers are left out. |
 | Updated | `exyliaevents` on 2026-09-20 for `registerMinigame` and the `net.exylia.lib.api.events.custom` package, naming `v1.7.0`. The hub's service table notes the sub-package; the page's "What it does not expose" no longer claims per-minigame settings are out of reach. |
 | Pending | `MinesService` (exylia-api `v1.8.0`) is documented on `exyliamines` but not yet listed in the hub's service table. The ExyliaSurvivalCore pages still describe the mines module and the stored economy that moved to ExyliaMines and ExyliaEconomy (`10d082c`, `896a57b`). |
-| Not documented | ExyliaBetCore, ExyliaSpecialsV3, ExyliaPearls and ExyliaTotems all publish a service, but have no documentation set on this site at all. They are absent from the hub's service table for that reason. |
+| Pending | ExyliaSpecials 4.0.0 (`SpecialsService`) now has its own set and API page, but the hub's service table does not list it yet. ExyliaSpecialsV3 is archived and replaced by it, so it is no longer tracked here. |
+| Not documented | ExyliaBetCore, ExyliaPearls and ExyliaTotems all publish a service, but have no documentation set on this site at all. They are absent from the hub's service table for that reason. |
 | Separate artifact | `exyliaanalytics` has an API page of its own that is **not** part of `exylia-api`: `net.exylia.analytics.api.ExyliaAnalytics` (`track`, `economy`, `supply`, `available`) ships inside `Exylia-Analytics-Loader.jar`, is published to no Maven repository, and is compiled against as a local `compileOnly` file. It is absent from the hub's service table for that reason. |
 
 The source of truth for these pages is
@@ -366,32 +367,23 @@ that moved; a rule a player can feel; a limit an owner can hit.
 The pages follow the code. The README and `docs/ARCHITECTURE.md` were used only where the source
 confirmed them.
 
-- **Standing still is not a setting.** The README and the architecture notes describe it as the player's
-  choice; `HudService.show` always freezes, `Preferences` has five toggles, and the profile's `freeze`
-  column is legacy. `AimPreferences.freeze` always returns `true`.
-- **Sixteen drills ship, not eleven.** `GlobalDefaults.defaultDrills()`; `DrillKind`'s javadoc still says
-  three kinds.
+Rechecked at `9bb51f6` (1.1.0) on 2026-10-14. Resolved and removed: standing still (the README and the
+architecture notes now say it is always frozen), the drill count (README says eighteen, `DrillKind`'s javadoc
+four kinds), drills needing a ready arena (the architecture notes now say so), `hotbar.yml` (now editable and
+documented as such; `AimMenus` no longer mentions a `.new` file), the placeholder rename, and the README's
+ExyliaLib floor (now 1.277.0). Still open:
+
 - **`match.use-preferences`** claims each player keeps their own size and distance. Both sides play rules
   built once from the challenger's preferences, colour and style included; a rematch reuses them, seed and all.
 - **`match.allow-even-formats`** claims a tied even series is replayed as a decider. Whoever wins the last
-  round takes it. Three draws in a row give the duel up (`MatchRunner.DRAW_LIMIT`).
-- **A drill needs a ready arena.** The architecture notes and `TrainingSession.arenaId`'s javadoc say it
-  runs where the player stands; `TrainingService.start` refuses.
-- **`menus/hotbar.yml` is not editable** — overwritten from the jar on every start and reload — and
-  `menus/admin/` is refreshed on every reload too, not only on start. `AimMenus`' comment about a `.new`
-  file describes nothing the library does.
+  round takes it (`MatchFormat.isDecided`). Three draws in a row give the duel up (`MatchRunner.DRAW_LIMIT`).
 - **The reset confirmation says "every record, session and duel"**; `aim_matches` rows stay.
-- **Placeholders** were renamed after 1.0.1: the group is now the plugin name, so every name is
-  `%exyliaaimtrainer_<name>%` everywhere. The old `%exyliaaimtrainer_aim_<name>%` and `%aim_<name>%` no
-  longer resolve; the pages and the README agree.
-- **README's ExyliaLib floor** (1.153.0) is below what the menus need (`refreshVersionedDirectory`, 1.156.1;
-  `BundledFiles`, 1.158.0). The pages name no floor for the plugin.
+- **`docs/ARCHITECTURE.md`** still opens with "built on ExyliaLib 1.153.x"; the README's 1.277.0 is right.
 
 Behaviour documented in place rather than promised: an accepted duel before the arenas load never starts
 and says nothing; `/aim duel <player>` without a drill plays the first drill in the file, not
 `default-drill`; a `default-format` missing from `formats` refuses every duel sent without a length; tab
-completion offers `overall` and even lengths that are then refused; no `admin_*` or player menu action checks
-a permission node; `admin_session_stop` has no confirmation and ignores duels; `max-players-per-arena` is
+completion offers `overall` and even lengths that are then refused; `admin_session_stop` has no confirmation and ignores duels; `max-players-per-arena` is
 checked before arrival, so a duel can put an arena one over; a board only drops its cache when a run beats the
 best rating; `leaderboard.cache-seconds` and `history.prune-interval-minutes` need a restart; COMBO keeps three
 blocks of reach while the fighter closes only to the scaled distance, so a distance multiplier past about ×1.10
