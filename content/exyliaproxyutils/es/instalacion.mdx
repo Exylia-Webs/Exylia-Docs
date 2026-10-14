@@ -1,0 +1,90 @@
+---
+title: "Instalación"
+description: "Descargar el jar, instalarlo en Velocity o BungeeCord, apuntarlo al Redis de la red y qué dice la consola."
+---
+
+## Descarga
+
+Cada versión se publica en
+[GitHub](https://github.com/Exylia-Plugins/ExyliaProxyUtils/releases) con dos copias del mismo jar:
+`ExyliaProxyUtils-<versión>.jar` y `ExyliaProxyUtils.jar`. Usa la segunda: el proxy
+[se actualiza solo](/docs/exyliaproxyutils/actualizaciones) escribiendo la nueva versión encima del jar
+que está ejecutando, con el mismo nombre de archivo, así que un nombre con versión deja de decir la
+verdad tras la primera actualización.
+
+El mismo archivo sirve para los dos proxies. Velocity lee `velocity-plugin.json` y BungeeCord lee
+`bungee.yml`; cada uno carga solo la clase principal escrita para él.
+
+## Antes de empezar
+
+Cada backend que tenga que llegar al proxy necesita:
+
+| En cada backend | Por qué |
+|---|---|
+| ExyliaLib 1.106.0 o superior | Es el lado que pregunta. |
+| `database.redis.enabled: true` en algún `database.yml` | ExyliaLib usa el primer Redis que encuentra: primero su propio `plugins/ExyliaLib/database.yml` y, si no, el primer plugin cuyo `database.yml` tenga Redis activado. |
+| Un `server-id` único en `database.redis` | Es la dirección a la que vuelven las respuestas. |
+| El mismo `key-prefix` que el proxy | Dos redes en un mismo Redis no deben responderse entre sí. |
+
+<Callout type="danger" title="Los nombres de servidor en el proxy deben ser los server-id">
+El nombre que tiene un servidor en `velocity.toml` (o en el `config.yml` de BungeeCord) tiene que ser
+exactamente el `server-id` de ese backend en su `database.yml`. Las respuestas se publican en
+`<prefix>:bridge:<server-id>`, un `connect` mueve al jugador al servidor del proxy con ese nombre, y un
+`connect` sin servidor significa «el servidor que preguntó», buscado por su `server-id`. Con nombres
+distintos, los teletransportes fallan con `no server "<nombre>"`.
+</Callout>
+
+## Instalación
+
+<Steps>
+  <Step title="Copia el jar">
+    Copia `ExyliaProxyUtils.jar` en la carpeta `plugins/` del proxy, junto a cualquier plugin de
+    sanciones que uses allí.
+  </Step>
+  <Step title="Arranca el proxy una vez">
+    El primer arranque escribe `plugins/ExyliaProxyUtils/config.properties` (`plugins/exyliaproxyutils/`
+    en Velocity, que nombra la carpeta por el id del plugin). Con el `localhost` por defecto solo
+    arranca si Redis está en la misma máquina que el proxy.
+  </Step>
+  <Step title="Apúntalo al Redis de la red">
+    Rellena el mismo host, puerto, contraseña, base de datos y prefijo que tiene cada backend en
+    `database.redis`. Ver [Configuración](/docs/exyliaproxyutils/configuracion).
+  </Step>
+  <Step title="Reinicia el proxy">
+    No hay recarga: el archivo se lee una vez, al arrancar.
+  </Step>
+</Steps>
+
+## Qué dice la consola
+
+Si todo va bien:
+
+```text
+ExyliaProxyUtils 2.0.2 ready on Redis 10.0.0.6:6379; modules: [commands, connect, kick, ping, player, players, punish-import, punish-sources]
+```
+
+precedido de una línea `Recording <ORIGIN> punishments made on this proxy.` por cada plugin de sanciones
+que haya enganchado (ver [Sanciones](/docs/exyliaproxyutils/sanciones)).
+
+Si no llega a Redis, o no puede leer el archivo:
+
+```text
+ExyliaProxyUtils could not start; check plugins/ExyliaProxyUtils/config.properties: <motivo>
+```
+
+<Callout type="warning" title="Un arranque fallido sigue fallido">
+La conexión se prueba una vez, al arrancar el proxy. Si Redis está caído en ese momento, el plugin
+queda cargado pero no hace nada hasta que el proxy se reinicie: ni puente, ni ganchos de sanciones, ni
+control al entrar. Solo una conexión que se cae **después** de un buen arranque se reintenta, cada dos
+segundos, con el aviso `Redis subscription dropped (...); retrying in 2000ms.`. La comprobación de
+actualizaciones sí se ejecuta.
+</Callout>
+
+## Archivos generados
+
+| Archivo | Contenido |
+|---|---|
+| `config.properties` | La conexión a Redis, el prefijo y el interruptor de actualizaciones. Se escribe una vez y nunca se sobrescribe. |
+
+Es el único archivo. El plugin no guarda datos propios: todo lo que recibe de los backends o de los
+plugins de sanciones sale de nuevo por Redis.

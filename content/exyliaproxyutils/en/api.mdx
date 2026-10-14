@@ -1,0 +1,62 @@
+---
+title: "API"
+description: "Reaching the proxy from a backend plugin through ExyliaLib's Proxy class, and adding a module to the proxy itself."
+---
+
+## From a backend plugin
+
+Backend plugins never talk to ExyliaProxyUtils directly. ExyliaLib's `net.exylia.lib.proxy.Proxy` does
+the framing, routing and waiting:
+
+```java
+import net.exylia.lib.proxy.Proxy;
+
+// About a player: who a player-proxy: command runs as, who a connect moves.
+Proxy.request(player, "commands", "player-proxy:server lobby")
+        .thenAccept(reply -> {
+            if (!reply.isOk()) player.sendMessage(reply.detail());
+        });
+
+// About nobody in particular.
+Proxy.request("commands", "console-proxy:alert Maintenance in 10 minutes");
+
+// Find anybody on the network.
+Proxy.find("Steve").thenAccept(found -> found.ifPresent(p -> { /* p's server */ }));
+```
+
+| Method | What it does |
+|---|---|
+| `Proxy.request(Player, String module, String payload)` | A request about a player. |
+| `Proxy.request(String module, String payload)` | A request about nobody. |
+| `Proxy.find(String nameOrId)` | The [`player`](/docs/exyliaproxyutils/modules#player) module; empty when not found or no bridge. |
+| `Proxy.players()` | Every name on the network as of the last ten-second refresh. Safe in tab completion. |
+| `Proxy.isAvailable()` | Whether the proxy has answered. A diagnostic: requests are always attempted. |
+| `Proxy.bridge()` | What answered the ping, such as `ExyliaProxyUtils 2.0.2 on Velocity`. |
+
+The returned future never fails exceptionally: a missing proxy comes back as a `TIMEOUT` reply after
+five seconds. It completes on the Redis subscriber thread, so hop to the server's scheduler before
+touching the Bukkit API. The payload formats are on [Modules](/docs/exyliaproxyutils/modules).
+
+## Adding a module to the proxy
+
+The proxy plugin publishes no API to other proxy plugins; a new module is a change to its source. One
+class in `common`, one line in `Bridge.withBuiltIns`:
+
+```java
+public final class ServersModule implements BridgeModule {
+    @Override public String name() { return "servers"; }
+    @Override public CompletableFuture<Reply> handle(Request request) {
+        return CompletableFuture.completedFuture(Reply.ok(String.join(",", names())));
+    }
+}
+```
+
+- A module sees the proxy only through `Platform`, so the same class runs on Velocity and BungeeCord.
+- `Request` carries the module name, the payload, the carrier's uuid and name, and the `server-id` it
+  came from.
+- Answer with `Reply.ok(detail)`, `Reply.rejected(reason)`; a module that throws answers `FAILED`.
+- A module runs on the Redis subscriber thread: return a future for anything slow.
+- A module that has something to tell a server later takes the `Publisher` and sends a push.
+- A later module with the same name replaces the earlier one.
+
+Then call it from a backend with `Proxy.request(..., "servers", "")`.

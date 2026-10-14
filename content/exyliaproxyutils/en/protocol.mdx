@@ -1,0 +1,49 @@
+---
+title: "Protocol"
+description: "The exact frames on the Redis channels between the backends and the proxy, the status codes, and pushes."
+---
+
+This is for anyone writing their own backend side or debugging with `redis-cli`. ExyliaLib reads and
+writes exactly this; a change on one side is a change on the other.
+
+## Channels
+
+| Direction | Channel | Frame |
+|---|---|---|
+| Backend to proxy | `<prefix>:bridge:proxy` | `<server-id>\|<uuid or empty>\|<module>\|<id>\|<payload>` |
+| Proxy to backend | `<prefix>:bridge:<server-id>` | `<module>\|<id>\|<status>\|<uuid or empty>\|<detail>` |
+
+- `server-id` is the asking backend; the answer goes to its channel.
+- The uuid is the player the request is about (the **carrier**), empty for a request about nobody.
+- `id` is a number the backend picks to match the answer to its request.
+- The payload and the detail come last and may contain `|`.
+
+## Status codes
+
+| Code | Status |
+|---|---|
+| `0` | `OK` |
+| `1` | `REJECTED` |
+| `2` | `FAILED` |
+| `3` | `UNKNOWN_MODULE` |
+
+## Pushes
+
+A frame from the proxy with id `0` is a **push**: something the proxy says unasked, with status `0`.
+Today the only one is `arrive`, sent by [`connect`](/docs/exyliaproxyutils/modules#connect) to the
+destination server with the moved player as carrier and the memo as detail.
+
+## Errors
+
+Every well-formed request is answered, including one for an unknown module and one whose module threw.
+Text that is not a request at all — wrong number of parts, empty server or module, a bad uuid or id — is
+dropped and logged on the proxy as `Dropped an unreadable request: <reason>`.
+
+## Trying it by hand
+
+```text
+$ redis-cli SUBSCRIBE exylia:bridge:test
+$ redis-cli PUBLISH exylia:bridge:proxy "test||ping|1|"
+```
+
+The subscriber receives `ping|1|0||ExyliaProxyUtils 2.0.2 on Velocity`.

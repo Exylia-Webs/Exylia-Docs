@@ -1,0 +1,64 @@
+---
+title: "First steps"
+description: "Checking the bridge works from a backend, a first proxy command, a cross-server teleport, and what to look at when nothing answers."
+---
+
+With the proxy started and its console showing the `ready on Redis` line, check the other side.
+
+## 1. Is a backend hearing the proxy?
+
+ExyliaLib opens the bridge a second after the backend starts and pings the proxy, again every ten
+seconds until it gets an answer. On a backend console, look for:
+
+```text
+Proxy bridge listening on Redis 10.0.0.6:6379 as "survival-1" (settings from ExyliaLib/database.yml).
+```
+
+and run `/exylialib status`: it sends a fresh ping and shows what answered, such as
+`ExyliaProxyUtils 2.0.2 on Velocity`.
+
+If the proxy never answers, the backend says so once:
+
+```text
+No proxy bridge answered on Redis channel "exylia:bridge:proxy". Install ExyliaProxyUtils on the proxy with the same Redis and key-prefix, or player-proxy: and console-proxy: commands and cross-server teleports will not run.
+```
+
+That almost always means a different Redis, a different `database`, or a different `key-prefix` on the
+two sides.
+
+## 2. Run something on the proxy
+
+Every Exylia plugin that runs command lists accepts two prefixes that land here:
+
+```yaml
+commands:
+  - "player-proxy:server lobby"     # as the player, with their proxy permissions
+  - "console-proxy:alert An event is starting!"   # as the proxy console
+```
+
+A `console-proxy:` command is written to the proxy log with the server that sent it:
+
+```text
+[survival-1] console: /alert An event is starting! (for Steve)
+```
+
+A command the proxy does not have comes back as a refusal the backend logs:
+`the proxy did not run "/alert"`. See [Commands](/docs/exyliaproxyutils/commands).
+
+## 3. A cross-server teleport
+
+Teleport a player to somebody on another server with the plugin that offers it (ExyliaStaff's
+`/tp`, ExyliaSurvivalCore's cross-server TPA or `/back`). The backend finds the target through the
+proxy, asks the proxy to move the player, and the destination server receives where to put them when
+they arrive. If the move is refused, the reason comes back: an unknown server, a connection already in
+progress, a proxy plugin that cancelled it, or the destination refusing the player.
+
+## When nothing answers
+
+| Symptom | Look at |
+|---|---|
+| `could not start` on the proxy | Redis host, port, password or database in `config.properties`. |
+| The backend says no bridge answered | Same Redis, same `database`, same `key-prefix` on both sides. |
+| `no server "<name>"` on teleports | The proxy's server names are not the backends' `server-id`s. |
+| Answers time out after five seconds | The proxy started before Redis was up: restart it. |
+| `UNKNOWN_MODULE` | A backend asks for a module this proxy version does not have: update the proxy. |

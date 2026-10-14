@@ -1,0 +1,64 @@
+---
+title: "Primeros pasos"
+description: "Comprobar desde un backend que el puente funciona, un primer comando en el proxy, un teletransporte entre servidores y qué revisar cuando nada responde."
+---
+
+Con el proxy arrancado y la línea `ready on Redis` en su consola, comprueba el otro lado.
+
+## 1. ¿Un backend oye al proxy?
+
+ExyliaLib abre el puente un segundo después de arrancar el backend y hace ping al proxy, y repite cada
+diez segundos hasta recibir respuesta. En la consola de un backend busca:
+
+```text
+Proxy bridge listening on Redis 10.0.0.6:6379 as "survival-1" (settings from ExyliaLib/database.yml).
+```
+
+y ejecuta `/exylialib status`: manda un ping nuevo y muestra qué respondió, por ejemplo
+`ExyliaProxyUtils 2.0.2 on Velocity`.
+
+Si el proxy no responde nunca, el backend lo dice una vez:
+
+```text
+No proxy bridge answered on Redis channel "exylia:bridge:proxy". Install ExyliaProxyUtils on the proxy with the same Redis and key-prefix, or player-proxy: and console-proxy: commands and cross-server teleports will not run.
+```
+
+Casi siempre significa un Redis distinto, una `database` distinta o un `key-prefix` distinto a cada
+lado.
+
+## 2. Ejecuta algo en el proxy
+
+Todo plugin de Exylia que ejecuta listas de comandos acepta dos prefijos que llegan aquí:
+
+```yaml
+commands:
+  - "player-proxy:server lobby"     # como el jugador, con sus permisos en el proxy
+  - "console-proxy:alert An event is starting!"   # como la consola del proxy
+```
+
+Un comando `console-proxy:` se escribe en el log del proxy con el servidor que lo envió:
+
+```text
+[survival-1] console: /alert An event is starting! (for Steve)
+```
+
+Un comando que el proxy no tiene vuelve como un rechazo que el backend registra:
+`the proxy did not run "/alert"`. Ver [Comandos](/docs/exyliaproxyutils/comandos).
+
+## 3. Un teletransporte entre servidores
+
+Teletransporta a un jugador hasta alguien de otro servidor con el plugin que lo ofrezca (el `/tp` de
+ExyliaStaff, el TPA entre servidores o `/back` de ExyliaSurvivalCore). El backend encuentra al objetivo
+a través del proxy, le pide que mueva al jugador, y el servidor de destino recibe dónde colocarlo cuando
+llegue. Si el movimiento se rechaza, vuelve el motivo: un servidor desconocido, una conexión ya en
+curso, un plugin del proxy que la canceló o el destino que rechazó al jugador.
+
+## Cuando nada responde
+
+| Síntoma | Revisa |
+|---|---|
+| `could not start` en el proxy | Host, puerto, contraseña o base de datos de Redis en `config.properties`. |
+| El backend dice que ningún puente respondió | Mismo Redis, misma `database`, mismo `key-prefix` a ambos lados. |
+| `no server "<nombre>"` en los teletransportes | Los nombres de servidor del proxy no son los `server-id` de los backends. |
+| Las respuestas caducan a los cinco segundos | El proxy arrancó antes de que Redis estuviera listo: reinícialo. |
+| `UNKNOWN_MODULE` | Un backend pide un módulo que esta versión del proxy no tiene: actualiza el proxy. |

@@ -1,0 +1,78 @@
+---
+title: "Actualizaciones"
+description: "Cómo se publican las versiones, cómo el proxy instala solo una más nueva al arrancar y al apagarse, qué rechaza y cómo desactivarlo."
+---
+
+El proxy mantiene su propio jar al día. Es independiente del actualizador de plugins de ExyliaLib en los
+backends: un proxy no tiene ExyliaLib.
+
+## Cuándo comprueba
+
+| Momento | Cómo |
+|---|---|
+| Al arrancar el proxy | En una tarea en segundo plano, para que el arranque no espere. |
+| Al apagar el proxy | En línea, después de cerrar el puente, para que una versión publicada mientras el proxy corría quede instalada antes de salir. |
+
+No hace nada con `updates.enabled=false` en `config.properties`, ni cuando el plugin no se está
+ejecutando desde un archivo jar.
+
+## Qué hace
+
+<Steps>
+  <Step title="Pregunta cuál es la última versión">
+    Una petición `HEAD` a `releases/latest/download/ExyliaProxyUtils.jar` en GitHub. La redirección
+    nombra la versión más nueva; todavía no se descarga nada.
+  </Step>
+  <Step title="Compara versiones">
+    No pasa nada salvo que la última sea más nueva que la que corre, comparadas número a número. Un jar
+    ya reemplazado por una comprobación anterior no se vuelve a descargar.
+  </Step>
+  <Step title="Rechaza una nueva versión mayor">
+    Una versión con otro número mayor puede cambiar la configuración o el protocolo. Solo se registra:
+    `ExyliaProxyUtils 3.0.0 is a new major version; install it by hand when ready.`
+  </Step>
+  <Step title="Descarga y comprueba">
+    El jar se descarga en un archivo temporal junto al que corre y se abre: tiene que ser
+    ExyliaProxyUtils (por el id de `velocity-plugin.json`) exactamente en esa versión.
+  </Step>
+  <Step title="Reemplaza el jar en uso">
+    La descarga se mueve encima del jar que cargó el proxy, conservando su nombre de archivo. El proxy
+    sigue ejecutando las clases que ya tenía abiertas; la versión nueva se carga en el siguiente
+    reinicio.
+  </Step>
+</Steps>
+
+```text
+ExyliaProxyUtils 2.0.3 installed (running 2.0.2); it loads on the next restart.
+```
+
+Cualquier fallo — GitHub inaccesible, una descarga incorrecta, un archivo que no se puede reemplazar —
+se registra una vez y se deja estar: `Could not check for ExyliaProxyUtils updates: <motivo>`.
+
+<Callout type="note" title="El nombre del archivo no cambia">
+La versión nueva se escribe encima del archivo en uso, con su nombre antiguo. Un jar instalado como
+`ExyliaProxyUtils-2.0.2.jar` conserva ese nombre después de pasar a 2.0.3. Instálalo como
+`ExyliaProxyUtils.jar` y el nombre nunca mentirá.
+</Callout>
+
+<Callout type="warning" title="Con una nueva versión mayor publicada, dejan de llegar parches">
+El actualizador solo mira la última versión publicada. Cuando esa es una nueva versión mayor, un proxy
+en la versión mayor anterior recibe el aviso de «instálala a mano» y deja de recibir los parches de su
+propia versión mayor.
+</Callout>
+
+## Cómo se publican las versiones
+
+Cada push a la rama `main` del repositorio cuya versión aún no tiene release compila el plugin con sus
+tests y publica una release de GitHub `v<versión>` con dos archivos, `ExyliaProxyUtils-<versión>.jar` y
+`ExyliaProxyUtils.jar`. El de nombre fijo es el que sigue el actualizador.
+
+## Desactivarlo
+
+```properties
+updates.enabled=false
+```
+
+Cualquier otro valor que no sea `false` (en mayúsculas o minúsculas) lo deja activado. Reinicia el proxy
+para aplicar el cambio. Para actualizar a mano, reemplaza el jar y reinicia; `config.properties` no se
+toca.

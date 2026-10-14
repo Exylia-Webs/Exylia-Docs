@@ -1,0 +1,64 @@
+---
+title: "API"
+description: "Llegar al proxy desde un plugin de backend con la clase Proxy de ExyliaLib, y añadir un módulo al propio proxy."
+---
+
+## Desde un plugin de backend
+
+Los plugins de backend nunca hablan directamente con ExyliaProxyUtils. `net.exylia.lib.proxy.Proxy`, de
+ExyliaLib, se encarga del formato, el enrutado y la espera:
+
+```java
+import net.exylia.lib.proxy.Proxy;
+
+// Sobre un jugador: como quién se ejecuta un player-proxy:, a quién mueve un connect.
+Proxy.request(player, "commands", "player-proxy:server lobby")
+        .thenAccept(reply -> {
+            if (!reply.isOk()) player.sendMessage(reply.detail());
+        });
+
+// Sobre nadie en particular.
+Proxy.request("commands", "console-proxy:alert Mantenimiento en 10 minutos");
+
+// Encontrar a cualquiera en la red.
+Proxy.find("Steve").thenAccept(found -> found.ifPresent(p -> { /* el servidor de p */ }));
+```
+
+| Método | Qué hace |
+|---|---|
+| `Proxy.request(Player, String module, String payload)` | Una petición sobre un jugador. |
+| `Proxy.request(String module, String payload)` | Una petición sobre nadie. |
+| `Proxy.find(String nameOrId)` | El módulo [`player`](/docs/exyliaproxyutils/modulos#player); vacío si no lo encuentra o no hay puente. |
+| `Proxy.players()` | Todos los nombres de la red según el último refresco de diez segundos. Seguro para autocompletar. |
+| `Proxy.isAvailable()` | Si el proxy ha respondido. Es un diagnóstico: las peticiones se intentan siempre. |
+| `Proxy.bridge()` | Qué respondió al ping, por ejemplo `ExyliaProxyUtils 2.0.2 on Velocity`. |
+
+El future devuelto nunca falla con excepción: un proxy ausente vuelve como respuesta `TIMEOUT` a los
+cinco segundos. Se completa en el hilo suscriptor de Redis, así que pasa al scheduler del servidor antes
+de tocar la API de Bukkit. Los formatos de payload están en [Módulos](/docs/exyliaproxyutils/modulos).
+
+## Añadir un módulo al proxy
+
+El plugin del proxy no publica ninguna API para otros plugins del proxy; un módulo nuevo es un cambio en
+su código. Una clase en `common` y una línea en `Bridge.withBuiltIns`:
+
+```java
+public final class ServersModule implements BridgeModule {
+    @Override public String name() { return "servers"; }
+    @Override public CompletableFuture<Reply> handle(Request request) {
+        return CompletableFuture.completedFuture(Reply.ok(String.join(",", names())));
+    }
+}
+```
+
+- Un módulo ve el proxy solo a través de `Platform`, así que la misma clase funciona en Velocity y en
+  BungeeCord.
+- `Request` lleva el nombre del módulo, el payload, el uuid y el nombre del portador, y el `server-id`
+  de origen.
+- Responde con `Reply.ok(detalle)` o `Reply.rejected(motivo)`; un módulo que lanza un error responde
+  `FAILED`.
+- Un módulo corre en el hilo suscriptor de Redis: devuelve un future para cualquier cosa lenta.
+- Un módulo que tenga algo que decirle más tarde a un servidor recibe el `Publisher` y envía un push.
+- Un módulo posterior con el mismo nombre reemplaza al anterior.
+
+Después llámalo desde un backend con `Proxy.request(..., "servers", "")`.

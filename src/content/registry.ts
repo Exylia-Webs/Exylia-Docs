@@ -978,6 +978,37 @@ const MINES_NAV: NavGroup[] = [
   },
 ];
 
+const PROXYUTILS_NAV: NavGroup[] = [
+  {
+    label: { en: "Getting started", es: "Empezar" },
+    pages: [
+      page("introduction", "introduction", "introduccion"),
+      page("installation", "installation", "instalacion"),
+      page("first-steps", "first-steps", "primeros-pasos"),
+    ],
+  },
+  {
+    label: { en: "Features", es: "Funciones" },
+    pages: [
+      page("modules", "modules", "modulos"),
+      page("punishments", "punishments", "sanciones"),
+      page("login-bans", "login-bans", "baneos-al-entrar"),
+      page("updates", "updates", "actualizaciones"),
+    ],
+  },
+  {
+    label: { en: "Reference", es: "Referencia" },
+    pages: [
+      page("commands", "commands", "comandos"),
+      page("permissions", "permissions", "permisos"),
+      page("configuration", "configuration", "configuracion"),
+      page("protocol", "protocol", "protocolo"),
+      page("api", "api", "api"),
+      page("faq", "faq", "faq"),
+    ],
+  },
+];
+
 const PROTECTIONS_NAV: NavGroup[] = [
   {
     label: { en: "Getting started", es: "Empezar" },
@@ -1438,6 +1469,29 @@ export const plugins: Plugin[] = [
       { en: "Folia", es: "Folia" },
     ],
     nav: PROTECTIONS_NAV,
+  },
+  {
+    id: "exyliaproxyutils",
+    name: "ExyliaProxyUtils",
+    tagline: { en: "The proxy half of ExyliaLib", es: "La mitad de ExyliaLib en el proxy" },
+    summary: {
+      en: "One jar for Velocity and BungeeCord that answers the backends over Redis: proxy commands from any Exylia plugin, cross-server teleports, network-wide lookups and kicks, punishments from LiteBans, LibertyBans, AdvancedBan or BanManager fed to ExyliaStaff, bans checked at login, and a jar that updates itself. Free.",
+      es: "Un solo jar para Velocity y BungeeCord que responde a los backends por Redis: comandos en el proxy desde cualquier plugin de Exylia, teletransportes entre servidores, búsquedas y expulsiones en toda la red, sanciones de LiteBans, LibertyBans, AdvancedBan o BanManager enviadas a ExyliaStaff, baneos comprobados al entrar y un jar que se actualiza solo. Gratis.",
+    },
+    version: "2.0.2",
+    status: "stable",
+    category: { en: "Library", es: "Librería" },
+    minecraft: "Velocity 3.4+ · BungeeCord",
+    banner: "https://s3.exylia.net/exylia-plugins/public/static/images/plugins/proxyutils/ExyliaProxyUtilsBanner.webp",
+    download: "https://github.com/Exylia-Plugins/ExyliaProxyUtils/releases",
+    tags: [
+      { en: "Proxy", es: "Proxy" },
+      { en: "Velocity", es: "Velocity" },
+      { en: "BungeeCord", es: "BungeeCord" },
+      { en: "Network", es: "Red" },
+      { en: "Redis", es: "Redis" },
+    ],
+    nav: PROXYUTILS_NAV,
   },
   {
     id: "exyliaeconomy",

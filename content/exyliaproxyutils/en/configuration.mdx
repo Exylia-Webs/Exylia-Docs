@@ -1,0 +1,88 @@
+---
+title: "Configuration"
+description: "config.properties key by key: the network's Redis, the key prefix, the update switch, and the Redis keys and channels the plugin uses."
+---
+
+The whole configuration is one file, written on the first start and never overwritten:
+
+| Proxy | Path |
+|---|---|
+| Velocity | `plugins/exyliaproxyutils/config.properties` |
+| BungeeCord | `plugins/ExyliaProxyUtils/config.properties` |
+
+```properties title="config.properties"
+# ExyliaProxyUtils talks to the backends over Redis, so nothing a player
+# sends can ever reach it. Point this at the same Redis every backend has
+# under database.redis in plugins/ExyliaLib/database.yml, with the same
+# key-prefix. Server names on this proxy must equal the backends' server-id.
+redis.host=localhost
+redis.port=6379
+redis.password=
+redis.database=0
+redis.key-prefix=exylia
+# New releases download at start and stop and load on the next restart.
+updates.enabled=true
+```
+
+It is read once, at startup. Restart the proxy after editing it.
+
+| Key | Default | What it does |
+|---|---|---|
+| `redis.host` | `localhost` | The Redis host. |
+| `redis.port` | `6379` | The Redis port. Must be a number, or the plugin does not start. |
+| `redis.password` | empty | The password; empty for none. Taken as written, spaces included. |
+| `redis.database` | `0` | Which numbered Redis database. Must match the backends'. |
+| `redis.key-prefix` | `exylia` | What every key and channel starts with. Must match the backends' `key-prefix`. Empty falls back to `exylia`. |
+| `updates.enabled` | `true` | Installs new releases of the same major at start and stop. Only `false` turns it off. See [Updates](/docs/exyliaproxyutils/updates). |
+
+A key left out of the file takes its default. Values other than the password are trimmed.
+
+## Matching the backends
+
+The values are the ones every backend has in its `database.yml`:
+
+```yaml title="plugins/ExyliaLib/database.yml (on a backend)"
+database:
+  redis:
+    enabled: true
+    host: 10.0.0.6
+    port: 6379
+    password: ""
+    database: 0
+    key-prefix: exylia
+    server-id: survival-1
+```
+
+```properties title="config.properties (on the proxy)"
+redis.host=10.0.0.6
+redis.port=6379
+redis.password=
+redis.database=0
+redis.key-prefix=exylia
+```
+
+`server-id` has no counterpart here: it lives in the proxy's own server list, where the backend's name
+must be that same `server-id`.
+
+<Callout type="warning" title="Two networks, one Redis">
+The key prefix is what keeps them apart. Two networks with the same prefix on the same Redis answer
+each other's servers and read each other's bans.
+</Callout>
+
+## Connection
+
+The plugin opens a small pool (at most four connections, a 200 ms wait for a free one) for answers and
+writes, and one dedicated connection for listening, with a two-second connect and read timeout. It
+identifies itself to Redis as `exylia-proxyutils`.
+
+## Redis keys and channels
+
+| Name | Kind | Direction |
+|---|---|---|
+| `<prefix>:bridge:proxy` | Pub/sub channel | Backends to the proxy: requests. |
+| `<prefix>:bridge:<server-id>` | Pub/sub channel | Proxy to one backend: answers and pushes. |
+| `<prefix>:punish:external` | Stream | Proxy to ExyliaStaff: punishments from ban plugins on the proxy. |
+| `<prefix>:punish:ban:<uuid>` | String | Read by the proxy at login; written by ExyliaStaff. |
+| `<prefix>:punish:ipban:<sha256>` | String | Read by the proxy at login; written by ExyliaStaff. |
+
+See [Protocol](/docs/exyliaproxyutils/protocol) for the message format.

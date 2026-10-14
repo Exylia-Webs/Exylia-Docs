@@ -1,0 +1,124 @@
+---
+title: "Sanciones"
+description: "Cómo llegan a ExyliaStaff las sanciones que LiteBans, LibertyBans, AdvancedBan o BanManager hacen en el proxy, el stream de Redis donde se escriben y la importación del historial de un plugin de sanciones."
+---
+
+Las sanciones son de ExyliaStaff. El proxy aporta la parte que solo el proxy ve: las sanciones que hace
+un plugin de sanciones instalado **en el proxy**, incluido un `/ban` escrito ahí y cada retirada. Se
+escriben en un stream de Redis, en el mismo Redis y `key-prefix` que el puente, y ExyliaStaff las lee.
+
+## Plugins de sanciones compatibles
+
+| Plugin | Velocity | BungeeCord | `originId` |
+|---|---|---|---|
+| LiteBans | sí | sí | `ban:<id>`, `mute:<id>`, `warn:<id>`, `kick:<id>` |
+| LibertyBans | sí | sí | `<id>`, una sola secuencia para todos los tipos |
+| AdvancedBan | no (no tiene versión para Velocity) | sí | `<id>`; una expulsión en vivo `kick:<uuid sin guiones>:<inicio>`; una entrada solo de historial en una importación `history:<id>` |
+| BanManager | sí | sí | `ban:<id>`, `mute:<id>`, `warn:<id>`, `kick:<id>`; en una importación, los baneos y silencios levantados `banrecord:<id>`, `muterecord:<id>` |
+
+Ninguno es obligatorio. Cada uno es una dependencia suave, cargada antes que este plugin si está, y cada
+gancho comprueba que su plugin existe antes de tocar ninguna de sus clases. Cada plugin enganchado se
+anuncia al arrancar:
+
+```text
+Recording LITEBANS punishments made on this proxy.
+```
+
+Un gancho que falla se registra como `Could not hook <ORIGIN>: <error>` y se omite; el resto del plugin
+sigue funcionando.
+
+### Qué se registra
+
+| Plugin | Añadidas | Retiradas |
+|---|---|---|
+| LiteBans | Cada entrada añadida. | Cada entrada retirada, con quién y por qué. |
+| LibertyBans | Cada sanción. | Cada perdón, con quién; LibertyBans no da motivo. |
+| AdvancedBan | Cada sanción. | Cada revocación; AdvancedBan no dice quién revocó. |
+| BanManager | Baneos, silencios, advertencias, expulsiones. | Desbaneos y desilencios que no se cancelaron, leídos al final, con quién y por qué. |
+
+Las entradas que no nombran a ningún jugador — baneos solo de dirección — se omiten: el `target` del
+stream siempre es un uuid. Un baneo de IP que sí nombra a un jugador se registra como `IPBAN`. Los
+nombres que un plugin no guarda (LibertyBans no guarda ninguno, ni del sancionado ni del staff) se
+rellenan con quien esté conectado en ese momento, o se dejan vacíos; la consola de LibertyBans se
+escribe como `Console`.
+
+## El stream
+
+Clave: `<prefix>:punish:external`. Cada entrada es un campo, `json`:
+
+```text
+XADD <prefix>:punish:external MAXLEN ~ 200000 * json <json>
+```
+
+```json
+{"v":1,"kind":"added","origin":"LITEBANS","originId":"ban:123","type":"TEMPBAN",
+ "target":"<uuid>","targetName":"Steve","staff":null,"staffName":"Console",
+ "reason":"Hacking","server":"proxy","created":1730000000000,"expires":1730086400000,
+ "removedAt":0,"removedBy":null,"removeReason":null,"import":false}
+```
+
+| Campo | Significado |
+|---|---|
+| `v` | Versión del formato, `1`. |
+| `kind` | `added` o `removed`. |
+| `origin` | `LITEBANS`, `LIBERTYBANS`, `ADVANCEDBAN` o `BANMANAGER`. |
+| `originId` | Estable por origen; ver la tabla de arriba. Recortado a 64 caracteres. |
+| `type` | `BAN`, `TEMPBAN`, `IPBAN`, `MUTE`, `TEMPMUTE`, `WARN` o `KICK`. |
+| `target`, `targetName` | El jugador sancionado. |
+| `staff`, `staffName` | Quién lo hizo; `staff` es null para la consola. |
+| `reason` | Recortado a 255 caracteres. |
+| `server` | El servidor de origen del propio plugin cuando lo guarda (LiteBans); si no, `proxy`. |
+| `created`, `expires`, `removedAt` | Milisegundos epoch; `0` significa nunca. |
+| `removedBy`, `removeReason` | Para las entradas `removed`. |
+| `import` | `true` en las entradas de una importación: ExyliaStaff no envía alertas ni avisos al jugador por ellas. |
+
+El stream guarda aproximadamente las últimas 200.000 entradas; ExyliaStaff lo lee con el grupo de
+consumidores `exyliastaff`.
+
+Las entradas en vivo pasan por un único hilo escritor, así que un plugin de sanciones nunca espera a
+Redis y una retirada nunca adelanta a su sanción. Cada escritura se intenta tres veces, con uno y dos
+segundos de espera; la que sigue fallando se registra con su JSON, nunca se pierde en silencio:
+
+```text
+Could not record a punishment in exylia:punish:external (<error>): {"v":1,...}
+```
+
+## Importar el historial
+
+El historial completo de un plugin de sanciones se puede copiar al stream una vez, para que ExyliaStaff
+conozca todas las sanciones anteriores a su instalación. Desde cualquier backend con ExyliaStaff:
+
+```text
+/staffadmin import <plugin>
+```
+
+con `exyliastaff.admin`. ExyliaStaff importa en local si ese plugin de sanciones está instalado en el
+backend y, si no, se lo pide al módulo `punish-import` del proxy. El proxy responde al momento y lee el
+historial en un hilo propio, informando sobre la marcha:
+
+```text
+Importing LITEBANS history into the punishment stream...
+Importing LITEBANS: 1000 entries so far.
+Imported LITEBANS: 48213 entries.
+```
+
+| Plugin | Cómo se lee el historial |
+|---|---|
+| LiteBans | Directamente de sus cuatro tablas (baneos, silencios, advertencias, expulsiones), de 500 en 500 filas por id. |
+| LibertyBans | Por su API, de la más antigua a la más reciente, de 500 en 500; primero lee las activas para saber cuáles se levantaron. |
+| AdvancedBan | La tabla de activas y después el historial de todo lo que ya no está activo. Cada una se carga entera. |
+| BanManager | Todas las tablas con los cursores del propio BanManager, incluidas las de historial. |
+
+Una sanción activa se escribe como `added`. Una levantada o caducada se escribe como `added` seguida de
+`removed`; las expulsiones solo como `added`. Cuando el plugin no guarda la fecha de retirada
+(LibertyBans, AdvancedBan), la retirada se fecha al final de la sanción si caducó, y si no, en el
+momento de la importación.
+
+Solo corre una importación por plugin a la vez; una segunda petición responde
+`<ORIGEN> import already running`. Una importación que falla se detiene con
+`The <ORIGEN> import stopped after <n> entries: <error>`; lo escrito se queda escrito.
+
+<Callout type="warning" title="Importa una sola vez">
+Cada ejecución vuelve a escribir todo el historial. ExyliaStaff descarta duplicados por origen y
+`originId`, pero no hay motivo para ejecutarla dos veces.
+</Callout>

@@ -1,0 +1,48 @@
+---
+title: "Baneos al entrar"
+description: "Cómo rechaza el proxy a los jugadores que ExyliaStaff ha baneado, las claves de Redis que lee y qué pasa si Redis está caído."
+---
+
+ExyliaStaff guarda una copia de sus baneos activos en Redis. Cuando un jugador entra al proxy,
+ExyliaProxyUtils lee esa copia y lo rechaza antes de que llegue a ningún servidor. No hay nada que
+configurar: usa el Redis y el `key-prefix` del puente.
+
+## Las claves
+
+| Clave | Contiene |
+|---|---|
+| `<prefix>:punish:ban:<uuid en minúsculas>` | Un baneo del jugador. |
+| `<prefix>:punish:ipban:<sha256 en hex>` | Un baneo de una dirección. El hash es de la dirección como texto, por ejemplo `1.2.3.4`. |
+
+Cada una contiene:
+
+```json
+{"id":123,"type":"BAN","expires":0,"mini":"...","legacy":"..."}
+```
+
+ExyliaStaff las escribe, las caduca y las borra; el proxy solo las lee.
+
+## Al entrar
+
+1. Se lee la clave del uuid del jugador; si no hay baneo, la de su dirección.
+2. Una entrada cuyo `expires` ya pasó se ignora (`0` no caduca nunca). Una entrada que no es JSON
+   válido se ignora.
+3. Un baneo vigente cancela la entrada con su pantalla.
+
+| Proxy | Cuándo | Pantalla |
+|---|---|---|
+| Velocity | `LoginEvent`, temprano, como tarea asíncrona; se omite si la entrada ya estaba denegada. | `mini`; la `legacy` si `mini` está vacía; `You are banned from this network.` si lo están las dos. |
+| BungeeCord | `LoginEvent`, prioridad baja, en una tarea asíncrona que retiene la entrada; se omite si ya estaba cancelada. | `legacy`; `You are banned from this network.` si está vacía. |
+
+Ninguno corre en el hilo de red del proxy.
+
+## Si Redis está caído
+
+El jugador entra, y el proxy avisa como mucho una vez por minuto:
+
+```text
+Could not read the ban mirror (<error>); letting players in, the backends still check.
+```
+
+Es una barrera delante de la red, no la única: cada backend con ExyliaStaff comprueba también su propia
+base de datos. Si el proxy no llegó a arrancar, este control no se ejecuta.

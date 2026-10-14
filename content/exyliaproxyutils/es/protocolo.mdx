@@ -1,0 +1,50 @@
+---
+title: "Protocolo"
+description: "Las tramas exactas de los canales de Redis entre los backends y el proxy, los códigos de estado y los pushes."
+---
+
+Esto es para quien escriba su propio lado de backend o depure con `redis-cli`. ExyliaLib lee y escribe
+exactamente esto; un cambio en un lado es un cambio en el otro.
+
+## Canales
+
+| Dirección | Canal | Trama |
+|---|---|---|
+| Del backend al proxy | `<prefix>:bridge:proxy` | `<server-id>\|<uuid o vacío>\|<módulo>\|<id>\|<payload>` |
+| Del proxy al backend | `<prefix>:bridge:<server-id>` | `<módulo>\|<id>\|<estado>\|<uuid o vacío>\|<detalle>` |
+
+- `server-id` es el backend que pregunta; la respuesta va a su canal.
+- El uuid es el jugador al que se refiere la petición (el **portador**), vacío para una petición sobre
+  nadie.
+- `id` es un número que elige el backend para emparejar la respuesta con su petición.
+- El payload y el detalle van al final y pueden contener `|`.
+
+## Códigos de estado
+
+| Código | Estado |
+|---|---|
+| `0` | `OK` |
+| `1` | `REJECTED` |
+| `2` | `FAILED` |
+| `3` | `UNKNOWN_MODULE` |
+
+## Pushes
+
+Una trama del proxy con id `0` es un **push**: algo que el proxy dice sin que se lo pidan, con estado
+`0`. Hoy el único es `arrive`, que [`connect`](/docs/exyliaproxyutils/modulos#connect) envía al servidor
+de destino con el jugador movido como portador y la nota como detalle.
+
+## Errores
+
+Toda petición bien formada recibe respuesta, también la de un módulo desconocido y la de un módulo que
+falló. Un texto que no es una petición — número de partes incorrecto, servidor o módulo vacío, un uuid o
+un id incorrecto — se descarta y el proxy lo registra como `Dropped an unreadable request: <motivo>`.
+
+## Probarlo a mano
+
+```text
+$ redis-cli SUBSCRIBE exylia:bridge:test
+$ redis-cli PUBLISH exylia:bridge:proxy "test||ping|1|"
+```
+
+El suscriptor recibe `ping|1|0||ExyliaProxyUtils 2.0.2 on Velocity`.

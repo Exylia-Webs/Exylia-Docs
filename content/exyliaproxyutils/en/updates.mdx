@@ -1,0 +1,75 @@
+---
+title: "Updates"
+description: "How releases are published, how the proxy installs a newer one by itself at start and stop, what it refuses, and how to turn it off."
+---
+
+The proxy keeps its own jar up to date. This is separate from ExyliaLib's plugin updater on the
+backends: a proxy has no ExyliaLib.
+
+## When it checks
+
+| Moment | How |
+|---|---|
+| Proxy start | On a background task, so startup does not wait. |
+| Proxy stop | Inline, after the bridge has closed, so a release published while the proxy ran is installed before it exits. |
+
+It does nothing when `updates.enabled=false` in `config.properties`, or when the plugin is not running
+from a jar file.
+
+## What it does
+
+<Steps>
+  <Step title="Asks which release is the latest">
+    A `HEAD` request to `releases/latest/download/ExyliaProxyUtils.jar` on GitHub. The redirect names
+    the newest version; nothing is downloaded yet.
+  </Step>
+  <Step title="Compares versions">
+    Nothing happens unless the latest is newer than the running version, compared number by number. A
+    jar already replaced by an earlier check is not downloaded again.
+  </Step>
+  <Step title="Refuses a new major">
+    A release with a different major number may change the configuration or the protocol. It is only
+    logged: `ExyliaProxyUtils 3.0.0 is a new major version; install it by hand when ready.`
+  </Step>
+  <Step title="Downloads and checks">
+    The jar is downloaded into a temporary file next to the running one and opened: it must be
+    ExyliaProxyUtils (by the id in `velocity-plugin.json`) at exactly that version.
+  </Step>
+  <Step title="Replaces the running jar">
+    The download is moved over the jar the proxy loaded, keeping its file name. The proxy keeps running
+    the classes it already opened; the new version loads on the next restart.
+  </Step>
+</Steps>
+
+```text
+ExyliaProxyUtils 2.0.3 installed (running 2.0.2); it loads on the next restart.
+```
+
+Any failure — GitHub unreachable, a bad download, a file that cannot be replaced — is logged once and
+left alone: `Could not check for ExyliaProxyUtils updates: <reason>`.
+
+<Callout type="note" title="The file name stays the same">
+The new release is written over the running file, under its old name. A jar installed as
+`ExyliaProxyUtils-2.0.2.jar` keeps that name after it becomes 2.0.3. Install it as
+`ExyliaProxyUtils.jar` and the name never lies.
+</Callout>
+
+<Callout type="warning" title="Once a new major is out, patches stop arriving">
+The updater only ever looks at the latest release. When that is a new major, a proxy on the previous
+major gets the "install it by hand" line and no longer receives that major's own patch releases.
+</Callout>
+
+## How releases are made
+
+Every push to the repository's `main` branch whose version has no release yet builds the plugin with
+its tests and publishes a GitHub release `v<version>` with two assets, `ExyliaProxyUtils-<version>.jar`
+and `ExyliaProxyUtils.jar`. The fixed-name asset is what the updater follows.
+
+## Turning it off
+
+```properties
+updates.enabled=false
+```
+
+Anything other than `false` (any case) leaves it on. Restart the proxy for the change to apply. To
+update by hand, replace the jar and restart; `config.properties` is never touched.

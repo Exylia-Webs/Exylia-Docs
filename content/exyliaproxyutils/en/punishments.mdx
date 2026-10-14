@@ -1,0 +1,121 @@
+---
+title: "Punishments"
+description: "How punishments made by LiteBans, LibertyBans, AdvancedBan or BanManager on the proxy reach ExyliaStaff, the Redis stream they go into, and importing a ban plugin's history."
+---
+
+ExyliaStaff owns punishments. The proxy carries the part only the proxy can see: punishments made by a
+ban plugin installed **on the proxy**, including a plain `/ban` typed there and every removal. They are
+written to a Redis stream on the same Redis and `key-prefix` as the bridge, and ExyliaStaff reads them.
+
+## Supported ban plugins
+
+| Plugin | Velocity | BungeeCord | `originId` |
+|---|---|---|---|
+| LiteBans | yes | yes | `ban:<id>`, `mute:<id>`, `warn:<id>`, `kick:<id>` |
+| LibertyBans | yes | yes | `<id>`, one sequence for every type |
+| AdvancedBan | no (it has no Velocity build) | yes | `<id>`; a live kick `kick:<uuid without dashes>:<start>`; an import's history-only entry `history:<id>` |
+| BanManager | yes | yes | `ban:<id>`, `mute:<id>`, `warn:<id>`, `kick:<id>`; an import's lifted bans and mutes `banrecord:<id>`, `muterecord:<id>` |
+
+None is required. Each is a soft dependency, loaded before this plugin when present, and each hook checks
+that its plugin is there before touching any of its classes. A hooked plugin is announced at startup:
+
+```text
+Recording LITEBANS punishments made on this proxy.
+```
+
+A hook that fails is logged as `Could not hook <ORIGIN>: <error>` and skipped; the rest of the plugin
+keeps working.
+
+### What is recorded
+
+| Plugin | Added | Removed |
+|---|---|---|
+| LiteBans | Every entry added. | Every entry removed, with who and why. |
+| LibertyBans | Every punishment. | Every pardon, with who; LibertyBans gives no reason. |
+| AdvancedBan | Every punishment. | Every revoke; AdvancedBan names nobody who revoked. |
+| BanManager | Bans, mutes, warnings, kicks. | Unbans and unmutes that were not cancelled, read last, with who and why. |
+
+Entries that name no player — address-only bans — are skipped: the stream's `target` is always a uuid.
+An IP ban that does name a player is recorded as `IPBAN`. Names a plugin does not keep (LibertyBans keeps
+none, of the target or of the staff member) are filled from whoever is online at that moment, else left
+empty; LibertyBans' console is written as `Console`.
+
+## The stream
+
+Key: `<prefix>:punish:external`. Each entry is one field, `json`:
+
+```text
+XADD <prefix>:punish:external MAXLEN ~ 200000 * json <json>
+```
+
+```json
+{"v":1,"kind":"added","origin":"LITEBANS","originId":"ban:123","type":"TEMPBAN",
+ "target":"<uuid>","targetName":"Steve","staff":null,"staffName":"Console",
+ "reason":"Hacking","server":"proxy","created":1730000000000,"expires":1730086400000,
+ "removedAt":0,"removedBy":null,"removeReason":null,"import":false}
+```
+
+| Field | Meaning |
+|---|---|
+| `v` | Format version, `1`. |
+| `kind` | `added` or `removed`. |
+| `origin` | `LITEBANS`, `LIBERTYBANS`, `ADVANCEDBAN` or `BANMANAGER`. |
+| `originId` | Stable per origin; see the table above. Cut to 64 characters. |
+| `type` | `BAN`, `TEMPBAN`, `IPBAN`, `MUTE`, `TEMPMUTE`, `WARN` or `KICK`. |
+| `target`, `targetName` | The punished player. |
+| `staff`, `staffName` | Who did it; `staff` is null for the console. |
+| `reason` | Cut to 255 characters. |
+| `server` | The ban plugin's own origin server when it keeps one (LiteBans), else `proxy`. |
+| `created`, `expires`, `removedAt` | Epoch milliseconds; `0` means never. |
+| `removedBy`, `removeReason` | For `removed` entries. |
+| `import` | `true` for entries written by an import: ExyliaStaff sends no alerts or player notices for them. |
+
+The stream keeps about the last 200,000 entries; ExyliaStaff reads it with the consumer group
+`exyliastaff`.
+
+Live entries go through a single writer thread, so a ban plugin never waits on Redis and a removal never
+overtakes its punishment. A write is tried three times, one and two seconds apart; one that still fails
+is logged with its JSON, never dropped silently:
+
+```text
+Could not record a punishment in exylia:punish:external (<error>): {"v":1,...}
+```
+
+## Importing history
+
+A ban plugin's whole history can be copied into the stream once, so ExyliaStaff knows every punishment
+made before it was installed. From any backend running ExyliaStaff:
+
+```text
+/staffadmin import <plugin>
+```
+
+with `exyliastaff.admin`. ExyliaStaff imports locally when that ban plugin is installed on the backend,
+and otherwise asks the proxy's `punish-import` module. The proxy answers at once and reads the history
+on a thread of its own, logging as it goes:
+
+```text
+Importing LITEBANS history into the punishment stream...
+Importing LITEBANS: 1000 entries so far.
+Imported LITEBANS: 48213 entries.
+```
+
+| Plugin | How the history is read |
+|---|---|
+| LiteBans | Straight from its four tables (bans, mutes, warnings, kicks), 500 rows at a time by id. |
+| LibertyBans | Through its API, oldest first, 500 at a time; active punishments are read first to tell which are lifted. |
+| AdvancedBan | The active table, then the history of everything no longer active. Each is loaded whole. |
+| BanManager | Every table through BanManager's own cursors, history tables included. |
+
+An active punishment is written as `added`. A lifted or expired one is written as `added` followed by
+`removed`; kicks are only `added`. When the plugin keeps no removal date (LibertyBans, AdvancedBan) the
+removal is dated at the punishment's end if it ran out, else at the moment of the import.
+
+Only one import per plugin runs at a time; a second request answers
+`<ORIGIN> import already running`. An import that fails stops with
+`The <ORIGIN> import stopped after <n> entries: <error>`; what was written stays written.
+
+<Callout type="warning" title="Run an import once">
+Every run writes the whole history again. ExyliaStaff deduplicates on origin and `originId`, but there
+is no reason to run it twice.
+</Callout>

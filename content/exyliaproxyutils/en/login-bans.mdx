@@ -1,0 +1,48 @@
+---
+title: "Bans at login"
+description: "How the proxy turns away players ExyliaStaff has banned, the Redis keys it reads, and what happens when Redis is down."
+---
+
+ExyliaStaff keeps its own active bans in Redis as a mirror. When a player logs in to the proxy,
+ExyliaProxyUtils reads that mirror and turns the player away before they reach any server. Nothing to
+configure: it uses the bridge's Redis and `key-prefix`.
+
+## The keys
+
+| Key | Holds |
+|---|---|
+| `<prefix>:punish:ban:<uuid in lowercase>` | A ban on the player. |
+| `<prefix>:punish:ipban:<sha256 hex>` | A ban on an address. The hash is of the address as text, such as `1.2.3.4`. |
+
+Each holds:
+
+```json
+{"id":123,"type":"BAN","expires":0,"mini":"...","legacy":"..."}
+```
+
+ExyliaStaff writes, expires and deletes them; the proxy only reads.
+
+## At login
+
+1. The player's uuid key is read; if there is no ban there, the address key.
+2. An entry whose `expires` is in the past is ignored (`0` never expires). An entry that is not valid
+   JSON is ignored.
+3. A ban that applies cancels the login with its screen.
+
+| Proxy | When | Screen |
+|---|---|---|
+| Velocity | `LoginEvent`, early, as an async task; skipped if the login was already denied. | `mini`; the `legacy` one if `mini` is blank; `You are banned from this network.` if both are. |
+| BungeeCord | `LoginEvent`, low priority, on an async task holding the login; skipped if already cancelled. | `legacy`; `You are banned from this network.` if it is blank. |
+
+Neither runs on the proxy's network thread.
+
+## When Redis is down
+
+The player is let in, and the proxy warns at most once a minute:
+
+```text
+Could not read the ban mirror (<error>); letting players in, the backends still check.
+```
+
+This is a gate in front of the network, not the only one: every backend running ExyliaStaff checks its
+own database too. If the proxy failed to start at all, this check does not run.

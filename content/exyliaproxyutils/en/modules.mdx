@@ -1,0 +1,128 @@
+---
+title: "Modules"
+description: "The eight things a backend can ask the proxy, what each payload means, and every answer it can give."
+---
+
+Every request a backend sends names a **module**, and the module decides what the payload means. The
+proxy answers every request, including one for a module that does not exist and one whose module threw:
+a request dropped in silence would be a five-second wait on the backend and no idea why.
+
+Each answer carries a status:
+
+| Status | Meaning |
+|---|---|
+| `OK` | The module did what was asked. The detail may carry a result. |
+| `REJECTED` | The module understood and refused, with a reason. |
+| `FAILED` | The module threw; the detail is the error message. |
+| `UNKNOWN_MODULE` | No module by that name on this proxy: `no module "<name>" on this proxy`. |
+
+ExyliaLib adds a fifth on its own side, `TIMEOUT`, when nothing answers within five seconds. Module names
+are case-insensitive.
+
+## ping
+
+| | |
+|---|---|
+| Payload | Ignored. |
+| Answer | `OK` with `ExyliaProxyUtils <version> on <Velocity or BungeeCord>`. |
+| Used by | ExyliaLib, a second after start and every ten seconds until it answers, and `/exylialib status`. |
+
+## commands
+
+Runs a command on the proxy. The payload is `<actor>:<command>`:
+
+| Actor | Runs as |
+|---|---|
+| `player-proxy` | The player the request is about, with their permissions on the proxy. Refused with `a player-proxy command needs a player to run as` when the request is about nobody. |
+| `console-proxy` | The proxy console. Always logged as `[<server-id>] console: /<command>`, plus ` (for <player>)` when the request is about somebody. |
+
+A leading `/` on the command is dropped. Answers:
+
+- `OK` once the proxy found and ran the command.
+- `REJECTED the proxy did not run "/<label>"` when the proxy has no such command, or the player has
+  left.
+- `REJECTED` with `expected <actor>:<command>`, `empty command` or `unknown actor "<actor>"` for a
+  malformed line.
+
+These are the `player-proxy:` and `console-proxy:` prefixes of [Commands](/docs/exyliaproxyutils/commands).
+
+## connect
+
+Moves a player to a server. The payload is `<server>|<uuid>|<memo>`; the last two are optional.
+
+| Part | Empty means |
+|---|---|
+| `server` | The server that asked. |
+| `uuid` | The player the request is about. Neither: `REJECTED nobody to move: no uuid given`. |
+| `memo` | No note for the destination. |
+
+Answers `OK` once connected, `OK already there` when they were. Refusals:
+
+| Reason | When |
+|---|---|
+| `no server "<name>"` | The proxy has no server by that name. |
+| `player is not connected` | The player has left the proxy. |
+| `not a player id: <text>` | The uuid part is not a uuid. |
+| `already connecting somewhere` | Velocity: another connection is in progress. |
+| `a proxy plugin cancelled the connection` | Velocity: a plugin on the proxy cancelled it. |
+| `server "<name>" refused the connection` | The destination refused or failed. On BungeeCord with the error message appended. |
+| `the proxy did not connect them` | BungeeCord: the connection ended without success or error. |
+
+When the move succeeds and a memo was given, the proxy sends the destination server an `arrive`
+**push** with the player and the memo. This is how ExyliaLib's cross-server teleports land next to
+somebody: the server that asked writes where, the proxy carries it, the destination reads it and holds
+it until the player has actually joined, since the push can arrive first.
+
+## player
+
+| | |
+|---|---|
+| Payload | A name or a uuid. |
+| Answer | `OK uuid\|name\|server` for a connected player; the server part is empty while they are between servers. `REJECTED "<who>" is not on the network` otherwise, `REJECTED expected a name or a uuid` for an empty payload. |
+| Used by | Every lookup of a player who is not on the asking server, such as `/tp <name>`. |
+
+Names are matched the way the proxy matches them.
+
+## players
+
+| | |
+|---|---|
+| Payload | Ignored. |
+| Answer | `OK` with every connected name, comma-separated, in no order. |
+| Used by | ExyliaLib, every ten seconds, kept in memory for tab completion and `Proxy.players()`. |
+
+## kick
+
+Disconnects a player from the whole network. The payload is `<uuid>|<mini>|<legacy>`, split on the
+first two pipes only, so the legacy screen may contain more.
+
+| Proxy | Screen shown |
+|---|---|
+| Velocity | The MiniMessage screen; the legacy one if `mini` is blank; `You are banned from this network.` if both are. |
+| BungeeCord | The `§`-coded legacy screen; if it is blank, the `mini` text as it is, tags and all. |
+
+Answers `OK` once disconnected, `REJECTED not connected` for a player the proxy does not have,
+`REJECTED not a player id: <text>` for a bad uuid. ExyliaStaff kicks and bans players on other servers
+this way.
+
+## punish-sources
+
+| | |
+|---|---|
+| Payload | Ignored. |
+| Answer | `OK` with the ban plugins hooked on this proxy as comma-separated origins (`LIBERTYBANS,LITEBANS`), sorted; empty for none. |
+
+## punish-import
+
+| | |
+|---|---|
+| Payload | An origin: `LITEBANS`, `LIBERTYBANS`, `ADVANCEDBAN` or `BANMANAGER`, in any case. |
+| Answer | `OK started <ORIGIN>` at once; the import runs on its own thread. `REJECTED <ORIGIN> not installed` or `REJECTED <ORIGIN> import already running` otherwise. |
+| Used by | ExyliaStaff's `/staffadmin import <plugin>`, when the plugin is not installed on that backend. |
+
+See [Punishments](/docs/exyliaproxyutils/punishments#importing-history).
+
+## Threading
+
+Modules run on the plugin's Redis subscriber thread. Lookups answer at once; a `connect` and a Velocity
+command return their answer when the proxy finishes, without holding that thread.
