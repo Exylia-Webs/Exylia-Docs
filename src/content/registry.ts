@@ -1298,10 +1298,10 @@ export const plugins: Plugin[] = [
     name: "ExyliaKillEffect",
     tagline: { en: "Kill effects drawn with display entities", es: "Efectos de muerte hechos con display entities" },
     summary: {
-      en: "100 kill effects across five categories, each one a body choreographed joint by joint among real items and blocks, often with the killer and the crowd acting it out: chosen from a menu, won out of a crate or bound to a weapon with a token, and written as sequences a server owner can edit.",
-      es: "100 efectos de muerte en cinco categorías, cada uno un cuerpo coreografiado articulación a articulación entre objetos y bloques reales, muchas veces con el asesino y el público actuándolo: elegidos desde un menú, ganados en una caja o atados a un arma con una ficha, y escritos como secuencias que el dueño puede editar.",
+      en: "110 kill effects across five categories, each one a body choreographed joint by joint among real items and blocks, often with the killer and the crowd acting it out: chosen from a menu, won out of a crate, bought with currency or bound to a weapon with a token, and written as sequences a server owner can edit.",
+      es: "110 efectos de muerte en cinco categorías, cada uno un cuerpo coreografiado articulación a articulación entre objetos y bloques reales, muchas veces con el asesino y el público actuándolo: elegidos desde un menú, ganados en una caja, comprados con moneda o atados a un arma con una ficha, y escritos como secuencias que el dueño puede editar.",
     },
-    version: "1.4.0",
+    version: "1.7.0",
     status: "stable",
     category: { en: "Cosmetic", es: "Cosmético" },
     minecraft: "1.21+",
