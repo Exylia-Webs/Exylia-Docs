@@ -1,12 +1,13 @@
 ---
 title: "API"
-description: "Preguntar dónde está un jugador, leer los mundos y sus kits, vestirlo y leer sus estadísticas de sandbox."
+description: "Preguntar dónde está un jugador, mandarlo a un mundo, leer los mundos y sus kits, vestirlo, leer sus estadísticas de sandbox, y los eventos de entrada, llegada y salida."
 badge: "dev"
 ---
 
-`SandBoxService` es como otro plugin pregunta si un jugador está en un sandbox o en una cola, lee los
-mundos configurados y los kits guardados de un jugador, viste a alguien con uno de ellos y lee sus
-bajas, muertes y tiempo jugado.
+`SandBoxService` es como otro plugin pregunta si un jugador está en un sandbox o en una cola, lo manda a
+un mundo, lee los mundos configurados y los kits guardados de un jugador, viste a alguien con uno de
+ellos y lee sus bajas, muertes y tiempo jugado. Tres eventos le avisan de cuándo un jugador pide entrar,
+llega y sale.
 
 ```java
 ExyliaAPI.get(SandBoxService.class).ifPresent(sandbox -> {
@@ -40,6 +41,27 @@ en el hilo principal, y no más a menudo de lo que podría provocarlo un jugador
 | `boolean leave(Player)` | Lo manda de vuelta al lobby. Informa de si la petición se aceptó, no de si terminó; `false` mientras está montando un kit. |
 | `boolean joinQueue(Player, String worldId, int kitSlot)` | Lo mete en la cola de un mundo. `false` solo cuando no hay ningún mundo con ese id — cualquier otro rechazo de la cola ya se le ha dicho al jugador. |
 | `void leaveQueue(Player)` | Lo saca de la cola en la que esté. |
+| `EnterResult enter(Player, String worldId, int kitSlot)` | Lo manda directo a un mundo, vestido con uno de sus kits: la entrada de `/rtp`. |
+| `void openWorldSelector(Player)` | Abre la lista de mundos que abre `/rtp`: la pantalla que quiere un NPC del lobby. |
+
+`enter` decide cada rechazo antes de quitarle nada al jugador, y no le dice ninguno: el resultado es
+tuyo para ponerlo en palabras. `ACCEPTED` es una petición en marcha, no una llegada: encontrar un sitio
+seguro y completar el teletransporte terminan unos ticks después y todavía pueden fallar, y en ese caso
+el jugador vuelve a estar como estaba y se le avisa. `SandboxArriveEvent` es la confirmación.
+
+| `EnterResult` | Significado |
+|---|---|
+| `ACCEPTED` | De camino |
+| `BUSY` | Otro plugin lo tiene, o está montando un kit |
+| `ALREADY_IN_SANDBOX` | Pasar de un mundo sandbox a otro no es entrar en uno |
+| `UNKNOWN_WORLD` | No hay ningún mundo configurado con ese id |
+| `WORLD_NOT_READY` | Todavía se está generando, o no está disponible |
+| `NO_KIT` | La ranura no tiene ningún kit guardado con contenido |
+| `REFUSED` | Un handler de `SandboxJoinEvent` lo canceló, el jugador está en combate (se le dice `general.in-combat`), u otro plugin se lo llevó entre las comprobaciones y la reserva |
+
+`openWorldSelector` abre la pantalla pueda o no entrar el jugador ahora mismo: un mundo que no está
+listo se dibuja sin acción, y cada entrada que ofrece la pantalla hace sus propias comprobaciones al
+pulsarla.
 
 ## Mundos
 
@@ -80,8 +102,19 @@ expone a propósito: usa `applyKit` en vez de leer las pilas.
 `SandboxStats` es `player`, `kills`, `deaths` y `playtimeMillis`, más `kdr()` — que devuelve el número
 de bajas cuando no hay muertes. El tiempo jugado es tiempo de sandbox, no tiempo en el servidor.
 
-## No hay eventos
+## Eventos
 
-El plugin no dispara ninguno, y el paquete publicado no lleva clases de evento. Para reaccionar a que un
-jugador entre o salga, mira su mundo con `worldOf`, o pregunta a `isInSandbox` cuando importe. Si
-necesitas un enganche en un momento concreto, pídelo en vez de sondear cada tick.
+Los tres viven en `net.exylia.lib.api.sandbox.event`, llevan `getPlayer()` y `getWorld()` (un
+`SandboxWorld`), y se llaman en el hilo dueño del jugador, que en Folia es el hilo de su región.
+
+| Evento | Cuándo | Cancelable |
+|---|---|---|
+| `SandboxJoinEvent` | Un jugador pide un mundo, por teletransporte aleatorio o entrando en su cola, antes de quitarle nada. `getKitSlot()` e `isQueued()` dicen cómo. | Sí: se queda exactamente como estaba, y el plugin no dice nada |
+| `SandboxArriveEvent` | Ha llegado, en supervivencia, con la vida llena y su kit puesto. La confirmación que los otros dos no son. | No |
+| `SandboxLeaveEvent` | El sandbox lo ha soltado: inventario devuelto, reserva liberada. `getReason()` es `LEFT`, `DIED` o `DISCONNECTED`. | No |
+
+Una cola pregunta una vez, al entrar el jugador, y no otra vez al encontrarle pareja: rechazar en ese
+momento mandaría a la pareja sola. Pasar de un mundo sandbox a otro no dispara ninguno de los tres, ni
+tampoco volver a conectarse dentro de uno. Salir de una cola, o una entrada que falló antes de que el
+jugador llegara, no dispara `SandboxLeaveEvent`. Cancelar una entrada no le dice nada al jugador:
+explicarle por qué es cosa de quien cancela.

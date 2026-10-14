@@ -1,12 +1,13 @@
 ---
 title: "API"
-description: "Ask where a player is, read the worlds and their kits, dress them, and read their sandbox statistics."
+description: "Ask where a player is, send them into a world, read the worlds and their kits, dress them, read their sandbox statistics, and the join, arrive and leave events."
 badge: "dev"
 ---
 
-`SandBoxService` is how another plugin asks whether a player is in a sandbox or a queue, reads the
-configured worlds and a player's saved kits, dresses somebody in one of them, and reads their kills,
-deaths and playtime.
+`SandBoxService` is how another plugin asks whether a player is in a sandbox or a queue, sends them
+into a world, reads the configured worlds and a player's saved kits, dresses somebody in one of them,
+and reads their kills, deaths and playtime. Three events tell it when a player asks to come in, lands
+and leaves.
 
 ```java
 ExyliaAPI.get(SandBoxService.class).ifPresent(sandbox -> {
@@ -40,6 +41,26 @@ thread, and no more often than a player could trigger them.
 | `boolean leave(Player)` | Sends them back to the lobby. Reports whether the request was accepted, not whether it finished; `false` while they are building a kit. |
 | `boolean joinQueue(Player, String worldId, int kitSlot)` | Queues them for one world. `false` only when no world is configured under that id — anything else the queue refuses is said to the player. |
 | `void leaveQueue(Player)` | Takes them out of whichever queue they are in. |
+| `EnterResult enter(Player, String worldId, int kitSlot)` | Sends them straight into a world, dressed in one of their kits — the `/rtp` way in. |
+| `void openWorldSelector(Player)` | Opens the world list `/rtp` opens: the screen a lobby NPC wants. |
+
+`enter` decides every refusal before anything is taken from the player, and says none of them to the
+player: the result is yours to put into words. `ACCEPTED` is a request under way, not an arrival —
+finding a safe spot and landing the teleport end some ticks later and can still fail, in which case the
+player is given back as they were and told so. `SandboxArriveEvent` is the confirmation.
+
+| `EnterResult` | Meaning |
+|---|---|
+| `ACCEPTED` | On their way in |
+| `BUSY` | Another plugin holds them, or they are building a kit |
+| `ALREADY_IN_SANDBOX` | Moving between sandbox worlds is not entering one |
+| `UNKNOWN_WORLD` | No world is configured under that id |
+| `WORLD_NOT_READY` | Still generating, or unavailable |
+| `NO_KIT` | The slot holds no saved kit with anything in it |
+| `REFUSED` | A `SandboxJoinEvent` handler cancelled it, the player is combat-tagged (they are told `general.in-combat`), or another plugin took them between the checks and the claim |
+
+`openWorldSelector` opens whether or not the player could enter right now: a world that is not ready
+draws without an action, and every way in the screen offers makes its own checks when clicked.
 
 ## Worlds
 
@@ -80,8 +101,20 @@ are deliberately not exposed — use `applyKit` rather than reading the stacks.
 `SandboxStats` is `player`, `kills`, `deaths` and `playtimeMillis`, plus `kdr()` — which returns the
 kill count when there are no deaths. Playtime is sandbox time only, not time on the server.
 
-## There are no events
+## Events
 
-The plugin fires nothing, and the published package carries no event classes. To react to a player
-entering or leaving, watch their world with `worldOf`, or ask `isInSandbox` when it matters. If you
-need a hook at a specific moment, ask for it rather than polling every tick.
+All three live in `net.exylia.lib.api.sandbox.event`, carry `getPlayer()` and `getWorld()` (a
+`SandboxWorld`), and are called on the thread that owns the player, which on Folia is their region
+thread.
+
+| Event | When | Cancellable |
+|---|---|---|
+| `SandboxJoinEvent` | A player asks for a world, by random teleport or by joining its queue, before anything is taken from them. `getKitSlot()` and `isQueued()` say how. | Yes: they are left exactly as they were, and the plugin says nothing |
+| `SandboxArriveEvent` | They have landed, in survival with full health and their kit on. The confirmation the other two are not. | No |
+| `SandboxLeaveEvent` | The sandbox has let go of them: inventory back, claim released. `getReason()` is `LEFT`, `DIED` or `DISCONNECTED`. | No |
+
+A queue asks once, when the player joins it, not again when a partner is found — refusing then would
+send the partner in alone. Moving from one sandbox world to another fires none of the three, and
+neither does logging back in inside one. Leaving a queue, or a way in that failed before the player
+arrived, does not fire `SandboxLeaveEvent`. Cancelling a join says nothing to the player: telling them
+why is the canceller's job.
