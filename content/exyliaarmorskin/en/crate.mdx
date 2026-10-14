@@ -1,0 +1,268 @@
+---
+title: "The crate"
+description: "Rarities, both kinds of key, the reels that fall, buying a skin with currency, and the blocks that open the crate."
+---
+
+The crate is how skins are won rather than given. A key is spent, a reel falls, and what it lands on
+is unlocked on the player's account: the whole skin, every piece it fits, owned for good whatever
+happens to their rank afterwards. The crate itself is ExyliaLib's; this plugin hands it the skins in
+`skins.yml` and reads its settings from `config.yml` and its lines from `messages.yml`.
+
+It works in every `behaviour.mode`. On an `item` server there is no wardrobe to wear an unlock in, so
+set `crate.reward` to `ITEM` or `BOTH` there and the crate hands over the skin item.
+
+## Rarities
+
+Every skin declares a `tier` in `skins.yml`, and `crate.tiers` in `config.yml` declares what the tiers
+are:
+
+```yaml title="config.yml"
+crate:
+  tiers:
+    common:
+      name: "Common"
+      color: "{muted}"
+      chance: 60.0
+      priority: 1
+    rare:
+      name: "Rare"
+      color: "{info}"
+      chance: 25.0
+      priority: 2
+    epic:
+      name: "Epic"
+      color: "{accent}"
+      chance: 12.0
+      priority: 3
+    legendary:
+      name: "Legendary"
+      color: "{highlight}"
+      chance: 3.0
+      priority: 4
+```
+
+| Key | What it does |
+|---|---|
+| `name` | What menus and messages call it. |
+| `color` | The colour its name and its skins are written in. |
+| `chance` | How often a crate lands on it, **relative to the other rarities**. |
+| `priority` | Where it sits in menus; lower comes first. |
+
+The forty shipped skins are 14 common, 12 rare, 9 epic and 5 legendary: one colour and a trim stay
+common, and the more a skin moves the rarer it is. The full list is on
+[Skins](/docs/exyliaarmorskin/skins#the-forty-that-ship).
+
+Nothing here is hard-coded. Delete `legendary`, invent `mythic`, rename all four: the key is the id
+`skins.yml` writes as `tier`, and a skin naming a rarity that no longer exists counts as the first
+one. A skin with no `tier` is `common`.
+
+<Callout type="note" title="chance is a weight, not a percentage">
+The shares are worked out from the weights, so four rarities weighted `60/25/12/3` and four weighted
+`6/2.5/1.2/0.3` behave identically. Deleting a rarity re-spreads its odds across the rest instead of
+leaving a three-percent hole.
+</Callout>
+
+## Keys
+
+Two kinds, and the crate takes both.
+
+### On the account
+
+A number on the player's crate row. Nothing can be dropped, duped, or lost to a full inventory:
+
+```text
+/armorskinsadmin keys give <player> <amount>
+/armorskinsadmin keys take <player> <amount>
+/armorskinsadmin keys set <player> <amount>
+/armorskinsadmin keys check <player>
+```
+
+Safe to run from console and for players who are offline — a shop, a vote listener or a reward plugin
+hands keys over the same way:
+
+```text
+[console] armorskinsadmin keys give %player% 1
+```
+
+Every player is given `crate.start-keys` keys — none by default — the first time they are seen.
+
+### In the hand
+
+An item, so it can be sold, put in a kit, dropped and given to a friend:
+
+```text
+/armorskinsadmin item key <player> [1-64]
+```
+
+Right click a bound crate block holding one and it opens on the spot: one key, one reel, no question
+screen. Left clicking never spends one — that is how a player asks what a block is. How the key is
+drawn is `crate.key-item` in `config.yml` (material and glow) and `key-item` in `messages.yml` (name
+and lore); it is recognised by what it carries in its data, not by its name or material. Keys that do
+not fit in the inventory wait and are handed over on the player's next join, with `rewards-claimed`.
+
+## Opening
+
+`/wardrobe crate`, the **SKIN CRATE** button in the corner of the wardrobe, or a bound block clicked
+without a key in hand. The first screen asks only one thing: how many at once.
+
+<Steps>
+  <Step title="How many">
+    `menus/crate.yml`. Choices are drawn up to `crate.max-at-once`, capped at seven by the width of
+    the screen, and spread the way the reels will be — where you click is where that reel falls. A
+    choice the player cannot afford is drawn by `empty_template` with how many keys it is missing.
+  </Step>
+  <Step title="The reels fall">
+    `menus/crate_open.yml`. One reel per crate, each running the full height of the chest, each with
+    its own finishing line `crate.stagger-seconds` after the one before it. Every face is the skin as
+    it is worn, on its chestplate, and keeps its name and the pieces it fits the whole way down.
+  </Step>
+  <Step title="What went past stays">
+    Nothing is cleared when a reel stops. What it came within one slot of stays on screen, because
+    half of what a crate is worth is the legendary that went past the line.
+  </Step>
+  <Step title="Paid out as each reel lands">
+    Keys are spent and prizes decided before the first frame is drawn. Each reel pays out as it
+    stops, with `crate.on-win` or `crate.on-duplicate` and its own line in chat. Closing the window
+    mid-fall costs nothing.
+  </Step>
+  <Step title="Wear it in one click">
+    Clicking a skin that landed puts it on every piece the player may wear it on, straight into the
+    wardrobe. On an `item` server the click just closes the window.
+  </Step>
+</Steps>
+
+| Refusal | Message |
+|---|---|
+| `crate.enabled` is off | `crate.disabled` |
+| Not enough keys | `crate.no-keys` — `%amount%` is the cost, `%keys%` what they hold. |
+| Their last opening is still falling | `crate.busy` |
+| No skin is declared | `crate.empty` |
+
+## What comes out
+
+`crate.reward` decides:
+
+| Value | What the player gets |
+|---|---|
+| `UNLOCK` | The skin is unlocked on the account, every piece it fits. It cannot be traded. The default. |
+| `ITEM` | Only its skin item. Nothing is unlocked, so no opening is ever a duplicate. |
+| `BOTH` | Unlocked on the account, and handed over as a skin item as well. |
+
+`crate.won` names what came out (`%reward%`) and its rarity (`%tier%`).
+
+## Duplicates
+
+Landing on a skin the player has already unlocked hands keys back, as many as
+`crate.duplicate-refund` says, with `crate.duplicate` (`%refund%` is how many). At the default of `1` a
+duplicate is a free re-roll rather than a loss.
+
+A skin the player only owns through a permission is **not** a duplicate: it is unlocked for good, so it
+outlives the rank that granted it.
+
+## Buying with currency
+
+A skin the player does not own can also be bought from the wardrobe. While `shop.enabled` is on and the
+skin has a price, its locked row is drawn by `purchasable_template` instead of `no_permissions_template`,
+with the price in its lore; clicking it asks to confirm, charges the price and unlocks the skin exactly
+as a crate would — the whole skin, for good.
+
+```yaml title="config.yml"
+shop:
+  enabled: true
+  tier-prices:
+    common: 500
+    rare: 1500
+    epic: 4000
+    legendary: 10000
+```
+
+| Key | Default | What it does |
+|---|---|---|
+| `enabled` | `true` | Off, locked skins look locked as before and nothing is for sale. |
+| `tier-prices` | above | The price of every skin of a rarity that sets none of its own. A rarity left out keeps its skins out of the shop. |
+
+A skin's own `price` in `skins.yml` wins over its rarity's:
+
+```yaml title="skins.yml"
+skins:
+  galaxy:
+    tier: epic
+    price: 2500                              # the default currency
+  eclipse:
+    tier: legendary
+    price: {amount: 50, currency: gems}      # a named currency
+```
+
+The money goes through ExyliaLib's economy, so it is whichever of ExyliaEconomy or Vault the server
+runs; with neither, every price is unavailable and nothing is offered. One purchase per player at a
+time, and an unlock that fails after the charge gives the money back. What the player is told — the
+confirmation, success, not enough money, already owned — is ExyliaLib's own wording, under `purchase`
+in ExyliaLib's `messages.yml`.
+
+A skin is offered wherever the player may not wear it on the piece being dressed, so a player who
+owns one piece through a per-piece node can still buy the rest: the purchase is only refused as already
+owned once they may wear every piece it fits.
+
+## Settings
+
+```yaml title="config.yml"
+crate:
+  enabled: true
+  start-keys: 0
+  duplicate-refund: 1
+  reward: UNLOCK
+  blocks: []
+  max-at-once: 4
+  spin-frames: 34
+  stagger-seconds: 2.0
+  key-item:
+    material: TRIPWIRE_HOOK
+    glow: true
+```
+
+| Key | Default | What it does |
+|---|---|---|
+| `enabled` | `true` | Off, the crate says so instead of opening. |
+| `start-keys` | `0` | Keys a player is given the first time they are seen. |
+| `duplicate-refund` | `1` | Keys handed back for a skin already unlocked. |
+| `reward` | `UNLOCK` | `UNLOCK`, `ITEM` or `BOTH`, as above. |
+| `blocks` | `[]` | The blocks that open the crate. Bind them in game, not by hand. |
+| `max-at-once` | `4` | How many crates one player may open in one go. The screen fits seven. |
+| `spin-frames` | `34` | How many faces the first reel runs through before it stops. Capped at 200, about eleven seconds. |
+| `stagger-seconds` | `2.0` | How long after one reel stops the next one does. `0` stops them together. |
+| `key-item` | `TRIPWIRE_HOOK`, glowing | How the key that can be held is drawn. Its name and lore are in `messages.yml`. |
+
+`on-spin`, `on-win` and `on-duplicate` are full ExyliaLib effect blocks — title, action bar, boss bar,
+sound, particle and firework — played on every falling tick, and then once per reel as it lands. They
+ship as a hi-hat, a level-up and a bass note.
+
+## Crate blocks
+
+A physical block, anywhere in the world, that opens the crate when it is clicked:
+
+```text
+/armorskinsadmin crate block add      # the block you are looking at, up to six blocks away
+/armorskinsadmin crate block remove
+/armorskinsadmin crate block list
+/armorskinsadmin crate block clear
+```
+
+They are written to `config.yml`, not into the world, so a bound block survives a schematic paste, a
+world edit and a rollback. While it is bound it cannot be broken, blown up or pushed away, and clicking
+it no longer does what its material does — a crate drawn on a barrel must not open a barrel.
+
+## Handing skins over without a crate
+
+```text
+/armorskinsadmin unlocks grant <player> <skin>
+/armorskinsadmin unlocks revoke <player> <skin>
+/armorskinsadmin unlocks clear <player>
+```
+
+The same unlock a crate writes, for a reward plugin, a support ticket or a wiped season. It outlives a
+rank running out and needs no permissions plugin.
+
+<Callout type="tip" title="Permissions and unlocks are two separate ways in">
+A player may wear a skin they unlocked **or** one their rank grants. Selling one as a rank is still one
+node — `exyliaarmorskin.skin.<id>` — and it is independent of anything they unboxed or bought.
+</Callout>

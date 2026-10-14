@@ -1,20 +1,31 @@
 ---
 title: "Permissions"
-description: "The wardrobe node, the admin node, the per-skin and per-piece nodes, and the two switches that decide whether they are enforced."
+description: "The wardrobe node, the admin node, the per-skin and per-piece nodes, crate unlocks as the other way in, and the switch that hides what a wearer no longer owns."
 ---
 
 ## The nodes
 
 | Permission | Default | Grants |
 |---|---|---|
-| `exyliaarmorskin.wardrobe` | — | `/wardrobe`. |
-| `exyliaarmorskin.admin` | `op` | Every subcommand of `/armorskinsadmin`: `give`, `remover`, `list`, `refresh`, `wardrobe open`, `wardrobe clear` and `reload`. |
-| `exyliaarmorskin.skin.<id>` | — | Applying and wearing that one skin, on every piece it fits. |
+| `exyliaarmorskin.wardrobe` | `true` | `/wardrobe` and `/wardrobe crate`. |
+| `exyliaarmorskin.admin` | `op` | Every subcommand of `/armorskinsadmin` — see [Commands](/docs/exyliaarmorskin/commands). |
+| `exyliaarmorskin.skin.<id>` | — | Wearing that one skin, on every piece it fits. |
 | `exyliaarmorskin.skin.<id>.<piece>` | — | That skin on one slot only: `helmet`, `chestplate`, `leggings` or `boots`. |
 | `exyliaarmorskin.skin.*` | `op` | Every skin. |
 
-Both fixed nodes are declared in `plugin.yml` with `default: op`, so an operator owns every skin out
-of the box and everybody else owns none until you say otherwise.
+Every player may open the wardrobe out of the box; an operator owns every skin, and everybody else owns
+none until you grant a node, they win one from the [crate](/docs/exyliaarmorskin/crate) or they buy
+one.
+
+## Two ways to own a skin
+
+| Way | What it covers | How it ends |
+|---|---|---|
+| A node | The skin, or one piece of it. | When the rank or the node goes. |
+| An unlock | The whole skin, every piece it fits. Written by the crate, the shop or `/armorskinsadmin unlocks grant`. | Only with `unlocks revoke` or `unlocks clear`: it outlives any rank. |
+
+Either one is enough. Everything that asks whether a player owns a skin — the wardrobe, the
+`hide-without-permission` check and the API's `canUse` — asks both.
 
 ## The per-skin node
 
@@ -33,69 +44,73 @@ four; a piece node covers exactly one.
 
 In the wardrobe a skin the player owns for one piece is offered on that piece, and dressing the full
 set dresses only the pieces they are allowed to wear — a rank holding one piece still gets it rather
-than being refused outright.
+than being refused outright. With the [shop](/docs/exyliaarmorskin/crate#buying-with-currency) on, the
+rest of the skin is offered for sale.
 
 ```text
-/lp group default permission set exyliaarmorskin.wardrobe true
 /lp group vip     permission set exyliaarmorskin.skin.galaxy true
 /lp group mvp     permission set exyliaarmorskin.skin.* true
 ```
 
-## What the node is checked for
+## What ownership is checked for
 
 <Steps>
-  <Step title="Applying">
-    Dragging a skin item onto armour, or wearing one in the wardrobe, without the node is refused
-    with the `no-permission` message. Nothing is written and nothing is consumed. Governed by
-    `behaviour.require-permission`.
+  <Step title="The wardrobe">
+    Wearing a skin from the wardrobe needs the node or an unlock. A skin the player does not own is
+    drawn locked, or for sale, and clicking it does not dress them.
   </Step>
-  <Step title="Wearing">
-    A piece whose skin the **wearer** may not use is drawn as the real armour — to them and to
-    everyone else — and it plays no effects. The id stays on the item, untouched. Governed by
-    `behaviour.hide-without-permission`.
+  <Step title="Applying an item">
+    Never checked. A skin item is a real item — bought, traded and lost like any other — and holding
+    one is the proof of ownership.
+  </Step>
+  <Step title="Being seen wearing it">
+    With `behaviour.hide-without-permission` on, a piece whose skin the **wearer** owns neither by node
+    nor by unlock is drawn as the real armour — to them and to everyone else — and it plays no effects.
+    The id stays on the item, or the row in the wardrobe, untouched.
   </Step>
 </Steps>
 
 The wearing check runs whenever the piece is reconciled: on equip, on join, on respawn, on
-`/armorskinsadmin refresh` and on `/armorskinsadmin reload`. Revoking a node mid-session therefore takes effect
-on the next of those — `/armorskinsadmin refresh <player>` makes it immediate. Granting it back and
-refreshing brings the skin straight back, because nothing was ever removed from the item.
+`/armorskinsadmin refresh` and on `/armorskinsadmin reload`. Revoking a node mid-session therefore
+takes effect on the next of those — `/armorskinsadmin refresh <player>` makes it immediate. An unlock
+from the crate or the shop redraws the player at once.
 
-## The two switches
+## `hide-without-permission`
 
 ```yaml title="config.yml"
 behaviour:
-  require-permission: true
   hide-without-permission: true
 ```
 
-| Combination | Result |
+| Value | Result |
 |---|---|
-| Both `true` (default) | A skin is owned: you need the node to apply it and to be seen wearing it. |
-| `require-permission: false` | Anybody holding the item can apply it, but a wearer without the node is still shown the real armour. |
-| `hide-without-permission: false` | The node is needed to apply, but once applied the skin is shown to everyone forever — a permission that only gates the purchase. |
-| Both `false` | Nobody is checked. This is how the plugin behaved before per-skin permissions existed. |
+| `true` (default) | A skin is owned: a wearer without the node or an unlock is shown the real armour. |
+| `false` | Whatever is on the armour, or in the wardrobe, is shown — the item is the permission. |
 
-<Callout type="warning" title="Commands and the API are never gated">
-`/armorskinsadmin give` hands out any skin item to any player, and `apply()` in the API writes any skin
-onto any piece, regardless of the node or of `require-permission` — those are the tools you use to
-grant a skin. What the wearer lacks the node for is the **display**, which `hide-without-permission`
-governs.
+<Callout type="warning" title="Items need hide-without-permission off to be sold on their own">
+Applying a skin item never asks for a node, but with this switch on a player who applied one without
+owning the skin is still shown their real armour. To sell skins as items alone, turn it off, or hand an
+unlock with the item.
+</Callout>
+
+<Callout type="note" title="Commands and most of the API are never gated">
+`/armorskinsadmin give` hands out any skin item to any player, `unlocks grant` hands over any skin, and
+`apply()` in the API writes any skin onto any piece — those are the tools you use to grant a skin. The
+API's `select` is the exception: it goes through the wardrobe and is refused for a skin the player does
+not own.
 </Callout>
 
 ## Selling skins
 
-Because a skin travels as an item **and** carries a node, you can sell either half:
-
 | You want | Do |
 |---|---|
-| A consumable a player buys once | Give the item and grant the node with it. |
-| A rank perk | Grant `exyliaarmorskin.skin.galaxy` to the rank; hand the item out freely. |
-| A skin anyone may use | Grant its node to `default`, or turn both switches off. |
+| A skin bought once and kept for good | Let the shop sell it, or sell crate keys, or run `unlocks grant` from your store. |
+| A rank perk | Grant `exyliaarmorskin.skin.galaxy` to the rank. |
 | A skin that stops working when a rank expires | Grant only the node, leave `hide-without-permission: true`. The armour keeps the id — or the wardrobe keeps the row — and the look returns the day the rank does. |
 | A skin on one slot only | Grant `exyliaarmorskin.skin.<id>.<piece>` instead of the whole node. |
+| A consumable item | Give the item and turn `hide-without-permission` off, or grant the node or an unlock with it. |
 
-<Callout type="tip" title="consume-skin-item decides whether a skin is single-use">
-With `consume-skin-item: true` — the default — applying eats the item, so a skin is a consumable.
+<Callout type="tip" title="consume-skin-item decides whether a skin item is single-use">
+With `consume-skin-item: true` — the default — applying eats the item, so a skin item is a consumable.
 Turn it off and one item skins an unlimited number of pieces.
 </Callout>

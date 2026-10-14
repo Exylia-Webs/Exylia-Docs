@@ -1,0 +1,270 @@
+---
+title: "La caja"
+description: "Rarezas, los dos tipos de llave, los rodillos que caen, comprar una skin con moneda y los bloques que abren la caja."
+---
+
+La caja es cómo las skins se ganan en vez de regalarse. Se gasta una llave, cae un rodillo y lo que
+sale queda desbloqueado en la cuenta del jugador: la skin entera, todas las piezas en las que encaja,
+suya para siempre pase lo que pase con su rango. La caja es la de ExyliaLib; este plugin le pasa las
+skins de `skins.yml` y lee sus ajustes de `config.yml` y sus líneas de `messages.yml`.
+
+Funciona en cualquier `behaviour.mode`. En un servidor `item` no hay vestidor donde llevar un
+desbloqueo, así que pon ahí `crate.reward` en `ITEM` o `BOTH` y la caja entrega el objeto de skin.
+
+## Rarezas
+
+Cada skin declara un `tier` en `skins.yml`, y `crate.tiers` en `config.yml` declara cuáles existen:
+
+```yaml title="config.yml"
+crate:
+  tiers:
+    common:
+      name: "Common"
+      color: "{muted}"
+      chance: 60.0
+      priority: 1
+    rare:
+      name: "Rare"
+      color: "{info}"
+      chance: 25.0
+      priority: 2
+    epic:
+      name: "Epic"
+      color: "{accent}"
+      chance: 12.0
+      priority: 3
+    legendary:
+      name: "Legendary"
+      color: "{highlight}"
+      chance: 3.0
+      priority: 4
+```
+
+| Clave | Qué hace |
+|---|---|
+| `name` | Cómo la llaman los menús y los mensajes. |
+| `color` | El color de su nombre y de sus skins. |
+| `chance` | Con qué frecuencia cae en ella una caja, **relativa a las demás rarezas**. |
+| `priority` | Dónde se coloca en los menús; menor va antes. |
+
+Las cuarenta skins incluidas son 14 common, 12 rare, 9 epic y 5 legendary: un color con un trim se
+queda en common, y cuanto más se mueve una skin más rara es. La lista completa está en
+[Skins](/docs/exyliaarmorskin/skins#las-cuarenta-incluidas).
+
+Nada está fijado en el código. Borra `legendary`, inventa `mythic`, renombra las cuatro: la clave es el
+id que `skins.yml` escribe como `tier`, y una skin que nombra una rareza que ya no existe cuenta como la
+primera. Una skin sin `tier` es `common`.
+
+<Callout type="note" title="chance es un peso, no un porcentaje">
+Las probabilidades se calculan a partir de los pesos, así que cuatro rarezas con `60/25/12/3` y cuatro
+con `6/2.5/1.2/0.3` se comportan igual. Borrar una rareza reparte sus probabilidades entre las demás en
+vez de dejar un hueco del tres por ciento.
+</Callout>
+
+## Llaves
+
+Dos tipos, y la caja acepta los dos.
+
+### En la cuenta
+
+Un número en la fila de caja del jugador. No se puede tirar, duplicar ni perder por tener el
+inventario lleno:
+
+```text
+/armorskinsadmin keys give <jugador> <cantidad>
+/armorskinsadmin keys take <jugador> <cantidad>
+/armorskinsadmin keys set <jugador> <cantidad>
+/armorskinsadmin keys check <jugador>
+```
+
+Seguro desde consola y con jugadores desconectados: una tienda, un listener de votos o un plugin de
+recompensas entrega llaves igual:
+
+```text
+[console] armorskinsadmin keys give %player% 1
+```
+
+Cada jugador recibe `crate.start-keys` llaves (ninguna por defecto) la primera vez que se le ve.
+
+### En la mano
+
+Un objeto, para venderlo, meterlo en un kit, tirarlo y regalarlo:
+
+```text
+/armorskinsadmin item key <jugador> [1-64]
+```
+
+Haz clic derecho en un bloque de caja enlazado con una en la mano y se abre al momento: una llave, un
+rodillo, sin pantalla de pregunta. El clic izquierdo nunca gasta una; así pregunta un jugador qué es un
+bloque. Cómo se dibuja la llave es `crate.key-item` en `config.yml` (material y brillo) y `key-item` en
+`messages.yml` (nombre y lore); se reconoce por lo que lleva en sus datos, no por su nombre ni su
+material. Las llaves que no caben en el inventario esperan y se entregan en la siguiente entrada del
+jugador, con `rewards-claimed`.
+
+## Abrirla
+
+`/wardrobe crate`, el botón **SKIN CRATE** en la esquina del vestidor, o un bloque enlazado pulsado sin
+llave en la mano. La primera pantalla pregunta una sola cosa: cuántas a la vez.
+
+<Steps>
+  <Step title="Cuántas">
+    `menus/crate.yml`. Las opciones se dibujan hasta `crate.max-at-once`, con un tope de siete por el
+    ancho de la pantalla, y repartidas como lo estarán los rodillos: donde haces clic es donde cae ese
+    rodillo. Una opción que el jugador no puede pagar se dibuja con `empty_template` y las llaves que le
+    faltan.
+  </Step>
+  <Step title="Caen los rodillos">
+    `menus/crate_open.yml`. Un rodillo por caja, cada uno de toda la altura del cofre y con su propia
+    línea de llegada `crate.stagger-seconds` después del anterior. Cada cara es la skin tal como se
+    lleva, en su peto, y conserva su nombre y las piezas en las que encaja durante toda la caída.
+  </Step>
+  <Step title="Lo que pasó se queda">
+    Nada se borra cuando un rodillo para. Lo que quedó a una casilla sigue en pantalla, porque la mitad
+    de lo que vale una caja es la legendaria que pasó de largo.
+  </Step>
+  <Step title="Se paga al caer cada rodillo">
+    Las llaves se gastan y los premios se deciden antes del primer fotograma. Cada rodillo paga al
+    parar, con `crate.on-win` o `crate.on-duplicate` y su propia línea en el chat. Cerrar la ventana a
+    mitad de caída no cuesta nada.
+  </Step>
+  <Step title="Ponérsela en un clic">
+    Hacer clic en una skin que ha salido la pone en cada pieza en la que el jugador puede llevarla,
+    directamente en el vestidor. En un servidor `item` el clic solo cierra la ventana.
+  </Step>
+</Steps>
+
+| Rechazo | Mensaje |
+|---|---|
+| `crate.enabled` está apagado | `crate.disabled` |
+| No le alcanzan las llaves | `crate.no-keys` — `%amount%` es el coste, `%keys%` las que tiene. |
+| Su apertura anterior sigue cayendo | `crate.busy` |
+| No hay ninguna skin declarada | `crate.empty` |
+
+## Qué sale
+
+Lo decide `crate.reward`:
+
+| Valor | Qué recibe el jugador |
+|---|---|
+| `UNLOCK` | La skin queda desbloqueada en la cuenta, todas las piezas en las que encaja. No se puede intercambiar. Por defecto. |
+| `ITEM` | Solo su objeto de skin. No se desbloquea nada, así que ninguna apertura es nunca un duplicado. |
+| `BOTH` | Desbloqueada en la cuenta, y entregada además como objeto de skin. |
+
+`crate.won` nombra lo que salió (`%reward%`) y su rareza (`%tier%`).
+
+## Duplicados
+
+Caer en una skin que el jugador ya desbloqueó le devuelve llaves, tantas como dice
+`crate.duplicate-refund`, con `crate.duplicate` (`%refund%` es cuántas). Con el valor por defecto de `1`
+un duplicado es una tirada gratis en vez de una pérdida.
+
+Una skin que el jugador solo tiene por un permiso **no** es un duplicado: queda desbloqueada para
+siempre, así que sobrevive al rango que la daba.
+
+## Comprar con moneda
+
+Una skin que el jugador no tiene también se puede comprar desde el vestidor. Mientras `shop.enabled`
+está encendido y la skin tiene precio, su fila bloqueada se dibuja con `purchasable_template` en lugar
+de `no_permissions_template`, con el precio en el lore; al hacer clic pide confirmar, cobra el precio y
+desbloquea la skin exactamente como lo haría una caja: la skin entera, para siempre.
+
+```yaml title="config.yml"
+shop:
+  enabled: true
+  tier-prices:
+    common: 500
+    rare: 1500
+    epic: 4000
+    legendary: 10000
+```
+
+| Clave | Por defecto | Qué hace |
+|---|---|---|
+| `enabled` | `true` | Apagado, las skins bloqueadas se ven bloqueadas como antes y no hay nada a la venta. |
+| `tier-prices` | arriba | El precio de cada skin de una rareza que no define el suyo. Una rareza que no aparece deja sus skins fuera de la tienda. |
+
+El `price` propio de una skin en `skins.yml` gana al de su rareza:
+
+```yaml title="skins.yml"
+skins:
+  galaxy:
+    tier: epic
+    price: 2500                              # la moneda por defecto
+  eclipse:
+    tier: legendary
+    price: {amount: 50, currency: gems}      # una moneda con nombre
+```
+
+El dinero pasa por la economía de ExyliaLib, así que es la que tenga el servidor de ExyliaEconomy o
+Vault; sin ninguna, todos los precios quedan no disponibles y no se ofrece nada. Una compra por jugador
+a la vez, y un desbloqueo que falla después del cobro devuelve el dinero. Lo que se le dice al jugador
+(la confirmación, el éxito, dinero insuficiente, ya la tiene) es el texto propio de ExyliaLib, bajo
+`purchase` en el `messages.yml` de ExyliaLib.
+
+Una skin se ofrece mientras el jugador no pueda llevarla en la pieza que está vistiendo, así que quien
+tiene una pieza por un nodo por pieza puede comprar el resto: la compra solo se rechaza como ya
+comprada cuando puede llevar todas las piezas en las que encaja.
+
+## Ajustes
+
+```yaml title="config.yml"
+crate:
+  enabled: true
+  start-keys: 0
+  duplicate-refund: 1
+  reward: UNLOCK
+  blocks: []
+  max-at-once: 4
+  spin-frames: 34
+  stagger-seconds: 2.0
+  key-item:
+    material: TRIPWIRE_HOOK
+    glow: true
+```
+
+| Clave | Por defecto | Qué hace |
+|---|---|---|
+| `enabled` | `true` | Apagada, la caja lo dice en vez de abrirse. |
+| `start-keys` | `0` | Llaves que recibe un jugador la primera vez que se le ve. |
+| `duplicate-refund` | `1` | Llaves devueltas por una skin ya desbloqueada. |
+| `reward` | `UNLOCK` | `UNLOCK`, `ITEM` o `BOTH`, como arriba. |
+| `blocks` | `[]` | Los bloques que abren la caja. Enlázalos en el juego, no a mano. |
+| `max-at-once` | `4` | Cuántas cajas puede abrir un jugador de una vez. La pantalla admite siete. |
+| `spin-frames` | `34` | Cuántas caras recorre el primer rodillo antes de parar. Tope de 200, unos once segundos. |
+| `stagger-seconds` | `2.0` | Cuánto después de parar un rodillo para el siguiente. `0` los para a la vez. |
+| `key-item` | `TRIPWIRE_HOOK`, con brillo | Cómo se dibuja la llave que se puede llevar en la mano. Su nombre y lore están en `messages.yml`. |
+
+`on-spin`, `on-win` y `on-duplicate` son bloques de efecto completos de ExyliaLib (título, action bar,
+boss bar, sonido, partícula y fuego artificial) que suenan en cada paso de la caída y una vez por
+rodillo al caer. Vienen como un hi-hat, un level-up y una nota de bajo.
+
+## Bloques de caja
+
+Un bloque físico, en cualquier parte del mundo, que abre la caja al pulsarlo:
+
+```text
+/armorskinsadmin crate block add      # el bloque que miras, hasta seis bloques de distancia
+/armorskinsadmin crate block remove
+/armorskinsadmin crate block list
+/armorskinsadmin crate block clear
+```
+
+Se guardan en `config.yml`, no en el mundo, así que un bloque enlazado sobrevive a pegar un schematic,
+a una edición del mundo y a un rollback. Mientras está enlazado no se puede romper, volar ni empujar, y
+pulsarlo ya no hace lo que hace su material: una caja dibujada sobre un barril no debe abrir un barril.
+
+## Entregar skins sin caja
+
+```text
+/armorskinsadmin unlocks grant <jugador> <skin>
+/armorskinsadmin unlocks revoke <jugador> <skin>
+/armorskinsadmin unlocks clear <jugador>
+```
+
+El mismo desbloqueo que escribe una caja, para un plugin de recompensas, un ticket de soporte o una
+temporada borrada. Sobrevive a que caduque un rango y no necesita plugin de permisos.
+
+<Callout type="tip" title="Permisos y desbloqueos son dos puertas distintas">
+Un jugador puede llevar una skin que desbloqueó **o** una que le da su rango. Venderla como rango sigue
+siendo un nodo, `exyliaarmorskin.skin.<id>`, independiente de lo que haya sacado de cajas o comprado.
+</Callout>

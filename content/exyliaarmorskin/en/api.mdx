@@ -1,6 +1,6 @@
 ---
 title: "API"
-description: "Reading the skin catalogue, a player's wardrobe, and the skins written onto armor."
+description: "Reading the skin catalogue, a player's wardrobe and what they are shown wearing, the skins written onto armor, handing items out, opening the wardrobe, and the two events."
 badge: "dev"
 ---
 
@@ -16,7 +16,9 @@ ExyliaAPI.get(ArmorSkinService.class).ifPresent(skins -> {
 
 <Callout type="note" title="Adding it to your project">
 The artifact, the repository and the `plugin.yml` line are the same for every Exylia plugin and live
-on the [public API page](/docs/exylialib/api).
+on the [public API page](/docs/exylialib/api). `shown`, `giveSkinItem`, `removerItem`,
+`openWardrobe` and the two events arrived in `exylia-api` `v1.133.0` and ExyliaArmorSkin 1.2.0: compile
+against that tag or a newer one to reach them.
 </Callout>
 
 Everything is addressed by **skin id**, matched without regard to case. An id the catalogue does not
@@ -38,8 +40,9 @@ answer empty and writes answer `false`.
 | `canUse(Player, String skinId)` | Whether they may wear the skin on at least one piece. |
 | `canUse(Player, String skinId, ArmorPiece)` | Whether they may wear it on that one piece. |
 
-Both answer by the server's own rule, which includes the setting that turns permissions off
-entirely — a shop asking gets the same answer the wardrobe would give, not a raw permission check.
+Both answer by the server's own rule — the skin's node **or** an unlock from the crate, the shop or
+`unlocks grant` — so a shop asking gets the same answer the wardrobe would give, not a raw permission
+check.
 The per-piece form is separate because a rank can be sold one slot at a time: a player given the
 helmet node wears the skin on their head and nowhere else.
 
@@ -58,9 +61,9 @@ again the moment the player equips armor that fits.
 
 <Callout type="warning" title="select sets, and here it also checks">
 `select` is a set rather than a toggle — running it twice leaves the skin on. In this plugin it is
-**gated by permission**: the wardrobe offers one write, that write enforces the server's rule, and a
-player who may not wear the skin is refused. That is the opposite of ExyliaArmorTrims and
-ExyliaArrows, where the owner's own setting says selection is never limited by a node. Ask
+**gated by ownership**: the wardrobe offers one write, that write enforces the server's rule — node or
+unlock — and a player who may not wear the skin is refused. That is the opposite of ExyliaArmorTrims and
+ExyliaArrows, where selection is never limited by a node. Ask
 `canUse(Player, String, ArmorPiece)` first if you want to know why before asking.
 </Callout>
 
@@ -76,6 +79,24 @@ ExyliaArrows, where the owner's own setting says selection is never limited by a
 
 Ask `isSkinItem` before a container, a shop or a trade treats a stack as ordinary loot: a skin item
 is drawn as whatever suits it and is not the material it looks like.
+
+## What a player is shown
+
+| Method | What it does |
+|---|---|
+| `shown(UUID player, ArmorPiece)` | The skin id drawn on that slot right now, as an `Optional<String>`. Empty when the slot shows the armor as it really is or the player is not online. |
+
+The answer after every rule has had its say — the mode, the armor actually in the slot, the wearer's
+ownership and whether their cosmetics are shown at all — which neither `selected` nor `skinOf` gives on
+its own. It is what a scoreboard describing somebody's look should read, and it is safe from any thread.
+
+## Handing things out
+
+| Method | What it does |
+|---|---|
+| `giveSkinItem(Player, String skinId, int amount)` | Gives skin items through the plugin's reward queue: what does not fit is kept and handed over on their next join. Says nothing to the player. `false` when the catalogue declares no such skin or the amount is below one. Call it on the thread that owns the player. |
+| `removerItem()` | A new remover, ready to be given. It only removes skins on a server whose mode uses items. |
+| `openWardrobe(Player)` | Opens the wardrobe exactly as `/wardrobe` does, for an NPC, a sign or a lobby item. No permission is checked. A wardrobe still being read opens a moment later. `false` when the mode has no wardrobe. Call it on the thread that owns the player. |
 
 ## Redrawing
 
@@ -108,10 +129,35 @@ placeholder. Everything that changes a wardrobe writes to the database and redra
 everyone watching — call those on the main thread, and no more often than a player could.
 </Callout>
 
+## Events
+
+Both are in `net.exylia.lib.api.armorskin.event`, cancellable, and called on the thread that owns the
+player — on Folia their region thread. Cancelling writes nothing and says nothing to the player: the
+handler that refused is the one that knows why.
+
+**`SkinApplyEvent`** — a player is dropping a skin item onto armor in their inventory. Fired once the
+plugin has agreed — the skin fits the piece and the armor carries no skin yet — and before anything is
+written. `armor()` is the live item as it was, `skinId()` the skin going on, `piece()` the slot.
+Cancelling leaves the armor bare and the skin item on the cursor. Not fired for `apply`, which has no
+player to name.
+
+**`WardrobeChangeEvent`** — a wardrobe is about to change. One event per write, however many slots it
+touches: `pieces()` are the slots that change, and every one of them changes to `skinId()`, or to
+nothing when it is empty. Fired for a click in the wardrobe, a crate winner worn in one click, an admin
+command and `select`/`clear`/`clearAll` alike, and only once the write is known to change something.
+Cancelling leaves the wardrobe as it was, and the service call answers `false`.
+
+```java
+@EventHandler
+public void onWardrobe(WardrobeChangeEvent event) {
+    if (event.getPlayer().getWorld().getName().equals("arena")) event.setCancelled(true);
+}
+```
+
 ## What it does not expose
 
-No events: ExyliaArmorSkin publishes none. Menu openers, the wardrobe's own editor flow, animation
-definitions and raw configuration rows are left out on purpose — a public contract cannot be broken
+Crate keys, unlocks, the wardrobe's own editor flow, animation definitions and raw configuration rows
+are left out on purpose — a public contract cannot be broken
 later, so it carries what an integration needs and nothing that only made sense inside one version.
 
 If something you need is genuinely missing, ask on [Discord](https://discord.exylia.net).

@@ -1,6 +1,6 @@
 ---
 title: "Commands"
-description: "The wardrobe command a player types, and the seven admin subcommands."
+description: "The wardrobe command a player types, its crate, and the admin subcommands, grouped."
 ---
 
 ## The player command
@@ -8,18 +8,20 @@ description: "The wardrobe command a player types, and the seven admin subcomman
 | Command | Permission | What it does |
 |---|---|---|
 | `/wardrobe` | `exyliaarmorskin.wardrobe` | Opens the wardrobe. Alias: `/armorskins`. |
+| `/wardrobe crate` | `exyliaarmorskin.wardrobe` | Opens the crate, the same screen the button in the wardrobe opens. Works in every mode. |
 
-That is the only command a player needs. Skin **items** need no command at all: they are dragged onto
-armour.
+Skin **items** need no command at all: they are dragged onto armour.
 
 <Callout type="note" title="It refuses to open in item mode">
 With `behaviour.mode: item` a wardrobe choice would never be read, so the command answers
-`wardrobe-disabled` instead of opening a screen that changes nothing.
+`wardrobe-disabled` instead of opening a screen that changes nothing. `/wardrobe crate` still opens.
 </Callout>
 
 ## The admin command
 
 `/armorskinsadmin`, alias `/armorskinadmin`. Everything under it needs `exyliaarmorskin.admin`.
+Subcommands that act on a stored row — `wardrobe clear`, `keys`, `unlocks` — also take a player who is
+offline; the rest need them online.
 
 | Command | What it does |
 |---|---|
@@ -28,20 +30,62 @@ With `behaviour.mode: item` a wardrobe choice would never be read, so the comman
 | `list` | Lists every registered skin. |
 | `refresh [player]` | Rebuilds and re-sends what a player is shown wearing. |
 | `wardrobe open <player>` | Opens somebody's wardrobe for them. |
-| `wardrobe clear <player>` | Empties their wardrobe: every slot back to their real armour. |
+| `wardrobe clear <player>` | Empties their wardrobe: every slot back to their real armour. Online or offline. |
 | `reload` | Re-reads this plugin's files and redraws everyone. |
+
+### `keys` — what opens crates
+
+| Command | What it does |
+|---|---|
+| `keys give <player> [amount]` | Adds crate keys to the player's account. Alias: `keys add`. The keys that can be held are `item key`. |
+| `keys take <player> [amount]` | Removes crate keys. Alias: `keys remove`. |
+| `keys set <player> <amount>` | Sets how many they hold. |
+| `keys check <player>` | Prints how many they hold. Alias: `keys`. |
+| `item key <player> [1-64]` | Gives crate keys as items, to be right clicked on a crate block. |
+
+### `unlocks` — what somebody owns
+
+| Command | What it does |
+|---|---|
+| `unlocks grant <player> <skin>` | Hands a whole skin over for good, the way a crate does. Alias: `unlocks give`. |
+| `unlocks revoke <player> <skin>` | Takes one back. Alias: `unlocks take`. |
+| `unlocks clear <player>` | Takes back every skin they unlocked. |
+
+### `crate` — the crate and the blocks that open it
+
+| Command | What it does |
+|---|---|
+| `crate open <player>` | Opens the crate screen for someone, without spending anything until they choose. |
+| `crate block add` | Binds the block you are looking at, so clicking it opens the crate. |
+| `crate block remove` | Unbinds the block you are looking at. |
+| `crate block list` | Prints every bound block. |
+| `crate block clear` | Unbinds all of them. |
+
+See [The crate](/docs/exyliaarmorskin/crate).
+
+### `showcase` — skins shown off on a loop
+
+| Command | What it does |
+|---|---|
+| `showcase add` | Shows skins on a loop where you stand, facing the way you face. |
+| `showcase remove` | Removes the showcase nearest you, up to five blocks away. |
+| `showcase list` | Prints every showcase. |
+| `showcase clear` | Removes all of them. |
+
+See [Configuration](/docs/exyliaarmorskin/configuration#showcase).
 
 ## `give`
 
 `<skin>` tab-completes from the registry, and an unknown id answers `unknown-skin` to whoever typed
 the command. `[amount]` is 1 to 64 and defaults to 1.
 
-`give` never checks the skin's own permission: it hands the item to anybody. Whether the player can
-then **use** it is `exyliaarmorskin.skin.<id>` and the two switches in
+`give` never checks the skin's own permission: it hands the item to anybody. Applying a skin item never asks for a
+permission either; whether the player is then **seen** wearing it is `hide-without-permission` in
 [Permissions](/docs/exyliaarmorskin/permissions).
 
-The item is added to the target's inventory; anything that does not fit is dropped at their feet. The
-`given` message — with `%skin%` and `%amount%` — is sent **to the target**, not to the sender, so
+The item is added to the target's inventory; anything that does not fit waits in the reward queue and
+is handed over on their next join, with `rewards-claimed`, rather than dropped where anybody could take
+it. The `given` message — with `%skin%` and `%amount%` — is sent **to the target**, not to the sender, so
 giving from console tells the player and says nothing back.
 
 ## `remover`
@@ -73,8 +117,10 @@ my back".
 ## `wardrobe open` and `wardrobe clear`
 
 `open` shows the target their own wardrobe — the screen belongs to them, not to the admin who opened
-it. `clear` empties every slot and answers `wardrobe-cleared`; the armour itself is untouched, since
-a wardrobe was never written to it.
+it. `clear` empties every slot and answers `wardrobe-cleared` — to the player when they are online, to
+the admin when they are not; the armour itself is untouched, since a wardrobe was never written to it.
+When there was nothing to clear, or another plugin refused the change, the admin is told
+`nothing-changed` instead.
 
 ## `reload`
 
@@ -82,14 +128,17 @@ Runs one step, `configs`, which:
 
 <Steps>
   <Step title="Re-reads every file">
-    `config.yml`, `animations.yml`, `skins.yml` and `menus/wardrobe.yml`.
+    `config.yml`, `messages.yml`, `animations.yml`, `skins.yml`, and the menus under
+    `lang/<language>/menus/`: `wardrobe.yml`, `crate.yml` and `crate_open.yml`. A changed `language`
+    is picked up here, without a restart.
   </Step>
   <Step title="Re-applies the message prefix">
     So `%prefix%` matches the rest of the ecosystem again.
   </Step>
   <Step title="Rebuilds the skins">
-    Cached trims are dropped, animations are rebuilt from `animations.yml`, and the file's skins
-    replace the previous file's skins. Skins registered through the API are left alone.
+    Cached trims are dropped, animations are rebuilt from `animations.yml`, the file's skins
+    replace the previous file's skins, and the shop's prices are read again. Skins registered through
+    the API are left alone. Showcases and crate blocks are rebuilt from `config.yml`.
   </Step>
   <Step title="Redraws everyone online">
     Every player has their visuals rebuilt and re-sent, silently — no equip effects are played.

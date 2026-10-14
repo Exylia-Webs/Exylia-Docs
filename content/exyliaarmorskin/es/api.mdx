@@ -1,6 +1,6 @@
 ---
 title: "API"
-description: "Leer el catálogo de skins, el vestidor de un jugador y las skins escritas en la armadura."
+description: "Leer el catálogo de skins, el vestidor de un jugador y lo que se le ve puesto, las skins escritas en la armadura, entregar objetos, abrir el vestidor y los dos eventos."
 badge: "dev"
 ---
 
@@ -16,7 +16,9 @@ ExyliaAPI.get(ArmorSkinService.class).ifPresent(skins -> {
 
 <Callout type="note" title="Agregarlo a tu proyecto">
 El artefacto, el repositorio y la línea del `plugin.yml` son los mismos para todos los plugins de
-Exylia y están en la [página de la API pública](/docs/exylialib/api).
+Exylia y están en la [página de la API pública](/docs/exylialib/api). `shown`, `giveSkinItem`,
+`removerItem`, `openWardrobe` y los dos eventos llegaron en `exylia-api` `v1.133.0` y ExyliaArmorSkin
+1.2.0: compila contra esa etiqueta o una más nueva para usarlos.
 </Callout>
 
 Todo se direcciona por **id de skin**, comparado sin distinguir mayúsculas. Un id que el catálogo no
@@ -38,8 +40,8 @@ las búsquedas devuelven vacío y las escrituras devuelven `false`.
 | `canUse(Player, String skinId)` | Si puede llevar la skin en al menos una pieza. |
 | `canUse(Player, String skinId, ArmorPiece)` | Si puede llevarla en esa pieza concreta. |
 
-Los dos responden con la regla del propio servidor, que incluye el ajuste que apaga los permisos por
-completo: una tienda que pregunta recibe la misma respuesta que daría el vestidor, no una
+Los dos responden con la regla del propio servidor (el nodo de la skin **o** un desbloqueo de la
+caja, la tienda o `unlocks grant`): una tienda que pregunta recibe la misma respuesta que daría el vestidor, no una
 comprobación cruda de nodo. La forma por pieza existe aparte porque un rango se vende ranura a
 ranura: quien tiene el nodo del casco lleva la skin en la cabeza y en ningún otro sitio.
 
@@ -57,10 +59,10 @@ ranura: quien tiene el nodo del casco lleva la skin en la cabeza y en ningún ot
 aparecer en cuanto el jugador se equipa una armadura que encaje.
 
 <Callout type="warning" title="select fija, y aquí además comprueba">
-`select` fija en vez de alternar: llamarlo dos veces deja la skin puesta. En este plugin **sí pasa por
-permiso**: el vestidor ofrece una sola escritura, esa escritura aplica la regla del servidor, y a un
-jugador que no puede llevar la skin se le rechaza. Es lo contrario de ExyliaArmorTrims y ExyliaArrows,
-donde el ajuste del propio dueño dice que la selección nunca se limita por nodo. Pregunta antes por
+`select` fija en vez de alternar: llamarlo dos veces deja la skin puesta. En este plugin **sí comprueba
+que la tenga**: el vestidor ofrece una sola escritura, esa escritura aplica la regla del servidor (nodo
+o desbloqueo), y a un jugador que no puede llevar la skin se le rechaza. Es lo contrario de ExyliaArmorTrims y ExyliaArrows,
+donde la selección nunca se limita por nodo. Pregunta antes por
 `canUse(Player, String, ArmorPiece)` si quieres saber el motivo antes de pedirlo.
 </Callout>
 
@@ -76,6 +78,25 @@ donde el ajuste del propio dueño dice que la selección nunca se limita por nod
 
 Pregunta `isSkinItem` antes de que un cofre, una tienda o un intercambio traten un stack como botín
 normal: un objeto de skin se dibuja como le convenga y no es el material que aparenta.
+
+## Lo que se le ve puesto
+
+| Método | Qué hace |
+|---|---|
+| `shown(UUID player, ArmorPiece)` | El id de la skin dibujada en esa ranura ahora mismo, como `Optional<String>`. Vacío cuando la ranura muestra la armadura tal como es o el jugador no está conectado. |
+
+La respuesta después de que cada regla haya dicho lo suyo (el modo, la armadura que hay de verdad en la
+ranura, si el portador la tiene y si sus cosméticos se muestran) que ni `selected` ni `skinOf` dan por
+sí solos. Es lo que debería leer un scoreboard que describe el aspecto de alguien, y es seguro desde
+cualquier hilo.
+
+## Entregar cosas
+
+| Método | Qué hace |
+|---|---|
+| `giveSkinItem(Player, String skinId, int amount)` | Da objetos de skin a través de la cola de recompensas del plugin: lo que no cabe se guarda y se entrega en su siguiente entrada. No le dice nada al jugador. `false` cuando el catálogo no declara esa skin o la cantidad es menor que uno. Llámalo en el hilo dueño del jugador. |
+| `removerItem()` | Un removedor nuevo, listo para dar. Solo quita skins en un servidor cuyo modo usa objetos. |
+| `openWardrobe(Player)` | Abre el vestidor igual que `/wardrobe`, para un NPC, un cartel o un objeto de lobby. No comprueba permisos. Un vestidor que todavía se está leyendo se abre un momento después. `false` cuando el modo no tiene vestidor. Llámalo en el hilo dueño del jugador. |
 
 ## Redibujar
 
@@ -109,10 +130,35 @@ todos los que lo ven: llama a eso desde el hilo principal, y no más seguido de 
 jugador.
 </Callout>
 
+## Eventos
+
+Los dos están en `net.exylia.lib.api.armorskin.event`, se pueden cancelar y se llaman en el hilo dueño
+del jugador (en Folia, el de su región). Cancelar no escribe nada ni le dice nada al jugador: el
+handler que lo rechazó es el que sabe por qué.
+
+**`SkinApplyEvent`**: un jugador está soltando un objeto de skin sobre una armadura de su inventario.
+Se lanza una vez que el plugin está de acuerdo (la skin encaja en la pieza y la armadura no lleva skin
+todavía) y antes de escribir nada. `armor()` es el objeto vivo tal como estaba, `skinId()` la skin que
+se pone y `piece()` la ranura. Cancelarlo deja la armadura sin skin y el objeto de skin en el cursor.
+No se lanza para `apply`, que no tiene jugador al que nombrar.
+
+**`WardrobeChangeEvent`**: un vestidor está a punto de cambiar. Un evento por escritura, toque las
+ranuras que toque: `pieces()` son las ranuras que cambian, y todas pasan a `skinId()`, o a nada cuando
+está vacío. Se lanza para un clic en el vestidor, el ganador de una caja puesto en un clic, un comando
+de admin y `select`/`clear`/`clearAll` por igual, y solo cuando ya se sabe que la escritura cambia
+algo. Cancelarlo deja el vestidor como estaba, y la llamada al service responde `false`.
+
+```java
+@EventHandler
+public void onWardrobe(WardrobeChangeEvent event) {
+    if (event.getPlayer().getWorld().getName().equals("arena")) event.setCancelled(true);
+}
+```
+
 ## Lo que no expone
 
-No hay eventos: ExyliaArmorSkin no publica ninguno. Los abridores de menú, el flujo de edición del
-vestidor, las definiciones de animación y las filas crudas de configuración quedan fuera a propósito:
+Las llaves de caja, los desbloqueos, el flujo de edición del vestidor, las definiciones de animación
+y las filas crudas de configuración quedan fuera a propósito:
 un contrato público no se puede romper después, así que lleva lo que una integración necesita y nada
 que solo tuviera sentido dentro de una versión.
 

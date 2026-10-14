@@ -1,20 +1,30 @@
 ---
 title: "Permisos"
-description: "El nodo del vestidor, el de administración, los nodos por skin y por pieza, y los dos interruptores que deciden si se aplican."
+description: "El nodo del vestidor, el de administración, los nodos por skin y por pieza, los desbloqueos de la caja como la otra puerta, y el interruptor que oculta lo que el portador ya no tiene."
 ---
 
 ## Los nodos
 
 | Permiso | Por defecto | Da acceso a |
 |---|---|---|
-| `exyliaarmorskin.wardrobe` | — | `/wardrobe`. |
-| `exyliaarmorskin.admin` | `op` | Todos los subcomandos de `/armorskinsadmin`: `give`, `remover`, `list`, `refresh`, `wardrobe open`, `wardrobe clear` y `reload`. |
-| `exyliaarmorskin.skin.<id>` | — | Aplicar y llevar esa skin concreta, en todas las piezas que encaja. |
+| `exyliaarmorskin.wardrobe` | `true` | `/wardrobe` y `/wardrobe crate`. |
+| `exyliaarmorskin.admin` | `op` | Todos los subcomandos de `/armorskinsadmin`; ver [Comandos](/docs/exyliaarmorskin/comandos). |
+| `exyliaarmorskin.skin.<id>` | — | Llevar esa skin concreta, en todas las piezas en las que encaja. |
 | `exyliaarmorskin.skin.<id>.<pieza>` | — | Esa skin en una sola ranura: `helmet`, `chestplate`, `leggings` o `boots`. |
 | `exyliaarmorskin.skin.*` | `op` | Todas las skins. |
 
-Los dos nodos fijos se declaran en `plugin.yml` con `default: op`, así que un operador tiene todas
-las skins de salida y el resto no tiene ninguna hasta que digas lo contrario.
+De salida cualquier jugador puede abrir el vestidor; un operador tiene todas las skins, y el resto no
+tiene ninguna hasta que le des un nodo, la gane en la [caja](/docs/exyliaarmorskin/caja) o la compre.
+
+## Dos formas de tener una skin
+
+| Forma | Qué cubre | Cómo termina |
+|---|---|---|
+| Un nodo | La skin, o una pieza de ella. | Cuando se va el rango o el nodo. |
+| Un desbloqueo | La skin entera, todas las piezas en las que encaja. Lo escriben la caja, la tienda o `/armorskinsadmin unlocks grant`. | Solo con `unlocks revoke` o `unlocks clear`: sobrevive a cualquier rango. |
+
+Con una basta. Todo lo que pregunta si un jugador tiene una skin (el vestidor, la comprobación de
+`hide-without-permission` y el `canUse` de la API) pregunta por las dos.
 
 ## El nodo por skin
 
@@ -28,70 +38,78 @@ Cada ranura tiene su propio nodo, `exyliaarmorskin.skin.<id>.<pieza>`. El nodo d
 las cuatro; el de una pieza cubre exactamente una.
 
 ```text
-/lp group default permission set exyliaarmorskin.wardrobe true
-/lp group vip     permission set exyliaarmorskin.skin.celestial.helmet true
-/lp group mvp     permission set exyliaarmorskin.skin.* true
+/lp group vip permission set exyliaarmorskin.skin.celestial.helmet true
 ```
 
 En el vestidor, una skin que el jugador tiene para una pieza se le ofrece en esa pieza, y vestir el
-set completo viste solo las piezas que puede llevar — un rango con una sola pieza se la lleva en vez
-de recibir un rechazo entero.
+set completo viste solo las piezas que puede llevar: un rango con una sola pieza se la lleva en vez de
+recibir un rechazo entero. Con la [tienda](/docs/exyliaarmorskin/caja#comprar-con-moneda) encendida,
+el resto de la skin se ofrece a la venta.
 
-## Para qué se comprueba el nodo
+```text
+/lp group vip     permission set exyliaarmorskin.skin.galaxy true
+/lp group mvp     permission set exyliaarmorskin.skin.* true
+```
+
+## Para qué se comprueba
 
 <Steps>
-  <Step title="Aplicar">
-    Arrastrar un objeto de skin sobre la armadura, o ponérsela en el vestidor, sin el nodo se
-    rechaza con el mensaje `no-permission`. No se escribe nada y no se consume nada. Lo gobierna
-    `behaviour.require-permission`.
+  <Step title="El vestidor">
+    Ponerse una skin desde el vestidor necesita el nodo o un desbloqueo. Una skin que el jugador no
+    tiene se dibuja bloqueada, o a la venta, y hacer clic en ella no lo viste.
   </Step>
-  <Step title="Llevarla puesta">
-    Una pieza cuya skin el **portador** no puede usar se dibuja como la armadura real — para él y
-    para todos los demás — y no reproduce ningún efecto. El id sigue en el objeto, intacto. Lo
-    gobierna `behaviour.hide-without-permission`.
+  <Step title="Aplicar un objeto">
+    Nunca se comprueba. Un objeto de skin es un objeto real (se compra, se intercambia y se pierde como
+    cualquier otro) y tenerlo es la prueba de que es tuyo.
+  </Step>
+  <Step title="Que te la vean puesta">
+    Con `behaviour.hide-without-permission` encendido, una pieza cuya skin el **portador** no tiene ni
+    por nodo ni por desbloqueo se dibuja como la armadura real, para él y para todos los demás, y no
+    reproduce ningún efecto. El id sigue en el objeto, o la fila en el vestidor, intacto.
   </Step>
 </Steps>
 
 La comprobación de llevar puesto ocurre cada vez que la pieza se reconcilia: al equipar, al entrar,
-al reaparecer, con `/armorskinsadmin refresh` y con `/armorskinsadmin reload`. Quitar un nodo en mitad de una
-sesión surte efecto en la siguiente de esas ocasiones — `/armorskinsadmin refresh <jugador>` lo hace
-inmediato. Volver a darlo y refrescar devuelve la skin al momento, porque nunca se le quitó nada al
-objeto.
+al reaparecer, con `/armorskinsadmin refresh` y con `/armorskinsadmin reload`. Quitar un nodo en mitad
+de una sesión surte efecto en la siguiente de esas ocasiones; `/armorskinsadmin refresh <jugador>` lo
+hace inmediato. Un desbloqueo de la caja o la tienda redibuja al jugador al momento.
 
-## Los dos interruptores
+## `hide-without-permission`
 
 ```yaml title="config.yml"
 behaviour:
-  require-permission: true
   hide-without-permission: true
 ```
 
-| Combinación | Resultado |
+| Valor | Resultado |
 |---|---|
-| Los dos en `true` (por defecto) | Una skin se posee: hace falta el nodo para aplicarla y para que te la vean puesta. |
-| `require-permission: false` | Cualquiera con el objeto la aplica, pero a un portador sin el nodo se le sigue mostrando la armadura real. |
-| `hide-without-permission: false` | Hace falta el nodo para aplicar, pero una vez aplicada la skin se ve para siempre: un permiso que solo controla la compra. |
-| Los dos en `false` | No se comprueba a nadie. Así se comportaba el plugin antes de los permisos por skin. |
+| `true` (por defecto) | Una skin se posee: a un portador sin el nodo ni un desbloqueo se le muestra la armadura real. |
+| `false` | Se muestra lo que haya en la armadura o en el vestidor: el objeto es el permiso. |
 
-<Callout type="warning" title="Los comandos y la API nunca se limitan">
-`/armorskinsadmin give` reparte cualquier objeto de skin a cualquier jugador, y `apply()` en la API escribe
-cualquier skin sobre cualquier pieza, sin mirar el nodo ni `require-permission`: son las herramientas
-con las que concedes una skin. Lo que le falta al portador sin el nodo es la **visualización**, y de
-eso se encarga `hide-without-permission`.
+<Callout type="warning" title="Para vender objetos solos hay que apagar hide-without-permission">
+Aplicar un objeto de skin nunca pide nodo, pero con este interruptor encendido a quien lo aplicó sin
+tener la skin se le sigue mostrando su armadura real. Para vender skins solo como objetos, apágalo, o
+entrega un desbloqueo con el objeto.
+</Callout>
+
+<Callout type="note" title="Los comandos y casi toda la API nunca se limitan">
+`/armorskinsadmin give` reparte cualquier objeto de skin a cualquier jugador, `unlocks grant` entrega
+cualquier skin y `apply()` en la API escribe cualquier skin sobre cualquier pieza: son las
+herramientas con las que concedes una skin. La excepción es `select` de la API: pasa por el vestidor y
+se rechaza para una skin que el jugador no tiene.
 </Callout>
 
 ## Vender skins
 
-Como una skin viaja en un objeto **y** lleva un nodo, puedes vender cualquiera de las dos mitades:
-
 | Lo que quieres | Cómo |
 |---|---|
-| Un consumible que se compra una vez | Da el objeto y concede el nodo con él. |
-| Una ventaja de rango | Concede `exyliaarmorskin.skin.galaxy` al rango y reparte el objeto sin más. |
-| Una skin para todo el mundo | Concede su nodo a `default`, o apaga los dos interruptores. |
-| Una skin que deja de funcionar al caducar el rango | Concede solo el nodo y deja `hide-without-permission: true`. La armadura conserva el id y el aspecto vuelve el día que vuelva el rango. |
+| Una skin que se compra una vez y se queda | Deja que la venda la tienda, vende llaves de caja, o ejecuta `unlocks grant` desde tu tienda. |
+| Una ventaja de rango | Concede `exyliaarmorskin.skin.galaxy` al rango. |
+| Una skin que deja de funcionar al caducar el rango | Concede solo el nodo y deja `hide-without-permission: true`. La armadura conserva el id, o el vestidor la fila, y el aspecto vuelve el día que vuelva el rango. |
+| Una skin en una sola ranura | Concede `exyliaarmorskin.skin.<id>.<pieza>` en vez del nodo entero. |
+| Un objeto consumible | Da el objeto y apaga `hide-without-permission`, o concede el nodo o un desbloqueo con él. |
 
-<Callout type="tip" title="consume-skin-item decide si una skin es de un solo uso">
-Con `consume-skin-item: true` — por defecto — aplicar consume el objeto, así que la skin es un
-consumible. Desactívalo y un objeto pinta un número ilimitado de piezas.
+<Callout type="tip" title="consume-skin-item decide si un objeto de skin es de un solo uso">
+Con `consume-skin-item: true` (por defecto) aplicar consume el objeto, así que es un consumible.
+Desactívalo y un objeto pinta un número ilimitado de piezas.
 </Callout>
