@@ -1,12 +1,12 @@
 ---
 title: "API"
-description: "Reading the effect catalogue and its categories, a player's chosen effect, their shortlist and particle setting, and the effects bound to bows."
+description: "Reading the effect catalogue and its categories, a player's chosen effect, their shortlist and particle setting, the effects bound to bows, playing effects on demand, the menus, unlocks, keys and ArrowEffectPlayEvent."
 badge: "dev"
 ---
 
 `ArrowsService` is what another plugin reads and drives ExyliaArrows through: the catalogue and its
-categories, the effect a player chose, their shortlist and particle setting, and the effects bound to
-bows.
+categories, the effect a player chose, their shortlist and particle setting, the effects bound to
+bows, effects played on demand, the menus, unlocks and crate keys.
 
 ```java
 ExyliaAPI.get(ArrowsService.class).ifPresent(arrows -> {
@@ -17,7 +17,9 @@ ExyliaAPI.get(ArrowsService.class).ifPresent(arrows -> {
 
 <Callout type="note" title="Adding it to your project">
 The artifact, the repository and the `plugin.yml` line are the same for every Exylia plugin and live
-on the [public API page](/docs/exylialib/api).
+on the [public API page](/docs/exylialib/api). Playing an effect, the menus, unlocks, keys and
+`ArrowEffectPlayEvent` arrived in `exylia-api` `v1.133.0` and ExyliaArrows 1.4.0: compile against
+that tag or a newer one to reach them.
 </Callout>
 
 Everything is addressed by **effect id**, matched without regard to case. An id the catalogue does
@@ -41,9 +43,9 @@ answer empty and writes answer `false`.
 |---|---|
 | `canUse(Player, String effectId)` | Whether they may use the effect. |
 
-Answers by the server's own rule: the effect's node, the node for its whole category, the wildcard,
-or the setting that turns permissions off entirely. A shop asking gets the same answer the menu would
-give, not a raw permission check.
+Answers by the server's own rule: the effect's node, the node for its whole category or its rarity,
+the wildcard, or an unlock from the crate or the shop. A shop asking gets the same answer the menu
+would give, not a raw permission check.
 
 ## What the player chose
 
@@ -56,10 +58,9 @@ give, not a raw permission check.
 
 <Callout type="warning" title="select sets, and does not ask for a node">
 `select` is a set rather than a toggle — running it twice leaves the effect on. It is **not gated by
-permission**, because the server owner's own setting says it should not be: an effect handed out by a
-crate or a reward is owned whether or not a node was ever granted for it. That is the same rule
-ExyliaArmorTrims follows and the opposite of ExyliaArmorSkin. Ask `canUse` first when you do want the
-permission to decide.
+permission**: the caller has already decided the player may have it, the same as an admin command.
+That is the same rule ExyliaArmorTrims follows and the opposite of ExyliaArmorSkin. Ask `canUse` first
+when you do want the permission to decide.
 </Callout>
 
 ## Favourites
@@ -96,6 +97,58 @@ race the player clicking it.
 Ask `isEffectItem` before a container, a shop or a trade treats a stack as ordinary loot: a token is
 drawn as whatever suits what it carries and is not the material it looks like.
 
+## Playing an effect
+
+| Method | What it does |
+|---|---|
+| `boolean play(String effectId, ArrowTrigger trigger, Location where, Player shooter, @Nullable Entity hit)` | Plays one moment of an effect at a place, as though a shot were there. The region flag, `ArrowEffectPlayEvent` and every observer's own visibility still decide; the bow, the menu choice, the projectile types and permission are skipped, because the caller named the effect. Exactly the moment asked for: a `HIT_ENTITY` on an effect that only declares `HIT` draws nothing. `false` when no effect goes by that id, it draws nothing then, the region silences it or a listener cancelled it. Call it on the thread that owns `where`. |
+| `boolean attach(Projectile projectile, String effectId)` | Makes a projectile carry an effect, as though it had just been fired with it — an ability's volley, a turret, a spell drawn as an arrow. The launch plays where it is now, the trail follows it and the impact plays where it lands; an effect it already carried is replaced. The shooter has to be a player. Call it straight after spawning the projectile, on the thread that owns it. |
+| `boolean preview(Player viewer, String effectId)` | Shows the effect on the server's preview stage, the way the menu's right click does. Owning it is not required, which makes it a shop's "try before you buy". `false`, and the player told so, when no stage is set. |
+
+`ArrowTrigger` is `LAUNCH`, `TRAIL`, `HIT` or `HIT_ENTITY`.
+
+## Menus
+
+| Method | What it does |
+|---|---|
+| `void openMenu(Player player)` | Opens the effect menu exactly as `/arrows` does, for an NPC, a hub item or a shop. The player's row is read first when it is not in memory, so the menu can appear a moment after the call. On a `bow` server the player is told the menu is off. Safe from any thread. |
+| `void openCrate(Player player)` | Opens the crate exactly as the command and the crate blocks do: the screen that asks how many to open and spends keys. With the crate turned off the player is told so. Safe from any thread. |
+
+## Owning, and crate keys
+
+| Method | What it does |
+|---|---|
+| `boolean unlock(Player player, String effectId)` | Gives a player an effect for good, as winning it from the crate does — ownership without a permission node, counted by `canUse` from then on. Nothing is chosen and no item is given: follow it with `select` or `effectItem` for that. `false` when no effect goes by that id, they already own it that way, or their row has not arrived yet. |
+| `int keys(UUID player)` | How many crate keys a player holds. `0` when they have none or their row has not arrived yet. |
+| `void addKeys(Player player, int keys)` | Gives keys, or takes them with a negative number — how a store, a vote or a quest pays out a spin. The count never goes below zero. |
+
+## ArrowEffectPlayEvent
+
+`net.exylia.lib.api.arrows.event.ArrowEffectPlayEvent` fires once everything else has agreed a moment
+should play: the effect draws something then, and the region allows arrow effects. It fires once per
+moment — the launch, the start of the trail, the impact — for real shots and for `play` and `attach`
+alike, and the two are not told apart on purpose: an arena that wants arrow effects quiet wants both
+quiet.
+
+```java
+@EventHandler
+public void onArrowEffect(ArrowEffectPlayEvent event) {
+    if (event.getLocation().getWorld().getName().equals("lobby")) event.setCancelled(true);
+}
+```
+
+| Method | What it returns |
+|---|---|
+| `Player getPlayer()` | The shooter: whose effect it is. |
+| `@Nullable Entity getHitEntity()` | What the shot landed on. `null` for a launch, a trail, a block, or a play that named nothing. |
+| `String getEffectId()` | The effect about to play, normalised. |
+| `ArrowTrigger getTrigger()` | Which moment it is. |
+| `Location getLocation()` | Where it plays; for a trail, where the line starts. A copy: changing it moves nothing. |
+
+Cancelling draws nothing and says nothing; the shot itself flies and lands as it would have.
+Cancelling a `TRAIL` stops the whole line for that shot. The event is called on the thread that owns
+the location, which on Folia is a region thread rather than the main one.
+
 ## Types
 
 **`ArrowEffect`** — `id`, `categoryId`, `name` (colour codes still in it), `permission` (the node
@@ -125,8 +178,8 @@ database, so call those on the main thread and no more often than a player could
 
 ## What it does not expose
 
-No events: ExyliaArrows publishes none. Menu openers, the effect editor, the compiled particle
-sequences and raw configuration rows are left out on purpose — a public contract cannot be broken
+One event, `ArrowEffectPlayEvent`. The effect editor, the compiled particle sequences, the shop and
+raw configuration rows are left out on purpose — a public contract cannot be broken
 later, so it carries what an integration needs and nothing that only made sense inside one version.
 
 If something you need is genuinely missing, ask on [Discord](https://discord.exylia.net).

@@ -5,7 +5,9 @@ description: "The rarities effects are sorted into, the keys that open a crate, 
 
 An effect is normally sold as a permission node. The crate is the other way in: a rarity decides how
 likely it is, a key buys one roll, and what comes out is written onto the player's own row rather
-than granted as a node — so it outlives the rank that never granted it.
+than granted as a node — so it outlives the rank that never granted it. Since 1.4.0 the crate itself
+is ExyliaLib's; this plugin hands it the catalogue and reads its settings and lines from `config.yml`
+and `messages.yml`, under the same keys as before.
 
 ## The rarities
 
@@ -43,7 +45,7 @@ tiers:
 | Key | What it does |
 |---|---|
 | `name` | What menus and placeholders call it. |
-| `material` | The item the rarity is drawn with. |
+| `material` | Still read, but nothing draws it since the crate moved to ExyliaLib. |
 | `color` | The colour its name and its effects are written in. |
 | `chance` | How often a crate lands on it, **relative to the other rarities**. |
 | `priority` | Where it sits in menus; lower comes first. |
@@ -81,15 +83,15 @@ lose to a full inventory; an item can be sold at a stall, put in a kit and given
 | `/arrowsadmin keys set <player> <amount>` | Sets the number outright. |
 | `/arrowsadmin keys check <player>` | Prints what they hold. |
 
-Every one of them runs from console, which is how a shop, a vote listener, a crate key from another
-plugin or a rank reward hands keys out:
+Every one of them runs from console and for a player who is offline, which is how a shop, a vote
+listener, a crate key from another plugin or a rank reward hands keys out:
 
 ```text
 /arrowsadmin keys give %player% 1
 ```
 
-`crate.start-keys` is what a player is given the first time they are seen — written once, when the
-row is created, never again on later joins.
+`crate.start-keys` is what a player is given the first time they are seen — once, never again on
+later joins.
 
 ### In the hand
 
@@ -100,8 +102,10 @@ row is created, never again on later joins.
 Right click a bound crate block holding one and it opens on the spot: one key, one reel, no question
 screen. The key leaves the hand as the reel starts falling. A left click never spends one, and
 neither does a right click anywhere else — a key cannot be placed as a block, so it cannot be lost to
-a wall. How it is drawn is `key-item` in `config.yml`, and it is told apart by what it carries in its
-data rather than by its name or material.
+a wall. Its material is `key-item` in `config.yml`, its name and lore `key-item` in `messages.yml`,
+and it is told apart by what it carries in its data rather than by its name or material. Key items
+handed out before 1.4.0 keep opening the crate. Keys that do not fit in the inventory wait and are
+handed over on the player's next join, with `rewards-claimed`.
 
 ## Opening it
 
@@ -142,15 +146,22 @@ queue until their next join.
 | No keys | The crate says so and spends nothing. |
 | Nothing to hand over | A crate with no rarities, or none with effects in them, refuses rather than charging for the disappointment. |
 
-An effect is usable when **either** its permission node applies **or** the player won it. That is the
-whole difference between the two ways in: a node is a rank and stops when the rank does, a win is
-theirs.
+An effect is usable when **either** its permission node applies **or** the player won or bought it.
+That is the whole difference between the ways in: a node is a rank and stops when the rank does, an
+unlock is theirs.
 
 | Command | What it does |
 |---|---|
 | `/arrowsadmin unlocks grant <player> <effect>` | Marks an effect as won, without a crate. Alias: `unlocks give`. |
 | `/arrowsadmin unlocks revoke <player> <effect>` | Takes a won effect back, for a support ticket. Alias: `unlocks take`. |
 | `/arrowsadmin unlocks clear <player>` | Wipes what they won, for a new season. |
+
+## Buying with currency
+
+A locked effect does not have to be won: with `shop.enabled` on and ExyliaEconomy or Vault installed,
+the menu draws its price and a left click asks the player to confirm, charges them and unlocks it —
+the same unlock a crate writes. Prices are set per rarity in `shop.tier-prices`, or per effect with
+`price` in `effects.yml`. See [Configuration](/docs/exyliaarrows/configuration#shop).
 
 ## Crate blocks
 
@@ -175,11 +186,18 @@ paste and a rollback — and a server that moves its hub only edits the list.
 
 | File | What it draws |
 |---|---|
-| `menus/crate.yml` | The crate: how many keys the player holds, how much of the catalogue they have unboxed, and the one question of how many to open at once. |
-| `menus/crate_open.yml` | The crates opening: one reel per crate, falling down its own column, with the prize landing on the third row. |
+| `lang/<code>/menus/crate.yml` | The crate: how many keys the player holds, how much of the catalogue they have unboxed, and the one question of how many to open at once. A choice the player cannot afford is drawn by `empty_template` with how many keys it is missing. |
+| `lang/<code>/menus/crate_open.yml` | The crates opening: one reel per crate, falling down its own column, with the prize landing on the third row. |
 
 Both are ordinary Exylia menu files — slots, templates, sounds and actions. `crate.spin-frames`
 decides how long the first reel falls (capped at 200, about eleven seconds), and `crate.on-spin`,
 `crate.on-win` and `crate.on-duplicate` are full effect blocks: sound, title, action bar, boss bar,
 particle and firework. They play as each reel lands rather than once at the end, so four crates
 opened together read as four prizes, each with its own sound and its own line in chat.
+
+## Coming from 1.3.0
+
+Up to 1.3.0 keys and unlocks lived on this plugin's own `arrows_players` row. They now live in
+ExyliaLib's `exylia_crate_players`, in the same database. The first time a player is seen after
+updating, their old keys and unlocks are carried across once, so nobody loses a key or an effect; the
+old columns are left in place so a rollback still finds them.

@@ -1,10 +1,42 @@
 ---
 title: "Configuration"
-description: "Every block of config.yml, with its defaults."
+description: "Every block of config.yml and messages.yml, with its defaults."
 ---
 
 `config.yml` is written from a schema: comments are regenerated on every start, unknown keys are
-dropped, and a key you delete comes back with its default.
+dropped, and a key you delete comes back with its default. It holds how the plugin behaves; every
+word a player reads is in `lang/<code>/messages.yml`, at the end of this page.
+
+## `language`
+
+```yaml
+language: default
+```
+
+Which folder under `plugins/ExyliaArrows/lang/` the menus and messages are read from. `default`
+follows the `language` set in ExyliaLib's own `config.yml`, so one line there switches every Exylia
+plugin; `en`, `es`, `pt`, `fr` or `ru` set this plugin alone. Each language is a complete folder you
+can edit:
+
+```
+plugins/ExyliaArrows/
+  config.yml
+  effects.yml
+  lang/es/messages.yml
+  lang/es/menus/effects.yml
+  lang/es/menus/crate.yml
+  lang/es/menus/crate_open.yml
+```
+
+English is the base the others are laid over, so a line not translated yet still arrives in English.
+A changed `language` takes effect on `/arrowsadmin reload`.
+
+<Callout type="note" title="Servers that ran 1.3.0 keep their edits">
+On the first start of 1.4.0 or newer the old `menus/` move to `lang/custom/`, every message, item
+name and lore, menu word and placeholder answer `config.yml` used to hold moves into
+`lang/custom/messages.yml`, and `config.yml` is pointed at it with `language: custom`, so nothing a
+server edited is lost. Set `language` to `default` or a code to switch to the shipped translations.
+</Callout>
 
 ## `behaviour`
 
@@ -13,7 +45,6 @@ behaviour:
   mode: both
   consume-token: true
   consume-remover: true
-  require-permission: true
   hide-without-permission: false
 ```
 
@@ -22,8 +53,10 @@ behaviour:
 | `mode` | `both` | `player`, `bow` or `both`. See [Modes and tokens](/docs/exyliaarrows/modes-and-tokens). |
 | `consume-token` | `true` | Whether the token is spent when it is bound. |
 | `consume-remover` | `true` | Whether the remover is spent when it unbinds. |
-| `require-permission` | `true` | Whether playing an effect needs its node. Commands and the API are never limited by it. |
 | `hide-without-permission` | `false` | Whether locked effects are hidden in the menu instead of shown locked. |
+
+Choosing an effect in the menu always needs its node or an unlock; a token, a bound bow, a command
+and the API never do. See [Permissions](/docs/exyliaarrows/permissions).
 
 ## `projectiles`
 
@@ -31,21 +64,22 @@ Which launched projectiles carry an effect at all.
 
 ```yaml
 projectiles:
-  all-types: true
+  all-types: false
   default-allowed-types:
     - ARROW
     - SPECTRAL_ARROW
     - TRIDENT
-    - EGG
-    - SNOWBALL
-    - WIND_CHARGE
-    - ENDER_PEARL
 ```
 
 | Key | Default | What it does |
 |---|---|---|
-| `all-types` | `true` | Every launched projectile carries the effect. |
-| `default-allowed-types` | seven types | Read only while `all-types` is `false` **and** the effect names no `projectiles` of its own. |
+| `all-types` | `false` | `true` makes every launched projectile carry the effect, including the snowballs, eggs, potions and fishing hooks a player can throw every tick. |
+| `default-allowed-types` | three types | Read only while `all-types` is `false` **and** the effect names no `projectiles` of its own. |
+
+These are the defaults a fresh install writes. A server that already had the file keeps what it had.
+
+Whatever is allowed, one player's launch flash plays at most once every 150 ms: a multishot crossbow
+fires three shots in the same tick, and one flash for the volley is all anyone can see.
 
 ## `trail`
 
@@ -54,6 +88,7 @@ trail:
   default-interval: 1
   max-duration: 10
   max-active: 200
+  max-active-per-player: 10
 ```
 
 | Key | Default | What it does |
@@ -61,6 +96,7 @@ trail:
 | `default-interval` | `1` | Ticks between trail steps for an effect that sets no `trail-interval`. |
 | `max-duration` | `10` | Seconds a trail may live before it is cancelled — an arrow lost in an unloaded chunk would otherwise draw forever. |
 | `max-active` | `200` | How many trails may be drawing at once on the whole server. Shots over the limit still play their launch and impact; they simply leave no trail. `0` removes the limit. |
+| `max-active-per-player` | `10` | How many of those one player may have drawing at once, so a single player cannot use up the whole server's limit. `0` removes it. |
 
 <Callout type="tip" title="max-active is what a crossbow volley is for">
 A trail is a repeating task and a burst of packets per tick. A full lobby firing crossbows is the case
@@ -72,33 +108,19 @@ the ceiling exists for, and losing a trail is a great deal less visible than los
 ```yaml
 token-item:
   material: FIREWORK_STAR
-  name: "{primary}&lARROW EFFECT &8» %effect%"
-  lore:
-    - "{secondary}Information:"
-    - " {letters_black}▎ {letters}Drop this onto a bow to"
-    - " {letters_black}▎ {letters}{highlight}bind the effect {letters}to it. The bow"
-    - " {letters_black}▎ {letters}keeps everything it had."
-    - ""
-    - "{secondary}Fits:"
-    - " {letters_black}▎ {info}%bows%"
-    - ""
-    - "{warning}➥ Drop onto a bow to bind"
-    - ""
   glow: true
 
 remover-item:
   material: SCRAPE_POTTERY_SHERD
-  name: "{primary}&lEFFECT REMOVER"
   glow: true
 
 key-item:
   material: TRIPWIRE_HOOK
-  name: "{primary}&lCRATE KEY"
   glow: true
 ```
 
-`%effect%` is the effect's name, `%bows%` what it fits. `material` is only used when the effect
-sets no icon of its own — a token is normally drawn as the effect's own material.
+`material` is only used when the effect sets no icon of its own — a token is normally drawn as the
+effect's own material. What each item is called and what its lore says is in `messages.yml`.
 
 `key-item` is the key a player holds: right click a crate block with one and it opens. See
 [The crate](/docs/exyliaarrows/crate).
@@ -108,12 +130,10 @@ sets no icon of its own — a token is normally drawn as the effect's own materi
 ```yaml
 bow-lore:
   enabled: true
-  lines:
-    - "{secondary}Arrow Effect:"
-    - " {letters_black}▎ {highlight}%effect%"
 ```
 
-Drawn under a bound bow's own lore, on packets only. The item itself never carries these lines.
+Whether the lines under a bound bow are drawn. They are drawn on packets only — the item itself never
+carries them — and the lines themselves are `bow-lore` in `messages.yml`.
 
 ## `tiers`
 
@@ -151,7 +171,7 @@ tiers:
 | Key | Default | What it does |
 |---|---|---|
 | `name` | per rarity | What menus and placeholders call it. |
-| `material` | per rarity | The item the rarity is drawn with in the crate. |
+| `material` | per rarity | Still read, but nothing draws it since the crate moved to ExyliaLib in 1.4.0. |
 | `color` | per rarity | The colour its name and its effects are written in. |
 | `chance` | `60`, `25`, `12`, `3` | A weight, not a percentage: the shares are worked out from the weights, so deleting a rarity re-spreads its odds. |
 | `priority` | `1`-`4` | Where it sits in menus; lower comes first. |
@@ -229,24 +249,13 @@ in, `/arrows preview` and the menu's right click say so instead of playing anyth
 
 ```yaml
 menu:
-  empty: "{muted}Nothing"
-  tab-open: "{success}✔ You are here"
-  tab-closed: "{warning}➥ Click to open"
-  bows-any: "Any bow"
-  favourites-name: "Favourites"
   favourites-icon: "AMETHYST_SHARD"
-  favourite-on: "{highlight}★ In your favourites"
-  favourite-off: "{muted}☆ Not in your favourites"
-  random-name: "{highlight}Random"
-  random-on: "{success}✔ Every shot is a surprise"
-  random-off: "{warning}➥ Click to surprise yourself"
 ```
 
-`random-name` is what the random choice is called wherever the effect a player carries is drawn;
-`random-on` and `random-off` are the line its button shows.
-
-The screens themselves are `menus/effects.yml`, `menus/crate.yml` and `menus/crate_open.yml` — see
-[The menu](/docs/exyliaarrows/menu) and [Rarities and the crate](/docs/exyliaarrows/crate).
+The material the favourites tab is drawn as. What the menu calls things is in `messages.yml`, and the
+screens themselves are `menus/effects.yml`, `menus/crate.yml` and `menus/crate_open.yml` under
+`lang/<code>/` — see [The menu](/docs/exyliaarrows/menu) and [Rarities and the
+crate](/docs/exyliaarrows/crate).
 
 ## `feedback`
 
@@ -270,27 +279,73 @@ available on each. `on-bind` plays when an effect is bound to a bow **or** chose
 ```yaml
 particles:
   default-visibility: "ALL"
-  name-all: "All"
-  name-none: "None"
-  name-self-only: "Self Only"
-  name-others-only: "Others Only"
 ```
 
-`default-visibility` is what a player starts with. The four names are what menus and placeholders
-call each mode.
+The visibility a player starts with: `ALL`, `NONE`, `SELF_ONLY` or `OTHERS_ONLY`. What menus and
+placeholders call each mode is in `messages.yml`.
 
-## `placeholders`
+## `showcase`
+
+Places that play arrow effects on their own, over and over, for whoever walks past: a lobby
+centrepiece rather than a shot. Two bodies wearing the skins of players standing nearby face each
+other nine blocks apart, one draws a bow and the other takes the arrow, twice a turn. The launch plays
+at the bow, the trail along the arc and the impact where it lands.
 
 ```yaml
-placeholders:
-  none: "None"
+showcase:
+  locations: []
+  pause-seconds: 3.0
+  radius: 24.0
+  only: []
 ```
 
-What every `%exyliarrows_...%` placeholder answers when there is no value.
+| Key | Default | What it does |
+|---|---|---|
+| `locations` | `[]` | Where showcases stand. Set them with `/arrowsadmin showcase add`, facing where the crowd will be: the pair stands to your left and right so the arc is seen side on. |
+| `pause-seconds` | `3.0` | The rest between one turn ending and the next starting. |
+| `radius` | `24.0` | How close a player has to be for a showcase to play and to be seen, in blocks. |
+| `only` | `[]` | The effect ids a showcase picks from. Empty picks from every effect. |
 
-## `messages`
+Only effects that fly on an arrow and draw a trail or an impact are picked; a launch on its own is a
+flash nobody would stop for. There is no real arrow and nobody is hit: the flight is simulated and
+drawn on packets, and the lines that act on a real player (`[COMMAND]`, `[POTION]`, `[TITLE]`,
+`[ACTION_BAR]`, `[MESSAGE]`, `[CAMERA]`) are cut from what a showcase plays. With nobody inside
+`radius` nothing plays, so an empty lobby costs nothing.
 
-Every line the plugin sends. `prefix` is `{primary}&lE-ARROWS &8•&r ` and every other message starts
+## `shop`
+
+A locked effect can be bought straight from the menu with currency. The row draws its price and a
+left click asks the player to confirm before anything is charged.
+
+```yaml
+shop:
+  enabled: true
+  tier-prices:
+    common: 500
+    rare: 1500
+    epic: 4000
+    legendary: 10000
+```
+
+| Key | Default | What it does |
+|---|---|---|
+| `enabled` | `true` | Whether a locked effect can be bought from the menu. |
+| `tier-prices` | `500` / `1500` / `4000` / `10000` | What an effect costs by rarity, in the default currency. A rarity left out is not for sale. |
+
+A price is a number (`500`, `2.5k`) or a block naming a currency: `{amount: 50, currency: gems}`. An
+effect in `effects.yml` can set its own `price`, which wins over its rarity's. The money is taken by
+ExyliaEconomy or Vault; with neither installed, or with the shop off, locked effects look exactly as
+they always have.
+
+A bought effect is unlocked on the account, the same as one won from [the crate](/docs/exyliaarrows/crate):
+it outlives a rank and cannot be traded. A purchase that could not be handed over gives the money
+back. The confirmation and every answer it sends are ExyliaLib's own lines, under `purchase` in
+ExyliaLib's `messages.yml`, shared by every cosmetic plugin.
+
+## `messages.yml`
+
+Every line the plugin sends, and every word an item or the menu draws, in
+`lang/<code>/messages.yml`. `prefix` is `{primary}&lE-ARROWS &8•&r ` and every other message starts
 with `%prefix%`.
 
 | Key | Sent when |
@@ -308,6 +363,7 @@ with `%prefix%`.
 | `no-permission` | The player does not own the effect. |
 | `empty-hand` | A hand-held subcommand with nothing in hand. |
 | `given` / `given-remover` / `given-key` | Tokens, removers or crate keys were given. |
+| `rewards-claimed` | Items that did not fit were waiting and have been handed over on join. |
 | `list-header` / `list-entry` / `list-empty` | `/arrowsadmin list`. |
 | `visibility-set` | Visibility changed. |
 | `refreshed` | `refresh` or `validate` finished. |
@@ -318,8 +374,22 @@ with `%prefix%`.
 | `crate-busy` / `crate-empty` / `crate-disabled` | A crate is already falling, has nothing to hand over, or is turned off. |
 | `keys-received` / `keys-taken` / `keys-given` | Keys changed hands. |
 | `unlock-granted` / `unlock-already` / `unlock-revoked` / `unlocks-cleared` | `/arrowsadmin unlocks`. |
-| `crate-block-added` / `crate-block-removed` / `crate-block-already` / `crate-block-missing` / `crate-block-none` | `/arrowsadmin crate block`. |
+| `crate-block-*` / `crate-blocks-*` | `/arrowsadmin crate block`. |
 | `preview-location-set` / `preview-unavailable` / `preview-unavailable-admin` | The preview stage. |
+| `showcase-*` / `showcases-*` | `/arrowsadmin showcase`. |
 
 Placeholders in messages: `%effect%`, `%amount%`, `%id%`, `%visibility%`, `%keys%`, `%player%`,
 `%location%`, plus `%prefix%`.
+
+Below the messages, the words drawn rather than sent:
+
+| Key | What it is |
+|---|---|
+| `token-item`, `remover-item`, `key-item` | Each item's `name` and `lore`. On the token, `%effect%` is the effect's name and `%bows%` what it fits. |
+| `bow-lore` | The lines under a bound bow. `%effect%` is the effect's name. |
+| `menu` | What the menu calls things: `empty`, `tab-open`, `tab-closed`, `bows-any`, `bow-names`, `favourites-name`, `favourite-on`, `favourite-off`, `random-name`, `random-on`, `random-off`. |
+| `particles` | What each visibility mode is called: `name-all`, `name-none`, `name-self-only`, `name-others-only`. |
+| `placeholders` | `none`, what every `%exyliarrows_...%` placeholder answers when there is no value, and `unknown`, what one answers when it names something that no longer exists. |
+
+`menu.bow-names` is how a bow is written wherever `%bows%` is drawn, keyed by family (`bow`,
+`crossbow`, `trident`, `ranged`) or by item id. Anything missing is spelled from its id.

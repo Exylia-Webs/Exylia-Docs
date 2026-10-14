@@ -1,12 +1,12 @@
 ---
 title: "API"
-description: "Leer el catálogo de efectos y sus categorías, el efecto elegido por un jugador, sus favoritos y su ajuste de partículas, y los efectos ligados a los arcos."
+description: "Leer el catálogo de efectos y sus categorías, el efecto elegido por un jugador, sus favoritos y su ajuste de partículas, los efectos ligados a los arcos, lanzar efectos a demanda, los menús, los desbloqueos, las llaves y ArrowEffectPlayEvent."
 badge: "dev"
 ---
 
 `ArrowsService` es por donde otro plugin lee y maneja ExyliaArrows: el catálogo y sus categorías, el
-efecto que eligió el jugador, sus favoritos y su ajuste de partículas, y los efectos ligados a los
-arcos.
+efecto que eligió el jugador, sus favoritos y su ajuste de partículas, los efectos ligados a los
+arcos, los efectos lanzados a demanda, los menús, los desbloqueos y las llaves de la caja.
 
 ```java
 ExyliaAPI.get(ArrowsService.class).ifPresent(arrows -> {
@@ -17,7 +17,9 @@ ExyliaAPI.get(ArrowsService.class).ifPresent(arrows -> {
 
 <Callout type="note" title="Agregarlo a tu proyecto">
 El artefacto, el repositorio y la línea del `plugin.yml` son los mismos para todos los plugins de
-Exylia y están en la [página de la API pública](/docs/exylialib/api).
+Exylia y están en la [página de la API pública](/docs/exylialib/api). Lanzar un efecto, los menús, los
+desbloqueos, las llaves y `ArrowEffectPlayEvent` llegaron en `exylia-api` `v1.133.0` y ExyliaArrows
+1.4.0: compila contra esa etiqueta o una más nueva para alcanzarlos.
 </Callout>
 
 Todo se direcciona por **id de efecto**, comparado sin distinguir mayúsculas. Un id que el catálogo no
@@ -41,8 +43,8 @@ las búsquedas devuelven vacío y las escrituras devuelven `false`.
 |---|---|
 | `canUse(Player, String effectId)` | Si puede usar el efecto. |
 
-Responde con la regla del propio servidor: el nodo del efecto, el de toda su categoría, el comodín, o
-el ajuste que apaga los permisos por completo. Una tienda que pregunta recibe la misma respuesta que
+Responde con la regla del propio servidor: el nodo del efecto, el de toda su categoría o su rareza, el
+comodín, o un desbloqueo de la caja o de la tienda. Una tienda que pregunta recibe la misma respuesta que
 daría el menú, no una comprobación cruda de nodo.
 
 ## Lo que eligió el jugador
@@ -55,9 +57,9 @@ daría el menú, no una comprobación cruda de nodo.
 | `clear(Player)` | Le quita el efecto elegido. |
 
 <Callout type="warning" title="select fija, y no pide nodo">
-`select` fija en vez de alternar: llamarlo dos veces deja el efecto puesto. **No pasa por permiso**,
-porque el ajuste del propio dueño del servidor dice que no debe hacerlo: un efecto repartido por una
-caja o una recompensa es suyo se le haya concedido un nodo o no. Es la misma regla que sigue
+`select` fija en vez de alternar: llamarlo dos veces deja el efecto puesto. **No pasa por permiso**:
+quien llama ya decidió que el jugador puede tenerlo, igual que un comando de admin. Es la misma regla
+que sigue
 ExyliaArmorTrims y lo contrario de ExyliaArmorSkin. Pregunta antes por `canUse` cuando sí quieras que
 decida el permiso.
 </Callout>
@@ -96,6 +98,58 @@ está pulsando.
 Pregunta `isEffectItem` antes de que una caja, una tienda o un intercambio traten un stack como botín
 normal: una ficha se dibuja como convenga a lo que lleva y no es el material que aparenta.
 
+## Lanzar un efecto
+
+| Método | Qué hace |
+|---|---|
+| `boolean play(String effectId, ArrowTrigger trigger, Location where, Player shooter, @Nullable Entity hit)` | Lanza un momento de un efecto en un sitio, como si hubiera un disparo allí. La flag de región, `ArrowEffectPlayEvent` y la visibilidad de cada observador siguen decidiendo; el arco, la elección del menú, los tipos de proyectil y el permiso se saltan, porque quien llama nombró el efecto. Exactamente el momento pedido: un `HIT_ENTITY` sobre un efecto que solo declara `HIT` no dibuja nada. `false` cuando no hay efecto con ese id, no dibuja nada en ese momento, la región lo silencia o un listener lo canceló. Llámalo en el hilo dueño de `where`. |
+| `boolean attach(Projectile projectile, String effectId)` | Hace que un proyectil lleve un efecto, como si se acabara de disparar con él — la ráfaga de una habilidad, una torreta, un hechizo dibujado como flecha. El lanzamiento suena donde está ahora, la estela lo sigue y el impacto suena donde cae; el efecto que ya llevara se reemplaza. El tirador tiene que ser un jugador. Llámalo justo después de crear el proyectil, en el hilo dueño de él. |
+| `boolean preview(Player viewer, String effectId)` | Muestra el efecto en el escenario de vistas previas, como hace el clic derecho del menú. No hace falta tenerlo, lo que lo convierte en el "pruébalo antes de comprarlo" de una tienda. `false`, avisando al jugador, cuando no hay escenario fijado. |
+
+`ArrowTrigger` es `LAUNCH`, `TRAIL`, `HIT` o `HIT_ENTITY`.
+
+## Menús
+
+| Método | Qué hace |
+|---|---|
+| `void openMenu(Player player)` | Abre el menú de efectos exactamente como `/arrows`, para un NPC, un objeto del hub o una tienda. Si la fila del jugador no está en memoria se lee antes, así que el menú puede aparecer un momento después de la llamada. En un servidor `bow` se le dice al jugador que el menú está apagado. Seguro desde cualquier hilo. |
+| `void openCrate(Player player)` | Abre la caja exactamente como el comando y los bloques de caja: la pantalla que pregunta cuántas abrir y gasta llaves. Con la caja apagada se le dice al jugador. Seguro desde cualquier hilo. |
+
+## Desbloqueos y llaves de la caja
+
+| Método | Qué hace |
+|---|---|
+| `boolean unlock(Player player, String effectId)` | Le da un efecto para siempre, como ganarlo en la caja — propiedad sin nodo de permiso, que `canUse` cuenta desde entonces. No elige nada ni da ningún objeto: sigue con `select` o `effectItem` para eso. `false` cuando no hay efecto con ese id, ya lo tiene así, o su fila todavía no llegó. |
+| `int keys(UUID player)` | Cuántas llaves tiene. `0` si no tiene ninguna o su fila todavía no llegó. |
+| `void addKeys(Player player, int keys)` | Da llaves, o las quita con un número negativo — así paga una tirada una tienda, un voto o una misión. La cuenta nunca baja de cero. |
+
+## ArrowEffectPlayEvent
+
+`net.exylia.lib.api.arrows.event.ArrowEffectPlayEvent` se dispara cuando todo lo demás ya aceptó que
+un momento debe sonar: el efecto dibuja algo en él y la región permite los efectos de flecha. Se
+dispara una vez por momento — el lanzamiento, el inicio de la estela, el impacto — para disparos
+reales y para `play` y `attach` por igual, y no se distinguen a propósito: una arena que quiere los
+efectos de flecha callados los quiere callados en ambos casos.
+
+```java
+@EventHandler
+public void onArrowEffect(ArrowEffectPlayEvent event) {
+    if (event.getLocation().getWorld().getName().equals("lobby")) event.setCancelled(true);
+}
+```
+
+| Método | Qué devuelve |
+|---|---|
+| `Player getPlayer()` | El tirador: de quién es el efecto. |
+| `@Nullable Entity getHitEntity()` | En qué cayó el disparo. `null` para un lanzamiento, una estela, un bloque o un lanzamiento que no nombró nada. |
+| `String getEffectId()` | El efecto a punto de sonar, normalizado. |
+| `ArrowTrigger getTrigger()` | Qué momento es. |
+| `Location getLocation()` | Dónde suena; para una estela, donde empieza la línea. Una copia: cambiarla no mueve nada. |
+
+Cancelarlo no dibuja nada ni dice nada; el disparo vuela y cae igual. Cancelar un `TRAIL` para toda la
+línea de ese disparo. El evento se llama en el hilo dueño de la ubicación, que en Folia es un hilo de
+región y no el principal.
+
 ## Tipos
 
 **`ArrowEffect`** — `id`, `categoryId`, `name` (con los códigos de color dentro), `permission` (el
@@ -126,8 +180,8 @@ podría un jugador.
 
 ## Lo que no expone
 
-No hay eventos: ExyliaArrows no publica ninguno. Los abridores de menú, el editor de efectos, las
-secuencias de partículas compiladas y las filas crudas de configuración quedan fuera a propósito: un
+Un evento, `ArrowEffectPlayEvent`. El editor de efectos, las secuencias de partículas compiladas, la
+tienda y las filas crudas de configuración quedan fuera a propósito: un
 contrato público no se puede romper después, así que lleva lo que una integración necesita y nada que
 solo tuviera sentido dentro de una versión.
 
