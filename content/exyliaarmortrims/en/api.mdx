@@ -1,6 +1,6 @@
 ---
 title: "API"
-description: "Reading the trim catalogue, the halves a player combines by hand, their chosen trim, and the trims written onto armor."
+description: "Reading the trim catalogue, the halves a player combines by hand, their chosen trim and what they are shown wearing, the trims written onto armor, and the two events."
 badge: "dev"
 ---
 
@@ -17,7 +17,9 @@ ExyliaAPI.get(ArmorTrimService.class).ifPresent(trims -> {
 
 <Callout type="note" title="Adding it to your project">
 The artifact, the repository and the `plugin.yml` line are the same for every Exylia plugin and live
-on the [public API page](/docs/exylialib/api).
+on the [public API page](/docs/exylialib/api). `shown`, `giveTrimItem`, `removerItem`, `openMenu` and
+the two events arrived with ExyliaArmorTrims 1.3.0, in `exylia-api` `v1.133.0`: compile against that
+tag or a newer one to reach them.
 </Callout>
 
 Everything is addressed by **trim id**, matched without regard to case. That is either a preset the
@@ -42,8 +44,8 @@ writes answer `false`.
 | `canUse(Player, String trimId)` | Whether they may wear the trim on at least one piece. |
 | `canUse(Player, String trimId, ArmorPiece)` | Whether they may wear it on that one piece. |
 
-Both answer by the server's own rule, which includes the setting that turns permissions off
-entirely — a shop asking gets the same answer the menu would give, not a raw permission check. The
+Both answer by the server's own rule: the trim's nodes, or what a crate or a purchase unlocked — a
+shop asking gets the same answer the menu would give, not a raw permission check. The
 per-piece form is separate because a rank can be sold one slot at a time: a player given the helmet
 node wears the trim on their head and nowhere else.
 
@@ -62,11 +64,24 @@ again the moment the player equips armor that fits.
 
 <Callout type="warning" title="select sets, and does not ask for a node">
 `select` is a set rather than a toggle — running it twice leaves the trim on. It is **not gated by
-permission**, because the server owner's own setting says it should not be: a trim handed out by a
-crate or a reward is owned whether or not a node was ever granted for it. That is the same rule
-ExyliaArrows follows and the opposite of ExyliaArmorSkin. Ask `canUse(Player, String, ArmorPiece)`
-first when you do want the permission to decide.
+ownership**: the caller decided this player may wear it. That is the same rule ExyliaArrows follows and
+the opposite of ExyliaArmorSkin. Ask `canUse(Player, String, ArmorPiece)` first when you do want
+ownership to decide.
+
+`TrimSelectionChangeEvent` fires for it like for a menu click; a listener that cancels it makes
+`select` answer `false`.
 </Callout>
+
+## What the player is shown wearing
+
+| Method | What it does |
+|---|---|
+| `shown(UUID player, ArmorPiece)` | The trim drawn on that slot right now, as an `Optional<String>`: a preset id or a `pattern/material` combination. |
+
+The answer after every rule has had its say — the mode, the armor actually in the slot, the wearer's
+ownership, and whether their cosmetics are shown at all — which neither `selected` nor `trimOf` gives
+on its own. Empty when the slot shows the armor as it really is or the player is not online. What a
+placeholder or a scoreboard describing somebody's look should read; safe from any thread.
 
 ## Trims on items
 
@@ -80,6 +95,16 @@ first when you do want the permission to decide.
 
 Ask `isTrimItem` before a container, a shop or a trade treats a stack as ordinary loot: a trim item
 is drawn as whatever suits it and is not the material it looks like.
+
+## Handing things out
+
+| Method | What it does |
+|---|---|
+| `giveTrimItem(Player, String trimId, int amount)` | Gives trim items through the plugin's reward queue: what does not fit is kept and handed over on the player's next join. The player is told nothing. `false` when the id names no trim or the amount is below one. |
+| `removerItem()` | A new remover, ready to be given. It only takes trims off on a server whose mode uses items. |
+| `openMenu(Player)` | Opens the trim menu as `/trims` does, for an NPC, a sign or a lobby item. No permission is checked. `false` when the mode has no menu. |
+
+Call `giveTrimItem` and `openMenu` on the thread that owns the player.
 
 ## Redrawing
 
@@ -116,10 +141,31 @@ placeholder. Everything that changes a selection writes to the database and redr
 everyone watching — call those on the main thread, and no more often than a player could.
 </Callout>
 
+## Events
+
+Both live in `net.exylia.lib.api.armortrims.event`, are cancellable, and are called on the thread
+that owns the player, which on Folia is their region thread.
+
+**`TrimSelectionChangeEvent`** — the trims a player chose are about to change. One event per write,
+however many slots it touches: `pieces()` are the slots and `trimId()` what they all change to, empty
+when trims are coming off. Fired for a menu click, an admin command and the service's `select` and
+clears alike, and only once the write is known to change something. Cancelling writes nothing and
+explains nothing.
+
+**`TrimApplyEvent`** — a player is dropping a trim item onto armor, after the plugin has agreed to it
+and before anything is written. `armor()` is the live item, `trimId()` the trim going on, `piece()`
+the slot. Not fired for `apply`. Cancelling leaves the armor untrimmed and the item on the cursor.
+
+```java
+@EventHandler
+public void onTrim(TrimSelectionChangeEvent event) {
+    if (arena.isPlaying(event.getPlayer())) event.setCancelled(true);
+}
+```
+
 ## What it does not expose
 
-No events: ExyliaArmorTrims publishes none. Menu openers, the custom-tab editor flow, removers and
-raw configuration rows are left out on purpose — a public contract cannot be broken later, so it
+The custom-tab editor flow, the crate and raw configuration rows are left out on purpose — a public contract cannot be broken later, so it
 carries what an integration needs and nothing that only made sense inside one version.
 
 If something you need is genuinely missing, ask on [Discord](https://discord.exylia.net).

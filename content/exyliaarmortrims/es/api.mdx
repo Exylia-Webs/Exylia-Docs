@@ -1,6 +1,6 @@
 ---
 title: "API"
-description: "Leer el catálogo de trims, las mitades que el jugador combina a mano, el trim que eligió y los trims escritos en la armadura."
+description: "Leer el catálogo de trims, las mitades que el jugador combina a mano, el trim que eligió y el que se le ve, los trims escritos en la armadura, y los dos eventos."
 badge: "dev"
 ---
 
@@ -17,7 +17,9 @@ ExyliaAPI.get(ArmorTrimService.class).ifPresent(trims -> {
 
 <Callout type="note" title="Agregarlo a tu proyecto">
 El artefacto, el repositorio y la línea del `plugin.yml` son los mismos para todos los plugins de
-Exylia y están en la [página de la API pública](/docs/exylialib/api).
+Exylia y están en la [página de la API pública](/docs/exylialib/api). `shown`, `giveTrimItem`,
+`removerItem`, `openMenu` y los dos eventos llegaron con ExyliaArmorTrims 1.3.0, en `exylia-api`
+`v1.133.0`: compila contra esa etiqueta o una más nueva para usarlos.
 </Callout>
 
 Todo se direcciona por **id de trim**, comparado sin distinguir mayúsculas. Ese id es o un preset que
@@ -42,8 +44,8 @@ las búsquedas devuelven vacío y las escrituras devuelven `false`.
 | `canUse(Player, String trimId)` | Si puede llevar el trim en al menos una pieza. |
 | `canUse(Player, String trimId, ArmorPiece)` | Si puede llevarlo en esa pieza concreta. |
 
-Los dos responden con la regla del propio servidor, que incluye el ajuste que apaga los permisos por
-completo: una tienda que pregunta recibe la misma respuesta que daría el menú, no una comprobación
+Los dos responden con la regla del propio servidor: los nodos del trim, o lo que desbloqueó una caja o
+una compra. Una tienda que pregunta recibe la misma respuesta que daría el menú, no una comprobación
 cruda de nodo. La forma por pieza existe aparte porque un rango se vende ranura a ranura: quien tiene
 el nodo del casco lleva el trim en la cabeza y en ningún otro sitio.
 
@@ -61,12 +63,26 @@ el nodo del casco lleva el trim en la cabeza y en ningún otro sitio.
 aparecer en cuanto el jugador se equipa una armadura que encaje.
 
 <Callout type="warning" title="select fija, y no pide nodo">
-`select` fija en vez de alternar: llamarlo dos veces deja el trim puesto. **No pasa por permiso**,
-porque el ajuste del propio dueño del servidor dice que no debe hacerlo: un trim repartido por una
-caja o una recompensa es suyo se le haya concedido un nodo o no. Es la misma regla que sigue
-ExyliaArrows y lo contrario de ExyliaArmorSkin. Pregunta antes por
-`canUse(Player, String, ArmorPiece)` cuando sí quieras que decida el permiso.
+`select` fija en vez de alternar: llamarlo dos veces deja el trim puesto. **No comprueba si el jugador
+lo tiene**: quien llama ya decidió que puede llevarlo. Es la misma regla que sigue ExyliaArrows y lo
+contrario de ExyliaArmorSkin. Pregunta antes por `canUse(Player, String, ArmorPiece)` cuando sí quieras
+que eso decida.
+
+`TrimSelectionChangeEvent` se lanza igual que con un clic del menú; un listener que lo cancela hace que
+`select` responda `false`.
 </Callout>
+
+## Lo que se le ve puesto
+
+| Método | Qué hace |
+|---|---|
+| `shown(UUID player, ArmorPiece)` | El trim que se dibuja en esa ranura ahora mismo, como `Optional<String>`: un id de preset o una combinación `patrón/material`. |
+
+La respuesta después de que cada regla haya dicho lo suyo — el modo, la armadura que de verdad hay en
+la ranura, si el portador lo tiene y si sus cosméticos se muestran — que ni `selected` ni `trimOf` dan
+por sí solos. Vacío cuando la ranura muestra la armadura tal cual o el jugador no está conectado. Es lo
+que debe leer un placeholder o un scoreboard que describe el aspecto de alguien; seguro desde
+cualquier hilo.
 
 ## Trims en los objetos
 
@@ -80,6 +96,16 @@ ExyliaArrows y lo contrario de ExyliaArmorSkin. Pregunta antes por
 
 Pregunta `isTrimItem` antes de que un cofre, una tienda o un intercambio traten un stack como botín
 normal: un objeto de trim se dibuja como le convenga y no es el material que aparenta.
+
+## Entregar cosas
+
+| Método | Qué hace |
+|---|---|
+| `giveTrimItem(Player, String trimId, int amount)` | Da objetos de trim por la cola de recompensas del plugin: lo que no cabe se guarda y se entrega cuando el jugador vuelve a entrar. Al jugador no se le dice nada. `false` cuando el id no nombra ningún trim o la cantidad es menor que uno. |
+| `removerItem()` | Un removedor nuevo, listo para entregar. Solo quita trims en un servidor cuyo modo usa objetos. |
+| `openMenu(Player)` | Abre el menú de trims como lo hace `/trims`, para un NPC, un cartel o un objeto del lobby. No comprueba permisos. `false` cuando el modo no tiene menú. |
+
+Llama a `giveTrimItem` y `openMenu` en el hilo dueño del jugador.
 
 ## Redibujar
 
@@ -118,10 +144,33 @@ todos los que lo ven: llama a eso desde el hilo principal, y no más seguido de 
 jugador.
 </Callout>
 
+## Eventos
+
+Los dos están en `net.exylia.lib.api.armortrims.event`, se pueden cancelar y se llaman en el hilo dueño
+del jugador, que en Folia es el hilo de su región.
+
+**`TrimSelectionChangeEvent`** — los trims que eligió un jugador están a punto de cambiar. Un evento por
+escritura, toque las ranuras que toque: `pieces()` son las ranuras y `trimId()` a lo que cambian todas,
+vacío cuando se quitan. Se lanza por un clic en el menú, un comando de admin y el `select` y los clears
+del servicio por igual, y solo cuando se sabe que la escritura cambia algo. Cancelarlo no escribe nada
+ni explica nada.
+
+**`TrimApplyEvent`** — un jugador suelta un objeto de trim sobre una armadura, después de que el plugin
+lo haya aceptado y antes de escribir nada. `armor()` es el objeto vivo, `trimId()` el trim que se pone,
+`piece()` la ranura. No se lanza con `apply`. Cancelarlo deja la armadura sin trim y el objeto en el
+cursor.
+
+```java
+@EventHandler
+public void onTrim(TrimSelectionChangeEvent event) {
+    if (arena.isPlaying(event.getPlayer())) event.setCancelled(true);
+}
+```
+
 ## Lo que no expone
 
-No hay eventos: ExyliaArmorTrims no publica ninguno. Los abridores de menú, el flujo de edición de la
-pestaña CUSTOM, los removedores y las filas crudas de configuración quedan fuera a propósito: un
+El flujo de edición de la pestaña CUSTOM, la caja y las filas crudas de configuración quedan fuera a
+propósito: un
 contrato público no se puede romper después, así que lleva lo que una integración necesita y nada que
 solo tuviera sentido dentro de una versión.
 

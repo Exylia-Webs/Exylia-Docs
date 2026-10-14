@@ -1,9 +1,9 @@
 ---
 title: "The menu"
-description: "One screen: armor along the top, three faces in the grid, all of it editable in menus/trims.yml."
+description: "One screen: armor along the top, three faces in the grid, all of it editable in lang/<language>/menus/trims.yml."
 ---
 
-`/armortrim` opens a single window. What is being engraved sits along the top; what can go on it sits
+`/armortrim` opens a single window, drawn from `lang/<language>/menus/trims.yml`. What is being engraved sits along the top; what can go on it sits
 below. Nothing is reopened between steps, so the armor never moves and a half-built choice is never
 lost.
 
@@ -41,14 +41,15 @@ icon is one picture eighteen times over. Swap `%entry_icon%` back to `%preview_m
 | Button | Slot | What it does |
 |---|---|---|
 | PRESETS | `0` | Opens the presets face. |
-| CUSTOM | `8` | Opens the patterns. With `require-permission` on it needs `exyliaarmortrims.custom`. |
+| CUSTOM | `8` | Opens the patterns. Needs `exyliaarmortrims.custom`, or any pattern or material unlocked. |
 | BARE EVERYTHING | `45` | Takes the trim off all four pieces. |
 | CLOSE | `49` | Closes. |
+| TRIM CRATE | `53` | Opens [the crate](/docs/exyliaarmortrims/crate), showing the player's keys and how much of the catalogue they unboxed. |
 | Previous / next | `48` / `50` | Grid pagination. |
 
 The two tabs are **one button each**, not two drawings of the same slot: each shows
 `%presets_status%` or `%custom_status%`, which come from `menu.tab-open` and `menu.tab-closed` in
-`config.yml`.
+`messages.yml`.
 
 ## What a click does
 
@@ -68,12 +69,14 @@ The first template of a list is what a row in no particular state uses, so `item
 | List | Templates |
 |---|---|
 | `targets` | `item_template`, `focused_template`, `set_template`, `focused_set_template` |
-| `grid` · presets | `preset_template`, `preset_selected_template`, `preset_unsupported_template`, `preset_locked_template` |
-| `grid` · patterns | `pattern_template`, `pattern_selected_template`, `pattern_locked_template` |
-| `grid` · materials | `material_template`, `material_selected_template`, `material_locked_template` |
+| `grid` · presets | `preset_template`, `preset_selected_template`, `preset_unsupported_template`, `preset_locked_template`, `preset_purchasable_template` |
+| `grid` · patterns | `pattern_template`, `pattern_selected_template`, `pattern_locked_template`, `pattern_purchasable_template` |
+| `grid` · materials | `material_template`, `material_selected_template`, `material_locked_template`, `material_purchasable_template` |
 
-`unsupported` is a preset that does not fit the focused piece; `locked` is one the player may not use.
-A locked entry **looks locked** rather than simply not being there.
+`unsupported` is a preset that does not fit the focused piece; `locked` is one the player does not
+own. `purchasable` is a locked one the shop sells to them, with its price; clicking it buys it. A file
+edited before the shop existed has no purchasable templates, and draws those entries as `locked`. A
+locked entry **looks locked** rather than simply not being there.
 
 ## Placeholders in the file
 
@@ -103,16 +106,21 @@ kind carries its own tokens.
 | `%entry_worn%` | `grid` | The pieces the player already wears it on, empty when none. |
 | `%entry_worn_name%` | `grid` | The same, but `menu.empty` when none. |
 | `%entry_pieces%` | `grid` · presets | The pieces the preset fits. |
+| `%price%` | `grid` · purchasable | What it costs, written the way its currency writes it. |
+| `%entry_buy%` | `grid` · purchasable | The id `armortrim:buy` takes: a preset id, `pattern:<id>` or `material:<id>`. |
 | `%material_name%` | `grid` · materials | The metal's display name. |
 | `%pattern_name%` | `grid` · materials, anywhere | The chosen pattern's display name, or `menu.empty` before one is chosen. |
 | `%tab%` | Anywhere | The grid being shown: `presets`, `patterns` or `materials`. |
 | `%pattern%` | Anywhere | The chosen pattern's id, empty before one is chosen. |
 | `%presets_status%` | Anywhere | `menu.tab-open` or `menu.tab-closed` for the presets tab. |
 | `%custom_status%` | Anywhere | The same, for the custom tab. |
+| `%keys%` | Anywhere | The crate keys the player holds. |
+| `%unlocked_count%` | Anywhere | How many prizes they unlocked. |
+| `%catalogue_count%` | Anywhere | How many prizes the crate holds. |
 
 ## Actions
 
-Six verbs, in the `armortrim` namespace:
+The verbs in the `armortrim` namespace:
 
 | Action | What it does |
 |---|---|
@@ -122,15 +130,17 @@ Six verbs, in the `armortrim` namespace:
 | `armortrim:pattern <id>` | Takes the first half and moves to the materials. |
 | `armortrim:wear <id\|pattern/material>` | Puts that trim on, or takes it off. |
 | `armortrim:clear <piece\|set>` | Takes the trim off one piece or all of them. |
+| `armortrim:buy <id>` | Buys a locked preset, pattern or material: asks to confirm, charges and unlocks it, then reopens the tab it was bought from. |
+| `armortrim:crate` | Opens the crate. |
 
-Each acts on the window the click came from, so a player with the menu open twice cannot move the
+The screen's own verbs act on the window the click came from, so a player with the menu open twice cannot move the
 wrong one.
 
 ## Wording
 
-The few strings a template cannot spell out slot by slot live in `config.yml`:
+The few strings a template cannot spell out slot by slot live under `menu` in `messages.yml`:
 
-```yaml title="config.yml"
+```yaml title="messages.yml"
 menu:
   full-set: "{primary}&lFULL SET"
   helmet: "{primary}&lHELMET"
@@ -141,9 +151,17 @@ menu:
   custom-name: "{primary}&l%pattern% {letters_black}» {secondary}&l%material%"
   tab-open: "{success}✔ You are here"
   tab-closed: "{warning}➥ Click to open"
+  piece-names:
+    helmet: "Helmet"
+    chestplate: "Chestplate"
+    leggings: "Leggings"
+    boots: "Boots"
 ```
 
+`piece-names` is how a piece is written inside a sentence or a list, such as the pieces a preset fits.
+
 <Callout type="note" title="No menu, no screen">
-With `mode: item` the menu does not exist: `/armortrim` answers with `menu-disabled` and nothing
-opens.
+With `mode: item` the trim screen does not exist: `/armortrim` answers with `menu-disabled` and
+nothing opens. The crate's two screens, `menus/crate.yml` and `menus/crate_open.yml`, are there in
+every mode — see [The crate](/docs/exyliaarmortrims/crate).
 </Callout>

@@ -1,0 +1,292 @@
+---
+title: "La caja"
+description: "Rarezas, los dos tipos de llave, los rodillos que caen, la tienda y los bloques que abren la caja."
+---
+
+La caja es cómo se ganan los trims en vez de regalarlos. Se gasta una llave, cae un rodillo, y lo que
+sale se desbloquea en la cuenta del jugador — suyo para siempre, pase lo que pase con su rango. La caja
+en sí es de ExyliaLib; este plugin le pasa el catálogo y lee sus ajustes y sus textos de `config.yml` y
+`messages.yml`.
+
+Funciona en cualquier modo: las llaves, las pantallas de la caja y los bloques de caja están incluso con
+`mode: item`.
+
+## En qué puede caer
+
+Tres tipos de premio, todos de `trims.yml`:
+
+| Premio | Se guarda como | Qué da ganarlo |
+|---|---|---|
+| Un preset | Su id — `shogun` | El preset, en todas las piezas que admite. |
+| Un patrón | `pattern:<id>` — `pattern:sentry` | Ese patrón en la pestaña CUSTOM. |
+| Un material | `material:<id>` — `material:netherite` | Ese material en la pestaña CUSTOM. |
+
+Una combinación hecha a mano nunca es un premio; sus dos mitades sí. Ganar cualquiera de las mitades
+abre la pestaña CUSTOM aunque no se tenga `exyliaarmortrims.custom`, porque sin ella la mitad no
+serviría de nada, y una combinación se lleva en cuanto el jugador tiene las dos mitades, por nodo o por
+desbloqueo.
+
+## Rarezas
+
+Cada preset, patrón y material declara un `tier` en `trims.yml`, y `config.yml` declara qué rarezas
+existen, bajo `crate.tiers`:
+
+```yaml title="config.yml"
+crate:
+  tiers:
+    common:
+      name: "Common"
+      color: "{muted}"
+      chance: 60.0
+      priority: 1
+    rare:
+      name: "Rare"
+      color: "{info}"
+      chance: 25.0
+      priority: 2
+    epic:
+      name: "Epic"
+      color: "{accent}"
+      chance: 12.0
+      priority: 3
+    legendary:
+      name: "Legendary"
+      color: "{highlight}"
+      chance: 3.0
+      priority: 4
+```
+
+| Clave | Qué hace |
+|---|---|
+| `name` | Cómo la llaman los menús y los mensajes. |
+| `color` | El color de su nombre y de sus premios. |
+| `chance` | Cada cuánto cae la caja en ella, **en relación con las demás rarezas**. |
+| `priority` | Dónde va en los menús; menor va antes. |
+
+El catálogo que viene tiene 47 premios:
+
+| Rareza | Presets | Patrones | Materiales |
+|---|---|---|---|
+| Común | 7 | 8 | 5 |
+| Rara | 6 | 4 | 4 |
+| Épica | 3 | 5 | 2 |
+| Legendaria | 2 — SHOGUN, SILENCE | 1 — Silence | 0 |
+
+Nada está fijado en el código. Borra `legendary`, inventa `mythic`, renombra las cuatro: la clave es el
+id que `trims.yml` escribe como `tier`, y una entrada que nombra una rareza que ya no existe cae en la
+primera. Una entrada sin `tier` es `common`.
+
+<Callout type="note" title="chance es un peso, no un porcentaje">
+Los repartos salen de los pesos, así que cuatro rarezas con pesos `60/25/12/3` y cuatro con
+`6/2.5/1.2/0.3` se comportan igual. Borrar una rareza reparte sus probabilidades entre las demás en vez
+de dejar un hueco del tres por ciento.
+</Callout>
+
+## Llaves
+
+Dos tipos, y la caja acepta los dos.
+
+### En la cuenta
+
+Un número en la fila de caja del jugador. Nada se puede tirar, duplicar ni perder por un inventario
+lleno:
+
+```text
+/armortrimsadmin keys give <jugador> <cantidad>
+/armortrimsadmin keys take <jugador> <cantidad>
+/armortrimsadmin keys set <jugador> <cantidad>
+/armortrimsadmin keys check <jugador>
+```
+
+Se puede ejecutar desde consola y con jugadores desconectados — una tienda, un listener de votos o un
+plugin de recompensas entregan llaves igual:
+
+```text
+[console] armortrimsadmin keys give %player% 1
+```
+
+Cada jugador recibe `crate.start-keys` llaves — ninguna por defecto — la primera vez que se le ve.
+
+### En la mano
+
+Un objeto, para venderlo, meterlo en un kit, tirarlo o regalarlo a un amigo:
+
+```text
+/armortrimsadmin item key <jugador> [1-64]
+```
+
+Clic derecho con una en la mano sobre un bloque de caja y se abre al momento: una llave, un rodillo,
+sin pantalla de pregunta. El clic izquierdo nunca gasta una — así pregunta el jugador qué es un bloque.
+Cómo se dibuja la llave es `crate.key-item` en `config.yml` (material y brillo) y `key-item` en
+`messages.yml` (nombre y lore); se reconoce por lo que lleva en sus datos, no por su nombre ni su
+material. Las llaves que no caben en el inventario esperan y se entregan al volver a entrar, con
+`rewards-claimed`.
+
+## Abrir
+
+`/armortrim crate`, el botón **TRIM CRATE** en la esquina del menú de trims, o un bloque de caja
+pulsado sin llave en la mano. La primera pantalla solo pregunta una cosa: cuántas a la vez.
+
+<Steps>
+  <Step title="Cuántas">
+    `menus/crate.yml`. Las opciones se dibujan hasta `crate.max-at-once`, con un tope de siete por el
+    ancho de la pantalla, y se reparten como caerán los rodillos — donde pulsas es donde cae ese rodillo.
+  </Step>
+  <Step title="Caen los rodillos">
+    `menus/crate_open.yml`. Un rodillo por caja, cada uno de toda la altura del cofre, con su propia
+    línea de llegada `crate.stagger-seconds` después del anterior. Un preset o un patrón se dibuja en
+    una pechera de diamante que lo lleva, un material como su propio icono.
+  </Step>
+  <Step title="Lo que pasó se queda">
+    Nada se borra cuando un rodillo para. Lo que quedó a una casilla sigue en pantalla, porque la mitad
+    de lo que vale una caja es la legendaria que pasó de largo.
+  </Step>
+  <Step title="Se paga según cae cada rodillo">
+    Las llaves se gastan y los premios se deciden antes del primer fotograma. Cada rodillo paga al
+    parar, con `crate.on-win` o `crate.on-duplicate` y su propia línea en el chat. Cerrar la ventana a
+    mitad de caída no cuesta nada.
+  </Step>
+  <Step title="Usar lo ganado">
+    Pulsar un premio en los rodillos lo usa: un preset se pone en todas las piezas en que el jugador
+    puede llevarlo y se abre el menú de trims; un patrón o un material abre la pestaña CUSTOM, donde se
+    combina.
+  </Step>
+</Steps>
+
+| Rechazo | Mensaje |
+|---|---|
+| `crate.enabled` está apagado | `crate.disabled` |
+| No hay llaves suficientes | `crate.no-keys` — `%amount%` es el coste, `%keys%` las que tiene. |
+| Su última apertura sigue cayendo | `crate.busy` |
+| El catálogo está vacío | `crate.empty` |
+
+## Qué sale
+
+Lo decide `crate.reward`:
+
+| Valor | Qué entrega una caja |
+|---|---|
+| `UNLOCK` | El premio se desbloquea en la cuenta. No se puede comerciar. Por defecto. |
+| `ITEM` | Solo el objeto de trim del preset. No se desbloquea nada, así que ninguna apertura es repetida. |
+| `BOTH` | Desbloqueado, y entregado además como objeto de trim. |
+
+Un patrón o un material no tiene objeto propio: con `ITEM` se desbloquea, para que una llave nunca se
+gaste a cambio de nada. `crate.won` nombra lo que salió (`%reward%`) y su rareza (`%tier%`).
+
+## Repetidos
+
+Caer en algo que el jugador ya tiene le devuelve llaves, tantas como diga `crate.duplicate-refund`, con
+`crate.duplicate` (`%refund%` es cuántas). Con el `1` por defecto un repetido es una tirada gratis, no
+una pérdida.
+
+## Comprar con moneda
+
+Lo que sigue bloqueado se puede comprar en vez de ganarlo. Un preset, patrón o material bloqueado con
+precio se dibuja con la plantilla `*_purchasable_template` del menú, con su precio; pulsarlo pide
+confirmar, cobra y lo desbloquea igual que una caja.
+
+```yaml title="config.yml"
+shop:
+  enabled: true
+  tier-prices:
+    common: 500
+    rare: 1500
+    epic: 4000
+    legendary: 10000
+```
+
+| Clave | Por defecto | Qué hace |
+|---|---|---|
+| `enabled` | `true` | Si las entradas bloqueadas se pueden comprar desde el menú de trims. |
+| `tier-prices` | arriba | El precio de cada rareza, para una entrada que no pone el suyo. Una rareza que no está aquí no se vende. |
+
+Una entrada de `trims.yml` puede poner su propio `price`, que gana al de su rareza:
+
+```yaml title="trims.yml"
+presets:
+  shogun:
+    tier: legendary
+    price: 25000                          # la moneda por defecto
+  silence:
+    tier: legendary
+    price: {amount: 50, currency: gems}   # una moneda con nombre
+```
+
+| Regla | Detalle |
+|---|---|
+| Monedas | Un número es la moneda por defecto de ExyliaLib; `currency` nombra otra. La economía es la de ExyliaLib, sobre ExyliaEconomy, Vault o PlayerPoints. |
+| No se vende | Lo que ya se tiene, por nodo o por desbloqueo, simplemente se puede llevar. Una entrada sin precio, o con una moneda que ninguna economía atiende, se dibuja con `*_locked_template` como antes. |
+| Una errata | Un precio que no se puede leer — cero, negativo, texto — no es precio: la entrada no se vende, en vez de salir gratis. |
+| De una en una | Una compra por jugador a la vez. Si el desbloqueo falla, se devuelve el dinero. |
+
+La confirmación y cada resultado — comprado, ya lo tienes, no te llega — son textos de ExyliaLib, bajo
+`purchase` en su `messages.yml`. Tras la compra el menú se vuelve a abrir en la pestaña desde la que se
+compró.
+
+## Ajustes
+
+```yaml title="config.yml"
+crate:
+  enabled: true
+  start-keys: 0
+  duplicate-refund: 1
+  reward: UNLOCK
+  blocks: []
+  max-at-once: 4
+  spin-frames: 34
+  stagger-seconds: 2.0
+  key-item:
+    material: TRIPWIRE_HOOK
+    glow: true
+```
+
+| Clave | Por defecto | Qué hace |
+|---|---|---|
+| `enabled` | `true` | Apagada, la caja lo dice en vez de abrirse. |
+| `start-keys` | `0` | Llaves que recibe un jugador la primera vez que se le ve. |
+| `duplicate-refund` | `1` | Llaves devueltas por algo que ya tenía. |
+| `reward` | `UNLOCK` | `UNLOCK`, `ITEM` o `BOTH` — ver arriba. |
+| `blocks` | `[]` | Los bloques que abren la caja. Se enlazan en el juego, no a mano. |
+| `max-at-once` | `4` | Cuántas cajas puede abrir un jugador de una vez. La pantalla admite siete. |
+| `spin-frames` | `34` | Cuántas caras recorre el primer rodillo antes de parar. Tope de 200, unos once segundos. |
+| `stagger-seconds` | `2.0` | Cuánto después de parar un rodillo para el siguiente. `0` los para a la vez. |
+| `key-item` | arriba | Cómo se dibuja la llave que se puede llevar en la mano. Su nombre y su lore están en `messages.yml`. |
+
+`on-spin`, `on-win` y `on-duplicate` son bloques de efecto completos de ExyliaLib — título, action bar,
+boss bar, sonido, partícula y fuego artificial — que suenan mientras giran los rodillos y luego una vez
+por rodillo al caer. Vienen con un sonido cada uno: `BLOCK_NOTE_BLOCK_HAT`, `ENTITY_PLAYER_LEVELUP` y
+`BLOCK_NOTE_BLOCK_BASS`.
+
+## Bloques de caja
+
+Un bloque físico, en cualquier parte del mundo, que abre la caja al pulsarlo:
+
+```text
+/armortrimsadmin crate block add      # el bloque que miras, hasta seis bloques de distancia
+/armortrimsadmin crate block remove
+/armortrimsadmin crate block list
+/armortrimsadmin crate block clear
+```
+
+Se escriben en `config.yml`, no en el mundo, así que un bloque enlazado sobrevive a pegar una
+schematic, a una edición del mundo y a un rollback. Mientras está enlazado no se puede romper, volar ni
+empujar, y pulsarlo ya no hace lo que hace su material — una caja dibujada en un barril no debe abrir
+un barril.
+
+## Entregar trims sin caja
+
+```text
+/armortrimsadmin unlocks grant <jugador> <premio>
+/armortrimsadmin unlocks revoke <jugador> <premio>
+/armortrimsadmin unlocks clear <jugador>
+```
+
+`<premio>` es un id de preset, `pattern:<id>` o `material:<id>`. El mismo desbloqueo que escribe una
+caja, para un plugin de recompensas, un ticket de soporte o una temporada reiniciada. Sobrevive a que
+caduque un rango y no necesita plugin de permisos.
+
+<Callout type="tip" title="Permisos y desbloqueos son dos entradas distintas">
+Un jugador puede usar un trim que desbloqueó **o** uno que le da su rango. Vender todos los presets con
+un rango sigue siendo una línea — `exyliaarmortrims.trim.*` — e independiente de lo que haya sacado de
+cajas.
+</Callout>

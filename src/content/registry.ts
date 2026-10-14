@@ -680,6 +680,7 @@ const ARMORTRIMS_NAV: NavGroup[] = [
       page("trims", "trims", "trims"),
       page("modes-and-items", "modes-and-items", "modos-y-objetos"),
       page("menu", "menu", "menu"),
+      page("crate", "crate", "caja"),
     ],
   },
   {
@@ -1362,10 +1363,10 @@ export const plugins: Plugin[] = [
     name: "ExyliaArmorTrims",
     tagline: { en: "Armour trims drawn with packets", es: "Trims de armadura dibujados con paquetes" },
     summary: {
-      en: "Eighteen named presets plus any pattern and material combined by hand, chosen on one screen or carried as a trim item, and drawn on the way to the client so the armour itself is never converted.",
-      es: "Dieciocho presets con nombre más cualquier combinación de patrón y material hecha a mano, elegidos en una sola pantalla o llevados como objeto, y dibujados en el camino al cliente para que la armadura nunca se convierta.",
+      en: "Eighteen named presets plus any pattern and material combined by hand, chosen on one screen, won out of a crate, bought with currency or carried as a trim item, and drawn on the way to the client so the armour itself is never converted.",
+      es: "Dieciocho presets con nombre más cualquier combinación de patrón y material hecha a mano, elegidos en una sola pantalla, ganados en una caja, comprados con moneda o llevados como objeto, y dibujados en el camino al cliente para que la armadura nunca se convierta.",
     },
-    version: "1.1.0",
+    version: "1.3.0",
     status: "stable",
     category: { en: "Cosmetic", es: "Cosmético" },
     minecraft: "1.21+",

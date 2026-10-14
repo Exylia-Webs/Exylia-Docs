@@ -1,0 +1,284 @@
+---
+title: "The crate"
+description: "Rarities, both kinds of key, the reels that fall, the shop, and the blocks that open the crate."
+---
+
+The crate is how trims are won rather than given. A key is spent, a reel falls, and what it lands on
+is unlocked on the player's account — owned for good, whatever happens to their rank afterwards. The
+crate itself is ExyliaLib's; this plugin hands it the catalogue and reads its settings and lines from
+`config.yml` and `messages.yml`.
+
+It works in every mode: keys, the crate screens and crate blocks are there even with `mode: item`.
+
+## What it can land on
+
+Three kinds of prize, every one of them in `trims.yml`:
+
+| Prize | Stored as | What winning it gives |
+|---|---|---|
+| A preset | Its id — `shogun` | The preset, on every piece it fits. |
+| A pattern | `pattern:<id>` — `pattern:sentry` | That pattern on the CUSTOM tab. |
+| A material | `material:<id>` — `material:netherite` | That material on the CUSTOM tab. |
+
+A combination built by hand is never a prize; its two halves are. Winning either half opens the CUSTOM
+tab even without `exyliaarmortrims.custom`, since a half would be useless otherwise, and a combination
+is worn once the player owns both halves, by node or by unlock.
+
+## Rarities
+
+Every preset, pattern and material declares a `tier` in `trims.yml`, and `config.yml` declares what
+the tiers are, under `crate.tiers`:
+
+```yaml title="config.yml"
+crate:
+  tiers:
+    common:
+      name: "Common"
+      color: "{muted}"
+      chance: 60.0
+      priority: 1
+    rare:
+      name: "Rare"
+      color: "{info}"
+      chance: 25.0
+      priority: 2
+    epic:
+      name: "Epic"
+      color: "{accent}"
+      chance: 12.0
+      priority: 3
+    legendary:
+      name: "Legendary"
+      color: "{highlight}"
+      chance: 3.0
+      priority: 4
+```
+
+| Key | What it does |
+|---|---|
+| `name` | What menus and messages call it. |
+| `color` | The colour its name and its prizes are written in. |
+| `chance` | How often a crate lands on it, **relative to the other rarities**. |
+| `priority` | Where it sits in menus; lower comes first. |
+
+The shipped catalogue has 47 prizes:
+
+| Rarity | Presets | Patterns | Materials |
+|---|---|---|---|
+| Common | 7 | 8 | 5 |
+| Rare | 6 | 4 | 4 |
+| Epic | 3 | 5 | 2 |
+| Legendary | 2 — SHOGUN, SILENCE | 1 — Silence | 0 |
+
+Nothing here is hard-coded. Delete `legendary`, invent `mythic`, rename all four: the key is the id
+`trims.yml` writes as `tier`, and an entry naming a rarity that no longer exists falls back to the
+first one. An entry with no `tier` is `common`.
+
+<Callout type="note" title="chance is a weight, not a percentage">
+The shares are worked out from the weights, so four rarities weighted `60/25/12/3` and four weighted
+`6/2.5/1.2/0.3` behave identically. Deleting a rarity re-spreads its odds across the rest instead of
+leaving a three-percent hole.
+</Callout>
+
+## Keys
+
+Two kinds, and the crate takes both.
+
+### On the account
+
+A number on the player's crate row. Nothing can be dropped, duped, or lost to a full inventory:
+
+```text
+/armortrimsadmin keys give <player> <amount>
+/armortrimsadmin keys take <player> <amount>
+/armortrimsadmin keys set <player> <amount>
+/armortrimsadmin keys check <player>
+```
+
+Safe to run from console and for players who are offline — a shop, a vote listener or a reward plugin
+hands keys over the same way:
+
+```text
+[console] armortrimsadmin keys give %player% 1
+```
+
+Every player is given `crate.start-keys` keys — none by default — the first time they are seen.
+
+### In the hand
+
+An item, so it can be sold, put in a kit, dropped and given to a friend:
+
+```text
+/armortrimsadmin item key <player> [1-64]
+```
+
+Right click a bound crate block holding one and it opens on the spot: one key, one reel, no question
+screen. Left clicking never spends one — that is how a player asks what a block is. How the key is
+drawn is `crate.key-item` in `config.yml` (material and glow) and `key-item` in `messages.yml` (name and
+lore); it is recognised by what it carries in its data, not by its name or material. Keys that do not
+fit in the inventory wait and are handed over on the player's next join, with `rewards-claimed`.
+
+## Opening
+
+`/armortrim crate`, the **TRIM CRATE** button in the corner of the trim menu, or a bound block clicked
+without a key in hand. The first screen asks only one thing: how many at once.
+
+<Steps>
+  <Step title="How many">
+    `menus/crate.yml`. Choices are drawn up to `crate.max-at-once`, capped at seven by the width of
+    the screen, and spread the way the reels will be — where you click is where that reel falls.
+  </Step>
+  <Step title="The reels fall">
+    `menus/crate_open.yml`. One reel per crate, each running the full height of the chest, each with
+    its own finishing line `crate.stagger-seconds` after the one before it. A preset or a pattern is
+    drawn on a diamond chestplate wearing it, a material as its own icon.
+  </Step>
+  <Step title="What went past stays">
+    Nothing is cleared when a reel stops. What it came within one slot of stays on screen, because
+    half of what a crate is worth is the legendary that went past the line.
+  </Step>
+  <Step title="Paid out as each reel lands">
+    Keys are spent and prizes decided before the first frame is drawn. Each reel pays out as it
+    stops, with `crate.on-win` or `crate.on-duplicate` and its own line in chat. Closing the window
+    mid-fall costs nothing.
+  </Step>
+  <Step title="Use the win">
+    Clicking a prize on the reels uses it: a preset is put on every piece the player may wear it on
+    and the trim menu opens; a pattern or a material opens the CUSTOM tab, where it is combined.
+  </Step>
+</Steps>
+
+| Refusal | Message |
+|---|---|
+| `crate.enabled` is off | `crate.disabled` |
+| Not enough keys | `crate.no-keys` — `%amount%` is the cost, `%keys%` what they hold. |
+| Their last opening is still falling | `crate.busy` |
+| The catalogue is empty | `crate.empty` |
+
+## What comes out
+
+`crate.reward` decides:
+
+| Value | What a crate hands over |
+|---|---|
+| `UNLOCK` | The prize is unlocked on the account. It cannot be traded. The default. |
+| `ITEM` | Only the preset's trim item. Nothing is unlocked, so no opening is ever a duplicate. |
+| `BOTH` | Unlocked, and handed over as a trim item as well. |
+
+A pattern or a material has no item of its own: under `ITEM` it is unlocked instead, so a key never
+buys nothing. `crate.won` names what came out (`%reward%`) and its rarity (`%tier%`).
+
+## Duplicates
+
+Landing on something the player already owns hands keys back, as many as `crate.duplicate-refund`
+says, with `crate.duplicate` (`%refund%` is how many). At the default of `1` a duplicate is a free
+re-roll rather than a loss.
+
+## Buying with currency
+
+Anything still locked can be bought instead of won. A locked preset, pattern or material with a price
+is drawn by the menu's `*_purchasable_template`, with its price; clicking it asks the player to
+confirm, charges them and unlocks it exactly as a crate would.
+
+```yaml title="config.yml"
+shop:
+  enabled: true
+  tier-prices:
+    common: 500
+    rare: 1500
+    epic: 4000
+    legendary: 10000
+```
+
+| Key | Default | What it does |
+|---|---|---|
+| `enabled` | `true` | Whether locked entries can be bought from the trim menu. |
+| `tier-prices` | above | The price of each rarity, for an entry that sets none of its own. A rarity left out is not for sale. |
+
+An entry in `trims.yml` can set its own `price`, which wins over its rarity's:
+
+```yaml title="trims.yml"
+presets:
+  shogun:
+    tier: legendary
+    price: 25000                          # the default currency
+  silence:
+    tier: legendary
+    price: {amount: 50, currency: gems}   # a named currency
+```
+
+| Rule | Detail |
+|---|---|
+| Currencies | A number is ExyliaLib's default currency; `currency` names another one. The economy is ExyliaLib's, over ExyliaEconomy, Vault or PlayerPoints. |
+| Not for sale | Something already owned, by node or by unlock, is simply wearable. An entry with no price, or priced in a currency no economy serves, is drawn by `*_locked_template` as before. |
+| A typo | A price that cannot be read — zero, negative, text — is no price: the entry is not for sale rather than free. |
+| One at a time | One purchase per player at once. A failed unlock gives the money back. |
+
+The confirmation and every outcome — bought, already owned, not enough money — are ExyliaLib's own
+lines, under `purchase` in its `messages.yml`. After the purchase the menu reopens on the tab it was
+bought from.
+
+## Settings
+
+```yaml title="config.yml"
+crate:
+  enabled: true
+  start-keys: 0
+  duplicate-refund: 1
+  reward: UNLOCK
+  blocks: []
+  max-at-once: 4
+  spin-frames: 34
+  stagger-seconds: 2.0
+  key-item:
+    material: TRIPWIRE_HOOK
+    glow: true
+```
+
+| Key | Default | What it does |
+|---|---|---|
+| `enabled` | `true` | Off, the crate says so instead of opening. |
+| `start-keys` | `0` | Keys a player is given the first time they are seen. |
+| `duplicate-refund` | `1` | Keys handed back for something already owned. |
+| `reward` | `UNLOCK` | `UNLOCK`, `ITEM` or `BOTH` — see above. |
+| `blocks` | `[]` | The blocks that open the crate. Bind them in game, not by hand. |
+| `max-at-once` | `4` | How many crates one player may open in one go. The screen fits seven. |
+| `spin-frames` | `34` | How many faces the first reel runs through before it stops. Capped at 200, about eleven seconds. |
+| `stagger-seconds` | `2.0` | How long after one reel stops the next one does. `0` stops them together. |
+| `key-item` | above | How the key that can be held is drawn. Its name and lore are in `messages.yml`. |
+
+`on-spin`, `on-win` and `on-duplicate` are full ExyliaLib effect blocks — title, action bar, boss bar,
+sound, particle and firework — played as the reels turn, and then once per reel as it lands. They ship
+as one sound each: `BLOCK_NOTE_BLOCK_HAT`, `ENTITY_PLAYER_LEVELUP` and `BLOCK_NOTE_BLOCK_BASS`.
+
+## Crate blocks
+
+A physical block, anywhere in the world, that opens the crate when it is clicked:
+
+```text
+/armortrimsadmin crate block add      # the block you are looking at, up to six blocks away
+/armortrimsadmin crate block remove
+/armortrimsadmin crate block list
+/armortrimsadmin crate block clear
+```
+
+They are written to `config.yml`, not into the world, so a bound block survives a schematic paste, a
+world edit and a rollback. While it is bound it cannot be broken, blown up or pushed away, and clicking
+it no longer does what its material does — a crate drawn on a barrel must not open a barrel.
+
+## Handing trims over without a crate
+
+```text
+/armortrimsadmin unlocks grant <player> <prize>
+/armortrimsadmin unlocks revoke <player> <prize>
+/armortrimsadmin unlocks clear <player>
+```
+
+`<prize>` is a preset id, `pattern:<id>` or `material:<id>`. The same unlock a crate writes, for a
+reward plugin, a support ticket or a wiped season. It outlives a rank running out and needs no
+permissions plugin.
+
+<Callout type="tip" title="Permissions and unlocks are two separate ways in">
+A player may use a trim they unlocked **or** one their rank grants. Selling every preset as a rank is
+still one line — `exyliaarmortrims.trim.*` — and it is independent of anything they unboxed.
+</Callout>
