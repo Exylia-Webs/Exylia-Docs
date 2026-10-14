@@ -4,7 +4,9 @@ description: "config.yml section by section, the messages file and its languages
 ---
 
 Everything is generated in `plugins/ExyliaProtections/` on first start, with comments. Edit the files there,
-never the copies in the jar, and restart the server to apply them: the plugin has no reload command.
+never the copies in the jar, and apply them with `/protectionsadmin reload` or a restart. Many settings can
+also be changed in game, which writes this file for you: see
+[Administration](/docs/exyliaprotections/administration#in-game-settings).
 
 The protections themselves are not in any file. They live in the database and are edited from the menus.
 
@@ -17,16 +19,16 @@ The protections themselves are not in any file. They live in the database and ar
 | `lang/<language>/menus/admin/*.yml` | The staff screens. |
 
 <Callout type="note" title="Coming from ExyliaSurvivalCore">
-When `plugins/ExyliaSurvivalCore/` exists on the first start, its `modules/protections/config.yml`, each
-language's `modules/protections/messages.yml` and its `database.yml` are copied here wherever this plugin
-has no file of its own yet, so nothing has to be set up again.
-See [Migration](/docs/exyliaprotections/migration).
+Up to 1.0.1 the first start copied ExyliaSurvivalCore's protections files here. Since 1.0.2 that import is gone:
+nothing is read from `plugins/ExyliaSurvivalCore/`. See [Migration](/docs/exyliaprotections/migration).
 </Callout>
 
 ## config.yml
 
 Each feature has a section of its own, then come the starting roles and the tiers. The `config-version`
-key is the plugin's own; leave it alone. The file is at version 5, and older files are updated on start.
+key is the plugin's own; leave it alone. The file is at version 7, and files at version 5 or 6 are
+updated on start: version 6 moved `settings.home-warmup-seconds` to `teleport.warmup-seconds`, and version 7
+added the new vanilla flags to every tier (see [tiers](#tiers)).
 
 ### settings
 
@@ -42,13 +44,12 @@ settings:
   allowed-world-guard-regions: []
   move-price: 1000.0
   move-currency: ''
-  home-warmup-seconds: 3
   deny-message-cooldown-millis: 1500
 ```
 
 | Key | Default | What it does |
 |---|---|---|
-| `backend` | `INTERNAL` | `INTERNAL`: the plugin enforces everything itself. `WORLDGUARD`: each protection is also a WorldGuard region with native flags. Change it with `/protections admin migrate`, not here. See [Backends](/docs/exyliaprotections/backends). |
+| `backend` | `INTERNAL` | `INTERNAL`: the plugin enforces everything itself. `WORLDGUARD`: each protection is also a WorldGuard region with native flags. Change it with `/protectionsadmin migrate`, not here. See [Backends](/docs/exyliaprotections/backends). |
 | `worldguard-priority` | `10` | Priority of the WorldGuard regions the plugin creates. |
 | `default-limit` | `3` | Protections a player may own without any `exyliaprotections.limit.<n>`. |
 | `world-limits` | `{}` | Protections a player may own per world, as `world: number`. A world left out has no limit of its own. |
@@ -57,15 +58,17 @@ settings:
 | `allowed-world-guard-regions` | `[]` | WorldGuard regions a protection may overlap. Every other region blocks it. |
 | `move-price` | `1000.0` | What moving a core costs. |
 | `move-currency` | `''` | Its currency; blank is the default one. |
-| `home-warmup-seconds` | `3` | Seconds standing still before teleporting home. |
 | `deny-message-cooldown-millis` | `1500` | Milliseconds between two "this land is protected" messages to the same player. |
 
-The comment above `default-limit` still names `exyliasurvivalcore.protections.limit.<n>`; both prefixes are
-read. See [Permissions](/docs/exyliaprotections/permissions#how-many-protections-a-player-may-own).
+`exyliaprotections.limit.0` is a limit of zero, not a fallback to `default-limit`. See
+[Permissions](/docs/exyliaprotections/permissions#how-many-protections-a-player-may-own). The countdown before
+teleporting home is now `teleport.warmup-seconds`: see [teleport](#teleport).
 
 ### submodules
 
 Turns whole features off. A feature that is off hides its buttons, refuses its commands and stops acting.
+Each one is also switched from the **Features** settings of the admin hub, or with
+`/protectionsadmin feature <key> <on|off>`.
 
 | Key | Default | Feature |
 |---|---|---|
@@ -84,13 +87,26 @@ Turns whole features off. A feature that is off hides its buttons, refuses its c
 | `visualization` | `true` | Drawing borders, and markers on BlueMap and Dynmap. |
 | `effects` | `false` | Perks for members inside their protection. |
 | `environment` | `false` | A time of day and weather of its own inside a protection. |
-| `merge` | `false` | Merging two protections that touch into one. |
+| `merge` | `false` | A core placed touching another protection of the same owner grows that one instead of standing alone. There is no longer a merge screen or `/protections merge`. |
+
+### cores
+
+```yaml
+cores:
+  enabled: true
+```
+
+| Key | Default | What it does |
+|---|---|---|
+| `enabled` | `true` | Whether placing a core protects land. Off: cores cannot be placed, and the shop refuses to open and is hidden from the hub; protections already made with a core keep working. Turn it off for a selection-only server. |
 
 ### selection
 
+Off by default since 1.0.2: turn it on for a selection-only server, or alongside cores to offer both.
+
 ```yaml
 selection:
-  enabled: true
+  enabled: false
   tier: medium
   height: FULL
   price-per-block: 5.0
@@ -103,8 +119,8 @@ selection:
 
 | Key | Default | What it does |
 |---|---|---|
-| `enabled` | `true` | Whether players may protect land by selecting two corners. Needs `exyliaprotections.select` too. |
-| `tier` | `medium` | The tier a selected protection counts as, for its limit and starting flags. |
+| `enabled` | `false` | Whether players may protect land by selecting two corners. Needs `exyliaprotections.select` too. |
+| `tier` | `medium` | The tier a selected protection counts as, for its limit and starting flags. Since 1.0.2 the tier's `permission` is also required to select. |
 | `height` | `FULL` | `FULL`: the corners protect their whole column. `NORMAL`: only the blocks between both corners' heights. |
 | `price-per-block` | `5.0` | Price per block of protected area. |
 | `currency` | `''` | Its currency; blank is the default one. |
@@ -471,6 +487,53 @@ cleanup:
 
 See [Migration](/docs/exyliaprotections/migration) and [Administration](/docs/exyliaprotections/administration).
 
+### teleport
+
+Teleports home, to warps and to visited plots: the countdown, what calls it off and who skips it.
+
+```yaml
+teleport:
+  warmup-seconds: 3.0
+  warp-warmup-seconds: -1.0
+  cancel-on-move: true
+  cancel-on-damage: true
+  refuse-in-combat: true
+  cooldown-seconds: 0.0
+  bypass-permission: exyliaprotections.bypass.warmup
+  tick-sound: UI_BUTTON_CLICK|0.6|1.3
+```
+
+| Key | Default | What it does |
+|---|---|---|
+| `warmup-seconds` | `3` | Seconds a player waits before being moved home or to a plot. `0` moves them at once. Was `settings.home-warmup-seconds`. |
+| `warp-warmup-seconds` | `-1` | Seconds before visiting a warp. `-1` uses `warmup-seconds`. |
+| `cancel-on-move` | `true` | Whether stepping off the block they started on calls it off. |
+| `cancel-on-damage` | `true` | Whether taking damage calls it off. |
+| `refuse-in-combat` | `true` | Whether a player tagged in combat cannot start one. |
+| `cooldown-seconds` | `0` | Seconds a player waits between two teleports. A called-off one does not count. `0`: none. |
+| `bypass-permission` | `exyliaprotections.bypass.warmup` | Holders move at once and skip the cooldown. Blank: nobody skips. |
+| `tick-sound` | `UI_BUTTON_CLICK\|0.6\|1.3` | Played each whole second of the countdown, as `NAME\|volume\|pitch`. Blank for none. |
+
+While it counts down the player sees a boss bar with the destination and the time left, which clears however
+it ends; on arrival a title, a sound and particles play. Moving, taking damage, starting a second teleport or
+the cooldown each answer with their own line. Every text is the `teleport` section of `messages.yml`.
+
+### forced-flags
+
+Server rules every protection and plot follows, whatever its owner sets: a flag mapped to `ALLOW` or `DENY`.
+
+```yaml
+forced-flags:
+  pvp: DENY
+```
+
+Empty by default. A forced flag applies inside every protection and every plot, overrides the owner's and the
+plot's own setting, and cannot be changed from any protection's menu: its switch shows the forced state "set by
+the server", and clicking it, or locking with `visitor-entry` forced, says so. What owners had set is kept and
+comes back once the flag is no longer forced. A key that is not a flag, or a value other than `ALLOW` or `DENY`,
+is ignored. With the WORLDGUARD backend the mirrored regions carry the forced value. Change them in game from the
+**Forced flags** settings of the admin hub, or with `/protectionsadmin flag <flag> <allow|deny|default>`.
+
 ### roles
 
 The roles a **new** protection starts with. Each protection then keeps its own copy, edited from its menu;
@@ -510,7 +573,8 @@ tiers:
     currency: ''
     permission: ''
     limit: 0
-    flags: [mob-spawning, crop-growth, leaf-decay, liquid-flow, visitor-entry]
+    flags: [mob-spawning, crop-growth, leaf-decay, liquid-flow, visitor-entry, mob-damage, fall-damage, hunger,
+      block-spread, snow-ice, item-drop, item-pickup, ender-pearl]
 ```
 
 | Key | What it does |
@@ -524,16 +588,23 @@ tiers:
 | `currency` | Its currency; blank is the default one. |
 | `permission` | Needed to place it, buy it or receive one; blank for none. |
 | `limit` | How many of this tier a player may own. `0` for no limit of its own. |
-| `flags` | The flags that start on. Flags: `pvp`, `mob-spawning`, `explosions`, `fire-spread`, `liquid-flow`, `crop-growth`, `leaf-decay`, `visitor-entry`. |
+| `flags` | The flags that start on. Flags: `pvp`, `mob-spawning`, `explosions`, `fire-spread`, `liquid-flow`, `crop-growth`, `leaf-decay`, `visitor-entry`, `mob-damage`, `fall-damage`, `hunger`, `mob-griefing`, `block-spread`, `snow-ice`, `crop-trample`, `item-drop`, `item-pickup`, `ender-pearl`. |
 
-Tiers are also edited in game from the admin menu's tier editor, which writes this section along with the
+The last ten flags arrived in 1.0.2. The eight that keep vanilla behaviour (`mob-damage`, `fall-damage`,
+`hunger`, `block-spread`, `snow-ice`, `item-drop`, `item-pickup`, `ender-pearl`) start on in every shipped
+tier, were added to every existing tier when the file was updated, and read as on in protections made before
+they existed, so nothing changes until an owner turns one off. `mob-griefing` and `crop-trample` start off.
+`explosions` no longer covers mobs that change blocks: that is `mob-griefing` now. See
+[People and access](/docs/exyliaprotections/people-and-access) for what each flag does.
+
+Tiers are also edited in game from the tier editor of the admin hub, which writes this section along with the
 tier's lives and upkeep cost. See [Administration](/docs/exyliaprotections/administration).
 
 ## messages.yml
 
 `lang/<language>/messages.yml` holds every line the plugin sends. The language is the one set in
 ExyliaLib's `config.yml`: unlike most Exylia plugins, ExyliaProtections' `config.yml` has no `language` key
-of its own. `es`, `pt` and `fr` ship translated; English is written from the plugin's built-in defaults, and a
+of its own. `es`, `pt`, `fr` and `ru` ship translated (Russian since 1.0.2); English is written from the plugin's built-in defaults, and a
 line a translation leaves out arrives in English.
 
 The top-level keys are chat lines, prompts and the words menus show, such as the raid and rent states. Then
@@ -541,27 +612,26 @@ come the sections:
 
 | Section | What it holds |
 |---|---|
-| `utility` | Warps, borders, perks, time and weather, merging. |
-| `utility.admin` | The admin menu, the tier editor, cleanup and the ProtectionStones import. |
+| `utility` | Warps, borders, perks, time and weather. |
+| `utility.admin` | The admin menus, the hub's settings and their labels, forced flags, the tier editor, cleanup and the ProtectionStones import. |
 | `utility.notices` | Refusals and confirmations, the `/protections help` lines, and `labels`: the names and descriptions of every role permission and flag, of log actions and of perks. |
 | `raids` | The core-hit action bar and the raidable boss bar. |
 | `enter-leave` | The titles and action bars of walking in and out. `%message%` is the owner's greeting or farewell, or the default one. |
 | `visualization` | The marker label and layer name on BlueMap and Dynmap. Plain text: web maps read no colour tokens. |
 | `general` | Lines shared by every part of the plugin. |
+| `teleport` | The countdown boss bar, the arrival effect, and the lines for a teleport already running, called off by moving or by damage, and the cooldown. Placeholders: `%name%`, `%time%`. |
 
 Colours use palette tokens such as `{primary}`, `{error}` or `{highlight}`, so recolouring the server never
 means editing this file. `%prefix%` is replaced by the `prefix` value at the top. A line may open with an
 effect tag that never reaches the screen: `[sound:NAME|volume|pitch]` plays a sound to whoever receives it.
 The values each line may use are written in the comment above it.
 
-`general.reloaded` is never sent: there is no reload command.
-
 ## Menus
 
 | Folder | What it holds |
 |---|---|
-| `lang/<language>/menus/user/` | The players' screens: the hub, the list, the protection overview and its seven sections, members, roles, permissions, shop, bans, logs, market, plots, rent, warps, perks, merge. Yours to restyle; an update only adds files that are missing. |
-| `lang/<language>/menus/admin/` | The staff screens: admin search, one protection, tiers, one tier, cleanup. Rewritten from the jar on every start; edits there are lost. |
+| `lang/<language>/menus/user/` | The players' screens: the hub, the list, the protection overview and its seven sections, members, roles, permissions, shop, bans, logs, market, plots, rent, warps, perks. Yours to restyle; an update only adds files that are missing. |
+| `lang/<language>/menus/admin/` | The staff screens: the hub, a settings group, admin search, one protection, tiers, one tier, cleanup. Rewritten from the jar on every start; edits there are lost. |
 
 A menu file that does not parse is named in the console and left out, rather than opening empty. See
 [Menus](/docs/exyliaprotections/menus) for every file and the actions their buttons run.

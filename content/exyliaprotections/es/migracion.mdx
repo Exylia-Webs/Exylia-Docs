@@ -1,154 +1,55 @@
 ---
 title: "Migración"
-description: "Pasar del módulo de protecciones de ExyliaSurvivalCore, en un servidor o en una red, e importar regiones de ProtectionStones."
+description: "Qué rehacer a mano al pasar del módulo de protecciones de ExyliaSurvivalCore, e importar regiones de ProtectionStones."
 ---
 
 ## Desde ExyliaSurvivalCore
 
 Las protecciones eran antes un módulo de ExyliaSurvivalCore. Ahora son este plugin, con las mismas
-funciones, las mismas claves y los mismos datos con nombres de tabla nuevos. El núcleo de supervivencia
-sigue funcionando a su lado: sus estadísticas y ajustes de jugador se siguen aplicando a las protecciones,
-leídos a través de ExyliaLib.
+claves, guardadas en sus propias tablas `protections*`. El núcleo de supervivencia sigue funcionando a su
+lado: sus estadísticas y ajustes de jugador se siguen aplicando a las protecciones, leídos a través de
+ExyliaLib.
 
-### Qué hace la importación
-
-La importación se ejecuta sola en cada arranque hasta que `.imported-survivalcore` está en
-`plugins/ExyliaProtections/`. Lee `plugins/ExyliaSurvivalCore/`; sin esa carpeta no hay nada que importar
-y no se escribe nada. Todas las rutas de la columna Desde están dentro de ella.
-
-| Qué | Desde | Hacia |
-|---|---|---|
-| Ajustes de base de datos | `database.yml` | `database.yml`, copiado tal cual, solo si ExyliaProtections aún no tiene uno. Mismo motor, mismas credenciales y el mismo `server-id` de Redis, para que cada protección siga perteneciendo a este servidor. |
-| Una base de datos H2 | El archivo H2 que nombra `database.yml`, `database/h2.mv.db` por defecto | La misma ruta dentro de `plugins/ExyliaProtections/`, mediante un archivo temporal que se mueve a su sitio. Si no se puede copiar, o ExyliaProtections ya tiene un archivo H2 ahí, el `database.yml` copiado apunta al archivo del núcleo de supervivencia. |
-| Ajustes | `modules/protections/config.yml` | `config.yml`, solo si aún no existe. Las claves son las mismas. |
-| Mensajes | `lang/<idioma>/modules/protections/messages.yml`, todos los idiomas | `lang/<idioma>/messages.yml`, donde aún no exista. Las claves son las mismas. |
-| Filas | Cada tabla `sc_protection*` | Su gemela `protections*`. Ver abajo. |
-
-Los archivos se copian primero, antes de que nada abra la base de datos, y nunca encima de un archivo que
-ExyliaProtections ya tenga. La consola nombra cada uno que copia. Las filas se copian antes de cargar
-ninguna protección:
-
-| Tabla antigua | Tabla nueva |
-|---|---|
-| `sc_protections` | `protections` |
-| `sc_protection_logs` | `protections_logs` |
-| `sc_protection_accounts` | `protections_accounts` |
-| `sc_protection_listings` | `protections_listings` |
-| `sc_protection_seen` | `protections_seen` |
-| `sc_protection_rent_offers` | `protections_rent_offers` |
-| `sc_protection_warps` | `protections_warps` |
-| `sc_protection_warp_ratings` | `protections_warp_ratings` |
-| `sc_protection_warp_visits` | `protections_warp_visits` |
-| `sc_protection_warp_totals` | `protections_warp_totals` |
-
-Una tabla solo se copia mientras su gemela está **vacía**, así que en una red que comparte una base de
-datos cada tabla se copia una vez, por el primer servidor que llegue. Las tablas antiguas quedan
-exactamente como estaban, de modo que una vuelta atrás las encuentra intactas. Cuando todas las tablas
-están dentro, la consola dice cuántas filas se importaron y se escribe `.imported-survivalcore`; desde
-entonces no se vuelve a leer nada de las tablas antiguas. Borrar el archivo repite la importación en el
-siguiente arranque, que igualmente solo rellena tablas vacías.
-
-Las filas **esperan**, sin escribir el archivo, mientras ExyliaSurvivalCore siga ejecutando su propio
-módulo de protecciones, que podría cambiarlas después de la copia. Los archivos se copian igualmente, y la
-consola dice:
-
-```text
-ExyliaSurvivalCore still runs its own protections module, so its protections are not imported yet. Update it and restart to bring them over.
-```
-
-Actualízalo a una versión sin el módulo y reinicia. Una copia fallida de las filas se informa y se
-reintenta en el siguiente arranque; las protecciones cargan de todos modos.
-
-### Si la importación no se hizo
-
-Los archivos solo se copian donde ExyliaProtections no tiene ninguno, y nada se ejecuta una vez que existe
-`.imported-survivalcore`. Un servidor cuya consola dijo que no se
-pudieron importar los archivos de protecciones de ExyliaSurvivalCore ya tiene sus propios valores por
-defecto y quizá el marcador, así que reiniciar sin más no trae nada. Deja sitio a la importación y deja
-que vuelva a ejecutarse:
-
-<Steps>
-  <Step title="Detén el servidor">
-    Nada de lo de abajo se borra mientras el servidor lo tiene abierto.
-  </Step>
-  <Step title="Borra lo que debe venir del núcleo de supervivencia">
-    En `plugins/ExyliaProtections/`, borra `database.yml`, y en H2 también el archivo de la base de datos,
-    `database/h2.mv.db` salvo que `database.h2.file` indique otro; después `config.yml` y cada
-    `lang/<idioma>/messages.yml` del que quieras la versión del núcleo de supervivencia.
-  </Step>
-  <Step title="Borra el marcador y arranca">
-    Borra `plugins/ExyliaProtections/.imported-survivalcore` si existe y arranca el servidor. La consola
-    nombra cada archivo que copia y dice cuántas filas se importaron.
-  </Step>
-</Steps>
-
-Si ExyliaProtections ya funcionó sobre su propia base H2 nueva, las protecciones que los jugadores crearon
-ahí se quedan en ese archivo y no pasan a la base copiada.
-
-### Qué no se importa
-
-- **Los menús.** Se rediseñaron — un inicio, una lista y una vista general con siete secciones — así que
-  el antiguo `modules/protections/menus/` se ignora y las pantallas nuevas se escriben desde cero. Vuelve a
-  darles estilo en `lang/<idioma>/menus/`; ver [Menús](/docs/exyliaprotections/menus).
-- **Estadísticas y ajustes de jugador.** Se quedan en ExyliaSurvivalCore, que los sigue contando y
-  aplicando mientras esté instalado.
-
-### Regiones de WorldGuard
-
-La importación copia tu `config.yml`, así que un servidor con el backend `WORLDGUARD` sigue en él. Las
-regiones que refleja conservan su prefijo `sc_ps_`, así que las regiones que escribió el núcleo de
-supervivencia se reconocen como propias del plugin: se reescriben en su sitio, no se quedan huérfanas, y
-nunca cuentan como una región ajena que bloquee terreno nuevo.
-
-<Callout type="warning" title="Sin tu config.yml se eliminan las regiones reflejadas">
-Con WorldGuard instalado, cada arranque deja en WorldGuard exactamente las regiones que quiere el backend
-elegido. Un servidor que arranca con el backend `INTERNAL` por defecto — que es lo que pasa cuando la
-importación no se hizo y no se copió tu `config.yml` — elimina todas las regiones `sc_ps_`. No se pierde
-ninguna protección: las protecciones están en la base de datos. Copia tu `config.yml`, o ejecuta
-`/protections admin migrate WORLDGUARD`, y todas las regiones se vuelven a escribir. Ver
-[Backends](/docs/exyliaprotections/backends).
+<Callout type="warning" title="Ya no se importa nada">
+Hasta la 1.0.1 se copiaban en el primer arranque el `database.yml` del núcleo de supervivencia, sus ajustes
+y mensajes de protecciones y todas las tablas `sc_protection*`, y se declaraban los antiguos permisos
+`exyliasurvivalcore.protections*`. Desde la 1.0.2 nada de eso existe: ExyliaProtections solo lee sus
+propios archivos y tablas, y ya no avisa cuando un ExyliaSurvivalCore antiguo sigue ejecutando su módulo
+de protecciones. Un servidor cuyas protecciones solo están en las tablas `sc_protection*` empieza sin
+ninguna.
 </Callout>
 
-### Una red
+Qué hay que rehacer a mano al pasarse:
 
-**Actualiza todos los servidores a la vez.** Un servidor que aún ejecuta el módulo antiguo sigue
-escribiendo en las tablas `sc_protection*`, y la importación copia una tabla una sola vez, mientras su
-gemela está vacía: una protección creada en un servidor antiguo después de que arrancase el primer
-servidor actualizado nunca se copia. Detén la red, actualiza ExyliaSurvivalCore e instala
-ExyliaProtections en todos, y después arráncala.
-
-Cada servidor conserva su nombre — el del puente del proxy, o `server-id` en el bloque `redis` de
-`database.yml` — para que cada protección la siga aplicando el servidor donde se creó.
-
-### Qué más se mantiene
-
-- **Permisos.** Los nodos del núcleo de supervivencia los declara ExyliaProtections y otorgan los nuevos,
-  así que lo que se dio al staff sigue funcionando:
-
-  | Nodo antiguo | Otorga |
-  |---|---|
-  | `exyliasurvivalcore.protections` | `exyliaprotections.use` |
-  | `exyliasurvivalcore.protections.select` | `exyliaprotections.select` |
-  | `exyliasurvivalcore.protections.admin` | `exyliaprotections.admin` |
-  | `exyliasurvivalcore.protections.bypass` | `exyliaprotections.bypass` |
-  | `exyliasurvivalcore.protections.limit.<n>` | Se cuenta junto con `exyliaprotections.limit.<n>`: gana el número más alto de los dos |
-
-  Ver [Permisos](/docs/exyliaprotections/permisos).
-- **Comandos.** `/protections`, `/ps` y `/claims` conservan sus nombres y subcomandos.
-- **Permisos de rol, flags, tipos y roles** se guardan en cada protección y en `config.yml` con las mismas
-  claves.
+- **El módulo.** Actualiza ExyliaSurvivalCore a una versión sin el módulo de protecciones, o desactívalo,
+  para que solo un plugin proteja el terreno.
+- **Ajustes y mensajes.** Las claves son las mismas: copia los valores que cambiaste de
+  `modules/protections/config.yml` a `plugins/ExyliaProtections/config.yml`. Los menús se rediseñaron y no
+  son compatibles; ver [Menús](/docs/exyliaprotections/menus).
+- **Permisos.** Da los nombres nuevos: `exyliaprotections.use`, `.select`, `.admin`, `.bypass` y
+  `.limit.<n>`. Los antiguos nodos `exyliasurvivalcore.protections*`, incluido el prefijo de límite, no
+  hacen nada. Ver [Permisos](/docs/exyliaprotections/permisos).
 - **Placeholders.** Dentro de los archivos de los plugins de Exylia los nombres son los mismos,
   `%protections_count%`. A través de PlaceholderAPI cambia el plugin delante:
   `%exyliasurvivalcore_protections_count%` pasa a ser `%exyliaprotections_protections_count%`. Ver
   [Placeholders](/docs/exyliaprotections/placeholders).
+- **Comandos.** `/protections`, `/ps` y `/claims` conservan sus nombres. Los comandos de staff pasaron a
+  `/protectionsadmin`; ver [Administración](/docs/exyliaprotections/administracion).
 - **La API.** Los plugins leen las protecciones a través del `ProtectionsService` de ExyliaLib. Ver
   [API](/docs/exyliaprotections/api).
+
+<Callout type="warning" title="Las regiones antiguas de WorldGuard se eliminan">
+Las regiones que refleja este plugin conservan el prefijo `sc_ps_` que usaba el núcleo de supervivencia.
+Con WorldGuard instalado, cada arranque deja en WorldGuard exactamente las regiones que quiere el backend:
+ninguna con `INTERNAL`, una por protección de la base de datos con `WORLDGUARD`. Toda región `sc_ps_` que
+dejó el núcleo de supervivencia sin una protección detrás se elimina en ambos casos. Ver [Backends](/docs/exyliaprotections/backends).
+</Callout>
 
 ## Desde ProtectionStones
 
 ```text
-/protections admin import protectionstones --dry-run
-/protections admin import protectionstones
+/protectionsadmin import protectionstones --dry-run
+/protectionsadmin import protectionstones
 ```
 
 La importación necesita WorldGuard activo; ProtectionStones puede estar ya desinstalado, porque WorldGuard
@@ -166,10 +67,16 @@ núcleo es el bloque al que apunta ese nombre, y la caja de la región pasa a se
 | Miembros | Miembros con `import.member-role` |
 | `ps-name` | El nombre, como texto plano de hasta 32 caracteres; sin él, el nombre por defecto |
 | `ps-home` | El hogar; sin él, encima del núcleo |
-| `pvp`, `mob-spawning`, `fire-spread`, `crop-growth`, `leaf-decay` | La flag del mismo nombre |
+| `pvp`, `mob-spawning`, `fire-spread`, `crop-growth`, `leaf-decay`, `mob-damage`, `fall-damage`, `item-drop`, `item-pickup` | La flag del mismo nombre |
 | `tnt`, `creeper-explosion`, `other-explosion` | `explosions` |
 | `water-flow`, `lava-flow` | `liquid-flow` |
 | `entry` | `visitor-entry` |
+| `natural-hunger-drain` | `hunger` |
+| `enderman-grief`, `ravager-grief`, `enderdragon-block-damage` | `mob-griefing` |
+| `grass-growth`, `mycelium-spread`, `vine-growth`, `mushroom-growth` | `block-spread` |
+| `snow-fall`, `snow-melt`, `ice-form`, `ice-melt` | `snow-ice` |
+| `block-trampling` | `crop-trample` |
+| `enderpearl`, `chorus-fruit-teleport` | `ender-pearl` |
 
 Una flag que la región nunca fijó mantiene el valor por defecto del tipo. Cuando varias flags de WorldGuard
 alimentan una sola flag, basta con que una deniegue para desactivarla. Un rol que la protección no tiene
@@ -196,7 +103,7 @@ que ejecutó la importación.
 Con `import.remove-source-regions` desactivado, el valor por defecto, las regiones de ProtectionStones se
 quedan en WorldGuard y siguen aplicando sus antiguos dueños y miembros junto a la nueva protección: un
 miembro añadido después en ExyliaProtections aún puede ser rechazado ahí por WorldGuard. Además cuentan
-como regiones ajenas, así que mejorar una protección importada, fusionarla o moverla sobre su antigua
+como regiones ajenas, así que mejorar una protección importada, hacerla crecer con un núcleo nuevo o moverla sobre su antigua
 región se rechaza con el mensaje de solapamiento de WorldGuard hasta que la región se elimine o se añada a
 `settings.allowed-world-guard-regions`. Activa la clave para eliminar cada región al importarla; una
 prueba con `--dry-run` avisa cuando está activa.

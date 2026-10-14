@@ -4,7 +4,9 @@ description: "config.yml sección a sección, el archivo de mensajes y sus idiom
 ---
 
 Todo se genera en `plugins/ExyliaProtections/` en el primer arranque, con comentarios. Edita los archivos de
-ahí, nunca las copias del jar, y reinicia el servidor para aplicarlos: el plugin no tiene comando de recarga.
+ahí, nunca las copias del jar, y aplícalos con `/protectionsadmin reload` o reiniciando. Muchos ajustes también
+se cambian dentro del juego, que escribe este archivo por ti: ver
+[Administración](/docs/exyliaprotections/administracion#ajustes-dentro-del-juego).
 
 Las protecciones en sí no están en ningún archivo. Viven en la base de datos y se editan desde los menús.
 
@@ -17,17 +19,17 @@ Las protecciones en sí no están en ningún archivo. Viven en la base de datos 
 | `lang/<idioma>/menus/admin/*.yml` | Las pantallas del staff. |
 
 <Callout type="note" title="Si vienes de ExyliaSurvivalCore">
-Si `plugins/ExyliaSurvivalCore/` existe en el primer arranque, su `modules/protections/config.yml`, el
-`modules/protections/messages.yml` de cada idioma y su `database.yml` se copian aquí allí donde este plugin
-aún no tiene un archivo propio, así que no hay que configurar nada otra vez. Ver
+Hasta la 1.0.1 el primer arranque copiaba aquí los archivos de protecciones de ExyliaSurvivalCore. Desde la
+1.0.2 esa importación ya no existe: no se lee nada de `plugins/ExyliaSurvivalCore/`. Ver
 [Migración](/docs/exyliaprotections/migracion).
 </Callout>
 
 ## config.yml
 
 Cada función tiene su propia sección, y después vienen los roles iniciales y los tiers. La clave
-`config-version` es del plugin; no la toques. El archivo está en la versión 5, y los archivos más antiguos se
-actualizan al arrancar.
+`config-version` es del plugin; no la toques. El archivo está en la versión 7, y los archivos en la versión 5 o 6
+se actualizan al arrancar: la versión 6 movió `settings.home-warmup-seconds` a `teleport.warmup-seconds`, y la
+7 añadió las nuevas flags vanilla a cada tier (ver [tiers](#tiers)).
 
 ### settings
 
@@ -43,13 +45,12 @@ settings:
   allowed-world-guard-regions: []
   move-price: 1000.0
   move-currency: ''
-  home-warmup-seconds: 3
   deny-message-cooldown-millis: 1500
 ```
 
 | Clave | Por defecto | Qué hace |
 |---|---|---|
-| `backend` | `INTERNAL` | `INTERNAL`: el plugin lo aplica todo por sí mismo. `WORLDGUARD`: cada protección es además una región de WorldGuard con flags nativas. Se cambia con `/protections admin migrate`, no aquí. Ver [Backends](/docs/exyliaprotections/backends). |
+| `backend` | `INTERNAL` | `INTERNAL`: el plugin lo aplica todo por sí mismo. `WORLDGUARD`: cada protección es además una región de WorldGuard con flags nativas. Se cambia con `/protectionsadmin migrate`, no aquí. Ver [Backends](/docs/exyliaprotections/backends). |
 | `worldguard-priority` | `10` | Prioridad de las regiones de WorldGuard que crea el plugin. |
 | `default-limit` | `3` | Protecciones que puede tener un jugador sin ningún `exyliaprotections.limit.<n>`. |
 | `world-limits` | `{}` | Protecciones que puede tener un jugador por mundo, como `mundo: número`. Un mundo que no aparece no tiene límite propio. |
@@ -58,15 +59,17 @@ settings:
 | `allowed-world-guard-regions` | `[]` | Regiones de WorldGuard con las que una protección puede superponerse. Cualquier otra región la bloquea. |
 | `move-price` | `1000.0` | Lo que cuesta mover un núcleo. |
 | `move-currency` | `''` | Su moneda; vacío es la moneda por defecto. |
-| `home-warmup-seconds` | `3` | Segundos quieto antes de teletransportarse al hogar. |
 | `deny-message-cooldown-millis` | `1500` | Milisegundos entre dos mensajes de "este terreno está protegido" al mismo jugador. |
 
-El comentario sobre `default-limit` todavía nombra `exyliasurvivalcore.protections.limit.<n>`; se leen los
-dos prefijos. Ver [Permisos](/docs/exyliaprotections/permisos#cuántas-protecciones-puede-tener-un-jugador).
+`exyliaprotections.limit.0` es un límite de cero, no una vuelta a `default-limit`. Ver
+[Permisos](/docs/exyliaprotections/permisos#cuántas-protecciones-puede-tener-un-jugador). La cuenta atrás antes
+de ir al hogar es ahora `teleport.warmup-seconds`: ver [teleport](#teleport).
 
 ### submodules
 
 Apaga funciones enteras. Una función apagada oculta sus botones, rechaza sus comandos y deja de actuar.
+Cada una se cambia también desde los ajustes **Funciones** del panel de administración, o con
+`/protectionsadmin feature <clave> <on|off>`.
 
 | Clave | Por defecto | Función |
 |---|---|---|
@@ -85,13 +88,27 @@ Apaga funciones enteras. Una función apagada oculta sus botones, rechaza sus co
 | `visualization` | `true` | Dibujar bordes, y marcadores en BlueMap y Dynmap. |
 | `effects` | `false` | Ventajas para los miembros dentro de su protección. |
 | `environment` | `false` | Una hora del día y un clima propios dentro de una protección. |
-| `merge` | `false` | Fusionar dos protecciones que se tocan en una. |
+| `merge` | `false` | Un núcleo colocado tocando otra protección del mismo dueño hace crecer esa en lugar de quedarse aparte. Ya no hay pantalla de fusión ni `/protections merge`. |
+
+### cores
+
+```yaml
+cores:
+  enabled: true
+```
+
+| Clave | Por defecto | Qué hace |
+|---|---|---|
+| `enabled` | `true` | Si colocar un núcleo protege terreno. Desactivado: no se pueden colocar núcleos, y la tienda se niega a abrir y desaparece del menú principal; las protecciones ya hechas con un núcleo siguen funcionando. Desactívalo en un servidor solo de selecciones. |
 
 ### selection
 
+Desactivada por defecto desde la 1.0.2: actívala en un servidor solo de selecciones, o junto a los núcleos para
+ofrecer las dos cosas.
+
 ```yaml
 selection:
-  enabled: true
+  enabled: false
   tier: medium
   height: FULL
   price-per-block: 5.0
@@ -104,8 +121,8 @@ selection:
 
 | Clave | Por defecto | Qué hace |
 |---|---|---|
-| `enabled` | `true` | Si los jugadores pueden proteger terreno seleccionando dos esquinas. También necesita `exyliaprotections.select`. |
-| `tier` | `medium` | El tier que cuenta una protección seleccionada, para su límite y sus flags iniciales. |
+| `enabled` | `false` | Si los jugadores pueden proteger terreno seleccionando dos esquinas. También necesita `exyliaprotections.select`. |
+| `tier` | `medium` | El tier que cuenta una protección seleccionada, para su límite y sus flags iniciales. Desde la 1.0.2 también hace falta el `permission` del tier para seleccionar. |
 | `height` | `FULL` | `FULL`: las esquinas protegen toda su columna. `NORMAL`: solo los bloques entre las alturas de las dos esquinas. |
 | `price-per-block` | `5.0` | Precio por bloque de área protegida. |
 | `currency` | `''` | Su moneda; vacío es la moneda por defecto. |
@@ -472,6 +489,57 @@ cleanup:
 
 Ver [Migración](/docs/exyliaprotections/migracion) y [Administración](/docs/exyliaprotections/administracion).
 
+### teleport
+
+Los teletransportes al hogar, a warps y a parcelas visitadas: la cuenta atrás, qué la cancela y quién se la
+salta.
+
+```yaml
+teleport:
+  warmup-seconds: 3.0
+  warp-warmup-seconds: -1.0
+  cancel-on-move: true
+  cancel-on-damage: true
+  refuse-in-combat: true
+  cooldown-seconds: 0.0
+  bypass-permission: exyliaprotections.bypass.warmup
+  tick-sound: UI_BUTTON_CLICK|0.6|1.3
+```
+
+| Clave | Por defecto | Qué hace |
+|---|---|---|
+| `warmup-seconds` | `3` | Segundos que espera un jugador antes de ir al hogar o a una parcela. `0` lo mueve al instante. Antes era `settings.home-warmup-seconds`. |
+| `warp-warmup-seconds` | `-1` | Segundos antes de visitar un warp. `-1` usa `warmup-seconds`. |
+| `cancel-on-move` | `true` | Si salir del bloque en el que empezó la cancela. |
+| `cancel-on-damage` | `true` | Si recibir daño la cancela. |
+| `refuse-in-combat` | `true` | Si un jugador marcado en combate no puede empezar una. |
+| `cooldown-seconds` | `0` | Segundos que espera un jugador entre dos teletransportes. Uno cancelado no cuenta. `0`: ninguno. |
+| `bypass-permission` | `exyliaprotections.bypass.warmup` | Quien lo tiene se mueve al instante y se salta el enfriamiento. Vacío: nadie se lo salta. |
+| `tick-sound` | `UI_BUTTON_CLICK\|0.6\|1.3` | Suena cada segundo entero de la cuenta atrás, como `NOMBRE\|volumen\|tono`. Vacío para ninguno. |
+
+Mientras cuenta, el jugador ve una barra de jefe con el destino y el tiempo que queda, que se quita acabe como
+acabe; al llegar suenan un título, un sonido y partículas. Moverse, recibir daño, empezar un segundo
+teletransporte o el enfriamiento responden cada uno con su propia línea. Todos los textos son la sección
+`teleport` de `messages.yml`.
+
+### forced-flags
+
+Reglas del servidor que siguen todas las protecciones y parcelas, ponga lo que ponga su dueño: una flag con
+`ALLOW` o `DENY`.
+
+```yaml
+forced-flags:
+  pvp: DENY
+```
+
+Vacío por defecto. Una flag forzada se aplica dentro de todas las protecciones y todas las parcelas, pasa por
+encima de lo que pusieron el dueño y la parcela, y no se puede cambiar desde el menú de ninguna protección: su
+interruptor muestra el estado forzado "lo pone el servidor", y pulsarlo, o cerrar la protección con
+`visitor-entry` forzada, lo dice. Lo que tenían puesto los dueños se conserva y vuelve cuando la flag deja de
+estar forzada. Una clave que no es una flag, o un valor que no es `ALLOW` ni `DENY`, se ignora. Con el backend
+WORLDGUARD las regiones reflejadas llevan el valor forzado. Se cambian en el juego desde los ajustes **Flags
+forzadas** del panel de administración, o con `/protectionsadmin flag <flag> <allow|deny|default>`.
+
 ### roles
 
 Los roles con los que empieza una protección **nueva**. Después cada protección guarda su propia copia, que
@@ -511,7 +579,8 @@ tiers:
     currency: ''
     permission: ''
     limit: 0
-    flags: [mob-spawning, crop-growth, leaf-decay, liquid-flow, visitor-entry]
+    flags: [mob-spawning, crop-growth, leaf-decay, liquid-flow, visitor-entry, mob-damage, fall-damage, hunger,
+      block-spread, snow-ice, item-drop, item-pickup, ender-pearl]
 ```
 
 | Clave | Qué hace |
@@ -525,9 +594,17 @@ tiers:
 | `currency` | Su moneda; vacío es la moneda por defecto. |
 | `permission` | Necesario para colocarlo, comprarlo o recibir uno; vacío para ninguno. |
 | `limit` | Cuántas de este tier puede tener un jugador. `0` sin límite propio. |
-| `flags` | Las flags que empiezan activadas. Flags: `pvp`, `mob-spawning`, `explosions`, `fire-spread`, `liquid-flow`, `crop-growth`, `leaf-decay`, `visitor-entry`. |
+| `flags` | Las flags que empiezan activadas. Flags: `pvp`, `mob-spawning`, `explosions`, `fire-spread`, `liquid-flow`, `crop-growth`, `leaf-decay`, `visitor-entry`, `mob-damage`, `fall-damage`, `hunger`, `mob-griefing`, `block-spread`, `snow-ice`, `crop-trample`, `item-drop`, `item-pickup`, `ender-pearl`. |
 
-Los tiers también se editan en el juego desde el editor de tiers del menú de administración, que escribe esta
+Las diez últimas flags llegaron en la 1.0.2. Las ocho que mantienen el comportamiento vanilla (`mob-damage`,
+`fall-damage`, `hunger`, `block-spread`, `snow-ice`, `item-drop`, `item-pickup`, `ender-pearl`) empiezan
+activadas en todos los tiers incluidos, se añadieron a cada tier existente al actualizarse el archivo, y se leen
+como activadas en las protecciones hechas antes de que existieran, así que nada cambia hasta que un dueño apague
+una. `mob-griefing` y `crop-trample` empiezan desactivadas. `explosions` ya no cubre a los mobs que cambian
+bloques: eso es ahora `mob-griefing`. Ver [Personas y acceso](/docs/exyliaprotections/personas-y-acceso) para lo
+que hace cada flag.
+
+Los tiers también se editan en el juego desde el editor de tiers del panel de administración, que escribe esta
 sección junto con las vidas y el coste de mantenimiento del tier. Ver
 [Administración](/docs/exyliaprotections/administracion).
 
@@ -535,7 +612,7 @@ sección junto con las vidas y el coste de mantenimiento del tier. Ver
 
 `lang/<idioma>/messages.yml` contiene cada línea que envía el plugin. El idioma es el que esté puesto en el
 `config.yml` de ExyliaLib: a diferencia de la mayoría de plugins de Exylia, el `config.yml` de
-ExyliaProtections no tiene clave `language` propia. `es`, `pt` y `fr` vienen traducidos; el inglés se escribe a
+ExyliaProtections no tiene clave `language` propia. `es`, `pt`, `fr` y `ru` vienen traducidos (el ruso desde la 1.0.2); el inglés se escribe a
 partir de los valores por defecto del plugin, y una línea que una traducción no incluye llega en inglés.
 
 Las claves de primer nivel son líneas de chat, preguntas y las palabras que muestran los menús, como los
@@ -543,13 +620,14 @@ estados de asalto y de alquiler. Después vienen las secciones:
 
 | Sección | Qué contiene |
 |---|---|
-| `utility` | Warps, bordes, ventajas, hora y clima, fusiones. |
-| `utility.admin` | El menú de administración, el editor de tiers, la limpieza y la importación de ProtectionStones. |
+| `utility` | Warps, bordes, ventajas, hora y clima. |
+| `utility.admin` | Los menús de administración, los ajustes del panel y sus nombres, las flags forzadas, el editor de tiers, la limpieza y la importación de ProtectionStones. |
 | `utility.notices` | Rechazos y confirmaciones, las líneas de `/protections help`, y `labels`: los nombres y descripciones de cada permiso de rol y flag, de las acciones del registro y de las ventajas. |
 | `raids` | La barra de acción del golpe al núcleo y la barra de jefe de asaltable. |
 | `enter-leave` | Los títulos y barras de acción al entrar y salir. `%message%` es el saludo o la despedida del dueño, o el de por defecto. |
 | `visualization` | La etiqueta de los marcadores y el nombre de la capa en BlueMap y Dynmap. Texto plano: los mapas web no leen tokens de color. |
 | `general` | Líneas compartidas por todas las partes del plugin. |
+| `teleport` | La barra de jefe de la cuenta atrás, el efecto al llegar, y las líneas de un teletransporte ya en marcha, cancelado al moverse o por daño, y del enfriamiento. Placeholders: `%name%`, `%time%`. |
 
 Los colores usan tokens de la paleta como `{primary}`, `{error}` o `{highlight}`, así que recolorear el
 servidor nunca obliga a editar este archivo. `%prefix%` se sustituye por el valor `prefix` de arriba. Una
@@ -557,14 +635,12 @@ línea puede empezar con una etiqueta de efecto que nunca llega a la pantalla: `
 reproduce un sonido a quien la recibe. Los valores que puede usar cada línea están en el comentario de
 encima.
 
-`general.reloaded` nunca se envía: no hay comando de recarga.
-
 ## Menús
 
 | Carpeta | Qué contiene |
 |---|---|
-| `lang/<idioma>/menus/user/` | Las pantallas de los jugadores: el menú principal, la lista, la vista de una protección y sus siete secciones, miembros, roles, permisos, tienda, baneos, registros, mercado, parcelas, alquiler, warps, ventajas, fusión. Tuyas para cambiarles el estilo; una actualización solo añade los archivos que faltan. |
-| `lang/<idioma>/menus/admin/` | Las pantallas del staff: búsqueda, una protección, tiers, un tier, limpieza. Se reescriben desde el jar en cada arranque; lo que se edite ahí se pierde. |
+| `lang/<idioma>/menus/user/` | Las pantallas de los jugadores: el menú principal, la lista, la vista de una protección y sus siete secciones, miembros, roles, permisos, tienda, baneos, registros, mercado, parcelas, alquiler, warps, ventajas. Tuyas para cambiarles el estilo; una actualización solo añade los archivos que faltan. |
+| `lang/<idioma>/menus/admin/` | Las pantallas del staff: el panel, un grupo de ajustes, búsqueda, una protección, tiers, un tier, limpieza. Se reescriben desde el jar en cada arranque; lo que se edite ahí se pierde. |
 
 Un archivo de menú que no se puede leer se nombra en la consola y se deja fuera, en vez de abrirse vacío. Ver
 [Menús](/docs/exyliaprotections/menus) para cada archivo y las acciones que ejecutan sus botones.
