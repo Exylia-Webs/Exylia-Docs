@@ -3,21 +3,22 @@ title: "Funciones de chat"
 description: "Todo lo de chat/config.yml que no es el filtro: menciones, emojis, ítems mostrados, susurros, moderación, el anunciador y los mensajes del módulo."
 ---
 
-`chat/config.yml` guarda los interruptores del módulo. El filtro tiene su propio archivo; todo lo demás
-está aquí.
+`chat/config.yml` guarda los interruptores y los disparadores del módulo. El filtro tiene su propio
+archivo; todo lo demás está aquí. Lo que lee un jugador — la línea del espía, el hover de los comandos,
+cómo se dibuja un ítem mostrado — está en `lang/<idioma>/chat/messages.yml`; un `chat/config.yml` de
+una versión anterior tiene esas líneas movidas allí en el primer arranque.
 
 | Sección | Claves |
 |---|---|
 | `listener-priority` | Dónde toma el módulo el evento de chat: `LOWEST`, `LOW`, `NORMAL`, `HIGH`, `HIGHEST`. Por defecto `HIGHEST` |
 | `commands` | Un booleano por comando de jugador: `msg`, `reply`, `ignore`, `ignoreall`, `spymsg`, `mutechat`, `clearchat`, `broadcast`, `channel` |
-| `spy` | `format`, con `{sender}`, `{receiver}` y `{message}` |
 | `msg` | `sound`, un efecto de ExyliaLib que suena para quien recibe un susurro |
 | `grammar` | `enabled` |
 | `emojis` | `enabled` |
-| `command-replacer` | `enabled`, `format` (`%command%`), `hover` |
+| `command-replacer` | `enabled`, `format` (`%command%`) |
 | `links` | `enabled` |
 | `mentions` | `enabled`, `format` (`%player%`), `max`, `cooldown-seconds`, `feedback` |
-| `renders` | `cache-seconds`, y después `item`, `inventory` y `enderchest` |
+| `renders` | `cache-seconds`, y después `item`, `inventory` y `enderchest`, cada uno con `enabled` y `triggers` |
 | `cross-server` | `enabled` |
 | `console-format` | `{channel}`, `{name}`, `{message}`. Por defecto `[{channel}] {name}: {message}` |
 | `filtered-marker` | Se pone delante de un mensaje bloqueado para el staff que aún puede leerlo. Por defecto `{error}✖ ` |
@@ -103,7 +104,8 @@ exactamente lo que escribiste.
 ## Reemplazo de comandos
 
 Un `/comando` escrito en el chat se convierte en algo que un lector puede clicar para escribirlo.
-`format` lo dibuja — `%command%` es el comando sin la barra — y `hover` es lo que dice. Al clicar se
+`format` lo dibuja — `%command%` es el comando sin la barra — y `command-replacer.hover` del
+`messages.yml` del módulo es lo que dice. Al clicar se
 sugiere `/comando ` con un espacio al final, listo para los argumentos.
 
 Solo se reemplaza el nombre del comando; lo que el jugador escribiera después se queda como texto.
@@ -126,8 +128,9 @@ Tres cosas que un jugador puede enseñar en el chat.
 | `[ec]` | `[ec]`, `[enderchest]` | `…chat.render.ec` | Su cofre de ender, con un recuento en el hover |
 
 Cada uno se dibuja como mucho una vez por mensaje: una línea con veinte `[inv]` es una ventana, no
-veinte instantáneas. Los disparadores se comparan sin distinguir mayúsculas, y el `format` (`{item}`,
-`{player}`) y el `title` (`%player%`) de cada tipo son configurables.
+veinte instantáneas. Los disparadores se comparan sin distinguir mayúsculas y se fijan por tipo en
+`renders.<tipo>.triggers`; `enabled: false` apaga un tipo. Cómo se dibuja cada uno — `format` (`{item}`,
+`{player}`) y el `title` de la ventana (`%player%`) — está en `renders` del `messages.yml` del módulo.
 
 Al clicar se abre una copia de **solo lectura** de lo que tenía el emisor cuando escribió la línea. Es
 un contenedor normal cuyos clics y arrastres se rechazan, no un menú; no hay nada dentro con lo que
@@ -136,7 +139,7 @@ mano, que se abre sobre su contenido. `[inv]` se abre en un cofre doble dispuest
 inventario, con la armadura y las dos manos en la fila de abajo.
 
 Las instantáneas viven `renders.cache-seconds` (por defecto `60`) en una caché acotada. Después de eso
-el clic responde `renders.expired` de `chat/messages.yml`. El clic ejecuta el comando oculto
+el clic responde `renders.expired` de `lang/<idioma>/chat/messages.yml`. El clic ejecuta el comando oculto
 `/chatcosmeticsrender <id>`, y el id son ocho caracteres al azar y no un contador, para que nadie abra
 la ventana de otro adivinando un número. Ese comando está registrado para que el clic tenga a qué
 llamar; no hay nada que escribir.
@@ -170,7 +173,7 @@ entregó. `exyliachatcosmetics.chat.bypass.ignore` atraviesa los dos, y a quien 
 `PrivateMessageEvent` se lanza antes de que un susurro llegue a alguien de este servidor, y cancelarlo
 no entrega nada.
 
-`/spymsg` alterna leer los susurros de todo el mundo, dibujados con `spy.format`. Un espía nunca lee
+`/spymsg` alterna leer los susurros de todo el mundo, dibujados con `staff.spy` del `messages.yml` del módulo. Un espía nunca lee
 sus propios susurros ni aquellos de los que es destinatario; esos ya los tendría.
 
 `/reply` responde a quien te susurró por última vez o a quien susurraste por última vez — las dos
@@ -200,10 +203,11 @@ lo que espera un dueño que silenció durante una avalancha hace una hora.
 
 ## El anunciador
 
-`chat/announcements.yml` guarda la rotación.
+`lang/<idioma>/chat/announcements.yml` guarda la rotación. Es texto que leen los jugadores, así que se
+traduce con el resto de la carpeta del idioma. Viene apagado.
 
-```yaml title="plugins/ExyliaChatCosmetics/chat/announcements.yml"
-enabled: true
+```yaml title="plugins/ExyliaChatCosmetics/lang/en/chat/announcements.yml"
+enabled: false
 interval-seconds: 300
 random: false
 
@@ -220,10 +224,9 @@ announcements:
     sound: BLOCK_NOTE_BLOCK_PLING
   cosmetics:
     lines:
-      - ' {letters_black}▎ {letters}open {highlight}/cosmetics{letters}.'
+      - ' {letters_black}▎ {letters}open {highlight}/cc{letters}.'
     hover: '{warning}➥ Click to open'
-    click: 'RUN_COMMAND:/cosmetics'
-    permission: ''
+    click: 'RUN_COMMAND:/cc'
 ```
 
 | Clave | Significado |
@@ -251,11 +254,12 @@ rotación.
 Los anuncios son el servidor hablando, así que conservan las versalitas de ExyliaLib — al contrario que
 la línea de chat. Ver [El módulo de chat](/docs/exyliachatcosmetics/chat).
 
-## `chat/messages.yml`
+## `lang/<idioma>/chat/messages.yml`
 
 Cada línea que envía el módulo, en secciones: `general`, `whispers`, `ignore`, `staff` (spy, alertas
 del filtro, los resultados de `/cca chat`), `moderation` (silencio, limpieza, broadcast, castigado),
-`channels`, `filter`, `renders` y `announcer`.
+`channels`, `filter`, `renders` (las líneas y cómo se dibuja y titula cada ítem mostrado), `announcer` y
+`command-replacer` (el hover).
 
 Tiene su propio `prefix`, y `%prefix%` en este archivo se sustituye desde él antes de que la línea
 llegue al motor de texto — así que el prefijo general del plugin, el del `messages.yml` de los

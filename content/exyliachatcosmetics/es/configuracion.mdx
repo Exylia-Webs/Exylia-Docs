@@ -10,6 +10,10 @@ lo vuelve a leer `/cca reload`. Eso conviene saberlo por dos motivos:
   en la consola. Una errata no se queda ahí calladita sin hacer nada.
 - **Un valor que el plugin no puede leer se reporta y se usa el de por defecto.** El servidor arranca
   igual; nunca se niega a cargar por una línea mala.
+- **El archivo lleva una versión y se migra en su sitio.** Un archivo escrito por una versión anterior
+  conserva sus claves renombradas o movidas en el primer arranque: `chat.module.enabled` pasó a
+  `modules.chat`, `rank-colors.repaint` pasó a `rank-colors.keep`, `chat.default-color` dio paso a la
+  sección `defaults`, y la sección `menu` se movió a `lang/<idioma>/messages.yml`.
 
 Los cosméticos en sí no están aquí. Viven en `cosmetics/*.yml` y se describen en
 [el catálogo](/docs/exyliachatcosmetics/catalogo).
@@ -20,6 +24,66 @@ Los cosméticos en sí no están aquí. Viven en `cosmetics/*.yml` y se describe
 |---|---|---|
 | `language` | `default` | El idioma de los menús y los mensajes. `default` sigue el idioma configurado en el `config.yml` de ExyliaLib; `en`, `es`, `pt`, `fr` o `ru` lo fijan solo para este plugin. Cada uno es una carpeta bajo `lang/` que puedes editar; `custom` guarda los archivos que el servidor tenía antes de que existieran los idiomas. |
 
+## modules
+
+Lo que usa este servidor. Un módulo apagado no registra nada — ni clase de cosmético, ni comando, ni
+botón, ni respuesta de placeholder — y lo que los jugadores ya llevan de él se queda en su perfil, así
+que volver a encenderlo le devuelve a cada uno sus cosas. Todos los interruptores vienen en `true`.
+
+| Clave | Qué enciende |
+|---|---|
+| `chat` | El [módulo de chat](/docs/exyliachatcosmetics/chat) integrado: canales, formatos, mensajes privados, el filtro, la moderación. Apagado, el plugin es solo cosméticos y tu plugin de chat sigue entregando a través del hook. **Se aplica con `/cca reload`.** |
+| `tags` | Etiquetas delante del nombre |
+| `nick-colors` | Colores para el nombre del jugador |
+| `rank-colors` | Colores para el prefijo y el sufijo del rango |
+| `chat-colors` | Colores para el mensaje |
+| `shadows` | Sombras bajo el nombre, el rango y el mensaje; cada una necesita su módulo de color |
+| `custom` | Etiquetas y colores que los jugadores crean con tokens; cada uno necesita su módulo de etiqueta o de color |
+| `fonts` | Fuentes para el mensaje |
+| `modifiers` | Negrita, cursiva y el resto de modificadores del mensaje |
+| `presets` | Looks completos que monta el servidor (`cosmetics/presets.yml`) |
+| `loadouts` | Looks que los jugadores guardan y se vuelven a poner |
+
+<Callout type="warning" title="Todos menos chat esperan a un reinicio">
+Un comando solo se puede añadir mientras el servidor arranca, así que `/cca reload` aplica `chat` y nada
+más. Si cambió cualquier otro interruptor, el reload lo dice en la consola — `The modules in config.yml
+changed; restart the server to apply them.` — y el conjunto en marcha se queda como arrancó.
+</Callout>
+
+## defaults
+
+Lo que lleva un jugador de una clase de la que no ha elegido nada, según su grupo de permisos. Un bloque
+por clase, con el grupo como clave y el id de una entrada del catálogo de esa clase como valor:
+
+```yaml title="plugins/ExyliaChatCosmetics/config.yml"
+defaults:
+  tag:
+    owner: staff
+    vip: mvp
+    default: ''
+  chat-color:
+    default: ''
+```
+
+| Clave | Nombra una entrada de |
+|---|---|
+| `tag` | `cosmetics/tags.yml` |
+| `nick-color` | `cosmetics/nick-colors.yml` |
+| `rank-color` | `cosmetics/rank-colors.yml` |
+| `chat-color` | `cosmetics/chat-colors.yml` |
+| `shadow-color`, `nick-shadow`, `rank-shadow` | `cosmetics/shadow-colors.yml` — las tres sombras son un mismo catálogo que se lleva en tres sitios |
+| `font` | `cosmetics/fonts.yml` |
+| `modifier` | `cosmetics/modifiers.yml` |
+
+`default` cubre todos los grupos que el bloque no nombra, y gana el primer grupo de la lista en el que
+esté el jugador, así que pon primero el rango más alto. Los grupos vienen de LuckPerms; sin él solo se
+aplica `default`. Todos los bloques vienen como `default: ''`, que no da nada, así que un servidor
+nuevo se ve igual que antes.
+
+Un valor por defecto lo da el servidor, no lo posee el jugador: se lleva sin nodo de permiso y sin
+concesión, y en cuanto el jugador elige algo de esa clase, se dibuja lo suyo. Un id que no nombra
+ninguna entrada se reporta en la consola al cargar y al recargar, y ese grupo no recibe nada.
+
 ## chat
 
 | Clave | Por defecto | Significado |
@@ -27,8 +91,9 @@ Los cosméticos en sí no están aquí. Viven en `cosmetics/*.yml` y se describe
 | `hook` | `decorate` | Cómo se estiliza el cuerpo del mensaje. Los cuatro modos están abajo. |
 | `priority` | `NORMAL` | Prioridad del evento para `chat_event` y `legacy_event`: `LOWEST`, `LOW`, `NORMAL`, `HIGH`, `HIGHEST`, `MONITOR`. Cualquier otra cosa cae a `NORMAL` con un aviso. |
 | `sanitize` | `true` | El formato que escribe un jugador — `&c`, `<red>`, `{primary}` — se muestra como el texto que escribió. `exyliachatcosmetics.chat.format` se lo salta. El `§` se neutraliza siempre, con permiso o sin él. |
-| `default-color` | `""` | El color de un mensaje de alguien que no lleva color de chat: `#hex`, el nombre de un color, un `{token}` o `#a:#b` para un degradado. Vacío deja el mensaje sin colorear. |
-| `module.enabled` | `false` | Enciende el [módulo de chat](/docs/exyliachatcosmetics/chat) integrado. Con él encendido el hook se desinstala — el módulo estiliza el cuerpo por su cuenta — y aparecen los archivos propios del módulo en `chat/`. |
+
+El hook solo actúa mientras `modules.chat` está apagado. Con el [módulo de chat](/docs/exyliachatcosmetics/chat)
+encendido, el hook se desinstala y el módulo estiliza el cuerpo por su cuenta.
 
 ### Los cuatro modos de hook
 
@@ -53,7 +118,7 @@ cosmético roto no puede convertirse en un muro de consola.
 
 | Clave | Por defecto | Significado |
 |---|---|---|
-| `repaint` | `letters` | Qué repinta un color de rango dentro del prefijo y del sufijo. `letters` pinta solo letras y dígitos, así que `&8[&eVIP&8]` conserva sus corchetes grises y cualquier símbolo que escriba el rango conserva su color; `all` pinta todo lo que escribió el rango. Un carácter que el rango dejó sin color se pinta de las dos formas — no hay nada que conservar. |
+| `keep` | `[]()<>{}\|` | Los caracteres que un color de rango nunca repinta: el marco que un rango escribe alrededor de su nombre, así que `&8[&eVIP&8]` conserva sus corchetes grises mientras `VIP` toma el color nuevo. Todo lo demás se repinta — letras, glifos de un resource pack, la estrella de un sufijo. Un carácter que el rango escribió sin color propio se repinta siempre. Vacío lo repinta todo. |
 
 ## custom-tags
 
@@ -102,21 +167,13 @@ que puedes vender, premiar o retirar jugador a jugador. Ver
 |---|---|---|
 | `format` | `%tag%%prefix% %name%%suffix%{letters_black}: %message%` | La línea que dibujan `/cc preview` y las vistas previas del menú. `%tag%` ya trae su espacio final de `tags.format`; `%prefix%` y `%suffix%` son los del rango, en el color de rango que se esté mirando. |
 
-## menu
+## Cómo llaman las cosas los menús
 
-| Clave | Por defecto | Significado |
-|---|---|---|
-| `types` | `tag: Tags`, `customtag: Custom tags`, `nick_color: Nick colors`, `customnick: Custom nick colors`, `rank_color: Rank colors`, `customrank: Custom rank colors`, `chat_color: Chat colors`, `customcolor: Custom chat colors`, `shadow_color: Shadow colors`, `font: Fonts`, `modifier: Modifiers` | Cómo se llama cada clase de cosmético en los títulos y en el lore. Un tipo que no esté en la lista muestra su id en bruto. |
-| `status.selected` | `{success}✔ Worn right now` | La línea de estado que muestra una fila, según su estado |
-| `status.available` | `{success}✔ Yours` | |
-| `status.locked` | `{error}✖ Not yours yet` | |
-| `status.expiring` | `{warning}⏱ Yours for {highlight}%expires%` | `%expires%` es el tiempo que queda |
-| `favorite-on` | `{highlight}★ {letters}Starred` | |
-| `favorite-off` | `{muted}☆ Not starred` | |
-| `none` | `{muted}None` | Se muestra allí donde un hueco no tiene nada equipado |
-| `sample-message` | `Hello there!` | El mensaje con el que se dibujan las vistas previas, y lo que usa `/cc preview` sin argumento |
-| `sample-prefix` | `{letters_black}[RANK]` | Hace de prefijo del rango en una vista previa, para un jugador cuyo rango no escribe ninguno |
-| `custom-hints` | `{warning}➥ Shift right click {letters}to change it`, `{error}➥ Drop key {letters}to delete it` | Las indicaciones que solo muestra una fila que hizo el propio jugador, insertadas en el `%cosmetic_manage%` del lore. Una lista vacía no muestra ninguna. |
+La sección `menu` que antes estaba aquí — el nombre de cada clase, las líneas de estado, la estrella,
+`none`, el mensaje y el prefijo de muestra, las indicaciones de las filas propias — es texto que ve el
+jugador, así que ahora vive en `lang/<idioma>/messages.yml` bajo `menu`, donde se traduce. Un
+`config.yml` de una versión anterior tiene su sección `menu` movida allí en el primer arranque. Ver
+[messages.yml](#messagesyml).
 
 ## expiry
 
@@ -131,6 +188,30 @@ que puedes vender, premiar o retirar jugador a jugador. Ver
 |---|---|---|
 | `none` | `""` | Lo que devuelve un placeholder que no tiene valor |
 | `unknown` | `?` | Lo que devuelve un placeholder que nombra algo que no existe |
+
+## shop
+
+Comprar un cosmético bloqueado con moneda, desde el menú. Necesita ExyliaEconomy o Vault; sin ninguno
+de los dos, nada muestra un precio.
+
+| Clave | Por defecto | Significado |
+|---|---|---|
+| `enabled` | `true` | Si un cosmético bloqueado con precio se puede comprar desde el menú |
+| `tier-prices` | `common: 500`, `rare: 1500`, `epic: 4000`, `legendary: 10000` | El precio de cada nivel, en la moneda por defecto o como `{amount, currency}` |
+
+Una entrada de `cosmetics/*.yml` entra en un nivel con `tier: rare`, o pone su propio `price`, que gana
+al de su nivel. Una entrada sin ninguno de los dos no está a la venta:
+
+```yaml title="plugins/ExyliaChatCosmetics/cosmetics/tags.yml"
+tags:
+  crown:
+    price: {amount: 50, currency: gems}
+```
+
+Un precio es un número mayor que cero — `500`, o `2.5k` — o un bloque con `amount` y `currency`.
+Cualquier otra cosa, cero y negativos incluidos, se lee como sin precio, así que una errata deja un
+cosmético sin poder comprarse en vez de gratis. Un precio en una moneda que ninguna economía acepta
+tampoco se muestra. `/cca reload` vuelve a leer los niveles.
 
 ## messages.yml
 
@@ -151,9 +232,13 @@ placeholders que acepta cada línea están nombrados en el comentario que tiene 
 | `loadouts` | guardado, aplicado, borrado, límite, desconocido, vacío, inválido, las líneas de `list` |
 | `custom` | creado y su línea para el destinatario, editado, borrado, ninguno, no-es-tuyo, muy-corto, muy-largo, patrón, en-lista-negra, ocupado, color-inválido, demasiadas-paradas |
 | `tokens` | sin-create, sin-edit, gastado, dado, quitado y fijado con sus líneas para el destinatario, las líneas de saldo, clase-desconocida, no-es-personalizado |
+| `presets` | aplicado, aplicado-en-parte, no-poseído, desconocido, las líneas de `list` |
 | `prompts` | los títulos y las pistas de las entradas de texto: etiqueta propia, color, editar cualquiera de las dos, nombre de loadout |
+| `menu` | `types` (cómo se llama cada clase en títulos y lore), `status` (`selected`, `available`, `locked`, `expiring`), `favorite-on`, `favorite-off`, `none`, `sample-message`, `sample-prefix`, `custom-hints` |
+| `admin` | las muestras que dibujan `/cca preview`, `render` y `chat line`, `permanent`, y los interruptores ON/OFF de las pantallas de admin del chat |
+| `confirm` | las preguntas que se hacen antes de borrar algo, en los menús y en la línea de comandos |
 
-El módulo de chat se queda con su propio `chat/messages.yml`, con su propio prefijo. Un plugin de
+El módulo de chat se queda con su propio `lang/<idioma>/chat/messages.yml`, con su propio prefijo. Un plugin de
 chat habla como el chat, no como el plugin de cosméticos, así que el `%prefix%` de allí nunca se
 expande a este. Ver [el módulo de chat](/docs/exyliachatcosmetics/chat).
 
@@ -162,6 +247,6 @@ expande a este. Ver [el módulo de chat](/docs/exyliachatcosmetics/chat).
     Los archivos de cosméticos, que no son configuración y no viven aquí.
   </Card>
   <Card title="Menús" href="/docs/exyliachatcosmetics/menus">
-    Los archivos de `menus/`, que son otra cosa distinta de la sección `menu` de arriba.
+    Los archivos de `lang/<idioma>/menus/`.
   </Card>
 </Cards>
