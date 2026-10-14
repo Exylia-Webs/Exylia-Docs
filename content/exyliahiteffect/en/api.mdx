@@ -1,11 +1,12 @@
 ---
 title: "API"
-description: "What another plugin can do with hit effects: the catalogue, what a player chose, and what a weapon carries."
+description: "What another plugin can do with hit effects: the catalogue, what a player chose, what a weapon carries, playing one on demand, the menus and the crate."
 badge: "dev"
 ---
 
-`HitEffectService` reads ExyliaHitEffect's catalogue, sets what a player wears, and binds effects onto
-weapons. One lookup gets you the whole surface.
+`HitEffectService` reads ExyliaHitEffect's catalogue, sets what a player wears, binds effects onto
+weapons, plays an effect on demand, opens the menus and hands effects and crate keys over. One lookup
+gets you the whole surface.
 
 ```java
 ExyliaAPI.get(HitEffectService.class).ifPresent(effects ->
@@ -43,7 +44,7 @@ what it asked for. `mayUse` is there for callers that do want the check, on thei
 | `List<HitEffectCategory> categories()` | Every category, in the order the tabs are drawn. |
 | `Optional<HitEffectCategory> category(String categoryId)` | One category by id. Empty when the file declares none by that id. |
 | `List<HitEffect> effectsIn(String categoryId)` | The effects in a category, in the order they are drawn. Empty when the category does not exist. |
-| `boolean mayUse(Player player, String effectId)` | Whether a player may use an effect: its own permission, every effect at once, or its whole category. An unknown id is never allowed, so a stale id reads as locked rather than free. |
+| `boolean mayUse(Player player, String effectId)` | Whether a player may use an effect: its own permission, every effect at once, its whole category or its rarity, or an unlock from the crate or the shop. An unknown id is never allowed, so a stale id reads as locked rather than free. |
 
 ## What a player chose
 
@@ -75,6 +76,62 @@ not arrived yet answers as though they chose nothing, rather than blocking the c
 
 `bind` and `unbind` write on the caller's own copy of the stack. Pass a copy rather than an item still
 sitting in an open inventory view: what a player sees is redrawn when the stack is set back.
+
+## Playing an effect
+
+| Method | What it does |
+|---|---|
+| `boolean play(String effectId, Location where, Player attacker, @Nullable LivingEntity victim)` | Plays an effect at a place, as though a hit had landed there. The region flag, `HitEffectPlayEvent` and every observer's own visibility still decide; the weapon, the menu choice, the mob list and permission are skipped, because the caller named the effect. A real hit plays a block above the victim's feet, on the body. `victim` is the body its steps draw on, or `null` for none. `false` when no effect goes by that id, it draws nothing, the region silences it or a listener cancelled it. |
+| `boolean playFor(Player attacker, LivingEntity victim)` | Plays the effect a hit earns, deciding everything a real blow decides: whether this kind of victim plays effects, and the attacker's weapon and menu choice under the server's mode. `false` when the hit earns nothing, or when `play` would have said `false`. |
+| `boolean preview(Player viewer, String effectId)` | Shows the effect on the server's preview stage, alone, and puts the player back — owning it is not required, which makes it a shop's "try before you buy". `false` when no stage is set, and the player is told so. |
+
+`playFor` is for damage the server never reports as a blow from this player: an ability, a custom
+weapon, a dash. A hit the server does report already plays its effect, so calling `playFor` for it as
+well plays it twice. Either way one attacker starts at most five effects a second.
+
+<Callout type="warning" title="The thread that owns the place">
+Call `play` on the thread that owns `where` and `playFor` on the one that owns the victim: the main
+thread on Paper, the region thread on Folia. `preview` belongs to the thread that owns the viewer.
+</Callout>
+
+## Menus
+
+| Method | What it does |
+|---|---|
+| `void openMenu(Player player)` | Opens the effect menu exactly as `/hiteffect` does, for an NPC, a hub item or a shop. The player's row is read first when it is not in memory, so the menu can appear a moment after the call. On a `weapon` server the player is told the menu is off. Safe from any thread. |
+| `void openCrate(Player player)` | Opens the crate exactly as the command and the crate blocks do: the screen that asks how many to open and spends keys. With the crate turned off the player is told so. Safe from any thread. |
+
+## Owning, and crate keys
+
+| Method | What it does |
+|---|---|
+| `boolean unlock(Player player, String effectId)` | Gives a player an effect for good, as winning it from the crate does — ownership without a permission node, counted by `mayUse` from then on. Nothing is chosen and no item is given: follow it with `chooseEffect` or `token` for that. `false` when no effect goes by that id, the crate already gave it to them, or their row has not arrived yet; nothing changed. |
+| `int keys(UUID player)` | How many crate keys a player holds. `0` when they have none or their row has not arrived yet. |
+| `void addKeys(Player player, int keys)` | Gives keys, or takes them with a negative number — how a store, a vote or a quest pays out a spin. The count never goes below zero. A player whose row has not arrived yet is left unchanged. |
+
+## HitEffectPlayEvent
+
+`net.exylia.lib.api.hiteffect.event.HitEffectPlayEvent` fires once everything else has agreed an
+effect should play: it exists, it draws something, and the region allows hit effects. It fires for
+the hits the server reports and for `play` and `playFor` alike, and the two are not told apart on
+purpose — an arena that wants hit effects quiet wants both quiet.
+
+```java
+@EventHandler
+public void onHitEffect(HitEffectPlayEvent event) {
+    if (event.getLocation().getWorld().getName().equals("lobby")) event.setCancelled(true);
+}
+```
+
+| Method | What it returns |
+|---|---|
+| `Player getPlayer()` | The attacker: whose effect it is. |
+| `@Nullable LivingEntity getVictim()` | What it plays on. `null` when a plugin played it at a place rather than on a body. |
+| `String getEffectId()` | The effect about to play, normalised. |
+| `Location getLocation()` | Where it plays. A copy: changing it moves nothing. |
+
+Cancelling draws nothing and says nothing; the hit itself is untouched. The event is called on the
+thread that owns the location, which on Folia is a region thread rather than the main one.
 
 ## HitEffectBindResult
 
@@ -123,8 +180,8 @@ integration written against one ports to the other by changing the types.
 
 What an effect actually draws — the particle steps the sequence engine compiles — is not here. It is
 this version's implementation of the effect, changes whenever the owner edits a line, and means
-nothing outside the plugin that plays it. Menu openers, the in-game editor and administrative writes
-are left out for the same reason: a public contract cannot be broken later, so it holds what an
+nothing outside the plugin that plays it. The in-game editor and administrative writes are left out
+for the same reason: a public contract cannot be broken later, so it holds what an
 integration genuinely needs and nothing that only made sense inside one version.
 
 If something you need is missing, ask on [Discord](https://discord.exylia.net).

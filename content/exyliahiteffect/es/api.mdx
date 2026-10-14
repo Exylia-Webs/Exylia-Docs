@@ -1,11 +1,12 @@
 ---
 title: "API"
-description: "Qué puede hacer otro plugin con los efectos de golpe: el catálogo, lo que eligió un jugador y lo que lleva un arma."
+description: "Qué puede hacer otro plugin con los efectos de golpe: el catálogo, lo que eligió un jugador, lo que lleva un arma, lanzar uno a demanda, los menús y la caja."
 badge: "dev"
 ---
 
-`HitEffectService` lee el catálogo de ExyliaHitEffect, cambia lo que lleva un jugador y ata efectos a
-las armas. Con una sola búsqueda tienes toda la superficie.
+`HitEffectService` lee el catálogo de ExyliaHitEffect, cambia lo que lleva un jugador, ata efectos a
+las armas, lanza un efecto a demanda, abre los menús y entrega efectos y llaves de caja. Con una sola
+búsqueda tienes toda la superficie.
 
 ```java
 ExyliaAPI.get(HitEffectService.class).ifPresent(effects ->
@@ -44,7 +45,7 @@ pidió. `mayUse` está para quien sí quiera la comprobación, en sus propios t�
 | `List<HitEffectCategory> categories()` | Todas las categorías, en el orden en que se dibujan las pestañas. |
 | `Optional<HitEffectCategory> category(String categoryId)` | Una categoría por id. Vacío si el archivo no declara ninguna con ese id. |
 | `List<HitEffect> effectsIn(String categoryId)` | Los efectos de una categoría, en el orden en que se dibujan. Vacío si la categoría no existe. |
-| `boolean mayUse(Player player, String effectId)` | Si un jugador puede usar un efecto: su propio permiso, el de todos los efectos a la vez o el de su categoría entera. Un id desconocido nunca está permitido, así que un id viejo se lee como bloqueado y no como gratis. |
+| `boolean mayUse(Player player, String effectId)` | Si un jugador puede usar un efecto: su propio permiso, el de todos los efectos a la vez, el de su categoría entera o el de su rareza, o un desbloqueo de la caja o de la tienda. Un id desconocido nunca está permitido, así que un id viejo se lee como bloqueado y no como gratis. |
 
 ## Lo que eligió un jugador
 
@@ -78,6 +79,63 @@ base de datos.
 `bind` y `unbind` escriben sobre la copia del stack que les pasas. Pásales una copia y no un objeto que
 siga dentro de una vista de inventario abierta: lo que ve el jugador se redibuja cuando devuelves el
 stack a su sitio.
+
+## Lanzar un efecto
+
+| Método | Qué hace |
+|---|---|
+| `boolean play(String effectId, Location where, Player attacker, @Nullable LivingEntity victim)` | Lanza un efecto en un lugar, como si allí hubiera caído un golpe. La bandera de región, `HitEffectPlayEvent` y la visibilidad de cada espectador siguen decidiendo; el arma, la elección del menú, la lista de mobs y el permiso se saltan, porque quien llama ya nombró el efecto. Un golpe real se lanza un bloque por encima de los pies de la víctima, sobre el cuerpo. `victim` es el cuerpo sobre el que dibujan sus pasos, o `null` para ninguno. `false` si ningún efecto lleva ese id, no dibuja nada, la región lo silencia o un listener lo canceló. |
+| `boolean playFor(Player attacker, LivingEntity victim)` | Lanza el efecto que gana un golpe, decidiendo todo lo que decide un golpe real: si ese tipo de víctima lanza efectos, y el arma y la elección del menú del atacante según el modo del servidor. `false` si el golpe no gana nada, o si `play` habría respondido `false`. |
+| `boolean preview(Player viewer, String effectId)` | Muestra el efecto en el escenario de previsualización del servidor, a solas, y devuelve al jugador — no hace falta tenerlo, así que sirve de "prueba antes de comprar" para una tienda. `false` si no hay escenario fijado, y se le avisa al jugador. |
+
+`playFor` sirve para daño que el servidor nunca reporta como un golpe de ese jugador: una habilidad, un
+arma personalizada, un dash. Un golpe que el servidor sí reporta ya lanza su efecto, así que llamar a
+`playFor` también para él lo lanza dos veces. En cualquier caso un atacante lanza como mucho cinco
+efectos por segundo.
+
+<Callout type="warning" title="El hilo dueño del lugar">
+Llama a `play` en el hilo dueño de `where` y a `playFor` en el dueño de la víctima: el hilo principal
+en Paper, el hilo de región en Folia. `preview` corresponde al hilo dueño del jugador.
+</Callout>
+
+## Menús
+
+| Método | Qué hace |
+|---|---|
+| `void openMenu(Player player)` | Abre el menú de efectos igual que `/hiteffect`, para un NPC, un objeto del hub o una tienda. Si la fila del jugador no está en memoria se lee antes, así que el menú puede aparecer un momento después de la llamada. En un servidor `weapon` se le avisa de que el menú está apagado. Seguro desde cualquier hilo. |
+| `void openCrate(Player player)` | Abre la caja igual que el comando y los bloques de caja: la pantalla que pregunta cuántas abrir y gasta las llaves. Con la caja apagada se le avisa. Seguro desde cualquier hilo. |
+
+## Tener efectos, y llaves de caja
+
+| Método | Qué hace |
+|---|---|
+| `boolean unlock(Player player, String effectId)` | Le da un efecto para siempre, igual que ganarlo en la caja — posesión sin nodo de permiso, que `mayUse` cuenta desde entonces. No elige nada ni entrega ningún objeto: sigue con `chooseEffect` o `token` para eso. `false` si ningún efecto lleva ese id, la caja ya se lo dio o su fila todavía no llegó; no se cambió nada. |
+| `int keys(UUID player)` | Cuántas llaves de caja tiene. `0` si no tiene ninguna o su fila todavía no llegó. |
+| `void addKeys(Player player, int keys)` | Da llaves, o las quita con un número negativo — así paga una tirada una tienda, un voto o una misión. La cuenta nunca baja de cero. Un jugador cuya fila todavía no llegó queda igual. |
+
+## HitEffectPlayEvent
+
+`net.exylia.lib.api.hiteffect.event.HitEffectPlayEvent` se lanza cuando todo lo demás ya aceptó que
+un efecto debe sonar: existe, dibuja algo y la región permite efectos de golpe. Se lanza para los
+golpes que reporta el servidor y para `play` y `playFor` por igual, y a propósito no se distinguen —
+una arena que quiere los efectos callados los quiere callados en los dos casos.
+
+```java
+@EventHandler
+public void onHitEffect(HitEffectPlayEvent event) {
+    if (event.getLocation().getWorld().getName().equals("lobby")) event.setCancelled(true);
+}
+```
+
+| Método | Qué devuelve |
+|---|---|
+| `Player getPlayer()` | El atacante: de quién es el efecto. |
+| `@Nullable LivingEntity getVictim()` | Sobre qué se lanza. `null` si un plugin lo lanzó en un lugar y no sobre un cuerpo. |
+| `String getEffectId()` | El efecto que va a sonar, normalizado. |
+| `Location getLocation()` | Dónde se lanza. Una copia: cambiarla no mueve nada. |
+
+Cancelarlo no dibuja nada ni dice nada; el golpe en sí queda intacto. El evento se llama en el hilo
+dueño del lugar, que en Folia es un hilo de región y no el principal.
 
 ## HitEffectBindResult
 
@@ -128,8 +186,8 @@ orden, mismos resultados. Una integración escrita contra uno se pasa al otro ca
 
 Lo que el efecto dibuja de verdad — los pasos de partículas que compila el motor de secuencias — no
 está aquí. Es la implementación de esa versión del efecto, cambia cada vez que el dueño edita una
-línea, y no significa nada fuera del plugin que lo reproduce. Los abridores de menú, el editor
-in-game y las escrituras administrativas quedan afuera por lo mismo: un contrato público no se puede
+línea, y no significa nada fuera del plugin que lo reproduce. El editor in-game y las
+escrituras administrativas quedan afuera por lo mismo: un contrato público no se puede
 romper después, así que lleva lo que una integración realmente necesita y nada que solo tuviera
 sentido dentro de una versión.
 
