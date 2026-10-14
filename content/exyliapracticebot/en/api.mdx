@@ -1,12 +1,13 @@
 ---
 title: "API"
-description: "Spawn a bot from another plugin, point it at somebody, dress it in your own kit, and hear about it when it dies."
+description: "Spawn a bot from another plugin, point it at somebody, dress it in your own kit, build it to your own numbers, and hear about it when it dies or kills."
 badge: "dev"
 ---
 
 `PracticeBotService` is how another plugin asks for a bot: a way of fighting, at a level of skill, in a
 place you choose. Everything a player tunes from `/bot` — thirty-odd settings, sliders, armour pieces —
 stays out of the contract on purpose. You ask for a fight; the bot decides how well it is executed.
+When one of the server's answers is wrong for what you are building, you say so — and only that one.
 
 ```java
 PracticeBots.get().ifPresent(bots ->
@@ -82,9 +83,16 @@ formality. See [Limits](/docs/exyliapracticebot/limits).
 |---|---|
 | `CompletableFuture<BotHandle> spawn(BotSpec spec)` | Spawns a bot. Completes on the thread owning the region it appeared in. |
 | `Optional<BotHandle> byEntity(UUID entityId)` | The bot driving an entity, or empty when that entity is not a bot. The lookup behind every "did that just happen to a bot?" question. |
-| `Optional<BotHandle> byOwner(Player owner)` | The bot a player owns, or empty. |
+| `Optional<BotHandle> byOwner(Player owner)` | One of the bots a player owns: the one they spawned with `/bot` when there is one, otherwise any of the rest. Empty when they have none. |
+| `Collection<BotHandle> ownedBy(Player owner)` | Every bot a player owns, newest last. |
+| `Collection<BotHandle> all()` | Every bot on the server. A snapshot, safe to iterate while bots die. |
 | `int active()` | How many bots exist right now. |
-| `int capacity()` | How many may exist at once — the server's configured cap. |
+| `int capacity()` | How many may exist at once — the server's whole `max-bots` cap. Bots spawned here can use the slots `reserved-for-matches` keeps away from players' own `/bot`. |
+
+A bot spawned here is the caller's, and independent of the player's own `/bot`: it does not replace one
+the owner already has, it is not saved to their profile, and a player may own several at once — a 2v2
+can put two on the field while the player keeps their sandbox bot. It is not built from the server's
+sandbox numbers either: see [`BotTuning`](#bottuning).
 
 ## What to spawn: `BotSpec`
 
@@ -93,7 +101,7 @@ construction, as is a spawn location with no world.
 
 | Component | What it is |
 |---|---|
-| `Player owner` | Whose bot it is. It decides who is told when the bot respawns and who has to be online for it to exist — **not** who it fights. |
+| `Player owner` | Whose bot it is. It decides who is told when the bot respawns and who has to be online for it to exist — **not** who it fights. A player may own several bots at once. |
 | `Location spawn` | Where it appears. A duel wants the far spawn, not the player's feet. |
 | `CombatMode mode` | How it fights, and therefore what it carries. |
 | `Difficulty difficulty` | How well it fights. |
@@ -102,8 +110,28 @@ construction, as is a spawn location with no world.
 | `String skin` | Whose skin it wears, by player name, or `null` for the configured one. |
 | `BotKit kit` | What it fights with, or `null` to let the mode dress it. |
 | `BotLimits limits` | How far it will go for the fight, or `null` for the plugin's configured distances. |
+| `BotTuning tuning` | What to change about how the bot is built, or `null` for the defaults. See [`BotTuning`](#bottuning). |
+| `boolean settingsMenu` | Whether the owner may crouch right-click the bot to open its settings menu. `true` is the plugin's own behaviour; `false` for anything you run as a match, where a player editing their opponent mid-fight is not a feature. |
 
-Three shorthands cover most calls:
+The builder is the way in for anything past the two required answers. Only the owner and the spawn
+have no default; a spec built and told nothing else is a `SWORD` bot at `NORMAL` that does not respawn,
+with its settings menu open.
+
+```java
+BotSpec spec = BotSpec.builder(owner, arenaSpawn)
+        .mode(CombatMode.CRYSTAL_PVP)
+        .difficulty(Difficulty.HARD)
+        .name("Crystal Bot")
+        .match(BotKit.of(arenaKit))     // the kit, unlimited distances, no menu, no respawn
+        .tuning(BotTuning.builder().breakBlocks(false).build())
+        .build();
+```
+
+`match(BotKit)` is the three answers every practice match gives in one call: the arena's kit,
+`BotLimits.unlimited()`, the settings menu shut and no respawn. `toBuilder()` turns a spec back into a
+builder.
+
+The older shorthands still work:
 
 ```java
 new BotSpec(owner, spawn, mode, difficulty, respawn);                 // dressed by its mode
@@ -112,8 +140,10 @@ BotSpec.duel(owner, spawn, mode, difficulty);                         // fights 
 BotSpec.duel(owner, spawn, mode, difficulty, name, skin);             // the same, with its own identity
 ```
 
-`withKit(BotKit)` and `withLimits(BotLimits)` return a copy with that one thing changed, so a spec built
-once per arena can be finished per match.
+`withKit(BotKit)`, `withLimits(BotLimits)`, `withTuning(BotTuning)` and `withSettingsMenu(boolean)`
+return a copy with that one thing changed, so a spec built once per arena can be finished per match.
+The nine-argument constructor from before tuning existed is deprecated; it leaves the tuning unset and
+the settings menu open.
 
 ## A kit outranks the mode
 
@@ -126,7 +156,10 @@ So when a spec carries a `BotKit`, the kit wins. The mode is then only the *scho
 with: which techniques it knows, how it moves, when it retreats. What it is holding comes off the items.
 
 Concretely, a non-empty kit replaces the mode's main hand, off hand, totem count and weapon damage,
-reading each of them back off the items themselves — and it clears the mode's free buffs. Strength,
+reading each of them back off the items themselves — and it clears the mode's free buffs. A kit is
+also a ledger: the bot spends what it carries and runs out of it, crystals, anchors, pearls, potions
+and totems included. Its spare totems are the kit's count minus the one already in its hand, so a kit
+with two totems is two lives, not three. Strength,
 Speed and fire resistance are a loadout's shorthand for potions a sandbox bot was never going to drink;
 a kit that wants the bot buffed puts the potions in the kit.
 
@@ -177,6 +210,37 @@ Left unsent, the plugin's configured values apply and nothing changes for anybod
 the ones the bot runs on — a bot spawned across an arena under sandbox limits stands still waiting to be
 approached, and one whose opponent runs the length of the map is quietly removed mid-fight.
 
+### `BotTuning`
+
+A bot spawned through the API is built on a vanilla body — twenty health, killable, knocked back like
+a player, and no totems beyond the ones its kit carries — and reads the server's `config.yml` only for
+what is genuinely tuning rather than a sandbox cheat: reach, cadence, movement and how each mode plays.
+An admin who makes their sandbox dummy invincible with endless totems has said something about their
+sandbox, not about your duel.
+
+`BotTuning` changes either. Every field is optional, and one left unset keeps the default it would
+have had, so a caller that cares about two of them says two of them:
+
+```java
+BotTuning tuning = BotTuning.builder()
+        .breakBlocks(false)      // the arena gets reused
+        .enderPearls(false)      // and it is too small to pearl across
+        .build();
+```
+
+| Group | Fields |
+|---|---|
+| Body | `maxHealth` (half-hearts), `invincible`, `spareTotems` (`0` the held one only, `-1` unlimited; with a kit, counted from the kit unless set) |
+| Attack | `attackDamage` (ignored when a kit is sent), `attackReach`, `attackSpeed` (multiplier) |
+| Movement | `movementSpeed` (multiplier), `followDistance` |
+| Defence | `antiKnockback`, `slowFalling`, `shieldDisableSeconds`, `respawnDelaySeconds` |
+| Crystal PvP | `crystalRange`, `crystalSelfPreservationPercent`, `respawnAnchors`, `crystalTraps`, `enderPearls`, `breakBlocks` |
+| Pot PvP | `healPotionPercent`, `potApplePercent`, `enchantedApples` |
+| UHC | `uhcApplePercent`, `cobwebs`, `lava`, `water` |
+
+`BotTuning.none()` overrides nothing; `BotTuning.trainingDummy()` is the practice dummy asked for on
+purpose — invincible, with unlimited totems.
+
 ## The handle
 
 `BotHandle` is the bot from the outside — a handle, not the bot. The entity it drives and the state
@@ -189,6 +253,9 @@ assuming.
 | `UUID entityId()` | The entity id of the body it drives. A plain UUID on purpose — the entity type is not part of this contract and has changed before. |
 | `Player owner()` | Whose bot it is. Never changes. |
 | `Player target()` | Who it is fighting right now. Starts as the owner. |
+| `CombatMode mode()` | How it fights. A bot spawned through the API keeps the mode it was spawned with; a player's own `/bot` follows their settings menu, so theirs can change under you. |
+| `Difficulty difficulty()` | How well it fights right now. |
+| `void setDifficulty(Difficulty difficulty)` | Changes how well it fights, from its next decision — a bot eased down after the player loses three in a row, pushed up once they start winning. Gear, health and whatever its kit has spent stay as they are, and nothing is saved. Safe from any thread; ignored when null. |
 | `void setTarget(Player target)` | Points it at somebody else, from the next tick it thinks. Whatever it had decided about the previous opponent — its route, the combo it thought it was in — is dropped. Ignored when null or already the target. |
 | `boolean isAlive()` | Whether the bot still exists and is fighting. |
 | `double health()` / `double maxHealth()` | A snapshot taken on the bot's own tick, not a live read: at worst a tick or two stale, which no health bar can see. `0` once the bot is gone. |
@@ -236,8 +303,11 @@ an ordinal, so the declaration order can change without breaking a stored row.
 
 ## Events
 
-One event, `net.exylia.lib.api.practicebot.event.PracticeBotDeathEvent`. It extends `Event` and is
-**not cancellable** — there is no `Cancellable` on it and nothing to gate. By the time it runs the bot
+Two events, in `net.exylia.lib.api.practicebot.event`. Neither is cancellable.
+
+### `PracticeBotDeathEvent`
+
+It extends `Event` and is **not cancellable** — there is no `Cancellable` on it and nothing to gate. By the time it runs the bot
 is already gone; the handle is there to say which one it was and who it belonged to, not to be kept.
 
 | Method | What it carries |
@@ -267,14 +337,32 @@ public void onBotDeath(PracticeBotDeathEvent event) {
 Compare `event.bot().entityId()` rather than holding the handle: it is the one thing about a dead bot
 that is still worth anything.
 
+### `PracticeBotKillEvent`
+
+A bot killed a player: the player died and the last thing to hurt them was a bot — its swing, or a
+crystal it set off. A player hit by a bot and then by anything else is not the bot's kill; one hit by a
+bot who then falls to their death is. It saves every integration reading `PlayerDeathEvent` and working
+out for itself whether the killer was a bot.
+
+| Method | What it carries |
+|---|---|
+| `BotHandle bot()` | The bot that landed the last hit. It may already be gone — one that died in the same exchange — so check `isAlive()` before acting on it. |
+| `Player victim()` | The player it killed. Still dying: the death event has not finished. |
+
+It is called from the player's own death, on the thread that owns them, which on a threaded server is
+not the main thread.
+
 ## What it does not expose
 
 No access to the thirty-odd settings a player tunes from `/bot`, no way to read or write somebody's
-saved row, no menu openers, and no event other than the death above. An integration asks for a way of
-fighting at a level of skill and lets the bot decide the rest — a public method for every slider would
-be a contract that breaks every time the AI learns something.
+saved row, no menu openers, and no events other than the two above. An integration asks for a way of
+fighting at a level of skill and lets the bot decide the rest — `BotTuning` covers what a match needs to
+change, and a public method for every slider would be a contract that breaks every time the AI learns
+something.
 
-`BotKit` and `BotLimits` are newer than the rest: they arrived in ExyliaLib `1.84.0` and `1.86.0`, while
-everything else has been there since `1.73.0`. Build against a recent `exylia-api` if you want them.
+`BotKit` and `BotLimits` arrived in ExyliaLib `1.84.0` and `1.86.0`; `BotTuning`, the builder,
+`settingsMenu`, `ownedBy` and `all` in `1.127.0`; `PracticeBotKillEvent` and the handle's `mode`,
+`difficulty` and `setDifficulty` in `1.133.0`. Everything else has been there since `1.73.0`. Build
+against a recent `exylia-api` if you want them; ExyliaPracticeBotV3 implements all of it from `1.3.0`.
 
 If something you genuinely need is still missing, ask on [Discord](https://discord.exylia.net).
