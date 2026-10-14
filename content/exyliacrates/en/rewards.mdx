@@ -1,0 +1,164 @@
+---
+title: "Rewards and rarities"
+description: "The weighted reward editor, how a prize is drawn, rarities as weight bands in tiers.yml, rewards per key, the guarantee, and the contents screen with its real odds."
+---
+
+## Rewards
+
+**Rewards** → **Rewards** on a crate's overview opens ExyliaLib's weighted reward editor. A reward is one of:
+
+| Type | Gives |
+|---|---|
+| Item | An item, taken from your hand, with its own name, enchantments and lore. |
+| Command | A console command run for the winner. |
+| Economy | An amount of money, in a currency of your choice. |
+| Experience | Experience. |
+| Potion | A potion effect, such as `SPEED\|2\|15`. |
+| Message | A line sent to the winner. |
+
+Each reward also has a display name and icon (what the screens and the animations show), an optional amount
+range, a **weight**, a **chance**, and an optional **permission** and **condition**.
+
+In the editor, shift + left-click raises a reward's weight and shift + right-click lowers it, in steps that
+grow with the weight (tenths below 1, then ones, fives and tens), never below 0.1. Every row shows its real
+share of the crate and its rarity, redrawn as you click. **Sort by weight** orders the list most common
+first; press it again for the rarest first. Nothing is saved until you save; cancelling leaves the crate as
+it was.
+
+## How a prize is drawn
+
+The prize is decided the moment the key is spent, before the animation starts. The animation only shows it.
+
+<Steps>
+  <Step title="Who can win what">
+    Rewards whose permission or condition the player does not meet are taken out of the draw for them. If
+    nothing is left the player is told "This crate has no rewards yet." and nothing is charged.
+  </Step>
+  <Step title="The weighted draw">
+    One reward is picked in proportion to its weight. Weights are relative: a reward weighted 10 next to one
+    weighted 5 comes out twice as often, and the numbers do not have to add up to anything.
+  </Step>
+  <Step title="Its own chance">
+    The picked reward then rolls its own chance. If it misses, the draw starts again — a key always opens
+    something. In effect each reward comes out in proportion to **weight × chance**.
+  </Step>
+  <Step title="Its amount">
+    An amount range is rolled now, so the stack the animation shows is the stack the player gets.
+  </Step>
+</Steps>
+
+<Callout type="warning" title="Keep chances high">
+A draw is tried up to 16 times. A crate whose rewards all have a low chance can miss all 16, and that draw
+pays nothing. If every draw of an opening misses, the player is told "This crate has no rewards yet." and the
+keys **are still spent**. Leave chance at 100 and use the weight to make a reward rare.
+</Callout>
+
+## Rewards per key
+
+**Rewards** → **Rewards per key**: a minimum and a maximum, 1 to 9 each. Every key pays a random number of
+rewards in that range, each drawn on its own; the same reward can come out twice. Raising the minimum above
+the maximum raises the maximum with it, and the other way round.
+
+## Rarities
+
+A rarity is not a label you set on a reward. It **follows the weight**: a rarity is a band of weights with a
+name, a colour, whether winning it is announced, and what plays when it comes out. They live in `tiers.yml`.
+
+```yaml
+tiers:
+  legendary:
+    display: "{highlight}&lLEGENDARY"
+    color: "{highlight}"
+    max-weight: 1.0
+    broadcast: true
+    celebrate:
+      - "[SOUND] UI_TOAST_CHALLENGE_COMPLETE;1.0;1.0"
+      - "[TITLE] %tier%;{letters}%player% {letters_black}» %reward%;0.1;2.5;0.6;who:nearby"
+      - "[BEAM] END_ROD;height:7;points:34;y:0.2"
+      - "[FIREWORK] color:%tier_color%;fade:{secondary};type:star;trail:true"
+      - "[RING_PULSE] END_ROD;radius:0.6;rings:3;points:16;y:0.4"
+      - "[SHAKE] radius:6;times:1"
+  epic:
+    display: "{accent}&lEPIC"
+    color: "{accent}"
+    max-weight: 5.0
+    broadcast: true
+    celebrate: [ ... ]
+  rare:
+    display: "{info}&lRARE"
+    color: "{info}"
+    max-weight: 25.0
+    broadcast: false
+    celebrate: [ ... ]
+  common:
+    display: "{letters_black}&lCOMMON"
+    color: "{letters_black}"
+    max-weight: 1000000.0
+    broadcast: false
+    celebrate:
+      - "[SOUND] ENTITY_ITEM_PICKUP;0.8;1.2"
+```
+
+| Key | Meaning |
+|---|---|
+| `display` | What menus, announcements and the reveal call it. |
+| `color` | The palette token the reward's name is written in on the screens. |
+| `max-weight` | The heaviest weight that still counts as this rarity. |
+| `broadcast` | Announce to the whole server when somebody wins one. See [Openings](/docs/exyliacrates/openings#announcements). |
+| `celebrate` | Effect lines played once where the prize comes out, whatever the animation. |
+
+A reward belongs to the first rarity, ordered by `max-weight`, whose `max-weight` it does not exceed. A
+weight above every band still belongs to the widest one, so keep the last rarity wide. You can rename,
+remove or add rarities; their ids are what the guarantee and the Tier Slots gems refer to.
+
+With the default file a reward weighted 1 or less is legendary, up to 5 epic, up to 25 rare, and heavier
+than that common. **A new reward starts at weight 1, which is legendary**: raise the common ones.
+
+### Celebrations
+
+`celebrate` lines are ExyliaLib sequences. `%reward%`, `%tier%`, `%tier_color%`, `%player%`, `%crate%` and
+`%amount%` are filled in, and `{item:reward}` draws the prize's icon. `who:nearby` on a `[TITLE]` or
+`[MESSAGE]` line reaches everybody watching instead of the opener only; a `[CAMERA]` line with `who:source`
+gives the opener a camera shot of their own. See [Sequences](/docs/exylialib/sequences).
+
+The celebration is the only place the reveal's sound lives: when it plays a `[SOUND]`, the chat line telling
+the opener what they won drops its own leading sound tag.
+
+In a bulk opening the celebration is that of the rarest prize.
+
+## The guarantee
+
+A crate can promise a rarity after a number of openings: "a legendary at least every 50 keys".
+
+**Rewards** → **Guarantee**: left-click sets the number of openings (0 to 500, 0 is off), right-click picks
+the rarity from `tiers.yml`, shift + left-click turns it off (keeping the rarity for later).
+
+- Each player has a counter per crate. Every opening adds one.
+- When the counter reaches the number, the first reward of that opening is drawn only among rewards of the
+  guaranteed rarity.
+- Winning a reward of that rarity — guaranteed or by luck — sets the counter back to 0.
+- A bulk opening moves the counter once per key: ten keys at once are ten openings closer.
+
+The counter is per player and crate, stored in the database, and shared across a network.
+
+<Callout type="warning" title="Two ways a guarantee does nothing">
+A number set without a rarity guarantees nothing: the contents screen says "No guarantee", though
+`%exyliacrates_crate_pity_<crate>%` still counts down. And a rarity the crate holds no reward of cannot be
+paid: the opening falls back to an ordinary draw, the counter never resets, and the contents screen keeps
+saying the next one is guaranteed.
+</Callout>
+
+## The contents screen
+
+Left-clicking a crate block, `/crates preview <crate>` or **Player view** on the overview opens the crate's
+contents: every reward, rarest first, each with its rarity and its chance.
+
+The chance shown is the real one for the player looking: weight × chance of each reward, over every reward
+**they** can win. A reward they cannot win — missing permission or condition — shows **Locked**.
+
+The crate's own item at the bottom shows how many keys they hold for it (items and balance of the first key
+it takes) and how far they are from the guarantee: "4 more to LEGENDARY", or "The next one is LEGENDARY!".
+Clicking it opens the crate; shift-clicking opens as many as they can pay for. That opening plays **in front
+of the player**, wherever they stand, not on the block — the same as `/crates open`.
+
+**Your openings** opens the player's own history, with a way back to the contents.

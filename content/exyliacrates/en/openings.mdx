@@ -1,0 +1,136 @@
+---
+title: "Openings"
+description: "What happens from the click to the prize: the checks, shared and private openings, opening several keys at once, speeding up, leaving mid-opening, the history, announcements and the other plugins that hear about it."
+---
+
+## From the click to the prize
+
+<Steps>
+  <Step title="The checks">
+    The crate must be enabled and hold a reward the player can win. Their keys must have loaded since they
+    joined ("Your keys are still loading."), their own previous opening must be over, and on a shared crate
+    nobody else's opening may be playing on that block ("Somebody is opening this crate. Wait a moment.").
+  </Step>
+  <Step title="The charge">
+    Every cost is charged, all or nothing. See [Keys and costs](/docs/exyliacrates/keys#how-a-charge-works).
+  </Step>
+  <Step title="The draw">
+    The prizes are drawn and the guarantee counter is written in the same step, so what the animation lands
+    on is exactly what is handed over. The opening is written to the history and the
+    [`CrateOpenEvent`](/docs/exyliacrates/api#crateopenevent) fires.
+  </Step>
+  <Step title="The animation">
+    The crate's animation plays over the block. It shows the rarest prize won; the others come out with it.
+  </Step>
+  <Step title="The reveal">
+    The prize comes out: it is handed over now, the rarity's celebration plays, a label floats over it —
+    "You won …" for the opener, "*player* won …" for everybody else — and the opener reads what they won in
+    chat. A rarity that broadcasts is announced to the server.
+  </Step>
+</Steps>
+
+With the **Instant** animation the prize simply appears over the crate for about two seconds.
+
+If an animation never reaches its reveal — it broke, or a player kept it waiting — the plugin reveals for it
+once its time is up, so a prize is never lost to an animation.
+
+## Shared or private
+
+**Opening** → **Audience** on a crate's overview.
+
+| | Everyone, one at a time | Opener only, many at once |
+|---|---|---|
+| Who sees the animation | The opener and everybody within `settings.watch-radius` (24 blocks), as they walk in and out of it | The opener alone |
+| Openings on one block | One at a time; others are told to wait | Any number at once |
+| Floating icon and hologram during the opening | Hidden for everybody watching | Hidden for the opener only |
+
+A player busy with an opening of their own does not see other openings, so two animations never mix on one
+screen. The labels, effects and celebration follow the same audience. Announcements and the chat summary do
+not depend on it.
+
+## Opening away from the block
+
+`/crates open <crate>` — and clicking the crate item on the contents screen — opens a crate from anywhere.
+The animation plays on the ground about three blocks in front of the player, seen by whoever the crate's
+audience allows. It takes no block, so it never makes anybody wait. Add `true` to open as many as they can pay for: `/crates open vote true`.
+
+Every player with `exyliacrates.use` can do this for every enabled crate. There is no per-crate permission
+and no switch to require standing at the block.
+
+## Opening several at once
+
+Sneak while right-clicking the block, shift-click the crate item on the contents screen, or add `true` to
+`/crates open`: the crate opens as many times as every cost allows, up to `settings.max-multi-open` (10).
+
+All the prizes come out together. The animation lands on the rarest; when it comes out, up to seven prizes
+line up under it, rarest last, each with a count when it was won more than once. The chat summary lists them
+the same way:
+
+```text
+CRATES • You opened Vote and won 10 rewards:
+ ▎ Diamond x3
+ ▎ 500 Coins x6
+ ▎ Netherite Sword
+```
+
+The guarantee counter advances once per key.
+
+## Speeding up
+
+A click while your own opening plays — any click, anywhere — plays the rest of it `settings.click-speed-up`
+times quicker (4 by default), up to the reveal. Once per opening; the reveal plays at its own pace.
+`click-speed-up: 1` turns it off.
+
+When an animated opening starts, the opener is reminded over the hotbar: `speed-up-hint` in `messages.yml`.
+Pick a Card ignores clicks while the player is choosing a card, since that click is the choice.
+
+## Leaving mid-opening
+
+A prize is handed over whatever happens to the opening:
+
+| The opener | What happens |
+|---|---|
+| Dies | Paid at once and told in chat what they won. |
+| Changes world | Paid at once and told in chat what they won. |
+| Disconnects | Paid at once, through the delivery queue: the prize waits for their next join. No chat summary and no announcement. |
+| The server stops | Paid at once, before the plugin shuts down. |
+
+Prizes that do not fit in the inventory, or that reach a player who is not online, are kept by ExyliaLib's
+delivery queue and handed over on their next join: "Delivered 3 rewards that were waiting for you."
+
+## History
+
+Every reward won is one row of history: who, which crate, what, its rarity and when.
+
+| Screen | Opened with | Shows |
+|---|---|---|
+| Your openings | `/crates history`, or **Your openings** on a contents screen | The player's own latest 108 rewards, newest first |
+| Server openings | `/cratesadmin history`, or **Server history** on the crate list | Everybody's latest 108 |
+
+Rows older than `settings.history-retention-days` (30) are deleted a minute after start and every six hours
+after. `0` keeps them forever.
+
+## Announcements
+
+When somebody wins a reward whose rarity has `broadcast: true` in `tiers.yml` — legendary and epic by
+default — the server reads:
+
+```text
+CRATES • Steve pulled Netherite Sword from Vote » LEGENDARY
+```
+
+That is `broadcast` in `messages.yml`. Announcements go through ExyliaLib's **Crate wins** channel
+(`crate-announcements`): every player can mute it from the Announcements screen of `/settings`.
+`settings.broadcast-enabled: false` turns announcements off for everybody.
+
+A bulk opening announces each broadcasting prize once, however many times it was won.
+
+## Other plugins
+
+| Plugin | What it does with openings |
+|---|---|
+| ExyliaSurvivalCore | Counts `crates.opened` and `crates.<id>.opened` for every player, one per opening, which missions and seasons read. Its boosters multiply crate prizes under the source `crates`. |
+| Any plugin | Listens for [`CrateOpenEvent`](/docs/exyliacrates/api#crateopenevent). |
+
+Prizes are paid through ExyliaLib's reward modifiers with the source `crates` and the scope `crate:<id>`, so a
+modifier provider can boost every crate or one crate alone.

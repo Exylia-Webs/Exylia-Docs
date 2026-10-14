@@ -1,0 +1,87 @@
+---
+title: "API"
+description: "Leer y dar llaves de cajas desde otro plugin, y escuchar cada apertura de una caja."
+badge: "dev"
+---
+
+`CratesService` es como otro plugin lee las llaves de un jugador y le suma más — un listener de votos, un puente
+con una tienda, un evento que paga en llaves. `CrateOpenEvent` le avisa cada vez que se abre una caja.
+
+```java
+ExyliaAPI.get(CratesService.class).ifPresent(crates -> crates.giveKeys(player.getUniqueId(), "vote", 1));
+```
+
+<Callout type="note" title="Añadirlo a tu proyecto">
+El artefacto, el repositorio y la línea de `plugin.yml` son los mismos para todos los plugins de Exylia y están
+en la [página de la API pública](/docs/exylialib/api). El contrato de cajas llegó en la API pública **1.10.0**,
+en el paquete `net.exylia.lib.api.crates`.
+</Callout>
+
+Un `Optional` vacío significa que el servidor no tiene ExyliaCrates, no que algo haya fallado. El servicio se
+registra cuando el plugin ha arrancado y desaparece cuando se desactiva.
+
+## Métodos
+
+| Método | Qué hace |
+|---|---|
+| `boolean exists(String crateId)` | Si existe una caja con ese id. |
+| `int keys(UUID player, String crateId)` | El **saldo** de llaves del jugador para la llave de la caja. |
+| `boolean giveKeys(UUID player, String crateId, int amount)` | Suma llaves al saldo del jugador para la llave de la caja. |
+
+El contrato habla de "las llaves de una caja". Desde que las llaves son registros propios, eso significa la
+llave con la que se abre la caja: la primera llave que lista su coste, o si no una llave con el mismo id que la
+caja. Un id que no es de ninguna caja pero sí de una llave se lee como esa llave, así que
+`giveKeys(player, "event_key", 1)` también funciona.
+
+### keys
+
+Lee el saldo de memoria. Cuenta solo el saldo, nunca los ítems de llave de un inventario, y responde `0` para un
+jugador desconectado, uno cuyas llaves aún no se han cargado, una caja que no pide llave y un id desconocido.
+Nunca toca la base de datos, así que es seguro en cualquier hilo.
+
+### giveKeys
+
+Suma la cantidad en la propia base de datos, así que funciona con un jugador desconectado o en otro servidor y
+nunca pisa llaves concedidas en otro sitio mientras tanto. Devuelve `false` para una cantidad menor que 1 o un id
+que no es ni de una caja con llave ni de una llave, `true` cuando la escritura está en camino.
+
+Al jugador **sí** se le avisa: uno conectado recibe `keys-received` y el efecto `keys.received` cuando las llaves
+están dentro; uno que no está conectado recibe `keys-while-away` en su siguiente entrada. El "the player is told
+nothing" del javadoc no coincide con el plugin.
+
+Lo que se concede por la API no se escribe en el registro de staff.
+
+## CrateOpenEvent
+
+`net.exylia.lib.api.crates.event.CrateOpenEvent`, no cancelable: lo que informa ya ha pasado.
+
+| Getter | Devuelve |
+|---|---|
+| `getPlayer()` | Quién abrió la caja. |
+| `getCrateId()` | El id de la caja. |
+| `getKeys()` | Cuántas **aperturas** fueron: 1, o más en una apertura múltiple. |
+| `getRewards()` | Los nombres visibles de cada recompensa ganada, con los tokens de paleta, una entrada por recompensa. |
+
+Se dispara una vez por apertura — una apertura múltiple de diez es un evento con `getKeys()` 10 — en el hilo del
+propio jugador (su hilo de región en Folia), y de forma asíncrona en el sentido de Bukkit cuando ese no es el
+hilo principal.
+
+Lo que hace de verdad el plugin, donde el javadoc dice otra cosa:
+
+- **Se dispara antes de entregar los premios.** Los costes están pagados y los premios decididos, y se dispara
+  cuando empieza la animación; los premios se entregan en la revelación, unos segundos después (o al momento si
+  el jugador se va). El javadoc dice "after the keys are spent and the rewards handed over".
+- **`getKeys()` cuenta aperturas, no llaves.** Una caja que pide tres llaves por apertura informa 1 por una
+  apertura; una caja que solo cuesta dinero, o nada, sigue informando las aperturas.
+- **`getRewards()` va en el orden del sorteo.** El javadoc dice la más rara primero.
+
+Las vistas previas de animación del staff nunca lo disparan.
+
+ExyliaSurvivalCore lo escucha para contar `crates.opened` y `crates.<id>.opened`.
+
+## Lo que no está
+
+Las cajas, las llaves y las recompensas se crean dentro del juego. No hay ningún método para crear o editar una
+caja, abrir una por un jugador, quitar llaves, leer ítems de llave ni leer el contador de garantía; lee el
+contador con los [placeholders](/docs/exyliacrates/placeholders), y quita o fija saldos con
+`/cratesadmin key take` y `key set` desde la consola.

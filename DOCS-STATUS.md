@@ -24,6 +24,7 @@ scripts/doc-drift.sh exyliaevents # just one
 | `exyliachatcosmetics` | `ExyliaChatCosmetics` | 1.0.0 | `e1bf009` 2026-09-07 | Current — first full documentation: the shipped catalogue (180 tags in seven tabs, 90 nick, 96 chat, 90 shadow and 77 rank colours, 18 fonts, 5 modifiers, 18 animations), tag marks as sprites, particles and head skins with the 1.21.9 ceiling, the four custom kinds and the create/edit token economy, entitlements and expiry, the menus, and the whole built-in chat module across five pages, mentions included: a name is a mention with or without the `@`, and the nudge ships as a sound alone. Written against the source: the repository's own `docs/` predates the current catalogue by twelve commits. |
 | `exyliaclans` | `ExyliaClans` | 1.2.1 | `176c733` 2026-10-06 | Current — reviewed for 1.2.1. New: the per-clan Discord webhook page (menu, `/clan webhook` and its forms, `MANAGE_WEBHOOK`, the `webhooks` block, `webhooks.yml` templates, `clan_webhooks`); the `language` key and the `lang/<code>/` layout (en/es/pt/fr, `default` following ExyliaLib, 1.1.0 files adopted into `lang/custom/`), with the relational labels, boss bar texts and teleport titles moved from `config.yml` into `messages.yml`; `/clanadmin setslots` and `clans.extraSlots`; `FOCUS`, `CAMP` and `RALLY` as rank permissions (granted once to existing ranks), `/clan rally clear`, and every one of the 28 permissions toggleable in the role menu; invites and alliance requests both expiring on `invite-expire-seconds`, stored, with the 30-second sweep; the create, invite and mail waits and the rival-notice throttle; the plugin.yml permission block (commands default `true`, `exyliaclans.admin` parent of every admin node); cross-server sync on the database page; SurvivalCore native rally, map icons, chat tabs, team panels and keybinds; centred clickable prompts; the API's `roles`, `relation`, `addExp`, `adjustDtr`, `joinClan`, `setRole`, `openMenu` and the eight clan events (`exylia-api` `v1.133.0`); menu updates through `/exylialib updates`; reload starting and stopping modules; ExyliaEconomy soft-depend. Corrected against the source: camp `duration-seconds` now expires the marker, an expired regroup point cancels running countdowns, explosion filtering only under `BUILTIN`, a shrunk clan's DTR clamped to its new maximum, `PROMOTE`/`DEMOTE` enforced by direction; 1.2.1 makes a mistyped `visibility-mode` fall back to `DISABLED`. 1.2.1 ships the loader `plugin.yml` with `exyliaclans.admin.setslots` and the ExyliaEconomy soft-depend. |
 | `exyliaclasses` | `ExyliaClasses` | 1.0.0 | `d48bfe0` 2026-08-31 | Current — the only change since was a database index. |
+| `exyliacrates` | `ExyliaCrates` | 1.0.0 | `dfbb500` 2026-10-14 | Beta — first full documentation, fourteen pages, written against the source at `dfbb500` and the crates contract in `exylia-api` (ExyliaLib `origin/main`, `e1885666`, public API 1.10.0). Premium on the Lukittu loader (`Exylia-Crates-Loader.jar`), but `bbbResourceId` is empty: the registry entry has no `purchase` and the pages link to the store; add the resource once it exists. The banner URL is assumed. Crates, the hub and its five sections, the wand, floating icon, hologram and idle loop; keys as records, items vs balance, costs (keys and money, all-or-nothing charge, multi-open); weighted rewards, the draw (weight × chance, 16 retries), rarities as weight bands in `tiers.yml` with celebrations, rewards per key, the guarantee and the contents screen; shared/private openings, remote opening, speed-up, settle on death/world change/quit/shutdown, history and retention, the `crate-announcements` channel, SurvivalCore stats and the `crates` modifier source; the eleven animations with every key of every `animations/<id>.yml`; `config.yml`, messages, menus; `CratesService` and `CrateOpenEvent`. Nothing is imported from ExyliaSurvivalCore (import dropped at `50fb9c3`). |
 | `exyliadisplays` | `ExyliaDisplays` | 2.4.0 | `6f2da50` 2026-10-14 | Current — first full documentation, eighteen pages, written against the source (and ExyliaLib `origin/main` for `HologramConfig`, `HologramLine`, `Interactions` and the page tokens; the 2.4.0 jar names `exylia-lib: 1.299.0`). Free and open source (GPL-3.0, GitHub releases): no loader, no licence, `download` instead of `purchase`; formerly ExyliaHolograms. Holograms (lines, items, blocks, heads, the editor and its dialog windows, appearance, location and facing), every line tag, per-player pages with `[PAGE]` and `page-interval`, visibility (permission, per-player, `all`/`manual` lists, attaching to players and saved or unsaved mobs), NPCs (skin incl. `@mirror` and texture/signature, pose, scale, glow, equipment, look modes, label, linked hologram), the shared interaction lines with `[SAY]`/`[ANIMATE]`/`[LOOK]` and the NPC gate (permission, cooldown, refusals), fine adjust, hand edits and the file watcher, the six admin screens and their `exyliadisplays:holo_*`/`npc_*` actions, the ExyliaHolograms move and the five importers, every command, permission, `config.yml` key and preset, and every key of `holograms.yml`/`npcs.yml`. No API page: the plugin publishes no service and no placeholders (FAQ points to ExyliaLib's `Holograms`/`Npcs`). Documented as behaviour and listed below: NPC labels are never per viewer; renaming or deleting a linked hologram leaves the NPC's link dangling; broken YAML hides the whole file's contents; `/holoadmin reload` and `/npcadmin reload` reload everything; colliding imported names can pass 32 characters. |
 | `exyliaeconomy` | `ExyliaEconomy` | 1.1.0 | `0dc0f06` 2026-10-03 | Current — first full documentation, nineteen pages. Free and open source (GPL-3.0, GitHub releases): no loader, no licence, the registry entry carries `download` instead of `purchase`. Currencies in the database edited in game, the Vault bridge, payments (tax charged to the payer on top, confirmations, throttling, paytoggle, offline notices), banknotes, interest, leaderboards, the ledger with export and rollback, networked balances, the automatic ExyliaSurvivalCore import and `/economyadmin import vault|points`, ExyliaLib auto-install, and the API (ExyliaLib's `Economy` facade, `BalanceChangeEvent`, `EconomyPayEvent`, `EconomyExchangeEvent`). Documented as behaviour: placeholders cannot name a currency whose id has an underscore (ExyliaLib splits arguments on `_`), so the shipped `netherite_ingots`, `xp_points` and `xp_levels` are out of reach; the PlaceholderAPI form is `%exyliaeconomy_economy_…%`, not the README's; the networked switch cannot be turned back once balances exist; a `/pay` receiver online on another server is not notified. |
 | `exyliaemotes` | `ExyliaEmotes` | 1.0.0 | `f7b0ba8` 2026-09-23 | Current — first full documentation, fourteen pages: the 68 shipped emotes in four tabs with every id, rarity, kind, cooldown and prop (52 endless, 16 one-shot, two duets), how an `emotes.yml` entry and its `[RAGDOLL]`/`[CAMERA]` lines are written, endless loops with `loop_from`, rolled `tempo` and `endless-limit`, the hidden player and the camera, every way out (clicks and keys read off the wire, the 300 ms grace, damage and the traced punch at the body) and every refusal, the two cooldowns, duets (one standing invitation, right-click to accept, reach on invite and accept, bodies placed `gap` apart on the line between the players), the menu and `emote:` actions, the crate on ExyliaLib with the one-time import of the old keys and unlocks, showcases, and every key of `config.yml` and `messages.yml`. No API page: `exylia-api` publishes no emotes service. Written against the source: the stale comments and the broken behaviour are listed below. |
@@ -203,6 +204,52 @@ Found while writing that set at `6f2da50`. The pages describe what the code does
   `exyliadisplays:holo_*`.
 - `FileWatcher.java:66`: when a file cannot be watched the console says "use /holoadmin reload" even for
   `npcs.yml`, whose command is `/npcadmin reload`.
+
+### Discrepancies and broken behaviour in ExyliaCrates
+
+Found while writing that set at `dfbb500`. The pages describe what the code does.
+
+- **An opening whose draws all miss pays nothing and keeps the keys.** `CratesService.pick` retries a reward
+  whose chance misses `CHANCE_ATTEMPTS` (16) times and then returns `null`; `draw` skips it. When every draw
+  misses, `paid` (`CratesService.java:593-597`) sends `no-rewards` and returns after the costs were charged and
+  the pity row written — nothing is refunded. A crate whose rewards all have a low chance eats keys.
+- **Deleting a key can make a crate free.** `CratesManager.deleteKey` removes the key from each crate's costs;
+  a crate left with none encodes `free` and opens for everybody at no cost (`max-multi-open` times on sneak).
+  The confirmation prompt (`prompts.key-delete`) only says the crates "will stop asking for it".
+- **`/cratesadmin reload` does not redraw holograms.** The `crates` reload step (`CratesService.reload`) only
+  invalidates animations/fillers and restarts the idle loop; `hologram-lines`, `hologram.enabled` and
+  `hologram.offset-y` reach standing holograms only through `refresh` (a General/Opening/Presence edit) or a
+  restart. The cost and reward editors (`editCosts`, `saveRewards`) do not call `refresh` either.
+- **Crates and keys are never re-read across a network.** `CratesManager.load` reads `crates`/`crates_keys` once;
+  only `CratePlayerEntity` has an `onRemoteChange` listener. An edit on one server reaches the others on restart,
+  and a stale server saving a crate overwrites the newer row.
+- **`CrateOpenEvent` javadoc (ExyliaLib `exylia-api`)**: says it fires "after the keys are spent and the rewards
+  handed over"; it fires in `paid()` before the animation, and prizes are handed at the reveal. `getKeys()` is
+  documented as keys spent but receives `times` (openings), so a 3-key crate reports 1 and a money-only crate
+  reports openings. `getRewards()` says "rarest first"; it is draw order (`won`).
+- **`CratesService.giveKeys` javadoc**: "The player is told nothing." `CratesServiceImpl` sends `keys-received`
+  with the `keys.received` effect to an online player, and a player away gets `keys-while-away` on join (the
+  grant bumps `unseen`). The interface also still describes balances as "per player and crate".
+- **A player who quits mid-opening is paid but never summarised or announced.** `forget` → `settle(false)`, so
+  `summarise` (chat lines and the broadcast of a broadcasting tier) never runs. Death and world change use
+  `settle(true)` and do announce.
+- **A guarantee without a tier, or with a tier the crate holds nothing of.** `pityAfter > 0` with `pityTier`
+  null: the preview says "No guarantee" but `%crate_pity_<id>%` counts down. A tier with no reward in it falls
+  back to an ordinary draw (`pick`), `isPityTier` never matches, the counter never resets and the preview keeps
+  saying `pity-next`.
+- **Remote opening is open to everyone.** `/crates open` and the preview's `crate_open` button open any enabled
+  crate from anywhere for any holder of `exyliacrates.use` (default true); no per-crate permission or setting.
+  The preview button also opens "in front of the player" even when the preview was opened from the block.
+- `CratesAdminCommand.told` fills `%crate%` (and `%key%`) of `keys-given`/`keys-taken`/`keys-set` with the raw
+  key id, while the player-facing lines use the crate names (`CrateKeys.opens`).
+- `CrateSetupMenu.values` writes `pity-every` with the tier **id**, not its `display`.
+- `animation-none` (messages) and `prompts.animation` are declared and never read.
+- `config.yml` declares no `language` key; the plugin follows ExyliaLib's language only (other translated
+  plugins write `language: default`).
+- The key screen's **Get keys** (`crate_key_give`) and API grants (`CratesServiceImpl.giveKeys`) are never
+  written to the staff log; every `/cratesadmin key` command is.
+- Local `~/Java/Exylia/ExyliaLib` is 126 commits behind `origin/main` and lacks `net.exylia.lib.api.crates`;
+  the API page was written from `origin/main`.
 
 ## How a review goes
 

@@ -1,0 +1,128 @@
+---
+title: "Installation"
+description: "The loader jar and the licence, dependencies and what each optional plugin adds, the files the plugin writes, the database, networks, and servers that used the crates of ExyliaSurvivalCore."
+---
+
+## Getting the plugin
+
+ExyliaCrates is a premium plugin, bought from the [Exylia store](https://link.exylia.net/@services). It
+ships through the Lukittu loader, so the file you install is the loader jar, `Exylia-Crates-Loader.jar`.
+Bought on BuiltByBit, the licence is embedded in that jar: there is no key to enter. The loader checks the
+licence on every start and then hands over to the plugin.
+
+## Before you start
+
+| Plugin | What for |
+|---|---|
+| `packetevents` | Required. Declared under `depend`, so without it the server does not load ExyliaCrates at all. Holograms, the floating icons and every animation are drawn with packets. |
+| `ExyliaLib` | Required, version **1.296.0** or newer. Configuration, menus and prompts, the reward editor, the database, holograms, displays, effects and the staff log. |
+
+<Callout type="note" title="ExyliaLib is listed as soft, and installed for you">
+`plugin.yml` names ExyliaLib under `softdepend` on purpose: the loader is what installs it, so the loader
+has to be allowed to start without it. On a server without ExyliaLib it downloads the newest release into
+`plugins/` and asks for a restart. On a server running a release older than 1.296.0 it stages the newest
+one in the update folder and says so in the console; restart once more to apply it. Without network access
+it skips the install and tries again on the next start — put `ExyliaLib.jar` in `plugins/` by hand.
+</Callout>
+
+### Optional plugins
+
+| Plugin | What it adds |
+|---|---|
+| `PlaceholderAPI` | The plugin's placeholders in other plugins: scoreboards, tab, holograms. See [Placeholders](/docs/exyliacrates/placeholders). The crate holograms work without it. |
+| `ExyliaEconomy` or `Vault` | Money as an opening cost, through ExyliaLib's economy. Without an economy a crate that costs money cannot be opened: the player is told they lack the amount. See [Keys and costs](/docs/exyliacrates/keys#money). |
+| `ExyliaSurvivalCore` | Its statistics count `crates.opened` and `crates.<id>.opened` for missions and seasons, and its boosters can multiply crate prizes under the `crates` source. See [Openings](/docs/exyliacrates/openings#other-plugins). |
+
+## Installing
+
+<Steps>
+  <Step title="Drop in the jars">
+    `Exylia-Crates-Loader.jar` and `packetevents` into `plugins/`. Add PlaceholderAPI or an economy now if
+    you want what they bring.
+  </Step>
+  <Step title="Start the server">
+    The loader writes `loader.yml`, checks the licence and installs ExyliaLib if it is missing. If it had to
+    install it, restart once more.
+  </Step>
+  <Step title="Let it generate">
+    The plugin writes `config.yml`, `tiers.yml`, the eleven animation files, its messages and menus, and
+    creates its tables. The console ends with `ExyliaCrates enabled`.
+  </Step>
+  <Step title="Build a crate">
+    Run `/cratesadmin` as an operator. See [First steps](/docs/exyliacrates/first-steps).
+  </Step>
+</Steps>
+
+## Generated files
+
+All of them live in `plugins/ExyliaCrates/`.
+
+| File | Contents |
+|---|---|
+| `loader.yml` | Written by the loader. A BuiltByBit purchase needs nothing in it: the licence is in the jar. |
+| `config.yml` | What every crate on this server shares: the wand, multi-open, history retention, announcements, the watch radius, the speed-up, the hologram, the idle loop and the keys-received effect. See [Configuration](/docs/exyliacrates/configuration). |
+| `tiers.yml` | The rarities, their weight bands and their celebrations. See [Rewards and rarities](/docs/exyliacrates/rewards#rarities). |
+| `animations/<id>.yml` | One file per animation: timings, sizes, blocks, sounds and the effect lines of each phase. See [Animations](/docs/exyliacrates/animations). |
+| `database.yml` | Where rows are stored, and Redis. Written by ExyliaLib. |
+| `lang/<language>/messages.yml` | Every line the plugin sends, the hologram lines, the key and wand items, the prompts and the screen labels. |
+| `lang/<language>/menus/user/` | The two player screens: a crate's contents and the history. Yours to edit. |
+| `lang/<language>/menus/admin/` | The ten staff screens: the crate list, a crate's overview and its sections, the animation picker, the key list and a key. Rewritten from the jar on every start. |
+
+The plugin ships English, Spanish, French, Portuguese and Russian. It follows the language set in
+ExyliaLib's own `config.yml`.
+
+## The database
+
+Crates, keys, the blocks they stand on, every player's balance and guarantee counter, and the history are
+rows in the database `database.yml` points at — H2 in a file by default, or MySQL, MariaDB, PostgreSQL or
+MongoDB through ExyliaLib.
+
+| Table | Holds |
+|---|---|
+| `crates` | One row per crate: name, icon, costs, rewards, rewards per key, guarantee, animation, audience and where its icon and hologram sit. |
+| `crates_keys` | One row per key: its id, name and item. |
+| `crates_blocks` | One row per block a crate stands on, with the server it is on. |
+| `crates_players` | One row per player and crate or key: the key balance, the openings since the guarantee last paid, the openings made, and keys granted while away. |
+| `crates_openings` | One row per reward won: who, which crate, what, its rarity, when. |
+
+Two more tables come from ExyliaLib in the same database: `exylia_pending_rewards`, where prizes and key
+items that could not be handed over wait for the player's next join, and the staff log.
+
+## Networks
+
+Point every server at the same database and they share crates, keys, balances and the history. Blocks are
+per server: each server registers only the crate blocks placed on it.
+
+A key balance is worth the same everywhere. Keys added to it are added in the database itself, and a spend,
+take or set holds a network-wide lock on the row, so a store purchase landing on one server while the
+player opens a crate on another counts both. With Redis configured in `database.yml`, a balance changed on
+one server reaches the others at once.
+
+<Callout type="warning" title="Crates and keys are read once, at startup">
+Each server reads the crates and the keys when it starts and works from that copy. A crate or key edited on
+one server — rewards, costs, name, animation — reaches the others on their next restart, and a server that
+saves its older copy of a crate writes it back over the newer one. Edit crates on one server, then restart
+the rest.
+</Callout>
+
+## Coming from ExyliaSurvivalCore
+
+The crates module of ExyliaSurvivalCore moved here, and **nothing is imported**. Its tables (`sc_crates`,
+`sc_crate_blocks`, `sc_crate_players`, `sc_crate_openings`) are not read; crates, keys and blocks are
+created again from `/cratesadmin`.
+
+Two things carry over on their own:
+
+- **Key items already in players' hands.** An item the survival core handed out still opens crates, as long
+  as a key with the same id exists here. Create the keys with the ids the old crates had.
+- **Statistics.** A release of ExyliaSurvivalCore without the crates module counts openings from this
+  plugin's event, under the same `crates.opened` and `crates.<id>.opened` names its missions read.
+
+The permission nodes changed: `exyliasurvivalcore.crates.use` and `exyliasurvivalcore.crates.admin` are no
+longer checked. Grant `exyliacrates.use` and `exyliacrates.admin` instead.
+
+## Updating
+
+Replace the loader jar and restart. Your `config.yml`, `tiers.yml`, animation files, messages and player
+menus are kept; new keys are added with their defaults. The staff menus under `menus/admin/` are rewritten
+from the jar every start, so an edit there does not survive one.

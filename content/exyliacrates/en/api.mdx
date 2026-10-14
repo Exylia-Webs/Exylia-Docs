@@ -1,0 +1,85 @@
+---
+title: "API"
+description: "Read and grant crate keys from another plugin, and listen for every crate opening."
+badge: "dev"
+---
+
+`CratesService` is how another plugin reads a player's keys and adds to them — a vote listener, a store
+bridge, an event that pays out in keys. `CrateOpenEvent` tells it every time a crate is opened.
+
+```java
+ExyliaAPI.get(CratesService.class).ifPresent(crates -> crates.giveKeys(player.getUniqueId(), "vote", 1));
+```
+
+<Callout type="note" title="Adding it to your project">
+The artifact, the repository and the `plugin.yml` line are the same for every Exylia plugin and live on
+the [public API page](/docs/exylialib/api). The crates contract arrived in the public API **1.10.0**, in the
+package `net.exylia.lib.api.crates`.
+</Callout>
+
+An empty `Optional` means the server has no ExyliaCrates, not that something failed. The service is
+registered once the plugin has started and goes away when it disables.
+
+## Methods
+
+| Method | What it does |
+|---|---|
+| `boolean exists(String crateId)` | Whether a crate by that id exists. |
+| `int keys(UUID player, String crateId)` | The player's key **balance** for the crate's key. |
+| `boolean giveKeys(UUID player, String crateId, int amount)` | Adds keys to the player's balance for the crate's key. |
+
+The contract speaks of "a crate's keys". Since keys became records of their own, that means the key the crate
+is opened with: the first key its cost lists, or else a key sharing the crate's id. An id that names no
+crate but a key is read as that key, so `giveKeys(player, "event_key", 1)` works too.
+
+### keys
+
+Reads the balance from memory. It counts the balance only, never key items in an inventory, and answers `0`
+for a player who is offline, whose keys have not loaded yet, for a crate that takes no key, and for an
+unknown id. It never touches the database, so it is safe on any thread.
+
+### giveKeys
+
+Adds the amount in the database itself, so it works on a player who is offline or on another server and never
+overwrites keys granted elsewhere meanwhile. Returns `false` for an amount below 1 or an id that names neither
+a crate with a key nor a key, `true` once the write is on its way.
+
+The player **is** told: an online player gets `keys-received` and the `keys.received` effect once the keys are
+in; one who is not online gets `keys-while-away` on their next join. The javadoc's "the player is told nothing"
+does not match the plugin.
+
+Grants through the API are not written to the staff log.
+
+## CrateOpenEvent
+
+`net.exylia.lib.api.crates.event.CrateOpenEvent`, not cancellable: what it reports already happened.
+
+| Getter | Returns |
+|---|---|
+| `getPlayer()` | Who opened the crate. |
+| `getCrateId()` | The crate's id. |
+| `getKeys()` | How many **openings** this was: 1, or more for a bulk opening. |
+| `getRewards()` | The display names of every reward won, palette tokens included, one entry per reward. |
+
+It fires once per opening — a bulk opening of ten is one event with `getKeys()` 10 — on the player's own thread
+(their region thread on Folia), and asynchronously in Bukkit's sense when that is not the primary thread.
+
+What the plugin actually does, where the javadoc says otherwise:
+
+- **It fires before the prizes are handed over.** The costs are paid and the prizes decided, and it fires as
+  the animation starts; the prizes are handed over at the reveal, seconds later (or at once if the player
+  leaves). The javadoc says "after the keys are spent and the rewards handed over".
+- **`getKeys()` counts openings, not keys.** A crate that takes three keys per opening reports 1 for one
+  opening; a crate that only costs money, or nothing, still reports the openings.
+- **`getRewards()` is in draw order.** The javadoc says rarest first.
+
+Admin previews of an animation never fire it.
+
+ExyliaSurvivalCore listens to it to count `crates.opened` and `crates.<id>.opened`.
+
+## What is not there
+
+Crates, keys and rewards are built in game. There is no method to create or edit a crate, open one for a
+player, take keys, read key items, or read the guarantee counter; read the counter through the
+[placeholders](/docs/exyliacrates/placeholders), and take or set balances with `/cratesadmin key take` and
+`key set` from the console.

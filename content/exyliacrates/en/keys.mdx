@@ -1,0 +1,138 @@
+---
+title: "Keys and costs"
+description: "Keys as records of their own, key items and key balances, how they are given and taken, and the list of keys and money a crate charges per opening."
+---
+
+A **key** is a record of its own: an id, a name and the item it is drawn as. Which crates it opens is up to
+the crates — each one lists the keys it takes — so one key can open several crates and outlives a crate
+that is deleted.
+
+## Items and balances
+
+A player can hold a key in two ways, and both open the same crates:
+
+| | Key item | Key balance |
+|---|---|---|
+| What it is | An item in the inventory, carrying the key's id. | A number in the database, per player and key. |
+| Given with | `/cratesadmin key give`, `key giveall`, the key screen's **Get keys** | `/cratesadmin key virtual`, the [API](/docs/exyliacrates/api) |
+| Reaches an offline player | Waits for their next join. | Yes, at once, on any server. |
+| Can be traded, dropped, stored | Yes | No |
+| Counted on every server of a network | Only where the item is | Yes |
+
+When a crate is opened, the key items the player carries are spent first and the balance pays the rest. A
+player with two items and five in their balance can open seven.
+
+A key item opens whatever its key opens **now**: renaming the key or changing which crates take it changes
+what every existing item does. Key items are inert as their material — a key drawn as a sweet berry is not
+eaten, one drawn as a block is not placed.
+
+<Callout type="tip" title="Which one to give">
+Give items for things players should be able to trade or give away — an event prize, a drop. Give a balance
+for anything bought or earned while the player may be offline: a store, a vote listener, a scheduled
+reward. A balance cannot be lost to a full inventory, a death or a disconnect.
+</Callout>
+
+`/crates` lists every key a player holds, items and balance together, with the crates each one opens.
+
+## The keys screen
+
+`/cratesadmin keys`, or **Keys** on the crate list, lists every key with the crates that take it.
+
+| On the list | Does |
+|---|---|
+| Left-click a key | Opens its screen. |
+| Right-click a key | Deletes it, after a confirmation. |
+| **Create key** | Asks for an id and opens the new key. |
+
+A key's screen edits its **name** (the item's name; colours work), its **icon** (a material, a head, or an
+item from another plugin; `settings.default-key-material` until one is chosen, `TRIPWIRE_HOOK` by default),
+and has **Get keys**, which hands you that many key items to test with, and **Delete key**.
+
+A new key is named after `default-key-name` in `messages.yml`: `KEY » <id>`. Only new keys take it; an
+existing key is renamed from its screen.
+
+### Deleting a key
+
+Deleting a key removes it from the costs of every crate that took it, and the confirmation says how many
+those are. Players' balances of it are kept, unread: a key created again with the same id finds them there.
+Key items of a deleted key stop opening anything.
+
+<Callout type="danger" title="A crate whose only cost was that key becomes free">
+Deleting a key takes it out of each crate's cost list. A crate left with no costs at all opens for free, for
+everybody. Give those crates another cost before deleting the key, or disable them.
+</Callout>
+
+## What a crate costs
+
+A crate charges an ordered list of costs per opening. **Opening cost** on a crate's overview lists them.
+
+| Kind | Charges | Added with |
+|---|---|---|
+| Key | A number of one key, 1 to 2304. | **Add key**: pick one of the existing keys, then how many. |
+| Money | An amount of a currency, at least 1. | **Add money**: the amount, then the currency when the server has more than one. |
+
+On a cost: left-click changes its amount, right-click removes it. Adding a key the crate already takes sets
+its amount rather than adding a second line. A crate with no costs is **free** and says so on its overview.
+
+A crate can take several keys — one `vote` key **and** one `event` key — and money with them. A player has to
+pay every one of them: when one is missing they are told which ("You need 1x Event Key to open Rare.") and
+nothing is charged.
+
+### How a charge works
+
+Money is charged first, then each key cost in order. The charge is all or nothing: when a later cost cannot
+be paid — another server spent the balance a moment earlier — everything already charged is given back,
+money and keys alike.
+
+### Money
+
+Money goes through ExyliaLib's economy: `ExyliaEconomy` or any `Vault` economy. A money cost without a
+currency is in the server's default one, and its amount is written the way that currency writes it. Without
+an economy plugin a money cost cannot be paid, and the crate cannot be opened.
+
+### Opening several at once
+
+Sneaking while opening pays for as many openings as **every** cost allows, up to `settings.max-multi-open`
+(10). A crate costing 2 keys and 100 coins, opened by a player with 7 keys and 250 coins, opens twice.
+
+A free crate opened while sneaking opens `max-multi-open` times every time.
+
+## Giving and taking keys
+
+Every key command takes a key's id. An id that names no key but a crate is read as that crate's key — the
+first key its cost lists — so a store command can name the crate.
+
+| Command | Gives | Target |
+|---|---|---|
+| `/cratesadmin key give <player> <key> <amount>` | Key items | Online players only |
+| `/cratesadmin key giveall <key> <amount>` | Key items | Everybody online on this server |
+| `/cratesadmin key virtual <player> <key> <amount>` | Balance | Anybody who has joined, online or not, on any server |
+| `/cratesadmin key take <player> <key> <amount>` | Removes from the balance, never below 0 | Online or not |
+| `/cratesadmin key set <player> <key> <amount>` | Sets the balance; a negative amount sets 0 | Online or not |
+
+`take` and `set` work on the balance only; they never touch key items in an inventory.
+
+Key items are handed over through ExyliaLib's delivery path: a full inventory, a death screen or a
+disconnect keeps them for the player's next join instead of dropping them on the floor.
+
+The player is told when keys reach them — "You received 3 Vote keys." — with the `keys.received` effect from
+`config.yml` (a title, a sound and a burst of particles by default). Keys added to the balance of a player
+who is not online are announced on their next join, on whichever server: "3 Vote keys arrived while you were
+away." A take or a set tells an online player the new state.
+
+`take` and `set` can answer "The keys of *player* changed on another server meanwhile. Try again." when
+another server kept changing the same balance through five attempts.
+
+Every give, take and set, and creating and deleting keys and crates, is written to ExyliaLib's staff log,
+read with `/exylialib logs`.
+
+### From a web store
+
+A store runs commands from the console while the buyer may be offline. Use `key virtual`:
+
+```text
+cratesadmin key virtual {username} vote 5
+```
+
+The keys are added in the database itself, so a purchase landing while the player spends a key on another
+server counts both.

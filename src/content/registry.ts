@@ -535,6 +535,7 @@ const ARMORSKIN_NAV: NavGroup[] = [
       page("wardrobe", "wardrobe", "vestidor"),
       page("animations", "animations", "animaciones"),
       page("effects", "effects", "efectos"),
+      page("crate", "crate", "caja"),
     ],
   },
   {
@@ -543,6 +544,7 @@ const ARMORSKIN_NAV: NavGroup[] = [
       page("commands", "commands", "comandos"),
       page("permissions", "permissions", "permisos"),
       page("configuration", "configuration", "configuracion"),
+      page("placeholders", "placeholders", "placeholders"),
       page("api", "api", "api"),
       page("faq", "faq", "faq"),
     ],
@@ -1102,6 +1104,38 @@ const MARKET_NAV: NavGroup[] = [
   },
 ];
 
+const CRATES_NAV: NavGroup[] = [
+  {
+    label: { en: "Getting started", es: "Empezar" },
+    pages: [
+      page("introduction", "introduction", "introduccion"),
+      page("installation", "installation", "instalacion"),
+      page("first-steps", "first-steps", "primeros-pasos"),
+    ],
+  },
+  {
+    label: { en: "Crates", es: "Cajas" },
+    pages: [
+      page("crates", "crates", "cajas"),
+      page("keys", "keys", "llaves"),
+      page("rewards", "rewards", "recompensas"),
+      page("openings", "openings", "aperturas"),
+      page("animations", "animations", "animaciones"),
+    ],
+  },
+  {
+    label: { en: "Reference", es: "Referencia" },
+    pages: [
+      page("commands", "commands", "comandos"),
+      page("permissions", "permissions", "permisos"),
+      page("placeholders", "placeholders", "placeholders"),
+      page("configuration", "configuration", "configuracion"),
+      page("api", "api", "api"),
+      page("faq", "faq", "faq"),
+    ],
+  },
+];
+
 const PROTECTIONS_NAV: NavGroup[] = [
   {
     label: { en: "Getting started", es: "Empezar" },
@@ -1562,6 +1596,27 @@ export const plugins: Plugin[] = [
       { en: "Folia", es: "Folia" },
     ],
     nav: PROTECTIONS_NAV,
+  },
+  {
+    id: "exyliacrates",
+    name: "ExyliaCrates",
+    tagline: { en: "Crates opened with keys, animated over the block", es: "Cajas que se abren con llaves, animadas sobre el bloque" },
+    summary: {
+      en: "Crates built and edited in game and placed on any block, opened with key items or a key balance shared across a network, priced in any mix of keys and money, with weighted rewards whose rarity follows the weight, a guarantee after so many openings, eleven opening animations everybody nearby watches, bulk openings, a history and server-wide announcements.",
+      es: "Cajas creadas y editadas dentro del juego y colocadas en cualquier bloque, que se abren con ítems de llave o con un saldo de llaves compartido en toda la red, con un precio de cualquier mezcla de llaves y dinero, recompensas con peso cuya rareza sigue al peso, una garantía tras tantas aperturas, once animaciones de apertura que ven todos los que están cerca, aperturas múltiples, un historial y anuncios a todo el servidor.",
+    },
+    version: "1.0.0",
+    status: "beta",
+    category: { en: "Survival", es: "Survival" },
+    minecraft: "1.21+",
+    banner: "https://s3.exylia.net/exylia-plugins/public/static/images/plugins/crates/ExyliaCratesBanner.webp",
+    tags: [
+      { en: "Crates", es: "Cajas" },
+      { en: "Animations", es: "Animaciones" },
+      { en: "Network", es: "Red" },
+      { en: "Folia", es: "Folia" },
+    ],
+    nav: CRATES_NAV,
   },
   {
     id: "exyliamarket",

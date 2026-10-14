@@ -1,0 +1,145 @@
+---
+title: "Llaves y costes"
+description: "Las llaves como registros propios, ítems de llave y saldos de llaves, cómo se dan y se quitan, y la lista de llaves y dinero que cobra una caja por apertura."
+---
+
+Una **llave** es un registro propio: un id, un nombre y el ítem con el que se dibuja. Qué cajas abre lo deciden
+las cajas — cada una lista las llaves que pide — así que una llave puede abrir varias cajas y sobrevive a una
+caja que se elimina.
+
+## Ítems y saldos
+
+Un jugador puede tener una llave de dos formas, y las dos abren las mismas cajas:
+
+| | Ítem de llave | Saldo de llaves |
+|---|---|---|
+| Qué es | Un ítem en el inventario, con el id de la llave. | Un número en la base de datos, por jugador y llave. |
+| Se da con | `/cratesadmin key give`, `key giveall`, **Obtener llaves** en la pantalla de la llave | `/cratesadmin key virtual`, la [API](/docs/exyliacrates/api) |
+| Llega a un jugador desconectado | Espera a su siguiente entrada. | Sí, al momento, en cualquier servidor. |
+| Se puede intercambiar, tirar, guardar | Sí | No |
+| Cuenta en todos los servidores de una red | Solo donde está el ítem | Sí |
+
+Al abrir una caja se gastan primero los ítems de llave que lleva el jugador y el saldo paga el resto. Un
+jugador con dos ítems y cinco de saldo puede abrir siete.
+
+Un ítem de llave abre lo que su llave abra **ahora**: renombrar la llave o cambiar qué cajas la piden cambia lo
+que hace cada ítem existente. Los ítems de llave no funcionan como su material — una llave dibujada como una
+baya no se come, una dibujada como un bloque no se coloca.
+
+<Callout type="tip" title="Cuál dar">
+Da ítems para lo que los jugadores deban poder intercambiar o regalar — un premio de evento, un drop. Da
+saldo para cualquier cosa comprada o ganada mientras el jugador puede estar desconectado: una tienda, un
+listener de votos, una recompensa programada. Un saldo no se pierde por un inventario lleno, una muerte o una
+desconexión.
+</Callout>
+
+`/crates` lista todas las llaves que tiene un jugador, ítems y saldo juntos, con las cajas que abre cada una.
+
+## La pantalla de llaves
+
+`/cratesadmin keys`, o **Llaves** en la lista de cajas, lista todas las llaves con las cajas que las piden.
+
+| En la lista | Hace |
+|---|---|
+| Clic izquierdo en una llave | Abre su pantalla. |
+| Clic derecho en una llave | La elimina, tras una confirmación. |
+| **Crear llave** | Pide un id y abre la llave nueva. |
+
+La pantalla de una llave edita su **nombre** (el nombre del ítem; admite colores), su **icono** (un material,
+una cabeza o un ítem de otro plugin; `settings.default-key-material` hasta que se elige uno, `TRIPWIRE_HOOK`
+por defecto), y tiene **Obtener llaves**, que te da esa cantidad de ítems de llave para probar, y **Eliminar
+llave**.
+
+Una llave nueva se nombra con `default-key-name` de `messages.yml`: `LLAVE » <id>`. Solo las llaves nuevas lo
+toman; una llave existente se renombra desde su pantalla.
+
+### Eliminar una llave
+
+Eliminar una llave la quita de los costes de todas las cajas que la pedían, y la confirmación dice cuántas
+son. Los saldos de los jugadores se conservan, sin leerse: una llave creada otra vez con el mismo id los
+encuentra ahí. Los ítems de una llave eliminada dejan de abrir nada.
+
+<Callout type="danger" title="Una caja cuyo único coste era esa llave pasa a ser gratis">
+Eliminar una llave la saca de la lista de costes de cada caja. Una caja que se queda sin ningún coste se abre
+gratis, para todo el mundo. Dale otro coste a esas cajas antes de eliminar la llave, o desactívalas.
+</Callout>
+
+## Lo que cuesta una caja
+
+Una caja cobra una lista ordenada de costes por apertura. **Coste de apertura** en la vista general de la
+caja los lista.
+
+| Tipo | Cobra | Se añade con |
+|---|---|---|
+| Llave | Una cantidad de una llave, de 1 a 2304. | **Añadir llave**: elige una de las llaves existentes y después cuántas. |
+| Dinero | Una cantidad de una moneda, al menos 1. | **Añadir dinero**: la cantidad, y después la moneda si el servidor tiene más de una. |
+
+Sobre un coste: clic izquierdo cambia su cantidad, clic derecho lo quita. Añadir una llave que la caja ya pide
+cambia su cantidad en vez de añadir una segunda línea. Una caja sin costes es **gratis** y lo dice en su vista
+general.
+
+Una caja puede pedir varias llaves — una llave `vote` **y** una llave `event` — y dinero con ellas. El jugador
+tiene que pagarlas todas: cuando falta una se le dice cuál ("Necesitas 1x Llave de evento para abrir Rara.") y
+no se cobra nada.
+
+### Cómo se cobra
+
+Primero se cobra el dinero y después cada coste de llave en orden. El cobro es todo o nada: cuando un coste
+posterior no se puede pagar — otro servidor gastó el saldo un momento antes — se devuelve todo lo ya cobrado,
+dinero y llaves.
+
+### Dinero
+
+El dinero pasa por la economía de ExyliaLib: `ExyliaEconomy` o cualquier economía de `Vault`. Un coste de
+dinero sin moneda es en la moneda por defecto del servidor, y su cantidad se escribe como la escribe esa
+moneda. Sin un plugin de economía un coste de dinero no se puede pagar, y la caja no se puede abrir.
+
+### Abrir varias de una vez
+
+Abrir agachado paga tantas aperturas como permitan **todos** los costes, hasta `settings.max-multi-open` (10).
+Una caja que cuesta 2 llaves y 100 monedas, abierta por un jugador con 7 llaves y 250 monedas, se abre dos
+veces.
+
+Una caja gratis abierta agachado se abre `max-multi-open` veces cada vez.
+
+## Dar y quitar llaves
+
+Todos los comandos de llaves reciben el id de una llave. Un id que no es de ninguna llave pero sí de una caja se
+lee como la llave de esa caja — la primera llave que lista su coste — así que un comando de tienda puede
+nombrar la caja.
+
+| Comando | Da | Objetivo |
+|---|---|---|
+| `/cratesadmin key give <jugador> <llave> <cantidad>` | Ítems de llave | Solo jugadores conectados |
+| `/cratesadmin key giveall <llave> <cantidad>` | Ítems de llave | Todos los conectados a este servidor |
+| `/cratesadmin key virtual <jugador> <llave> <cantidad>` | Saldo | Cualquiera que haya entrado, conectado o no, en cualquier servidor |
+| `/cratesadmin key take <jugador> <llave> <cantidad>` | Resta del saldo, nunca por debajo de 0 | Conectado o no |
+| `/cratesadmin key set <jugador> <llave> <cantidad>` | Fija el saldo; una cantidad negativa lo deja en 0 | Conectado o no |
+
+`take` y `set` actúan solo sobre el saldo; nunca tocan los ítems de llave de un inventario.
+
+Los ítems de llave se entregan por la vía de entrega de ExyliaLib: un inventario lleno, la pantalla de muerte
+o una desconexión los guardan para la siguiente entrada del jugador en vez de tirarlos al suelo.
+
+Al jugador se le avisa cuando le llegan llaves — "Recibiste 3 llaves de Vote." — con el efecto `keys.received`
+de `config.yml` (un título, un sonido y unas partículas por defecto). Las llaves sumadas al saldo de un
+jugador que no está conectado se anuncian en su siguiente entrada, en el servidor que sea: "Mientras no
+estabas llegaron 3 llaves de Vote." Un `take` o un `set` le dice a un jugador conectado cómo queda.
+
+`take` y `set` pueden responder "Las llaves de *jugador* cambiaron en otro servidor mientras tanto. Inténtalo
+de nuevo." cuando otro servidor siguió cambiando el mismo saldo durante cinco intentos.
+
+Cada `give`, `take` y `set`, y crear y eliminar llaves y cajas, se escribe en el registro de staff de
+ExyliaLib, que se lee con `/exylialib logs`.
+
+### Desde una tienda web
+
+Una tienda ejecuta comandos desde la consola mientras el comprador puede estar desconectado. Usa
+`key virtual`:
+
+```text
+cratesadmin key virtual {username} vote 5
+```
+
+Las llaves se suman en la propia base de datos, así que una compra que llega mientras el jugador gasta una
+llave en otro servidor cuenta las dos cosas.
