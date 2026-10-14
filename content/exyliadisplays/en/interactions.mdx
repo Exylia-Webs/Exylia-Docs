@@ -1,0 +1,113 @@
+---
+title: "Interactions"
+description: "The click lines holograms and NPCs share: click filters, commands, server transfers, teleports, effects, delays, NPC speech bubbles and animations, permissions and cooldowns."
+---
+
+Holograms and NPCs run the same click lines: a hologram's `click.commands` (and each page's `click`), and
+an NPC's `interactions.actions`. One action per line, run in order for the player who clicked:
+
+```yaml
+actions:
+  - 'right: [SOUND] ENTITY_VILLAGER_AMBIENT;1;1.2'
+  - 'right: [SAY] {letters}Welcome, {highlight}%player_name%{letters}!;6s'
+  - 'left: [ANIMATE] hurt'
+  - 'shift_right: [SERVER] survival'
+  - 'console: give %player_name% bread 1'
+```
+
+The lines come from ExyliaLib's interaction module, so they read the same in every Exylia plugin.
+
+## Click filters
+
+A line may start with a filter; then only that click runs it. A line without one runs on any click.
+
+| Filter | Runs on |
+|---|---|
+| `left:` | A left click. |
+| `right:` | A right click. |
+| `shift_left:` / `shift_right:` | That click while sneaking. |
+| `shift:` | Either click while sneaking. |
+| `any:` | Every click (the same as no filter). |
+| `left,right:` | A list of the above. |
+
+A plain `left:` does not match a sneaking left click: use `shift_left:` or `shift:` for those.
+
+## Actions
+
+| Line | Does |
+|---|---|
+| `command` · `player: command` | Runs a command as the player (no slash). |
+| `console: command` | Runs it from the console. |
+| `player-proxy: server lobby` · `console-proxy: alert ...` | Runs it on the proxy, with ExyliaProxyUtils. |
+| `[SERVER] lobby` | Sends the player to another server of the network (BungeeCord or Velocity). |
+| `[TELEPORT] world;x;y;z[;yaw;pitch]` | Teleports the player. |
+| `[DELAY] 1s` | Waits before the lines after it. |
+| `[MESSAGE] text` | A chat message, only to the player who clicked. |
+| `[TITLE] title;subtitle` · `[ACTION_BAR] text` | A title or action bar. |
+| `[SOUND] NAME;volume;pitch` | A sound. |
+| `[TOAST] ...` · `[PARTICLE] ...` | Any other ExyliaLib sequence token, for the clicking player. |
+| `[ACTION] namespace:id` | An action another Exylia plugin registered. |
+
+`%player_name%` and every PlaceholderAPI or ExyliaLib placeholder resolve for the clicking player.
+
+A line that cannot be understood (an unknown token, nothing after the filter) is reported once in the
+console, naming the hologram or NPC, and left out; the other lines still run.
+
+## Only on NPCs
+
+| Line | Does |
+|---|---|
+| `[SAY] text;5s` | A speech bubble above the NPC that only the clicking player sees, typed in letter by letter. The time is optional (`say-duration`, default 5s). |
+| `[ANIMATE] swing` · `[ANIMATE] hurt` | Swings an arm, or flinches. Anything other than `hurt` swings. |
+| `[LOOK]` | Turns it to the clicking player for `turn-back` (default 4s). |
+
+NPC lines also fill `%npc%` with the NPC's name and `%click%` with the click (`left`, `right`,
+`shift_left`, `shift_right`).
+
+A `[SAY]` bubble floats above the label. A new bubble for the same player replaces their old one at once;
+two players talking to the same NPC each see only their own. Its look is `say-bubble` in
+`messages/npcs.yml`, default `<typewriter:30><background:#66000000>{letters}%text%`. The last `;5s` is
+read as the time only when it is one: `[SAY] Hi; how are you?` is all text.
+
+## Only on holograms
+
+`[PAGE] next`, `previous`, `first`, `last` or a number turns the clicking player's page. See
+[Pages](/docs/exyliadisplays/pages).
+
+## Hologram clicks
+
+A hologram with click lines gets an invisible box over its lines. It is clickable only when it has at
+least one click line.
+
+| Setting | Command | Default |
+|---|---|---|
+| Lines | `/holo <name> click add <line>` · `click remove <n>` · `click clear` | none |
+| Width of the box | `/holo <name> click width <blocks>` | `1.5` (as tall as the lines) |
+| Cooldown per player | `/holo <name> click cooldown <ms>` | `500` |
+| Hover growth | `/holo <name> click hover <scale>` | `1.08`; `1` turns it off |
+
+The hologram grows a little while a player looks at it, so they know it can be clicked. In the file,
+`cooldown` also reads `500ms`, `1s`.
+
+## NPC permission and cooldown
+
+An NPC's clicks can be gated:
+
+| Setting | Command | |
+|---|---|---|
+| Lines | `/npc <name> action add <line>` · `action remove <n>` · `action clear` · `action list` | |
+| Permission | `/npc <name> action permission [node]` | Only players with it can use the NPC. Everyone still sees it. |
+| Cooldown | `/npc <name> action cooldown <time>` | Per player: `500ms`, `2s`, `1m`, or `0`. |
+| Refusal | `/npc <name> action denymessage [text]` | Told to a player without the permission. No text: `interaction-denied` in `messages/npcs.yml`. |
+| Waiting | `/npc <name> action cooldownmessage [text]` | Told to a player still waiting; `%remaining%` is the seconds left. No text: `interaction-cooldown`. |
+| Face the clicker | `/npc <name> action faceclicker <true\|false>` | Default `true`. |
+
+A click that no line answers (a left click on an NPC that only acts on right click) is ignored and spends
+no cooldown. Cooldowns live in memory: a restart forgets them.
+
+Clicking the NPC's label counts as clicking the NPC.
+
+<Callout type="tip" title="An NPC that does nothing">
+Turn `debug: true` on in `config.yml`. Every NPC click is then logged with what became of it — ran (with
+its lines), ignored, denied or cooling down — which is the first thing to look at.
+</Callout>

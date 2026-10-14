@@ -182,6 +182,10 @@ export const dict = {
       en: "Measuring the server: players, performance and the economy.",
       es: "Medir el servidor: jugadores, rendimiento y economía.",
     },
+    Utility: {
+      en: "Things in the world every server needs, edited in game.",
+      es: "Lo que todo servidor necesita en el mundo, editado dentro del juego.",
+    },
     Library: {
       en: "The foundation the rest is written on.",
       es: "La base sobre la que está escrito el resto.",

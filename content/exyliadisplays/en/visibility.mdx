@@ -1,0 +1,98 @@
+---
+title: "Visibility and attaching"
+description: "Who sees a hologram: view distance, permission, per-player copies, and lists of chosen players. Holograms that ride a player or a mob."
+---
+
+Several things decide whether a player sees a hologram, and all of them must agree:
+
+1. it is `enabled` and its world is loaded;
+2. the player is within `view-distance` (default 48 blocks);
+3. the player has its `permission`, when it has one;
+4. the player passes its `visibility` list;
+5. if it is attached to an entity, that entity is in the world.
+
+On top of those, each [line](/docs/exyliadisplays/line-tags#who-sees-a-line) can have its own
+`<range>`, `<perm>` or `<if>`.
+
+Changing a permission or a list is read by the next visibility check: nothing is redrawn and nobody sees
+it flicker.
+
+## Distance, permission and per-player
+
+| Setting | Command | |
+|---|---|---|
+| View distance | `/holo <name> viewdistance <blocks>` | Above 0. |
+| Permission | `/holo <name> permission [node]` | Only players with it see the hologram. No node clears it. |
+| Per-player | `/holo <name> perplayer <true\|false>` | Every viewer gets their own copy. Costs one set of packets per viewer. |
+| Refresh | `/holo <name> refresh <ticks>` | Ticks between placeholder refreshes, 1+ (default 20). |
+| Auto-update | `/holo <name> autoupdate <true\|false>` | Whether the lines refresh on their own (default `true`). |
+
+You rarely need `per-player`: a hologram with a placeholder in any line is already drawn per viewer.
+Turn it on only for lines without a placeholder that must still differ.
+
+The **VISIBILITY** window in the editor holds all of these plus the page interval and the player lists.
+
+## Chosen players
+
+`visibility.mode` picks how the player list is read:
+
+| Mode | Who sees it | List used |
+|---|---|---|
+| `all` (default) | Everyone except the players listed. | `hidden-from` |
+| `manual` | Only the players listed. | `shown-to` |
+
+```text
+/holo nametag visibility manual
+/holo nametag show Notch
+/holo nametag show @a
+/holo nametag hide Notch
+/holo nametag viewers
+/holo nametag viewers clear
+```
+
+`show` and `hide` work in both modes: in `all` they take a player off or put them on `hidden-from`; in
+`manual` they put them on or take them off `shown-to`. `@a` means every player online. A player is named
+by name or UUID and must have joined the server before. `viewers` lists the list the mode reads;
+`viewers clear` empties it, so in `all` everyone sees it again and in `manual` nobody does.
+
+Only the exceptions are written, as UUIDs, so a renamed player keeps their place and a hologram
+everybody sees costs two empty lists:
+
+```yaml
+visibility:
+  mode: manual
+  shown-to: ['069a79f4-44e9-4726-a5be-fca90e38aaf5']
+  hidden-from: []
+```
+
+Right-clicking **VISIBILITY** in the editor switches between the two modes.
+
+## Attaching to a player or a mob
+
+A hologram can ride an entity instead of standing at its location.
+
+```text
+/holo nametag attach Notch           # a player, by name or UUID
+/holo nametag attach <uuid>          # any entity by UUID
+/holo nametag attach nearest         # the entity nearest to you, within 16 blocks
+/holo nametag attachoffset 0.8       # blocks above the entity, -16 to 16 (default 0.5)
+/holo nametag detach
+```
+
+| What it rides | Saved | Behaviour |
+|---|---|---|
+| A player | Yes, `attach.entity` | Rides them whenever they are online, joining, respawning and changing worlds included. Hidden while they are away. |
+| A mob saved with its chunk | Yes | Rides it whenever its chunk is loaded. Hidden while it is not. |
+| A mob that is not saved (not persistent) | No | Ridden until it is gone or the server restarts, without being written down. The command says so. |
+
+A player who is offline when you attach can still be named, as long as they joined before. Range is
+measured from the ridden entity, and a viewer who comes into range later sees it mounted.
+
+```yaml
+attach:
+  entity: '069a79f4-44e9-4726-a5be-fca90e38aaf5'
+  offset: 0.5
+```
+
+An unreadable `entity` (a typo in the file) is treated as no attachment. `location` is kept while
+attached and used again after `detach`.

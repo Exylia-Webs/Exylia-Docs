@@ -1,0 +1,118 @@
+---
+title: "Interacciones"
+description: "Las líneas de clic que comparten hologramas y NPCs: filtros de clic, comandos, cambio de servidor, teletransportes, efectos, esperas, bocadillos y animaciones de NPC, permisos y cooldowns."
+---
+
+Hologramas y NPCs ejecutan las mismas líneas de clic: el `click.commands` de un holograma (y el `click` de
+cada página) y el `interactions.actions` de un NPC. Una acción por línea, ejecutadas en orden para el
+jugador que hizo clic:
+
+```yaml
+actions:
+  - 'right: [SOUND] ENTITY_VILLAGER_AMBIENT;1;1.2'
+  - 'right: [SAY] {letters}¡Bienvenido, {highlight}%player_name%{letters}!;6s'
+  - 'left: [ANIMATE] hurt'
+  - 'shift_right: [SERVER] survival'
+  - 'console: give %player_name% bread 1'
+```
+
+Las líneas vienen del módulo de interacciones de ExyliaLib, así que se leen igual en todos los plugins de
+Exylia.
+
+## Filtros de clic
+
+Una línea puede empezar con un filtro; entonces solo ese clic la ejecuta. Una línea sin filtro se ejecuta
+con cualquier clic.
+
+| Filtro | Se ejecuta con |
+|---|---|
+| `left:` | Un clic izquierdo. |
+| `right:` | Un clic derecho. |
+| `shift_left:` / `shift_right:` | Ese clic mientras estás agachado. |
+| `shift:` | Cualquiera de los dos clics agachado. |
+| `any:` | Cualquier clic (igual que sin filtro). |
+| `left,right:` | Una lista de los anteriores. |
+
+Un `left:` a secas no responde a un clic izquierdo agachado: usa `shift_left:` o `shift:` para esos.
+
+## Acciones
+
+| Línea | Hace |
+|---|---|
+| `comando` · `player: comando` | Ejecuta un comando como el jugador (sin barra). |
+| `console: comando` | Lo ejecuta desde la consola. |
+| `player-proxy: server lobby` · `console-proxy: alert ...` | Lo ejecuta en el proxy, con ExyliaProxyUtils. |
+| `[SERVER] lobby` | Envía al jugador a otro servidor de la red (BungeeCord o Velocity). |
+| `[TELEPORT] mundo;x;y;z[;yaw;pitch]` | Teletransporta al jugador. |
+| `[DELAY] 1s` | Espera antes de las líneas siguientes. |
+| `[MESSAGE] texto` | Un mensaje de chat, solo para el jugador que hizo clic. |
+| `[TITLE] título;subtítulo` · `[ACTION_BAR] texto` | Un título o una barra de acción. |
+| `[SOUND] NOMBRE;volumen;tono` | Un sonido. |
+| `[TOAST] ...` · `[PARTICLE] ...` | Cualquier otro token de secuencia de ExyliaLib, para el jugador que hizo clic. |
+| `[ACTION] espacio:id` | Una acción que registró otro plugin de Exylia. |
+
+`%player_name%` y cualquier placeholder de PlaceholderAPI o de ExyliaLib se resuelven para el jugador que
+hizo clic.
+
+Una línea que no se entiende (un token desconocido, nada después del filtro) se avisa una vez en la consola,
+nombrando el holograma o el NPC, y se omite; las demás se siguen ejecutando.
+
+## Solo en NPCs
+
+| Línea | Hace |
+|---|---|
+| `[SAY] texto;5s` | Un bocadillo sobre el NPC que solo ve el jugador que hizo clic, tecleado letra a letra. El tiempo es opcional (`say-duration`, por defecto 5s). |
+| `[ANIMATE] swing` · `[ANIMATE] hurt` | Mueve un brazo, o se estremece. Todo lo que no sea `hurt` mueve el brazo. |
+| `[LOOK]` | Lo gira hacia el jugador que hizo clic durante `turn-back` (por defecto 4s). |
+
+Las líneas de NPC rellenan además `%npc%` con el nombre del NPC y `%click%` con el clic (`left`, `right`,
+`shift_left`, `shift_right`).
+
+Un bocadillo `[SAY]` flota por encima de la etiqueta. Un bocadillo nuevo para el mismo jugador sustituye al
+anterior al momento; dos jugadores hablando con el mismo NPC ven cada uno solo el suyo. Su aspecto es
+`say-bubble` en `messages/npcs.yml`, por defecto
+`<typewriter:30><background:#66000000>{letters}%text%`. El último `;5s` solo se lee como tiempo cuando lo es:
+`[SAY] Hola; ¿qué tal?` es todo texto.
+
+## Solo en hologramas
+
+`[PAGE] next`, `previous`, `first`, `last` o un número pasa la página del jugador que hizo clic. Ver
+[Páginas](/docs/exyliadisplays/paginas).
+
+## Clics en hologramas
+
+Un holograma con líneas de clic recibe una caja invisible sobre sus líneas. Solo es clicable si tiene al
+menos una línea de clic.
+
+| Ajuste | Comando | Por defecto |
+|---|---|---|
+| Líneas | `/holo <nombre> click add <línea>` · `click remove <n>` · `click clear` | ninguna |
+| Ancho de la caja | `/holo <nombre> click width <bloques>` | `1.5` (tan alta como las líneas) |
+| Cooldown por jugador | `/holo <nombre> click cooldown <ms>` | `500` |
+| Crecimiento al mirarlo | `/holo <nombre> click hover <escala>` | `1.08`; `1` lo desactiva |
+
+El holograma crece un poco mientras un jugador lo mira, para que sepa que se puede pulsar. En el archivo,
+`cooldown` también lee `500ms`, `1s`.
+
+## Permiso y cooldown de un NPC
+
+Los clics de un NPC se pueden restringir:
+
+| Ajuste | Comando | |
+|---|---|---|
+| Líneas | `/npc <nombre> action add <línea>` · `action remove <n>` · `action clear` · `action list` | |
+| Permiso | `/npc <nombre> action permission [nodo]` | Solo los jugadores con él pueden usar el NPC. Todos lo siguen viendo. |
+| Cooldown | `/npc <nombre> action cooldown <tiempo>` | Por jugador: `500ms`, `2s`, `1m`, o `0`. |
+| Rechazo | `/npc <nombre> action denymessage [texto]` | Lo que se le dice a un jugador sin el permiso. Sin texto: `interaction-denied` de `messages/npcs.yml`. |
+| Espera | `/npc <nombre> action cooldownmessage [texto]` | Lo que se le dice a un jugador que aún espera; `%remaining%` son los segundos restantes. Sin texto: `interaction-cooldown`. |
+| Mirar a quien hace clic | `/npc <nombre> action faceclicker <true\|false>` | Por defecto `true`. |
+
+Un clic al que no responde ninguna línea (un clic izquierdo en un NPC que solo actúa con el derecho) se
+ignora y no gasta cooldown. Los cooldowns viven en memoria: un reinicio los olvida.
+
+Hacer clic en la etiqueta del NPC cuenta como hacer clic en el NPC.
+
+<Callout type="tip" title="Un NPC que no hace nada">
+Activa `debug: true` en `config.yml`. Cada clic en un NPC se registra entonces con lo que pasó — se ejecutó
+(con sus líneas), se ignoró, se denegó o está en cooldown —, que es lo primero que hay que mirar.
+</Callout>

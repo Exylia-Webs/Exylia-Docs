@@ -1009,6 +1009,50 @@ const PROXYUTILS_NAV: NavGroup[] = [
   },
 ];
 
+const DISPLAYS_NAV: NavGroup[] = [
+  {
+    label: { en: "Getting started", es: "Empezar" },
+    pages: [
+      page("introduction", "introduction", "introduccion"),
+      page("installation", "installation", "instalacion"),
+      page("first-steps", "first-steps", "primeros-pasos"),
+    ],
+  },
+  {
+    label: { en: "Holograms", es: "Hologramas" },
+    pages: [
+      page("holograms", "holograms", "hologramas"),
+      page("line-tags", "line-tags", "etiquetas-de-linea"),
+      page("pages", "pages", "paginas"),
+      page("visibility", "visibility", "visibilidad"),
+    ],
+  },
+  {
+    label: { en: "NPCs", es: "NPCs" },
+    pages: [page("npcs", "npcs", "npcs")],
+  },
+  {
+    label: { en: "Shared", es: "Común" },
+    pages: [
+      page("interactions", "interactions", "interacciones"),
+      page("fine-adjust", "fine-adjust", "ajuste-fino"),
+      page("editing-files", "editing-files", "editar-archivos"),
+      page("menus", "menus", "menus"),
+      page("migration", "migration", "migracion"),
+    ],
+  },
+  {
+    label: { en: "Reference", es: "Referencia" },
+    pages: [
+      page("commands", "commands", "comandos"),
+      page("permissions", "permissions", "permisos"),
+      page("configuration", "configuration", "configuracion"),
+      page("file-reference", "file-reference", "referencia-de-archivos"),
+      page("faq", "faq", "faq"),
+    ],
+  },
+];
+
 const PROTECTIONS_NAV: NavGroup[] = [
   {
     label: { en: "Getting started", es: "Empezar" },
@@ -1471,6 +1515,28 @@ export const plugins: Plugin[] = [
     nav: PROTECTIONS_NAV,
   },
   {
+    id: "exyliadisplays",
+    name: "ExyliaDisplays",
+    tagline: { en: "Holograms and NPCs, edited three ways", es: "Hologramas y NPCs, editados de tres formas" },
+    summary: {
+      en: "Packet holograms and NPCs with one click system: per-line size, motion and colour effects, items, blocks and heads, lines only some players see, pages each player reads alone, holograms that ride a player, NPCs with mirror skins and speech bubbles. Edited from screens, commands or the YAML files, which apply on save. Imports DecentHolograms, HolographicDisplays, FancyHolograms, Citizens and FancyNpcs. Free and open source.",
+      es: "Hologramas y NPCs por paquetes con un mismo sistema de clics: tamaño, movimiento y efectos de color por línea, ítems, bloques y cabezas, líneas que solo ven algunos jugadores, páginas que cada jugador lee por su cuenta, hologramas que van encima de un jugador, NPCs con skin espejo y bocadillos. Se editan desde menús, comandos o los archivos YAML, que se aplican al guardar. Importa DecentHolograms, HolographicDisplays, FancyHolograms, Citizens y FancyNpcs. Gratis y de código abierto.",
+    },
+    version: "2.4.0",
+    status: "stable",
+    category: { en: "Utility", es: "Utilidad" },
+    minecraft: "1.21+",
+    banner: "https://s3.exylia.net/exylia-plugins/public/static/images/plugins/displays/ExyliaDisplaysBanner.webp",
+    download: "https://github.com/Exylia-Plugins/ExyliaDisplays/releases",
+    tags: [
+      { en: "Holograms", es: "Hologramas" },
+      { en: "NPCs", es: "NPCs" },
+      { en: "Imports", es: "Importaciones" },
+      { en: "Folia", es: "Folia" },
+    ],
+    nav: DISPLAYS_NAV,
+  },
+  {
     id: "exyliaproxyutils",
     name: "ExyliaProxyUtils",
     tagline: { en: "The proxy half of ExyliaLib", es: "La mitad de ExyliaLib en el proxy" },
@@ -1690,6 +1756,7 @@ export const CATEGORY_ORDER = [
   "Survival",
   "Moderation",
   "Analytics",
+  "Utility",
   "Library",
 ] as const;
 

@@ -1,0 +1,84 @@
+---
+title: "Editar los archivos"
+description: "holograms.yml y npcs.yml como única fuente de verdad: ediciones a mano aplicadas al guardar, qué pasa con los errores, recargas y copias de seguridad."
+---
+
+`holograms.yml` y `npcs.yml` son el único sitio donde viven los hologramas y los NPCs. Un comando, un botón y
+una edición a mano del archivo cambian la misma entrada, y lo que hay en el mundo se dibuja a partir de
+ella, así que las tres formas de editar nunca se contradicen.
+
+## Guardar un archivo lo aplica
+
+Con `watch-files: true` (por defecto) en `config.yml`, guardar `holograms.yml` o `npcs.yml` lo aplica solo:
+
+- el plugin espera a que el archivo lleve medio segundo sin cambios, así un editor que guarda en varias
+  escrituras se lee una sola vez;
+- lee el archivo, muestra lo que dice ahora y avisa a cada jugador conectado con `exyliadisplays.holograms`
+  (o `.npcs`): *"holograms.yml cambió: 12 hologramas aplicados."*;
+- una escritura que hizo el propio plugin se reconoce por su contenido y no se vuelve a leer.
+
+Solo se redibuja lo que cambió: las líneas nuevas se cambian dentro del holograma que ya está, un holograma
+movido se mueve, y nadie ve parpadear el resto.
+
+Sin el vigilante (o en un sistema de archivos que no se puede vigilar, cosa que avisa la consola), aplica una
+edición con `/holoadmin reload` o `/npcadmin reload`.
+
+## Una entrada escrita a mano solo necesita lo que cambia
+
+Cada clave tiene un valor por defecto, así que una entrada puede ser de pocas líneas; las claves que faltan
+no cuentan como errores:
+
+```yaml title="plugins/ExyliaDisplays/npcs.yml"
+npcs:
+  guia:
+    location: {world: lobby, x: 0.5, y: 64.0, z: -3.5, yaw: 180.0, pitch: 0.0}
+    skin: {type: player, player: Notch}
+    label: {lines: ['<size:1.2><shine>{primary}&lGUÍA']}
+    interactions:
+      actions: ['right: [SAY] ¡Hola, %player_name%!;5s']
+      cooldown: 2s
+```
+
+Todas las claves están en la [Referencia de archivos](/docs/exyliadisplays/referencia-de-archivos). Los
+nombres siguen la misma regla que en los comandos: letras minúsculas, dígitos, `_` y `-`, hasta 32
+caracteres.
+
+Las coordenadas se guardan con precisión de milésima de bloque y los ángulos de décima de grado, así que el
+ruido de coma flotante de una importación o de una edición a mano (`90.12000274658203`) se redondea en la
+siguiente escritura.
+
+## Errores
+
+Un valor que no se puede leer (una palabra donde va un número) vuelve a su valor por defecto y se avisa en la
+consola, y los jugadores avisados de la recarga reciben *"holograms.yml tiene 1 error(es); mira la consola."*.
+Una clave que el plugin no conoce se avisa y se quita del archivo.
+
+<Callout type="danger" title="Un YAML roto oculta todo lo de ese archivo">
+Si el archivo no se puede leer en absoluto — sangría rota, unas comillas sin cerrar —, ExyliaLib lo lee como
+vacío, así que todos los hologramas (o NPCs) que contiene desaparecen del mundo hasta que se arregle.
+ExyliaLib conserva el archivo roto en lugar de sobrescribir lo que escribiste, pero arréglalo antes de cambiar
+nada en el juego. La consola indica qué archivo no se pudo leer.
+</Callout>
+
+## Recargas
+
+| Comando | Hace |
+|---|---|
+| `/displays reload` | Vuelve a leer `config.yml`, todos los archivos de mensajes, `holograms.yml` y `npcs.yml`, redibuja los dos módulos y recarga los menús. |
+| `/holoadmin reload` | La misma recarga completa, y después vuelve a leer `holograms.yml` e informa de su cantidad y sus errores. |
+| `/npcadmin reload` | Lo mismo con `npcs.yml`. |
+| `/exylialib reload` | También recarga los menús, para que una paleta nueva llegue a sus ítems. |
+
+Ninguno arranca ni detiene un módulo: eso necesita un reinicio.
+
+## Varios admins a la vez
+
+Los cambios pasan por una sola puerta y se aplican en orden: dos admins editando el mismo holograma desde dos
+menús cambian cada uno la última versión, nunca la que tenían cuando abrieron su menú. Los archivos se
+escriben fuera del hilo principal, así que una ráfaga de cambios desde un menú es una sola escritura y el
+servidor nunca espera al disco.
+
+## Copias de seguridad
+
+Todo está en dos archivos YAML. Copia `holograms.yml` y `npcs.yml` (o la carpeta entera) para hacer una copia
+de seguridad o llevarlo a otro servidor; los menús y los mensajes vienen con el jar.

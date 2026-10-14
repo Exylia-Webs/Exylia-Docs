@@ -1,0 +1,81 @@
+---
+title: "Editing the files"
+description: "holograms.yml and npcs.yml as the single source of truth: hand edits applied on save, what happens to mistakes, reloads, and backups."
+---
+
+`holograms.yml` and `npcs.yml` are the only place holograms and NPCs live. A command, a button and a
+hand edit of the file all change the same entry, and what stands in the world is drawn from it, so the
+three ways of editing never disagree.
+
+## Saving a file applies it
+
+With `watch-files: true` (the default) in `config.yml`, saving `holograms.yml` or `npcs.yml` applies it
+on its own:
+
+- the plugin waits until the file has been quiet for half a second, so an editor that saves in several
+  writes is read once;
+- it reads the file, shows what it says now, and tells every online player with
+  `exyliadisplays.holograms` (or `.npcs`): *"holograms.yml changed: 12 holograms applied."*;
+- a write the plugin made itself is recognised by its contents and not read again.
+
+Only what changed is redrawn: new lines are swapped into the hologram already there, a moved hologram is
+moved, and nobody sees the rest blink.
+
+Without the watcher (or on a file system that cannot be watched, which the console reports), apply an
+edit with `/holoadmin reload` or `/npcadmin reload`.
+
+## A hand-written entry only needs what it changes
+
+Every key has a default, so an entry can be a few lines; the missing keys are not counted as mistakes:
+
+```yaml title="plugins/ExyliaDisplays/npcs.yml"
+npcs:
+  guide:
+    location: {world: lobby, x: 0.5, y: 64.0, z: -3.5, yaw: 180.0, pitch: 0.0}
+    skin: {type: player, player: Notch}
+    label: {lines: ['<size:1.2><shine>{primary}&lGUIDE']}
+    interactions:
+      actions: ['right: [SAY] Hello, %player_name%!;5s']
+      cooldown: 2s
+```
+
+Every key is in the [File reference](/docs/exyliadisplays/file-reference). Names follow the same rule as
+commands: lowercase letters, digits, `_` and `-`, up to 32 characters.
+
+Coordinates are kept to a thousandth of a block and angles to a tenth of a degree, so float noise from
+an import or a hand edit (`90.12000274658203`) is rounded on the next write.
+
+## Mistakes
+
+A value that cannot be read (a word where a number goes) falls back to its default and is reported in the
+console, and the players told about the reload get *"holograms.yml has 1 mistake(s); see the console."*.
+A key the plugin does not know is reported and removed from the file.
+
+<Callout type="danger" title="Broken YAML hides everything in that file">
+If the file cannot be parsed at all — broken indentation, an unclosed quote — ExyliaLib reads it as
+empty, so every hologram (or NPC) in it disappears from the world until the file is fixed. ExyliaLib
+keeps the broken file rather than overwriting what you wrote, but fix it before changing anything in
+game. The console reports which file could not be read.
+</Callout>
+
+## Reloads
+
+| Command | Does |
+|---|---|
+| `/displays reload` | Reads `config.yml`, every message file, `holograms.yml` and `npcs.yml` again, redraws both modules and reloads the screens. |
+| `/holoadmin reload` | The same full reload, then reads `holograms.yml` again and reports its count and mistakes. |
+| `/npcadmin reload` | The same for `npcs.yml`. |
+| `/exylialib reload` | Also reloads the screens, so a new palette reaches their items. |
+
+None of them start or stop a module: that takes a restart.
+
+## Several admins at once
+
+Changes go through one door and are applied in order: two admins editing the same hologram from two
+screens each change the latest version, never the one their screen was opened with. Files are written off
+the main thread, so a burst of edits from a screen is one write and the server never waits on the disk.
+
+## Backups
+
+Everything is in two YAML files. Copy `holograms.yml` and `npcs.yml` (or the whole folder) to back it up
+or to move it to another server; the screens and messages come with the jar.
