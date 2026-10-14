@@ -1,0 +1,148 @@
+---
+title: "Subastas"
+description: "Subastas con tiempo en cualquier moneda: abrir una, los pasos de puja, el antisnipe, las pujas automáticas retenidas hasta un tope, la compra inmediata, cómo termina una subasta, la cuenta atrás y los ajustes."
+---
+
+Una subasta vende a quien puja más alto antes de que se acabe el tiempo, en la moneda del servidor que haya
+elegido el vendedor. Cada puja **se paga al hacerla** y la subasta la retiene hasta que se supera o la
+subasta termina, así que una puja es una promesa de la que el pujador no puede echarse atrás.
+
+ID del módulo `auctions`, archivo `modules/auctions/config.yml`, comando `/auction` (también `/auctions`).
+
+## Abrir una subasta
+
+| Desde | Cómo |
+|---|---|
+| El botón **Vender** de `/auction` | Sostén el objeto, elige una moneda si hay opción y rellena el formulario: precio inicial, compra inmediata (opcional) y horas. |
+| `/auction sell <start> [hours] [buyout] [currency]` | La abre al instante, con la pila de tu mano principal. `hours` toma por defecto `default-hours`; una compra inmediata de `0` es ninguna. |
+
+No hay pantalla de revisión: la subasta se abre en cuanto pasan las comprobaciones. Desde el formulario, un
+precio de compra inmediata muy por debajo de la media de 7 días pide una confirmación más.
+
+Las comprobaciones: una moneda que tenga el servidor, un objeto en la mano, que no esté en
+`blocked-materials`, que no esté dañado salvo con `allow-damaged-items`, que no pese más de
+`max-item-kilobytes`, un precio inicial de al menos `min-start-price` (la cantidad mínima de la moneda para
+cualquier moneda que no sea la moneda por defecto), una compra inmediata por encima del precio inicial, unas
+horas entre `min-hours` y `max-hours`, y menos subastas en curso que el límite del jugador.
+
+`listing-fee-percent` **del precio inicial** se cobra al abrir la subasta y no se reembolsa, ni siquiera
+cuando nadie puja. Un precio inicial igual o superior a `broadcast-opened-above` se anuncia.
+
+## Pujar
+
+`/auction` lista todas las subastas en curso, las que terminan antes primero; la ordenación también pasa por
+Más recientes, Más baratas y Más caras, y la búsqueda compara el material, el nombre del objeto y el
+vendedor. Haz clic en una para abrir su pantalla de puja: la puja actual, la siguiente puja, cuántas pujas
+hay, quién va en cabeza, el tiempo restante y tu propio tope, actualizados mientras está abierta.
+
+| Botón | Qué hace |
+|---|---|
+| **Pujar** | Puja exactamente la siguiente puja que muestra el botón. Si la subasta cambió entretanto, el clic se rechaza y no se cobra nada. |
+| **Puja personalizada** | Escribe cualquier cantidad a partir de la siguiente puja. |
+| **Puja automática** | Fija un tope: ver más abajo. |
+| **Comprar ya** | Solo cuando la subasta tiene compra inmediata. La paga y termina la subasta al instante. |
+
+### La siguiente puja
+
+Sin pujas, la siguiente puja es el precio inicial. Después, es la puja más alta más el mayor entre
+`min-bid-increment-percent` de ella y `min-bid-increment`. El paso absoluto está en la moneda por defecto;
+en cualquier otra moneda el paso es al menos la cantidad mínima de esa moneda. El vendedor no puede pujar.
+
+Una puja o un tope igual o superior al precio de compra inmediata **es** una compra inmediata, al precio de
+compra inmediata.
+
+### Pujas automáticas
+
+Una puja automática es lo máximo que estás dispuesto a pagar. **Todo el tope se descuenta de tu saldo de
+golpe** y se retiene, y la subasta responde por ti:
+
+- En una subasta sin pujas, se queda en el precio inicial contigo en cabeza.
+- Si supera el tope de quien va en cabeza, se queda un paso por encima del tope superado, nunca por encima
+  del tuyo.
+- Si no lo supera, el tope de quien va en cabeza responde al instante, un paso por encima de ti, y tu dinero
+  vuelve al momento. Con topes iguales gana quien fijó el suyo primero.
+
+Quien va en cabeza puede subir o bajar su tope sin mover el precio, siempre que siga igual o por encima de la
+siguiente puja. Cuando la subasta termina, se reembolsa todo lo retenido por encima del precio ganador.
+
+### Cuando te superan
+
+Tu dinero retenido vuelve al instante, y se te avisa en el servidor en el que estés, o en tu siguiente
+conexión, con un enlace **[PUJAR DE NUEVO]** que ejecuta `/auction view <id>`. Con
+`feedback.outbid-action-bar` activo, también lo dice una barra de acción. El vendedor se entera de cada puja
+nueva.
+
+### Antisnipe
+
+Una puja que mueve el precio cuando quedan menos de `anti-snipe-seconds` (30 por defecto) retrasa el final a
+esa cantidad de segundos desde ese momento, para que la última palabra no sea de quien hizo clic el último.
+Si quien va en cabeza solo sube su propio tope, no se alarga.
+
+### La cuenta atrás
+
+Durante los últimos `feedback.auction-countdown-seconds` (60 por defecto, `0` para ninguna) una barra de jefe
+cuenta hacia atrás para quien va en cabeza y para todos los que pujaron en ella en este servidor desde que
+arrancó. El vendedor no tiene ninguna.
+
+## Cómo termina
+
+El barrido se ejecuta cada segundo, así que una subasta termina en el segundo exacto.
+
+| Final | El objeto | El dinero |
+|---|---|---|
+| Con pujas | Para el ganador: al inventario, y el resto a [`/collect`](/docs/exyliamarket/recoger). | Al vendedor se le paga la puja ganadora menos `sales-tax-percent`. Lo que el ganador tenía retenido por encima vuelve. |
+| Compra inmediata | Para el comprador. | Como arriba; a quien iba en cabeza se le reembolsa y se le avisa. |
+| Sin pujas | Vuelve al vendedor. | La comisión no se reembolsa. |
+
+Los demás pujadores reciben una línea de *perdida* en su historial. Una victoria igual o superior a
+`broadcast-above` se anuncia.
+
+## Tus subastas y pujas
+
+| Comando | Pantalla |
+|---|---|
+| `/auction mine` (también `/auction selling`) | Lo que tienes en curso, frente a tu límite. Haz clic en una para cancelarla — solo mientras **no tenga pujas**: una subasta con pujas llega hasta el final. |
+| Mis pujas, desde `/auction` | Las subastas en curso en las que pujaste, en cabeza o superado, con tu tope. |
+| Historial, desde `/auction` | Las subastas que ganaste, perdiste y vendiste. |
+
+## Staff
+
+`/auctionadmin` (también `/auctionsadmin`) lista todas las subastas en curso, las que terminan antes primero.
+El clic izquierdo retira una tras una confirmación, incluso con pujas: el objeto vuelve al vendedor y se
+reembolsa el dinero retenido del mejor pujador, y a los dos se les avisa. El clic derecho abre su línea en el
+registro del mercado.
+
+| Comando | Qué hace |
+|---|---|
+| `/auctionadmin remove <id>` | Retira una subasta. |
+| `/auctionadmin clear <player>` | Retira todas las subastas que tiene en curso un jugador. |
+
+Los dos necesitan `exyliamarket.auctions.admin` y debe ejecutarlos un jugador dentro del juego.
+
+## Ajustes
+
+En `settings:` de `modules/auctions/config.yml`, editables dentro del juego desde `/marketadmin`.
+
+| Clave | Por defecto | Qué hace |
+|---|---|---|
+| `max-auctions-per-player` | `3` | Subastas en curso a la vez. `exyliamarket.auctions.limit.<n>` lo sustituye. |
+| `min-start-price` | `1.0` | Precio inicial mínimo de una subasta, en la moneda por defecto. |
+| `min-bid-increment-percent` | `5.0` | Una puja nueva supera a la más alta en al menos esta parte de ella… |
+| `min-bid-increment` | `1.0` | …y en al menos esta cantidad, lo que sea mayor. |
+| `min-hours` | `1` | Duración mínima de una subasta. |
+| `max-hours` | `72` | Duración máxima de una subasta. |
+| `default-hours` | `24` | Cuánto dura cuando el vendedor no lo indica. |
+| `anti-snipe-seconds` | `30` | La ventana a la que una puja tardía retrasa el final. `0` lo desactiva. |
+| `listing-fee-percent` | `2.0` | Del precio inicial, se cobra al abrirla. No se reembolsa. |
+| `sales-tax-percent` | `5.0` | Se descuenta de la puja ganadora antes de pagar al vendedor. |
+| `broadcast-above` | `50.0` | Anuncia una victoria a partir de este precio. `-1` nunca. |
+| `broadcast-opened-above` | `50.0` | Anuncia la apertura de una subasta a partir de este precio inicial. `-1` nunca. |
+| `broadcast-opened-cooldown-seconds` | `60` | Segundos antes de que la siguiente subasta de un vendedor se vuelva a anunciar. |
+| `blocked-materials` | `BEDROCK`, `COMMAND_BLOCK`, `BARRIER`, `STRUCTURE_BLOCK` | Materiales que nunca se pueden subastar. |
+| `allow-damaged-items` | `true` | Si se puede subastar un objeto dañado. |
+| `max-item-kilobytes` | `64` | El objeto más pesado que se puede subastar. `0` para no tener tope. |
+| `min-counted-value` | `10.0` | La puja o victoria más pequeña, en la moneda por defecto, que cuenta para estadísticas y misiones. |
+| `history-size` | `45` | Subastas que muestra la pantalla de historial. |
+
+Y en `sounds:` — `listed`, `bid`, `outbid`, `won`, `sold`, `cancelled` — cada uno como `NAME|volume|pitch`.
+Los anuncios se silencian por jugador en `/settings`, en **Mercado** → **Subastas**.

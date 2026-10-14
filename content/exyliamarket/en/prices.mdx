@@ -1,0 +1,90 @@
+---
+title: "Prices"
+description: "The shared price index built from what players pay each other: what counts, the figures it keeps, price suggestions, the stray-price question, the 7-day chart and how long history is kept."
+---
+
+The market keeps an index of what players **actually paid each other** for each item: the last sale, the
+24-hour and 7-day averages, the median, the range, the volume and the trend, per material and currency.
+Players see it as suggestions on the review screens, a question before a price far from the market, a
+7-day chart and [placeholders](/docs/exyliamarket/placeholders#market-prices).
+
+## What counts
+
+- Every finished sale of the **auction house**, **auctions**, **buy orders** and the **bazaar**.
+- Not the shop, `/sell` or trades: shop prices are the server's, not the market's.
+- Only **plain** items: nothing renamed, enchanted, damaged or carrying lore or data. A material's price is
+  the price of the material, not of somebody's sword.
+- Every figure is **per item**: a sale of 16 for 320 is 16 at 20. Averages are weighted by items; the
+  median, low and high are per sale.
+- Each currency is kept apart.
+
+## How it is kept
+
+Each server adds its sales to day rows of its own in memory and writes the changed ones every
+`prices.refresh-seconds` (60 by default), then reads the last fourteen days of every server's rows back and
+works the figures out again. Screens and placeholders read the figures from memory and never wait on the
+database. A sale shows up one refresh later, on every server alike.
+
+Days are UTC. The trend compares the last seven days with the seven before: **up** or **down** past 5%,
+**flat** otherwise.
+
+## Trusted figures
+
+An item needs `prices.min-sales` sales in the last seven days (3 by default) before it is suggested or a
+deal is questioned. With fewer, the screens say there are not enough trades yet.
+
+## The stray-price question
+
+Nothing ever refuses a deal on price: a price far below the average may be a gift, one far above a
+collector's. The player is asked once, with the figures, and their answer stands.
+
+| Setting | Default | When it asks |
+|---|---|---|
+| `prices.warn-below-percent` | `50` | Listing on the auction house, or setting an auction's buy-it-now, below this % of the 7-day average. |
+| `prices.warn-above-percent` | `200` | Buying on the auction house, buying an auction out, or placing a buy order above this % of it. |
+
+`0` turns either off.
+
+## On the screens
+
+The auction house and buy order reviews have a **market price** button with the 7-day average, last sale,
+median, trend, sales and a suggested price; clicking it sets the price. Menu files may use these on those
+screens:
+
+| Value | What it is |
+|---|---|
+| `%market_known%` | `true` with enough sales. |
+| `%market_average%`, `%market_last%`, `%market_median%` | The 7-day average, last sale and median, per item. |
+| `%market_trend%`, `%market_sales%` | The trend and the number of sales in 7 days. |
+| `%market_suggested%` | The 7-day average for the amount being listed. |
+
+### The price chart
+
+`/worth history [material]`, a shift-click on the auction house board, the bazaar's product screen and the
+worth menu all open a material's last seven days as a chart: one column a day, oldest on the left, its
+height that day's average against the week's range. A day without sales is a grey column.
+
+| Value | What it is |
+|---|---|
+| `%price_item%`, `%price_currency%` | What it is about. |
+| `%price_last%`, `%price_last_when%` | The last sale and how long ago. |
+| `%price_average24%`, `%price_average7%`, `%price_median%` | The averages and the median. |
+| `%price_low%`, `%price_high%` | The week's range. |
+| `%price_volume%`, `%price_sales%` | Items traded and number of sales. |
+| `%price_previous%`, `%price_trend%` | The week before and the trend. |
+
+The chart's file is `lang/<code>/menus/price_history.yml`; the date under each column follows
+`prices.day-format` in `messages.yml`.
+
+## History and retention
+
+Every sale is also two lines of `market_history`, one for the buyer and one for the seller, read by each
+module's history screen. The index keeps its own daily rows, so pruning history never costs a chart a day.
+
+| Setting | Default | What it keeps |
+|---|---|---|
+| `prices.keep-history-days` | `90` | Each player's market history. `0` forever. |
+| `prices.keep-daily-days` | `365` | The daily rows behind the charts. `0` forever. |
+
+All of `prices` is in `config.yml`; everything but `refresh-seconds` and `keep-daily-days` can also be
+changed in game from `/marketadmin` → **Price checks**.

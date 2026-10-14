@@ -1,0 +1,94 @@
+---
+title: "Precios"
+description: "El índice de precios compartido construido con lo que los jugadores se pagan entre sí: qué cuenta, las cifras que guarda, las sugerencias de precio, la pregunta por precios fuera de lo normal, el gráfico de 7 días y cuánto se conserva el historial."
+---
+
+El mercado mantiene un índice de lo que los jugadores **se pagaron realmente entre sí** por cada objeto: la
+última venta, las medias de 24 horas y de 7 días, la mediana, el rango, el volumen y la tendencia, por
+material y moneda. Los jugadores lo ven como sugerencias en las pantallas de revisión, una pregunta antes de
+un precio lejos del mercado, un gráfico de 7 días y
+[placeholders](/docs/exyliamarket/placeholders#precios-de-mercado).
+
+## Qué cuenta
+
+- Cada venta terminada de la **casa de subastas**, las **subastas**, los **pedidos de compra** y el **bazar**.
+- No la tienda, `/sell` ni los intercambios: los precios de la tienda son del servidor, no del mercado.
+- Solo objetos **simples**: nada renombrado, encantado, dañado ni con lore o datos. El precio de un material
+  es el precio del material, no de la espada de alguien.
+- Cada cifra es **por objeto**: una venta de 16 por 320 son 16 a 20. Las medias se ponderan por objetos; la
+  mediana, el mínimo y el máximo son por venta.
+- Cada moneda se guarda por separado.
+
+## Cómo se guarda
+
+Cada servidor suma sus ventas a filas diarias propias en memoria y escribe las que cambiaron cada
+`prices.refresh-seconds` (60 por defecto); después vuelve a leer los últimos catorce días de las filas de
+todos los servidores y recalcula las cifras. Las pantallas y los placeholders leen las cifras de memoria y
+nunca esperan a la base de datos. Una venta aparece un refresco más tarde, igual en todos los servidores.
+
+Los días son en UTC. La tendencia compara los últimos siete días con los siete anteriores: **al alza** o
+**a la baja** más allá del 5 %, **estable** en otro caso.
+
+## Cifras fiables
+
+Un objeto necesita `prices.min-sales` ventas en los últimos siete días (3 por defecto) antes de que se
+sugiera o se cuestione un trato. Con menos, las pantallas dicen que todavía no hay suficientes operaciones.
+
+## La pregunta por precios fuera de lo normal
+
+Nada rechaza nunca un trato por su precio: un precio muy por debajo de la media puede ser un regalo, y uno muy
+por encima, el de un coleccionista. Al jugador se le pregunta una vez, con las cifras, y su respuesta se
+respeta.
+
+| Ajuste | Por defecto | Cuándo pregunta |
+|---|---|---|
+| `prices.warn-below-percent` | `50` | Al publicar en la casa de subastas, o al fijar la compra inmediata de una subasta, por debajo de este % de la media de 7 días. |
+| `prices.warn-above-percent` | `200` | Al comprar en la casa de subastas, comprar una subasta de forma inmediata o hacer un pedido de compra por encima de este % de ella. |
+
+`0` desactiva cualquiera de los dos.
+
+## En las pantallas
+
+Las revisiones de la casa de subastas y de los pedidos de compra tienen un botón de **precio de mercado** con
+la media de 7 días, la última venta, la mediana, la tendencia, las ventas y un precio sugerido; al hacer clic
+se fija el precio. Los archivos de menú pueden usar estos valores en esas pantallas:
+
+| Valor | Qué es |
+|---|---|
+| `%market_known%` | `true` con suficientes ventas. |
+| `%market_average%`, `%market_last%`, `%market_median%` | La media de 7 días, la última venta y la mediana, por objeto. |
+| `%market_trend%`, `%market_sales%` | La tendencia y el número de ventas en 7 días. |
+| `%market_suggested%` | La media de 7 días para la cantidad que se publica. |
+
+### El gráfico de precios
+
+`/worth history [material]`, un shift-clic en el tablero de la casa de subastas, la pantalla de producto
+del bazar y el menú de valores abren los últimos siete días de un material como gráfico: una columna por
+día, la más antigua a la izquierda, con su altura según la media de ese día frente al rango de la semana. Un
+día sin ventas es una columna gris.
+
+| Valor | Qué es |
+|---|---|
+| `%price_item%`, `%price_currency%` | De qué se trata. |
+| `%price_last%`, `%price_last_when%` | La última venta y hace cuánto. |
+| `%price_average24%`, `%price_average7%`, `%price_median%` | Las medias y la mediana. |
+| `%price_low%`, `%price_high%` | El rango de la semana. |
+| `%price_volume%`, `%price_sales%` | Objetos intercambiados y número de ventas. |
+| `%price_previous%`, `%price_trend%` | La semana anterior y la tendencia. |
+
+El archivo del gráfico es `lang/<code>/menus/price_history.yml`; la fecha bajo cada columna sigue
+`prices.day-format` en `messages.yml`.
+
+## Historial y conservación
+
+Cada venta es también dos líneas de `market_history`, una para el comprador y otra para el vendedor, que lee
+la pantalla de historial de cada módulo. El índice guarda sus propias filas diarias, así que podar el
+historial nunca le quita un día a un gráfico.
+
+| Ajuste | Por defecto | Qué conserva |
+|---|---|---|
+| `prices.keep-history-days` | `90` | El historial de mercado de cada jugador. `0` para siempre. |
+| `prices.keep-daily-days` | `365` | Las filas diarias detrás de los gráficos. `0` para siempre. |
+
+Todo `prices` está en `config.yml`; todo salvo `refresh-seconds` y `keep-daily-days` también se puede
+cambiar dentro del juego desde `/marketadmin` → **Comprobación de precios**.

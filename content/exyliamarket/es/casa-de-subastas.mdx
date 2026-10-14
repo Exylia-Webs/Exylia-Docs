@@ -1,0 +1,156 @@
+---
+title: "Casa de subastas"
+description: "Publicaciones a precio fijo entre jugadores: publicar mediante la pantalla de revisión, comisión e impuesto, comprar, ver el interior de las cajas, ordenaciones y filtros del tablón, la lista de seguimiento, la caducidad y los ajustes."
+---
+
+Los jugadores ponen un objeto a la venta a un precio fijo y cualquier otro lo compra. El objeto sale del
+inventario del vendedor cuando se publica, vive en la fila de la base de datos mientras está publicado y sale
+de esa fila exactamente una vez — vendido, retirado o caducado —, así que dos compradores que hacen clic en la
+misma publicación en el mismo tick nunca pueden quedárselo los dos. A quien pierde esa carrera se le
+reembolsa.
+
+ID del módulo `auction-house`, archivo `modules/auction-house/config.yml`, comando `/ah` (también
+`/auctionhouse`).
+
+## Publicar
+
+| Desde | Cómo |
+|---|---|
+| El botón **Vender** de `/ah` | Mete el objeto en la ventana de una casilla, elige una moneda si el servidor tiene más de una y escribe el precio. |
+| `/ah sell <price> [currency]` | Publica la pila entera de tu mano principal a ese precio. Sin moneda escrita y con más de una para elegir, se abre un selector. |
+
+Los dos terminan en la **pantalla de revisión**, y no se cobra ni se retira nada hasta pulsar **Confirmar**:
+
+- el objeto, la moneda y cuánto tiempo estará publicado;
+- el precio total y el precio por unidad, con un clic para cambiarlo;
+- la comisión que se cobra ahora, el impuesto que se descuenta en una venta y **Recibes**;
+- tu saldo ahora y después de la comisión;
+- un botón de **precio de mercado**, cuando el objeto tiene suficientes ventas entre jugadores: la media de
+  7 días, la última venta, la mediana, la tendencia y el precio sugerido para la pila entera. Al hacer clic
+  se fija el precio.
+
+Un precio muy por debajo de la media de 7 días pide una confirmación más antes de publicar
+(`prices.warn-below-percent`). Ver [Precios](/docs/exyliamarket/precios).
+
+### Qué se comprueba
+
+En este orden: que existe una economía, que la moneda es una que tiene el servidor, que el objeto no está en
+`blocked-materials`, que no está dañado salvo con `allow-damaged-items`, que no pesa más de
+`max-item-kilobytes`, que el precio está entre `min-price` y `max-price`, que el jugador está por debajo de
+su límite de publicaciones y que todavía lleva la cantidad entera.
+
+`min-price` y `max-price` son cantidades de la **moneda por defecto**: una publicación en otra moneda solo
+tiene que valer la cantidad mínima de esa moneda, sin tope.
+
+### Comisión e impuesto
+
+| | Por defecto | Se cobra |
+|---|---|---|
+| `listing-fee-percent` | 2% | Al vendedor cuando se publica. **Nunca se reembolsa**, ni siquiera cuando caduca: es lo que impide que la casa de subastas sea un almacén gratuito. |
+| `sales-tax-percent` | 5% | De lo que se le paga al vendedor cuando se vende, redondeado hacia arriba a la cantidad mínima de la moneda. |
+
+Una publicación de 1.000 paga una comisión de 20 al publicarse, y 950 al vendedor cuando se vende.
+
+## Comprar
+
+Haz clic izquierdo en una publicación para abrir su pantalla de confirmación: el precio, tu saldo antes y
+después, si puedes pagarla y el tiempo restante. Un precio por unidad muy por encima de la media de 7 días
+pide una confirmación más (`prices.warn-above-percent`). Primero se cobra el dinero y después se reclama la
+publicación; si otro la consiguió antes, el dinero vuelve al instante.
+
+El objeto va a tu inventario, y lo que no cabe, a [`/collect`](/docs/exyliamarket/recoger). Al vendedor se
+le paga al instante y se le avisa en el servidor en el que esté, o en su siguiente conexión. No puedes
+comprar tu propia publicación salvo con `allow-self-purchase` activo; retírala en su lugar.
+
+### Ver el interior
+
+Una caja de shulker o un saco con algo dentro se puede abrir desde el tablón, desde tus publicaciones o desde
+la pantalla de confirmación con shift-clic: una vista de solo lectura de lo que hay dentro, cajas dentro de
+cajas incluidas.
+
+## El tablón
+
+Cada publicación muestra su precio, el precio por unidad, el vendedor, el tiempo restante y, cuando la tienda
+o la lista de valores lo recompra, por cuánto se vende una unidad al servidor.
+
+| Clic | Qué hace |
+|---|---|
+| Izquierdo | Comprar. |
+| Derecho | Añadir a tu lista de seguimiento o quitar de ella. |
+| Shift | El gráfico de precios de 7 días del objeto, o el interior de una caja. |
+
+| Control | Qué hace |
+|---|---|
+| **Ordenar** | Más recientes → Más baratas → Más caras → Terminan antes → Más baratas por unidad. |
+| **Categoría** | Clic izquierdo para la categoría siguiente, clic derecho para la anterior. Las categorías son `categories` en `config.yml`. |
+| **Buscar** | Hasta 32 caracteres, comparados con el material, el nombre actual del vendedor y el nombre del objeto. Clic derecho para borrarla. |
+
+La ordenación, la categoría y la búsqueda se recuerdan hasta que el jugador sale.
+
+## Tus publicaciones, historial y lista de seguimiento
+
+`/ah mine` (también `/ah listings`) lista lo que tienes publicado, cuántas publicaciones llevas frente a tu
+límite y cuánto suman por moneda. Haz clic en una para retirarla: el objeto vuelve, la comisión no. Desde
+ahí:
+
+- **Historial** — tus últimas compras y ventas, `history-size` de ellas.
+- **Lista de seguimiento** — las publicaciones en las que hiciste clic derecho y que siguen publicadas. Es
+  solo una lista de marcadores: nada te avisa sobre una publicación que sigues.
+
+## Caducidad
+
+Una publicación sigue publicada `listing-hours` horas (48 por defecto; `0` para nunca). Cada minuto, un
+barrido devuelve a su vendedor lo que caducó, mediante el mismo reclamo que una venta, así que una
+publicación que se está comprando en ese momento no se devuelve además. Al vendedor se le avisa de que está
+de camino.
+
+## Anuncios
+
+Una venta igual o superior a `broadcast-above`, y una publicación nueva igual o superior a
+`broadcast-listed-above`, se anuncian al servidor. Los dos umbrales están en la moneda por defecto, así que
+una publicación en otra moneda nunca se anuncia. La siguiente publicación de un vendedor no se vuelve a
+anunciar hasta pasados `broadcast-listed-cooldown-seconds`. Los jugadores los silencian en `/settings`, en
+**Mercado** → **Casa de subastas**; silenciarlos nunca oculta sus propias ventas.
+
+## Staff
+
+`/ahadmin` (también `/auctionhouseadmin`) lista todas las publicaciones, las más recientes primero. El clic
+izquierdo retira una tras una confirmación: el objeto vuelve al vendedor, al que se le avisa. El clic derecho
+abre su línea en el registro del mercado.
+
+| Comando | Qué hace |
+|---|---|
+| `/ahadmin remove <id>` | Retira una publicación. |
+| `/ahadmin clear <player>` | Retira todo lo que un jugador tiene publicado. |
+
+Los dos necesitan `exyliamarket.auctionhouse.admin` y debe ejecutarlos un jugador dentro del juego.
+
+## Ajustes
+
+En `settings:` de `modules/auction-house/config.yml`, editables dentro del juego desde `/marketadmin`.
+
+| Clave | Por defecto | Qué hace |
+|---|---|---|
+| `max-listings-per-player` | `5` | Publicaciones activas a la vez. `exyliamarket.auctionhouse.listings.<n>` lo sustituye; `0` es ilimitado. |
+| `min-price` | `1.0` | Precio mínimo de una publicación, en la moneda por defecto. |
+| `max-price` | `-1.0` | Precio máximo de una publicación. `-1` para no tener tope. |
+| `listing-hours` | `48` | Cuánto tiempo sigue publicada una publicación. |
+| `listing-fee-percent` | `2.0` | Se cobra al publicar. No se reembolsa. |
+| `sales-tax-percent` | `5.0` | Se descuenta de lo que se le paga al vendedor. |
+| `allow-self-purchase` | `false` | Si un jugador puede comprar su propia publicación. |
+| `broadcast-above` | `50.0` | Anuncia una venta a partir de este precio. `-1` nunca. |
+| `broadcast-listed-above` | `50.0` | Anuncia una publicación nueva a partir de este precio. `-1` nunca. |
+| `broadcast-listed-cooldown-seconds` | `60` | Segundos antes de que la siguiente publicación de un vendedor se vuelva a anunciar. |
+| `blocked-materials` | `BEDROCK`, `COMMAND_BLOCK`, `BARRIER`, `STRUCTURE_BLOCK` | Materiales que nunca se pueden publicar. |
+| `allow-damaged-items` | `true` | Si se puede publicar un objeto dañado. |
+| `max-item-kilobytes` | `64` | El objeto más pesado que se puede publicar: se envía a todo el que mira el tablón. `0` para no tener tope. |
+| `min-counted-value` | `10.0` | La venta más pequeña, en la moneda por defecto, que cuenta para estadísticas y misiones. |
+| `history-size` | `45` | Compras y ventas que muestra la pantalla de historial. |
+
+Y en `sounds:` — `listed`, `bought`, `sold`, `cancelled` — cada uno escrito como `NAME|volume|pitch`.
+
+<Callout type="note" title="Algunos sonidos suenan dos veces">
+Varios mensajes incluidos empiezan con su propia etiqueta `[sound:…]`, el mismo sonido que reproduce la
+sección `sounds:`. Cambiar un sonido en `config.yml` no quita el del mensaje: edita o quita también la
+etiqueta en el `messages.yml` del módulo.
+</Callout>

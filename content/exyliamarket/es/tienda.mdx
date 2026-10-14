@@ -1,0 +1,180 @@
+---
+title: "Tienda"
+description: "La tienda del servidor: categorías y productos editados dentro del juego, productos de objeto y de comando, precios fijos, por demanda y aleatorios, stock y reposición, límites por jugador, rebajas, rotaciones y el catálogo por defecto."
+---
+
+La tienda propia del servidor: categorías de productos con un precio de compra, uno de venta o ambos. Todo
+el catálogo vive en la base de datos y se edita desde el juego — no hay ningún archivo de tienda que
+escribir. Todos los servidores sobre la misma base de datos venden el mismo catálogo.
+
+ID del módulo `shop`, archivo `modules/shop/config.yml`, comandos `/shop` y `/shopadmin` (también `/shopa`).
+
+## Para los jugadores
+
+`/shop` abre la portada: un botón por categoría y un botón **Vender** que abre la
+[ventana de `/sell`](/docs/exyliamarket/venta) con un clic izquierdo y lo vende todo con un clic derecho.
+`/shop <category>` abre una categoría directamente por su ID.
+
+Una categoría sin el permiso del jugador se oculta, o se dibuja bloqueada cuando `hide-locked-categories`
+está desactivado. Dentro de una, cada producto muestra su precio de compra y de venta, si el precio se está
+moviendo, su descuento, el stock, cuántos más puedes comprar o vender en este periodo y cuántos llevas.
+
+| Clic | Qué hace |
+|---|---|
+| Izquierdo | Comprar: abre la pantalla de cantidad. |
+| Derecho | Vender: abre la pantalla de cantidad. |
+| Shift + izquierdo / derecho | Compra o vende `shift-click-amount` unidades de una vez. |
+
+La pantalla de cantidad tiene botones ±1, ±16, ±64, **1** y **Máx.** La cantidad se detiene en
+`max-amount`, el stock, lo que te deja tu límite, lo que puedes pagar y lo que cabe en tu inventario; al
+vender, en lo que llevas y en tu margen de venta. **Confirmar** solo aparece cuando la operación puede
+hacerse.
+
+- **Comprar** comprueba que todo cabe **antes** de cobrar nada.
+- **Vender** toma los objetos que coinciden de tu inventario (no la armadura ni la mano secundaria) y
+  después paga. Vender un producto que tiene stock lo repone, hasta su máximo.
+
+<Callout type="note" title="Una unidad es el stack entero del producto">
+El precio de un producto es por el objeto tal como se configuró, cantidad incluida. Un producto creado a
+partir de 16 flechas vende 16 cada vez, y los objetos de los jugadores se comparan exactamente — nombre,
+lore y encantamientos — ignorando solo la cantidad.
+</Callout>
+
+## Productos
+
+| Campo | Qué hace |
+|---|---|
+| Tipo | **Objeto**, o **Comando**: comandos de consola que se ejecutan al comprar, con `%player%`. Los productos de comando se compran de uno en uno y nunca se revenden. |
+| Objeto, nombre, descripción | Qué se vende y cómo se muestra. Un nombre en blanco usa el del propio objeto. |
+| Precio de compra, precio de venta | Cualquiera de los dos puede estar desactivado. Desactivados ambos muestra "No está a la venta ahora mismo". |
+| Moneda | Cualquier moneda del servidor. |
+| Precio | **Fijo**, **Por demanda** o **Aleatorio**. Ver abajo. |
+| Stock y reposición | `-1` es ilimitado. El stock es compartido por toda la red y se rellena **hasta el máximo** en cada periodo de reposición. |
+| Límite de compra, límite de venta, periodo | Unidades que cada jugador puede comprar y vender por periodo. El periodo empieza con la primera operación del jugador en él. |
+| Permiso | Un nodo para comprarlo o venderlo. Los administradores de la tienda siempre pasan. |
+| Descuento | Un porcentaje sobre el precio de compra, hasta una fecha. |
+| Activado, página, posición | Si los jugadores lo ven, y dónde. |
+
+### Cómo se mueven los precios
+
+| Precio | Cómo |
+|---|---|
+| **Fijo** | Siempre el precio fijado. |
+| **Por demanda** | Cada unidad comprada suma `demand.step-percent` del precio base y cada unidad vendida lo resta, entre `floor-percent` y `ceiling-percent` del base. Sin nadie operando vuelve poco a poco `decay-percent-per-hour` puntos por hora. Un lote se valora unidad a unidad. |
+| **Aleatorio** | Un nuevo sorteo cada `random.reset-hours`, hasta `spread-percent` del base. El mismo en todos los servidores. |
+
+Los sorteos y las rotaciones siguen UTC: un sorteo de 6 horas cambia a las 00, 06, 12 y 18 UTC.
+
+### A qué se sujeta el precio de venta
+
+- Los **descuentos** se aplican solo al precio de compra. El descuento de un producto y el de su categoría
+  no se suman: gana el mayor.
+- El **bonus de venta** (`exyliamarket.shop.sell.<multiplier>`) y los boosters `shop-sell` aumentan lo que
+  paga vender. Ver [Venta](/docs/exyliamarket/venta#bonus-de-venta).
+- Vender nunca paga tanto como cuesta ahora mismo volver a comprar las mismas unidades, ni tanto como
+  fabricar el objeto con cosas que vende la tienda. El precio se mantiene un paso por debajo de ambos, así
+  que no se puede farmear la tienda.
+
+## Categorías
+
+| Campo | Qué hace |
+|---|---|
+| ID | En minúsculas, fijo una vez creado. Lo que recibe `/shop <category>`. |
+| Nombre, descripción, icono | Cómo se dibuja en la portada. |
+| Posición | Su ranura en la portada: 21 sitios, tres filas de siete. |
+| Páginas | De 1 a 10, cada una con 45 ranuras de productos. |
+| Permiso | Un nodo para abrirla. En blanco es para todos. |
+| Moneda | La moneda de los productos **creados después** en ella. |
+| Descuento | Sobre el precio de compra de todos sus productos, hasta una fecha. |
+| Rotación | Muestra solo unos pocos de sus productos a la vez — `rotation size` de ellos, sorteados de nuevo en cada periodo. |
+| Activada | Si los jugadores la ven. |
+
+<Callout type="warning" title="21 categorías como máximo">
+La portada tiene 21 sitios. Las categorías que pasan de ahí no se dibujan, ni en `/shop` ni en el editor, y
+nada avisa de ello.
+</Callout>
+
+## El editor
+
+`/shopadmin` abre las categorías exactamente donde las dibuja `/shop`.
+
+- **Haz clic** en una categoría para editarla; con **shift-clic** la coges, y el siguiente clic la suelta
+  en un sitio vacío, la intercambia con otra o la devuelve a su sitio.
+- **Crear** pide un ID. **Cargar tienda por defecto**: el clic izquierdo añade lo que falta, el clic derecho
+  lo reemplaza todo (ver abajo).
+
+La pantalla de una categoría tiene **Activada**, **General** (nombre, descripción, icono, páginas),
+**Rebajas** (moneda, descuento y su duración, permiso), **Rotación**, **Productos**, **Vista del jugador** y
+**Borrar**, que borra todos sus productos tras una confirmación.
+
+En la cuadrícula de productos, **sostener un objeto en el cursor y hacer clic en una ranura vacía crea un
+producto** a partir de él, con ambos precios desactivados. El bloque de comandos crea un producto de
+comando. Haz clic en un producto para editarlo, shift-clic para moverlo; las flechas de página lo llevan a
+otra página. La pantalla de un producto tiene **Activado**, **General** (objeto, nombre, descripción,
+posición), **Precios** (compra, venta, moneda, tipo de precio, descuento), **Stock** (fijarlo lo rellena),
+**Límites** (compra, venta, periodo, permiso), **Comandos** y **Borrar**.
+
+## El catálogo por defecto
+
+En una tienda sin categorías ni productos, y con `example-catalogue` activado, el plugin escribe su tienda
+por defecto: **17 categorías y 402 productos**, más una categoría **Premium** de 6 productos con precio en
+la primera moneda que no sea la por defecto, cuando el servidor tiene una. Los materiales que la versión del
+servidor no conoce se omiten.
+
+| Categoría | Notas |
+|---|---|
+| blocks, wood, colours, ores, farming, food, mobs, armoury, redstone, brewing, nether, end, miscellaneous | Las materias primas se venden por su valor y se compran por el triple; el equipo fabricado es solo de compra. Los cultivos de farming tienen precio **por demanda**. |
+| perks | Cuatro productos de comando tras `exyliamarket.shop.perks`. |
+| daily-deals | Rota 7 de 16 lotes al por mayor al día, un 20% de descuento durante 365 días desde la instalación. |
+| enchanter | Rota 6 de 17 libros cada 12 horas, con precio aleatorio. |
+| black-market | Stock pequeño, temporizadores de reposición y límites por jugador. |
+
+| Comando | Qué hace |
+|---|---|
+| `/shopadmin defaults add` | Añade lo que falte de la tienda por defecto y de la lista de valores. Nunca cambia una fila existente. |
+| `/shopadmin defaults replace` | Hace una copia de seguridad de la tienda y de `worth.yml` en `backups/shop-<date>/` y después reemplaza ambos por los valores por defecto. A un jugador se le pide confirmación; a la consola no. Si la copia de seguridad falla, no cambia nada. |
+| `/shopadmin log <player> [rows]` | Lo que un jugador compró y vendió, lo más reciente primero, 10 filas por defecto y 50 como máximo. |
+
+`exyliamarket.shop.perks` no está declarado en `plugin.yml`, así que es solo para operadores hasta que se
+le da a un rango.
+
+## Una red
+
+Cada servidor mantiene el catálogo en memoria. Con **Redis** activado, una edición hecha en un servidor
+llega a los demás al instante; **sin Redis, los demás servidores solo ven una edición tras su siguiente
+reinicio**. El stock es seguro en ambos casos: una compra solo se completa cuando la base de datos ha
+aceptado el cambio. Los límites de cada jugador se leen al conectarse y se combinan con lo que escribió el
+servidor del que viene.
+
+## Ajustes
+
+`modules/shop/config.yml`. El catálogo no está aquí.
+
+| Clave | Por defecto | Qué hace |
+|---|---|---|
+| `settings.hide-locked-categories` | `true` | Ocultar una categoría para la que el jugador no tiene permiso, o dibujarla bloqueada. |
+| `settings.shift-click-amount` | `1` | Unidades que compra o vende un shift-clic. |
+| `settings.max-amount` | `2304` | Máximo de unidades que compra de una vez la pantalla de cantidad o un shift-clic. |
+| `settings.example-catalogue` | `true` | Llenar una tienda vacía con el catálogo por defecto. |
+| `demand.step-percent` | `1.0` | Porcentaje del base que mueve el precio una unidad. |
+| `demand.floor-percent` | `50.0` | Lo más bajo que puede llegar el precio, como porcentaje del base. |
+| `demand.ceiling-percent` | `200.0` | Lo más alto que puede llegar. |
+| `demand.decay-percent-per-hour` | `5.0` | Puntos que recupera por hora sin nadie operando. |
+| `random.spread-percent` | `25.0` | Cuánto puede alejarse un sorteo del base. |
+| `random.reset-hours` | `6` | Cuánto dura un sorteo. |
+| `sounds.bought`, `sounds.sold`, `sounds.failed` | | `NAME\|volume\|pitch`. |
+
+## Problemas conocidos
+
+<Callout type="warning" title="El stock limitado se repone demasiado a menudo">
+Un producto cuyo stock está lleno cuando le toca la reposición se omite sin que se mueva su siguiente
+reposición. A partir de ahí cualquier compra se repone en menos de un minuto, así que los objetos raros con
+poco stock — los del mercado negro por defecto — solo los frena el límite de cada jugador.
+</Callout>
+
+- La portada muestra como número de productos de una categoría rotativa todo su conjunto, no el tamaño de
+  la rotación.
+- El chat cuenta objetos (unidades × el stack del producto), `/shopadmin log` cuenta unidades.
+- Dos administradores editando la misma categoría a la vez: el último en guardar gana la fila entera.
+- `/shopadmin defaults replace` conserva los contadores de límites de los jugadores: los productos por
+  defecto vuelven a tener los mismos IDs.

@@ -1,0 +1,155 @@
+---
+title: "Venta y valores"
+description: "Vender al servidor con /sell, la ventana de venta y /sell all, de dónde sale el precio, la lista de valores, el bonus de venta y los boosters, la línea de valor bajo los objetos, /worth y la auditoría de precios."
+---
+
+Dos módulos venden objetos al servidor. **Sell** se encarga de `/sell` y su ventana, y dibuja bajo cada
+objeto lo que vale. **Worth** se encarga de `worth.yml`, un precio por material para los objetos que la
+tienda no compra. Las varitas de venta y la autoventa venden por el mismo camino; ver
+[Varitas de venta](/docs/exyliamarket/varitas-de-venta).
+
+Archivos `modules/sell/config.yml` y `modules/worth/worth.yml`.
+
+## De dónde sale un precio
+
+1. **La tienda.** Si un producto de la tienda compra ese objeto, su precio es el que se paga, y se aplican
+   sus límites y su permiso. Cuando varios productos lo compran, decide el activado más antiguo.
+2. **La lista de valores.** Si no, el material del objeto en `worth.yml`.
+
+La tienda siempre gana, incluso cuando el jugador no puede usar ese producto: sin su permiso el objeto no se
+vende en absoluto, y una vez agotado su límite de venta el resto vuelve sin vender. La lista de valores no
+toma el relevo.
+
+## /sell
+
+| Comando | Qué hace |
+|---|---|
+| `/sell` | Abre la ventana de venta. |
+| `/sell hand` | Vende el stack de tu mano principal. |
+| `/sell all` | Vende todo lo vendible de tu inventario: las 27 ranuras de almacenamiento, más la barra rápida cuando `sell-all-scope` es `ALL` (por defecto). |
+
+Los tres necesitan `exyliamarket.shop.sell`. `/sell all` pide confirmación cuando pagaría al menos
+`confirm-sell-all-above` de la moneda por defecto (5.000 por defecto, `-1` nunca pregunta).
+
+### La ventana de venta
+
+Suelta objetos en las cinco filas superiores como en un cofre. La fila inferior contiene:
+
+| Botón | Qué hace |
+|---|---|
+| **Añadir vendibles** | Mueve a la ventana cada stack vendible de tu inventario, según `sell-all-scope`. |
+| **Cancelar** | Te lo devuelve todo. |
+| **Total** | Lo que suma todo, por moneda, bonus incluidos, y cuántos objetos volverán sin vender. Se actualiza en cada clic y cada segundo. |
+| **Confirmar** | Vende. |
+
+Los objetos que no se venden, y los sobrantes por debajo del stack de un producto, vuelven a tu inventario,
+y el resto a [`/collect`](/docs/exyliamarket/recoger). Cerrar la ventana con ESC — o salir, morir, ser
+expulsado, un apagado — **vende** lo que hay en ella mientras `sell-on-close` esté activado, como lo está
+por defecto; desactivado, todos esos casos lo devuelven todo y solo **Confirmar** vende.
+
+## Bonus de venta
+
+`exyliamarket.shop.sell.<multiplier>` multiplica todo lo que un jugador vende al servidor: productos de la
+tienda, objetos de la lista de valores, varitas y autoventa. El número es un multiplicador simple, no un
+porcentaje:
+
+| Nodo | Paga |
+|---|---|
+| `exyliamarket.shop.sell.1.25` | ×1.25 |
+| `exyliamarket.shop.sell.2` | ×2 |
+
+Gana el más alto que se tenga; cualquiera por debajo de 1 no hace nada. Los nodos no están declarados en
+`plugin.yml`.
+
+Los boosters de ExyliaLib se acumulan encima: `shop-sell` para los productos de la tienda y `worth-sell`
+para los objetos de la lista de valores, cada uno por moneda. El precio de un objeto de la lista de valores
+tras bonus, booster y varita se sigue manteniendo por debajo de lo que cobra la tienda por el mismo objeto y
+de lo que cuesta fabricarlo con objetos de la tienda.
+
+## La lista de valores
+
+```yaml title="modules/worth/worth.yml"
+DIAMOND: 50
+IRON_INGOT: 6
+EMERALD: "40:gems"
+```
+
+Una línea por material: un precio por objeto suelto, o `"price:currency"` para una moneda distinta de la
+por defecto. El material se reconoce en mayúsculas o minúsculas. Solo se venden así los objetos simples —
+sin nombre personalizado, lore, modelo personalizado ni datos de plugins, sin contenedores llenos. Los
+encantamientos, el daño y el tipo de poción **no** se comprueban: una herramienta encantada se vende al
+precio de su material.
+
+El archivo se escribe una vez, cuando no existe, a partir de la tabla de valores del plugin menos cada
+material que la tienda por defecto ya compra. Después es tuyo y nunca se sobrescribe.
+
+Edítalo dentro del juego:
+
+- `/setworth <price> [material]` pone precio al objeto de la mano o a un material indicado. `0` lo quita.
+- `/marketadmin` → **Valores** abre el editor de valores: añadir desde un selector de materiales, editar,
+  quitar, buscar cualquier objeto. No cambia nada hasta que se guarda.
+
+Los dos conservan la moneda de una línea; la moneda en sí solo se cambia en el archivo. Los dos necesitan
+`exyliamarket.worth.admin`.
+
+## /worth
+
+| Comando | Qué dice |
+|---|---|
+| `/worth` | Por cuánto se vende el stack de tu mano, por unidad y en total. |
+| `/worth <material>` | Un objeto simple de ese material, y un stack completo. |
+| `/worth inventory` | Todo lo que llevas que se vende, sumado por moneda. |
+| `/worth menu` | Todos los precios, para explorarlos. |
+| `/worth history [material]` | El gráfico de precios de 7 días de lo que los jugadores se pagaron entre ellos. |
+
+Cada respuesta va seguida de lo que los jugadores pagaron por ello en el mercado cuando hay suficientes
+ventas. `/worth` muestra precios base, sin el bonus de venta ni los boosters, y no comprueba límites ni
+permisos, así que `/worth inventory` puede diferir de lo que paga `/sell all`.
+
+El menú de valores lista cada material que se vende, con su precio por unidad y por stack, quién lo compra
+— la tienda o la lista de valores —, su categoría y su precio de mercado. El botón de categoría recorre
+`categories.shown` de `config.yml` (izquierdo hacia delante, derecho hacia atrás), la búsqueda compara el
+nombre o el material, y una fila abre su gráfico de precios.
+
+## La línea bajo los objetos
+
+Con `lore.enabled`, cada objeto que se vende muestra por cuánto se vende, en inventarios y contenedores. Se
+dibuja solo con paquetes: el objeto en sí nunca lleva la línea. Muestra precios base y no se muestra en
+creativo.
+
+- `lore.menus` la dibuja también en los objetos de los menús de plugins; desactivado por defecto, salvo en
+  la ventana de venta.
+- Cada jugador puede ocultarla para sí mismo en `/settings` en **Valor bajo los objetos**.
+
+## La auditoría de precios
+
+`/selladmin` (o `/selladmin audit`) revisa cada precio que podría imprimir dinero:
+
+| Hallazgo | Nivel |
+|---|---|
+| Un objeto se vende por al menos lo que la tienda cobra por él. | Error |
+| El resultado de una receta se vende por más de lo que cuestan sus ingredientes en la tienda. | Error |
+| El resultado de una receta se vende por más de lo que se venden sus ingredientes. | Aviso |
+| La tienda y `worth.yml` ponen precios distintos al mismo material (se paga el de la tienda). | Aviso |
+| Una línea de `worth.yml` que no es un objeto, no tiene un precio positivo o nombra una moneda desconocida. | Error |
+
+Lee las recetas de fabricación, fundición y cortapiedras, con la opción más barata de cada ingrediente. Se
+ejecuta diez segundos después del arranque y cada media hora; la consola solo se entera de un cambio. El
+chat muestra los primeros 15 hallazgos y la consola todos, y a un jugador con `exyliamarket.sell.admin` se
+le avisa al conectarse mientras queden problemas.
+
+## Ajustes
+
+`modules/sell/config.yml`, editable dentro del juego desde `/marketadmin`.
+
+| Clave | Por defecto | Qué hace |
+|---|---|---|
+| `settings.sell-all-scope` | `ALL` | `STORAGE` para las 27 ranuras de almacenamiento, `ALL` para incluir la barra rápida. También de dónde toma **Añadir vendibles**. |
+| `settings.sell-on-close` | `true` | Cerrar la ventana vende lo que hay en ella. |
+| `settings.confirm-sell-all-above` | `5000` | `/sell all` pide confirmación a partir de esta cantidad de la moneda por defecto. `-1` nunca pregunta. |
+| `lore.enabled` | `true` | Dibujar la línea de valor bajo los objetos. |
+| `lore.menus` | `false` | También en los objetos de los menús de plugins. |
+| `sounds.sold`, `failed`, `added`, `returned` | | `NAME\|volume\|pitch`. |
+
+Los pagos llevan el motivo `sell:command`, `sell:wand` o `sell:autosell`, y `shop:sell` desde las propias
+pantallas de la tienda, que es lo que muestran el registro de ExyliaEconomy y Exylia Analytics.

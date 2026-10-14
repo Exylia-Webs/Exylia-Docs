@@ -1,0 +1,149 @@
+---
+title: "Selling and worth"
+description: "Selling to the server with /sell, the sell window and /sell all, where the price comes from, the worth list, the sell bonus and boosters, the worth line under items, /worth and the price audit."
+---
+
+Two modules sell items back to the server. **Sell** owns `/sell` and its window, and draws what each item
+is worth under it. **Worth** owns `worth.yml`, a price per material for items the shop does not buy. Sell
+wands and autosell sell through the same path; see [Sell wands](/docs/exyliamarket/sell-wands).
+
+Files `modules/sell/config.yml` and `modules/worth/worth.yml`.
+
+## Where a price comes from
+
+1. **The shop.** If a shop product sells that item back, its price is the one paid, and its limits and
+   permission apply. When several products buy it, the oldest enabled one decides.
+2. **The worth list.** Otherwise, the item's material in `worth.yml`.
+
+The shop always wins, even when the player cannot use that product: without its permission the item does
+not sell at all, and once its sell limit is used up the rest comes back unsold. The worth list does not
+take over.
+
+## /sell
+
+| Command | What it does |
+|---|---|
+| `/sell` | Opens the sell window. |
+| `/sell hand` | Sells the stack in your main hand. |
+| `/sell all` | Sells everything sellable in your inventory: the 27 storage slots, plus the hotbar when `sell-all-scope` is `ALL` (the default). |
+
+All three need `exyliamarket.shop.sell`. `/sell all` asks first when it would pay at least
+`confirm-sell-all-above` of the default currency (5,000 by default, `-1` never asks).
+
+### The sell window
+
+Drop items into the top five rows like a chest. The bottom row holds:
+
+| Button | What it does |
+|---|---|
+| **Add sellable** | Moves every sellable stack from your inventory into the window, following `sell-all-scope`. |
+| **Cancel** | Hands everything back. |
+| **Total** | What it all comes to, per currency, bonuses included, and how many items will come back unsold. Updated on every click and every second. |
+| **Confirm** | Sells. |
+
+Items that do not sell, and leftovers below a product's stack, come back to your inventory, the rest to
+[`/collect`](/docs/exyliamarket/collect). Closing the window with ESC — or quitting, dying, being kicked, a
+shutdown — **sells** what is in it while `sell-on-close` is on, as it is by default; turned off, all of
+those hand everything back and only **Confirm** sells.
+
+## Sell bonus
+
+`exyliamarket.shop.sell.<multiplier>` multiplies everything a player sells to the server: shop products,
+worth items, wands and autosell. The number is a plain multiplier, not a percentage:
+
+| Node | Pays |
+|---|---|
+| `exyliamarket.shop.sell.1.25` | ×1.25 |
+| `exyliamarket.shop.sell.2` | ×2 |
+
+The highest one held wins; anything below 1 does nothing. The nodes are not declared in `plugin.yml`.
+
+ExyliaLib boosters stack on top: `shop-sell` for shop products and `worth-sell` for worth items, each per
+currency. A worth item's price after bonus, booster and wand is still held below what the shop charges for
+the same item and below what crafting it from shop items costs.
+
+## The worth list
+
+```yaml title="modules/worth/worth.yml"
+DIAMOND: 50
+IRON_INGOT: 6
+EMERALD: "40:gems"
+```
+
+One line per material: a price per single item, or `"price:currency"` for a currency other than the
+default. The material is matched in any case. Only plain items sell this way — no custom name, lore,
+custom model or plugin data, no filled container. Enchantments, damage and potion type are **not** checked:
+an enchanted tool sells at its material's price.
+
+The file is written once, when it does not exist, from the plugin's value table minus every material the
+default shop already buys back. After that it is yours and never overwritten.
+
+Edit it in game:
+
+- `/setworth <price> [material]` prices the item in hand or a named material. `0` removes it.
+- `/marketadmin` → **Worth** opens the worth editor: add from a material picker, edit, remove, find any
+  item. Nothing changes until it is saved.
+
+Both keep a line's currency; the currency itself is only changed in the file. Both need
+`exyliamarket.worth.admin`.
+
+## /worth
+
+| Command | What it says |
+|---|---|
+| `/worth` | What the stack in your hand sells for, each and in total. |
+| `/worth <material>` | One plain item of it, and a full stack. |
+| `/worth inventory` | Everything you carry that sells, added up per currency. |
+| `/worth menu` | Every price, browsable. |
+| `/worth history [material]` | The 7-day price chart of what players paid each other. |
+
+Each answer is followed by what players paid for it on the market when there are enough sales.
+`/worth` shows base prices, without the sell bonus or boosters, and does not check limits or permissions,
+so `/worth inventory` may differ from what `/sell all` pays.
+
+The worth menu lists every material that sells, with its price each and per stack, who buys it — the shop
+or the worth list — its category and its market price. The category button steps through `categories.shown`
+in `config.yml` (left forward, right back), the search matches the name or the material, and a row opens its
+price chart.
+
+## The line under items
+
+With `lore.enabled`, every item that sells shows what it sells for, in inventories and containers. It is
+drawn on packets only: the item itself never carries the line. It shows base prices, and is not shown in
+creative.
+
+- `lore.menus` draws it on items in plugin menus too; off by default, except in the sell window.
+- Each player can hide it for themselves in `/settings` under **Worth under items**.
+
+## The price audit
+
+`/selladmin` (or `/selladmin audit`) checks every price that could print money:
+
+| Finding | Level |
+|---|---|
+| An item sells for at least what the shop charges for it. | Error |
+| A recipe's result sells for more than its ingredients cost in the shop. | Error |
+| A recipe's result sells for more than its ingredients sell for. | Warning |
+| The shop and `worth.yml` price the same material differently (the shop's price is paid). | Warning |
+| A `worth.yml` line that is not an item, has no positive price, or names an unknown currency. | Error |
+
+It reads crafting, smelting and stonecutter recipes, the cheapest choice of each ingredient. It runs ten
+seconds after start and every half hour; the console hears only a change. The chat shows the first 15
+findings, the console all of them, and a player with `exyliamarket.sell.admin` is told on join while
+problems remain.
+
+## Settings
+
+`modules/sell/config.yml`, editable in game from `/marketadmin`.
+
+| Key | Default | What it does |
+|---|---|---|
+| `settings.sell-all-scope` | `ALL` | `STORAGE` for the 27 storage slots, `ALL` to include the hotbar. Also what **Add sellable** takes from. |
+| `settings.sell-on-close` | `true` | Closing the window sells what is in it. |
+| `settings.confirm-sell-all-above` | `5000` | `/sell all` asks first from this much of the default currency. `-1` never asks. |
+| `lore.enabled` | `true` | Draw the worth line under items. |
+| `lore.menus` | `false` | Also on items of plugin menus. |
+| `sounds.sold`, `failed`, `added`, `returned` | | `NAME\|volume\|pitch`. |
+
+Payments carry the reason `sell:command`, `sell:wand` or `sell:autosell`, and `shop:sell` from the shop's
+own screens, which is what ExyliaEconomy's ledger and Exylia Analytics show.

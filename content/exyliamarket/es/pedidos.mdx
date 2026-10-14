@@ -1,0 +1,122 @@
+---
+title: "Pedidos de compra"
+description: "La casa de subastas al revés: pedir una cantidad de un objeto pagando por adelantado, pedidos por material y pedidos exactos, cómo se rellenan, recogida, caducidad y los ajustes."
+---
+
+Un pedido de compra pide una cantidad de un objeto a un precio por unidad, y el comprador lo paga entero
+cuando publica el pedido. Cualquiera puede venderle — conectado o no, el comprador no tiene que estar — y
+cobra al instante. Lo que entregan los vendedores espera en el pedido hasta que el comprador lo recoge.
+
+ID del módulo `orders`, archivo `modules/orders/config.yml`, comando `/orders` (también `/order`).
+
+## Crear un pedido
+
+Hay dos formas de entrar, y crean dos tipos de pedido.
+
+| Desde | Pedido | Qué acepta |
+|---|---|---|
+| **Nuevo pedido** en el tablón | Un **pedido por material**, de cualquier objeto elegido en una lista con buscador de todos los objetos | Cualquier objeto *simple* de ese material: sin renombrar, sin lore, sin encantamientos, sin modelo personalizado, sin daño y sin nada dentro. |
+| **En tu mano** en esa misma lista, o `/orders create <amount> <price> [currency]` | Un **pedido exacto** | Solo objetos idénticos al que sostienes, encantamientos y nombre incluidos. |
+
+El flujo del tablón pide el objeto, luego la cantidad, luego la moneda (se omite si el servidor solo tiene
+una) y luego el precio **por unidad**. `/orders create` recibe los mismos valores escritos, con `<price>`
+por unidad: `/orders create 500 3` pide 500 de lo que sostienes a 3 cada uno. Sin moneda escrita y con más
+de una para elegir, se abre un selector.
+
+Los dos terminan en la **pantalla de revisión**: el objeto y cómo se compara, la cantidad, el precio por
+unidad y el precio total, la comisión de creación, el total cobrado, el impuesto del vendedor y tu saldo
+antes y después. La cantidad y el precio se pueden cambiar ahí, y un botón de **precio de mercado** fija el
+precio en la media de 7 días de ese objeto. No se cobra nada hasta **Confirmar**; un precio muy por encima
+del mercado pide confirmación una vez más antes. Ver [Precios](/docs/exyliamarket/precios).
+
+### Qué se comprueba
+
+- El objeto no está en `blocked-materials`, no está dañado salvo con `allow-damaged-items`, y no pesa más
+  que `max-item-kilobytes`.
+- La cantidad está entre 1 y `max-amount` (2304 por defecto, 36 stacks).
+- El precio por unidad es al menos la cantidad mínima de la moneda. En la **moneda por defecto** el precio
+  total también tiene que estar entre `min-price` y `max-price`; las demás monedas no tienen límites.
+- El jugador tiene menos pedidos abiertos que su límite: `max-orders-per-player`, o su
+  `exyliamarket.orders.limit.<n>`.
+
+Al confirmar se cobra el precio total **más** el `creation-fee-percent` de él. La comisión nunca se
+devuelve: es lo que impide usar los pedidos como almacén gratuito de dinero.
+
+### Aceptar algo más que objetos simples
+
+`material-orders-accept` permite que un pedido por material acepte objetos que si no, no contarían como
+simples. Pon cualquiera de `NAME`, `LORE`, `ENCHANTMENTS`, `CUSTOM_MODEL_DATA`:
+
+```yaml title="modules/orders/config.yml"
+settings:
+  material-orders-accept:
+  - NAME
+```
+
+<Callout type="warning" title="El comprador siempre recibe objetos simples">
+Un pedido por material entrega copias simples de su material, entregue lo que entregue el vendedor. Con
+`ENCHANTMENTS` aceptado, un objeto encantado vendido al pedido pierde sus encantamientos por el camino.
+</Callout>
+
+## Rellenar un pedido
+
+Haz clic en un pedido del tablón para abrir su pantalla de **entrega**: qué pide, cuántos de los que llevas
+coinciden, cuántos se venderán (lo menor entre lo que llevas y lo que aún se pide) y lo que cobrarás tras
+el impuesto. **Confirmar** vende todos los objetos que coinciden en tu inventario y tu barra rápida, hasta
+lo que el pedido aún necesita; no se puede elegir una cantidad menor.
+
+El vendedor cobra al instante: una parte proporcional de lo que puso el comprador, menos el
+`sales-tax-percent`. No puedes rellenar tu propio pedido salvo que `allow-self-fill` esté activado.
+
+Al comprador se le avisa en el servidor en el que esté, o en su siguiente conexión, y ve un aviso emergente
+cuando el pedido se rellena y otra vez cuando se completa. Ver
+[Recoger y avisos](/docs/exyliamarket/recoger).
+
+## Recogida, cancelación y caducidad
+
+Los objetos entregados esperan **en el pedido**, no en el buzón general. Haz clic izquierdo en él en
+`/orders mine` para llevarte lo que quepa en tu inventario; `/collect` también lista cada pedido con objetos
+esperando. Un pedido terminado y vacío desaparece.
+
+| Qué ocurre | El dinero restante | Los objetos entregados |
+|---|---|---|
+| El comprador lo cancela (clic derecho en `/orders mine` y confirmar) | Se devuelve al saldo | Quedan para recoger |
+| El staff lo cancela | Se devuelve al saldo | Quedan para recoger |
+| Caduca tras `order-hours` (72 por defecto) | Se devuelve al saldo | Quedan para recoger |
+| Se completa | No queda nada | Quedan para recoger |
+
+Un pedido caducado deja de aceptar entregas al instante; la revisión que lo reembolsa se ejecuta cada
+minuto.
+
+## El tablón
+
+Ordenado por **Mejor pagado** (precio por unidad, el más alto primero), **Más recientes** o **Más
+buscados** (unidades que aún faltan), alternando con el botón de orden. La búsqueda compara el material, el
+nombre del comprador o el nombre del objeto; el clic derecho la borra. Cada pantalla se actualiza mientras
+está abierta.
+
+## Staff
+
+`/ordersadmin` (también `/ordersa`) lista todos los pedidos abiertos, los más recientes primero. El clic
+izquierdo cancela uno tras una confirmación; el clic derecho abre el registro de mercado del comprador.
+`/ordersadmin cancel <id>` hace lo mismo por ID. Los dos necesitan `exyliamarket.orders.admin`.
+
+## Ajustes
+
+Todo bajo `settings:` en `modules/orders/config.yml`, y editable dentro del juego desde `/marketadmin`.
+
+| Clave | Por defecto | Qué hace |
+|---|---|---|
+| `max-orders-per-player` | `5` | Pedidos abiertos por jugador. `exyliamarket.orders.limit.<n>` lo sustituye. |
+| `max-amount` | `2304` | Máximo de unidades que puede pedir un pedido. |
+| `min-price` | `1.0` | Mínimo del precio total, en la moneda por defecto. |
+| `max-price` | `-1.0` | Máximo del precio total, en la moneda por defecto. `-1` para no tener tope. |
+| `order-hours` | `72` | Cuánto tiempo acepta entregas un pedido. |
+| `creation-fee-percent` | `1.0` | Se cobra al comprador además del precio al crear el pedido. No se devuelve. |
+| `sales-tax-percent` | `5.0` | Se descuenta de lo que cobra un vendedor. |
+| `allow-self-fill` | `false` | Si un jugador puede vender a su propio pedido. |
+| `blocked-materials` | `BEDROCK`, `COMMAND_BLOCK`, `BARRIER`, `STRUCTURE_BLOCK`, `SPAWNER` | Materiales que nadie puede pedir. |
+| `allow-damaged-items` | `false` | Si un pedido puede pedir un objeto dañado. |
+| `max-item-kilobytes` | `64` | Objeto más pesado que se puede pedir. `0` para no tener tope. |
+| `min-counted-value` | `10.0` | Entrega mínima, en la moneda por defecto, que cuenta para estadísticas y misiones. |
+| `material-orders-accept` | `[]` | Partes que un pedido por material deja pasar de todos modos: `NAME`, `LORE`, `ENCHANTMENTS`, `CUSTOM_MODEL_DATA`. |

@@ -1,0 +1,119 @@
+---
+title: "Buy orders"
+description: "The auction house the other way round: asking for an amount of an item and paying up front, material orders and exact orders, filling, collecting, expiry and the settings."
+---
+
+A buy order asks for an amount of an item at a price per unit, and the buyer pays for all of it when the
+order goes up. Anybody may sell into it — online or not, the buyer does not have to be there — and is paid
+at once. What sellers deliver waits on the order until the buyer collects it.
+
+Module id `orders`, file `modules/orders/config.yml`, command `/orders` (also `/order`).
+
+## Placing an order
+
+There are two ways in, and they make two kinds of order.
+
+| From | Order | What it accepts |
+|---|---|---|
+| **New order** on the board | A **material order**, for any item picked from a searchable list of every item | Any *plain* item of that material: not renamed, no lore, no enchantments, no custom model, not damaged, holding nothing. |
+| **In your hand** in that same list, or `/orders create <amount> <price> [currency]` | An **exact order** | Only items identical to the one held, enchantments and name included. |
+
+The board's flow asks for the item, then the amount, then the currency (skipped when the server has only
+one), then the price **per unit**. `/orders create` takes the same values typed, with `<price>` per unit:
+`/orders create 500 3` orders 500 of what you hold at 3 each. Without a currency typed and more than one to
+choose from, a picker opens.
+
+Both end on the **review screen**: the item and how it is matched, amount, price each and whole price, the
+creation fee, the total charged, the seller tax, your balance before and after. Amount and price can be
+changed there, and a **market price** button sets the price to the 7-day average of that item. Nothing is
+charged until **Confirm**; a price far above the market asks once more first. See
+[Prices](/docs/exyliamarket/prices).
+
+### What is checked
+
+- The item is not in `blocked-materials`, is not damaged unless `allow-damaged-items`, and is not heavier
+  than `max-item-kilobytes`.
+- The amount is between 1 and `max-amount` (2304 by default, 36 stacks).
+- The price per unit is at least the currency's smallest amount. In the **default currency** the whole
+  price must also be between `min-price` and `max-price`; other currencies have no bounds.
+- The player has fewer open orders than their limit: `max-orders-per-player`, or their
+  `exyliamarket.orders.limit.<n>`.
+
+On confirm the whole price **plus** `creation-fee-percent` of it is taken. The fee is never refunded: it is
+what stops orders being used as free storage for money.
+
+### Accepting more than plain items
+
+`material-orders-accept` lets a material order take items that would otherwise not count as plain. List
+any of `NAME`, `LORE`, `ENCHANTMENTS`, `CUSTOM_MODEL_DATA`:
+
+```yaml title="modules/orders/config.yml"
+settings:
+  material-orders-accept:
+  - NAME
+```
+
+<Callout type="warning" title="The buyer always receives plain items">
+A material order delivers plain copies of its material, whatever the seller handed in. With
+`ENCHANTMENTS` accepted, an enchanted item sold into the order loses its enchantments on the way.
+</Callout>
+
+## Filling an order
+
+Click an order on the board to open its **fill** screen: what it wants, how many you carry that match,
+how many will sell (the smaller of what you carry and what is still wanted) and what you will be paid
+after tax. **Confirm** sells every matching item in your storage and hotbar slots, up to what the order
+still needs; there is no picking a smaller amount.
+
+The seller is paid at once: a proportional share of what the buyer put up, minus `sales-tax-percent`. You
+cannot fill your own order unless `allow-self-fill` is on.
+
+The buyer is told on whichever server they are, or on their next join, and sees a toast when the order is
+filled and again when it is complete. See [Collect and notices](/docs/exyliamarket/collect).
+
+## Collecting, cancelling and expiry
+
+Delivered items wait **on the order**, not in the general inbox. Left-click it in `/orders mine` to take
+what fits in your inventory; `/collect` lists every order with items waiting too. An order that is
+finished and empty disappears.
+
+| What happens | The money left | The items delivered |
+|---|---|---|
+| The buyer cancels it (right-click in `/orders mine`, then confirm) | Refunded to the balance | Stay to collect |
+| Staff cancel it | Refunded to the balance | Stay to collect |
+| It runs out after `order-hours` (72 by default) | Refunded to the balance | Stay to collect |
+| It is complete | Nothing left | Stay to collect |
+
+An expired order stops taking fills at once; the sweep that refunds it runs every minute.
+
+## The board
+
+Sorted by **Best paid** (unit price, highest first), **Newest** or **Most wanted** (units still needed),
+cycled with the sort button. The search matches the material, the buyer's name or the item's name;
+right-click clears it. Every screen updates while it is open.
+
+## Staff
+
+`/ordersadmin` (also `/ordersa`) lists every open order, newest first. Left-click cancels one after a
+confirmation; right-click opens the buyer's market log. `/ordersadmin cancel <id>` does the same by id.
+Both need `exyliamarket.orders.admin`.
+
+## Settings
+
+All under `settings:` in `modules/orders/config.yml`, and editable in game from `/marketadmin`.
+
+| Key | Default | What it does |
+|---|---|---|
+| `max-orders-per-player` | `5` | Open orders per player. `exyliamarket.orders.limit.<n>` replaces it. |
+| `max-amount` | `2304` | Most units one order may ask for. |
+| `min-price` | `1.0` | Least the whole price may be, in the default currency. |
+| `max-price` | `-1.0` | Most the whole price may be, in the default currency. `-1` for no ceiling. |
+| `order-hours` | `72` | How long an order takes fills. |
+| `creation-fee-percent` | `1.0` | Charged to the buyer on top of the price when the order is placed. Not refunded. |
+| `sales-tax-percent` | `5.0` | Taken from what a seller is paid. |
+| `allow-self-fill` | `false` | Whether a player may sell into their own order. |
+| `blocked-materials` | `BEDROCK`, `COMMAND_BLOCK`, `BARRIER`, `STRUCTURE_BLOCK`, `SPAWNER` | Materials nobody may order. |
+| `allow-damaged-items` | `false` | Whether an order may ask for a damaged item. |
+| `max-item-kilobytes` | `64` | Heaviest item that may be ordered. `0` for no cap. |
+| `min-counted-value` | `10.0` | Smallest fill, in the default currency, that counts toward statistics and missions. |
+| `material-orders-accept` | `[]` | Parts a material order lets through anyway: `NAME`, `LORE`, `ENCHANTMENTS`, `CUSTOM_MODEL_DATA`. |

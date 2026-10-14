@@ -1,0 +1,111 @@
+---
+title: "API"
+description: "Feeding drops into a player's autosell, asking which market modules run, reacting to finished deals and trade requests, and letting a container refuse a sell wand."
+badge: "dev"
+---
+
+`MarketService` answers two things other plugins need from the market: which of its modules are running,
+and selling a drop through the player's autosell. Four events report what happens on the market. Prices are
+not here: ask ExyliaLib's `Prices`, which the shop and the worth list answer.
+
+```java
+// A plugin that hands out drops: offer each one to the player's autosell first.
+boolean sold = ExyliaAPI.get(MarketService.class)
+        .map(market -> market.autoSell(player, drop))
+        .orElse(false);
+if (!sold) player.getInventory().addItem(drop);
+```
+
+<Callout type="note" title="Adding it to your project">
+The artifact, the repository and the `plugin.yml` line are the same for every Exylia plugin and live on the
+[public API page](/docs/exylialib/api). The market contract arrived in the public API **1.11.0**, shipped
+with ExyliaLib **1.276.0**, in the package `net.exylia.lib.api.market`.
+</Callout>
+
+An empty `Optional` from `ExyliaAPI.get` means the server has no ExyliaMarket. The service is registered once
+the modules have started and goes away when the plugin disables.
+
+## Methods
+
+| Method | What it does |
+|---|---|
+| `boolean isModuleEnabled(String moduleId)` | Whether a module is switched on and running: `auction-house`, `auctions`, `orders`, `bazaar`, `shop`, `sell`, `worth`, `sell-wands` or `trade`. |
+| `boolean autoSell(Player player, ItemStack drop)` | Offers a drop to the player's autosell. `true` when it was taken and must **not** be given as well; `false` when the player has autosell off or lacks the permission, nobody buys the item, or the sell wands module is off. Paid in batches every `autosell.flush-seconds`, not at once. Call it on the player's own thread. The stack is never changed. |
+
+<Callout type="warning" title="The module ids in the javadoc">
+The interface's javadoc lists `market` among the module ids and leaves out `bazaar`. The auction house's id is
+`auction-house`: `isModuleEnabled("market")` always answers `false`.
+</Callout>
+
+## Events
+
+All in `net.exylia.lib.api.market.event`.
+
+| Event | Cancellable | When |
+|---|---|---|
+| `MarketDealEvent` | No | A deal between two players finished, money and items settled. |
+| `SellWandUseEvent` | Yes | A player is about to sell a container's contents with a sell wand. |
+| `TradeRequestEvent` | No | A trade request was delivered. |
+| `MarketLogEvent` | No | Deprecated, and no longer fired. |
+
+### MarketDealEvent
+
+For a reputation plugin to open a rating, or to hand the seller back part of the tax. With nobody listening
+the deal stands exactly as it was paid.
+
+| Getter | What it is |
+|---|---|
+| `getSource()` | `market` (auction house), `auctions`, `orders`, `trade`, or `bazaar`. |
+| `getBuyer()`, `getBuyerName()` | Who paid; the name may be `null`. |
+| `getSeller()`, `getSellerName()` | Who was paid. |
+| `getCurrency()` | The currency id, blank for the default. |
+| `getPrice()` | What the buyer paid, before tax. |
+| `getTax()` | The sales tax the seller paid, zero for none. |
+
+A trade has no buyer or seller: it fires once per side, with that side as the buyer, the other as the seller,
+a price of what the trade was worth in the default currency (money in it plus what the items sell for) and
+no tax. A bazaar fill uses the source `bazaar`, which is not one of the class's constants.
+
+<Callout type="warning" title="Usually off the main thread">
+`MarketDealEvent` is fired from a database callback in most cases. Schedule before touching the world or a
+player's inventory.
+</Callout>
+
+### SellWandUseEvent
+
+Fired on the player's own thread before anything is sold or the click is taken. Cancel it for a container
+that decides itself when it opens — a loot chest, a supply drop crate: the wand does nothing and the click
+goes on as a plain open.
+
+```java
+@EventHandler
+public void onWand(SellWandUseEvent event) {
+    if (crates.isCrate(event.getBlock())) event.setCancelled(true);
+}
+```
+
+| Getter | What it is |
+|---|---|
+| `getPlayer()` | Who holds the wand. |
+| `getBlock()` | The container clicked. |
+
+### TradeRequestEvent
+
+On the main thread, both players on this server, after the request was delivered. For saying something to
+either side before they deal, such as a warning about a low reputation.
+
+| Getter | What it is |
+|---|---|
+| `getFrom()` | Who asked. |
+| `getTo()` | Who was asked. |
+
+### MarketLogEvent
+
+Deprecated in the API and not fired by ExyliaMarket any more: the market records into ExyliaLib's shared
+staff log instead, browsed with `/exylialib logs`.
+
+## What is not there
+
+No method lists, creates or cancels listings, auctions, orders or offers, edits the shop or reads a
+player's history. Placeholders cover the read-outs most integrations want: see
+[Placeholders](/docs/exyliamarket/placeholders).

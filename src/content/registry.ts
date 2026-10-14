@@ -1053,6 +1053,55 @@ const DISPLAYS_NAV: NavGroup[] = [
   },
 ];
 
+const MARKET_NAV: NavGroup[] = [
+  {
+    label: { en: "Getting started", es: "Empezar" },
+    pages: [
+      page("introduction", "introduction", "introduccion"),
+      page("installation", "installation", "instalacion"),
+      page("first-steps", "first-steps", "primeros-pasos"),
+    ],
+  },
+  {
+    label: { en: "Between players", es: "Entre jugadores" },
+    pages: [
+      page("auction-house", "auction-house", "casa-de-subastas"),
+      page("auctions", "auctions", "subastas"),
+      page("orders", "orders", "pedidos"),
+      page("bazaar", "bazaar", "bazar"),
+      page("trade", "trade", "intercambios"),
+    ],
+  },
+  {
+    label: { en: "Selling to the server", es: "Vender al servidor" },
+    pages: [
+      page("shop", "shop", "tienda"),
+      page("selling", "selling", "venta"),
+      page("sell-wands", "sell-wands", "varitas-de-venta"),
+    ],
+  },
+  {
+    label: { en: "Systems", es: "Sistemas" },
+    pages: [
+      page("collect", "collect", "recoger"),
+      page("prices", "prices", "precios"),
+      page("administration", "administration", "administracion"),
+      page("integrations", "integrations", "integraciones"),
+    ],
+  },
+  {
+    label: { en: "Reference", es: "Referencia" },
+    pages: [
+      page("commands", "commands", "comandos"),
+      page("permissions", "permissions", "permisos"),
+      page("placeholders", "placeholders", "placeholders"),
+      page("configuration", "configuration", "configuracion"),
+      page("api", "api", "api"),
+      page("faq", "faq", "faq"),
+    ],
+  },
+];
+
 const PROTECTIONS_NAV: NavGroup[] = [
   {
     label: { en: "Getting started", es: "Empezar" },
@@ -1513,6 +1562,27 @@ export const plugins: Plugin[] = [
       { en: "Folia", es: "Folia" },
     ],
     nav: PROTECTIONS_NAV,
+  },
+  {
+    id: "exyliamarket",
+    name: "ExyliaMarket",
+    tagline: { en: "Every way players buy and sell", es: "Todas las formas de comprar y vender" },
+    summary: {
+      en: "An auction house, timed auctions with auto-bids, buy orders, a bazaar order book, a server shop edited in game, /sell with a worth list, sell wands and autosell, and safe face-to-face trades, with a shared price index, one /collect inbox and Discord webhooks.",
+      es: "Casa de subastas, subastas con tiempo y pujas automáticas, pedidos de compra, un bazar con libro de órdenes, una tienda del servidor editada en el juego, /sell con lista de precios, varitas de venta y autoventa, e intercambios cara a cara seguros, con un índice de precios compartido, un solo buzón /collect y webhooks de Discord.",
+    },
+    version: "1.0.0",
+    status: "beta",
+    category: { en: "Survival", es: "Survival" },
+    minecraft: "1.21+",
+    banner: "https://s3.exylia.net/exylia-plugins/public/static/images/plugins/market/ExyliaMarketBanner.webp",
+    tags: [
+      { en: "Economy", es: "Economía" },
+      { en: "Auctions", es: "Subastas" },
+      { en: "Shop", es: "Tienda" },
+      { en: "Folia", es: "Folia" },
+    ],
+    nav: MARKET_NAV,
   },
   {
     id: "exyliadisplays",

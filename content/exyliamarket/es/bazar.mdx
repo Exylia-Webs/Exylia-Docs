@@ -1,0 +1,149 @@
+---
+title: "Bazar"
+description: "Un libro de órdenes por producto: compras y ventas instantáneas, órdenes de compra y ofertas de venta a un precio, cómo se casan las órdenes, comisiones, límites y el volumen diario, y el editor de productos."
+---
+
+El bazar es un libro de órdenes de dos lados para cada producto. Los jugadores colocan **órdenes de
+compra** (su dinero queda retenido) y **ofertas de venta** (sus objetos quedan retenidos) a un precio por
+unidad, o compran y venden **al instante** contra las mejores de ellas. Los productos son materiales
+simples, elegidos por el staff y ordenados en categorías.
+
+ID del módulo `bazaar`, archivo `modules/bazaar/config.yml`, comando `/bazaar` (también `/bz`).
+
+## Uso
+
+`/bazaar` abre la portada con sus categorías; `/bazaar <item>` va directo a un producto, como
+`/bazaar diamond`. `/bazaar mine` lista tus órdenes y ofertas abiertas.
+
+La pantalla de un producto muestra los mejores precios de compra y venta y el diferencial, los mejores
+precios de cada lado con cuántas unidades esperan en cada uno (`levels-shown`, 5 por defecto), el último
+precio, la media y la tendencia del [índice de precios](/docs/exyliamarket/precios), cuántas llevas y un
+botón para el gráfico de precios de 7 días. Se actualiza mientras está abierta.
+
+| Botón | Qué hace |
+|---|---|
+| **Compra instantánea** | Compra ya a las ofertas de venta más baratas. Empieza en 64 unidades. |
+| **Venta instantánea** | Vende ya a las órdenes de compra más altas. Empieza en lo que llevas. |
+| **Orden de compra** | Coloca una orden a tu precio; el dinero de toda ella queda retenido. |
+| **Oferta de venta** | Coloca una oferta a tu precio; los objetos quedan retenidos. |
+
+Cada uno abre antes una revisión. Una operación instantánea muestra cuántas unidades hay disponibles, el
+total, la media y el peor precio al que llega, y en una venta el impuesto y lo que cobras. Si el libro se
+movió entre la revisión y **Confirmar**, se operan menos unidades, nunca a un precio peor que el que mostró
+la revisión: el dinero no gastado se devuelve y los objetos no vendidos se te entregan de vuelta.
+
+Una orden u oferta empieza en **mejor + paso**: un `price-step` más allá del mejor precio de su lado.
+**Igualar** usa exactamente el mejor precio. Sin nada en ese lado se usa el mejor precio del otro lado, y
+después la media de 7 días.
+
+## Cómo se casan las órdenes
+
+- El mejor precio se ejecuta primero, y entre precios iguales el más antiguo.
+- **Cada ejecución se hace al precio de la orden que estaba esperando.** Una orden de compra colocada por
+  encima de la oferta más barata compra al precio de la oferta y se le devuelve la diferencia.
+- Una orden nueva primero se ejecuta contra todo lo que cruza su precio; solo lo que queda espera en el
+  libro.
+- Tus propias órdenes y ofertas nunca se ejecutan entre sí.
+
+Cuando una orden tuya se ejecuta mientras no estás, una oferta de venta te paga al instante, menos el
+impuesto, y los objetos de una orden de compra van a [`/collect`](/docs/exyliamarket/recoger). Te enteras en
+cualquier servidor, con un aviso emergente con el marco de `toast-frame`.
+
+## Dinero
+
+| Qué | Quién paga | Cuándo |
+|---|---|---|
+| `tax-percent` (1.25% por defecto) | El vendedor, de lo que recibe | En cada ejecución. Los compradores no pagan impuesto. |
+| `flat-fee` (0 por defecto) | Quien coloca una orden u oferta | Al colocarla, aunque se ejecute al instante. No se devuelve. Las operaciones instantáneas no pagan ninguna. |
+
+### Límites
+
+- **Órdenes y ofertas abiertas**: `max-offers-per-player` en total, o el
+  `exyliamarket.bazaar.limit.<n>` del jugador. Se comprueba antes de colocar, incluso una orden que se
+  ejecutaría al instante.
+- **Unidades**: una orden, oferta u operación instantánea mueve como máximo `max-amount`.
+- **Precio**: al menos la cantidad mínima de la moneda por unidad, como máximo `max-unit-price`.
+- **Volumen diario**: dinero operado por día, compras y ventas juntas, `daily-volume` o el
+  `exyliamarket.bazaar.volume.<n>` del jugador. Los días son UTC, así que se reinicia a las 00:00 UTC.
+
+<Callout type="warning" title="Cómo se cuenta el volumen diario">
+El límite se comprueba **antes** de una operación: la operación que lo supera sigue adelante, y una orden
+que ya espera en el libro sigue ejecutándose. Cada ejecución suma su valor en unidades enteras de la moneda
+a los dos lados. `-1` desactiva el límite; **`0` bloquea toda operación del bazar**, ya que cualquier
+volumen está en el límite.
+</Callout>
+
+## Caducidad y cancelación
+
+Las órdenes y ofertas duran `offer-hours` (168, una semana, por defecto; `0` las mantiene para siempre), y
+se comprueban cada minuto.
+
+| Qué termina | Orden de compra | Oferta de venta |
+|---|---|---|
+| Caduca | El dinero restante se devuelve al saldo | Los objetos restantes van a `/collect` |
+| La cancelas (clic derecho en `/bazaar mine` y confirmar) | Se devuelve al saldo | A tu inventario, el resto a `/collect` |
+| El staff la cancela | Se devuelve al saldo | A `/collect` |
+
+<Callout type="note" title="El mensaje de caducidad dice /collect para ambos">
+La línea incluida para una orden caducada dice "… te espera en /collect" sea del lado que sea. Para una
+orden de compra el dinero está en el saldo, no en `/collect`.
+</Callout>
+
+## Productos y categorías
+
+El catálogo incluido se rellena la primera vez que la tabla de productos está vacía: **227 productos** en
+siete categorías — minería 55, agricultura 42, criaturas 33, maderas 26, bloques 36, pesca 9, rarezas 26. Los
+materiales que la versión del servidor no conoce se omiten.
+
+Las categorías y sus iconos están en `config.yml`; sus nombres están en el `messages.yml` del bazar bajo
+`categories`. Un producto en una categoría que ya no está configurada no se muestra en ninguna pantalla de
+categoría, pero `/bazaar <item>` sigue abriéndolo.
+
+```yaml title="modules/bazaar/config.yml"
+categories:
+  mining:
+    icon: DIAMOND_PICKAXE
+  farming:
+    icon: GOLDEN_HOE
+```
+
+### El editor de productos
+
+`/bazaaradmin` (también `/bzadmin`) abre el panel de staff: el editor de productos y todas las órdenes y
+ofertas abiertas.
+
+| Botón | Qué hace |
+|---|---|
+| **Añadir** | Elige un material en un buscador. Solo los materiales simples y apilables pueden ser productos. |
+| **Dejar objetos** | Añade un producto por cada material simple entre los objetos que colocas en la ventana, y después te los devuelve. |
+| **Importar mi inventario** | Lo mismo, desde tu inventario. |
+| **Cargar catálogo por defecto** | Añade lo que falte de los 227 incluidos, nunca dos veces. |
+| Una fila | Fija la categoría y la posición de ese producto. |
+| **Guardar** | Escribe la lista. No cambia nada hasta entonces; un producto quitado de la lista se borra. |
+
+Los productos nuevos van a la categoría del catálogo incluido cuando forman parte de él, y si no a la
+primera categoría configurada. Las órdenes de un producto eliminado se mantienen hasta que se cancelan o
+caducan.
+
+La lista de ofertas cancela cualquier orden u oferta con un clic derecho y una confirmación, y
+`/bazaaradmin cancel <id>` lo hace por ID. Todo esto necesita `exyliamarket.bazaar.admin`.
+
+## Ajustes
+
+Bajo `settings:` en `modules/bazaar/config.yml`, y editable dentro del juego desde `/marketadmin`.
+
+| Clave | Por defecto | Qué hace |
+|---|---|---|
+| `currency` | `''` | La moneda con la que opera el bazar. Vacío es la moneda por defecto del servidor. |
+| `tax-percent` | `1.25` | Se descuenta de lo que cobra un vendedor. |
+| `flat-fee` | `0.0` | Se cobra por cada orden u oferta colocada. |
+| `max-offers-per-player` | `14` | Órdenes y ofertas abiertas por jugador. |
+| `daily-volume` | `-1` | Dinero que un jugador puede operar por día. `-1` para no tener límite. |
+| `max-amount` | `2304` | Máximo de unidades que puede mover una orden, oferta u operación instantánea. |
+| `max-unit-price` | `-1.0` | Precio por unidad más alto. `-1` para no tener tope. |
+| `price-step` | `0.1` | Cuánto se aleja **mejor + paso** del mejor precio. Nunca menos que la cantidad mínima de la moneda. |
+| `offer-hours` | `168` | Cuánto dura una orden u oferta. `0` para siempre. |
+| `levels-shown` | `5` | Precios de cada lado que lista la pantalla del producto. |
+| `toast-frame` | `TASK` | El aviso emergente cuando se ejecuta una orden tuya: `TASK`, `GOAL`, `CHALLENGE` o `NONE`. |
+
+Los precios del bazar también son [placeholders](/docs/exyliamarket/placeholders#precios-del-bazar).

@@ -1,0 +1,148 @@
+---
+title: "Auction house"
+description: "Fixed-price listings between players: listing through the review screen, fees and tax, buying, looking inside boxes, the board's sorts and filters, the watchlist, expiry and the settings."
+---
+
+Players put an item up at a fixed price and anybody else buys it. The item leaves the seller's inventory
+when the listing goes up, lives in the database row while it is up, and leaves that row exactly once —
+sold, taken back or expired — so two buyers clicking the same listing on the same tick can never both get
+it. The loser of that race is refunded.
+
+Module id `auction-house`, file `modules/auction-house/config.yml`, command `/ah` (also `/auctionhouse`).
+
+## Listing
+
+| From | How |
+|---|---|
+| The **Sell** button of `/ah` | Put the item into the one-slot window, pick a currency if the server has more than one, type the price. |
+| `/ah sell <price> [currency]` | Lists the whole stack in your main hand at that price. With no currency typed and more than one to choose from, a picker opens. |
+
+Both end on the **review screen**, and nothing is charged or taken until **Confirm**:
+
+- the item, the currency and how long the listing stays up;
+- the whole price and the price per item, with a click to change it;
+- the fee charged now, the tax taken on a sale, and **You receive**;
+- your balance now and after the fee;
+- a **market price** button, when the item has enough player sales: the 7-day average, last sale, median,
+  trend and the suggested price for the whole stack. Clicking it sets the price.
+
+A price far below the 7-day average asks once more before listing (`prices.warn-below-percent`). See
+[Prices](/docs/exyliamarket/prices).
+
+### What is checked
+
+In this order: an economy exists, the currency is one the server has, the item is not in
+`blocked-materials`, is not damaged unless `allow-damaged-items`, is not heavier than `max-item-kilobytes`,
+the price is within `min-price` and `max-price`, the player is under their listing limit, and they still
+carry the whole amount.
+
+`min-price` and `max-price` are amounts of the **default currency**: a listing in another currency only
+has to be worth that currency's smallest amount, with no ceiling.
+
+### Fee and tax
+
+| | Default | Charged |
+|---|---|---|
+| `listing-fee-percent` | 2% | To the seller when the listing goes up. **Never refunded**, not even when it expires: that is what stops the auction house being free storage. |
+| `sales-tax-percent` | 5% | Out of what the seller is paid when it sells, rounded up to the currency's smallest amount. |
+
+A listing of 1,000 pays a fee of 20 when it goes up, and 950 to the seller when it sells.
+
+## Buying
+
+Left-click a listing to open its confirm screen: the price, your balance before and after, whether you can
+afford it and the time left. A price per item far above the 7-day average asks once more
+(`prices.warn-above-percent`). The money is taken first, then the listing is claimed; if somebody else got
+it first, the money goes straight back.
+
+The item goes into your inventory, and whatever does not fit to [`/collect`](/docs/exyliamarket/collect).
+The seller is paid at once and told on whichever server they are, or on their next join. You cannot buy your
+own listing unless `allow-self-purchase` is on; take it back instead.
+
+### Looking inside
+
+A shulker box or bundle with something in it can be opened from the board, your listings or the confirm
+screen with a shift-click: a read-only view of what is inside, boxes within boxes included.
+
+## The board
+
+Each listing shows its price, the price per item, the seller, the time left and, when the shop or the worth
+list buys it back, what one sells for to the server.
+
+| Click | What it does |
+|---|---|
+| Left | Buy. |
+| Right | Add to or remove from your watchlist. |
+| Shift | The item's 7-day price chart, or the inside of a box. |
+
+| Control | What it does |
+|---|---|
+| **Sort** | Newest → Cheapest → Most expensive → Ending soonest → Cheapest per item. |
+| **Category** | Left-click for the next category, right-click for the previous. The categories are `categories` in `config.yml`. |
+| **Search** | Up to 32 characters, matched against the material, the seller's current name and the item's name. Right-click clears it. |
+
+Sort, category and search are remembered until the player leaves.
+
+## Your listings, history and watchlist
+
+`/ah mine` (also `/ah listings`) lists what you have up, how many against your limit and what they add up
+to per currency. Click one to take it back: the item comes back, the fee does not. From there:
+
+- **History** — your latest purchases and sales, `history-size` of them.
+- **Watchlist** — the listings you right-clicked that are still up. It is a bookmark list only: nothing
+  notifies you about a watched listing.
+
+## Expiry
+
+A listing stays up `listing-hours` (48 by default; `0` for never). Every minute a sweep sends what ran out
+back to its seller, through the same claim as a sale, so a listing being bought at that moment is not also
+returned. The seller is told it is on its way back.
+
+## Announcements
+
+A sale at or above `broadcast-above`, and a new listing at or above `broadcast-listed-above`, are announced
+to the server. Both thresholds are in the default currency, so a listing in another currency is never
+announced. A seller's next listing is not announced again for `broadcast-listed-cooldown-seconds`. Players
+mute these in `/settings` under **Market** → **Auction House**; muting never hides their own sales.
+
+## Staff
+
+`/ahadmin` (also `/auctionhouseadmin`) lists every listing, newest first. Left-click takes one down after a
+confirmation: the item goes back to the seller, who is told. Right-click opens its line in the market log.
+
+| Command | What it does |
+|---|---|
+| `/ahadmin remove <id>` | Takes one listing down. |
+| `/ahadmin clear <player>` | Takes down everything a player has up. |
+
+Both need `exyliamarket.auctionhouse.admin` and must be run by a player in game.
+
+## Settings
+
+Under `settings:` in `modules/auction-house/config.yml`, editable in game from `/marketadmin`.
+
+| Key | Default | What it does |
+|---|---|---|
+| `max-listings-per-player` | `5` | Listings up at once. `exyliamarket.auctionhouse.listings.<n>` replaces it; `0` is unlimited. |
+| `min-price` | `1.0` | Least a listing may be priced at, in the default currency. |
+| `max-price` | `-1.0` | Most a listing may be priced at. `-1` for no ceiling. |
+| `listing-hours` | `48` | How long a listing stays up. |
+| `listing-fee-percent` | `2.0` | Charged when listing. Not refunded. |
+| `sales-tax-percent` | `5.0` | Taken from what the seller is paid. |
+| `allow-self-purchase` | `false` | Whether a player may buy their own listing. |
+| `broadcast-above` | `50.0` | Announce a sale from this price. `-1` never. |
+| `broadcast-listed-above` | `50.0` | Announce a new listing from this price. `-1` never. |
+| `broadcast-listed-cooldown-seconds` | `60` | Seconds before one seller's next listing is announced again. |
+| `blocked-materials` | `BEDROCK`, `COMMAND_BLOCK`, `BARRIER`, `STRUCTURE_BLOCK` | Materials that may never be listed. |
+| `allow-damaged-items` | `true` | Whether a damaged item may be listed. |
+| `max-item-kilobytes` | `64` | Heaviest item that may be listed: every viewer of the board is sent it. `0` for no cap. |
+| `min-counted-value` | `10.0` | Smallest sale, in the default currency, that counts toward statistics and missions. |
+| `history-size` | `45` | Purchases and sales the history screen shows. |
+
+And under `sounds:` — `listed`, `bought`, `sold`, `cancelled` — each written `NAME|volume|pitch`.
+
+<Callout type="note" title="Some sounds play twice">
+Several shipped messages start with their own `[sound:…]` tag, the same sound the `sounds:` section plays.
+Changing a sound in `config.yml` does not remove the one in the message: edit or remove the tag in the
+module's `messages.yml` as well.
+</Callout>
