@@ -1,12 +1,14 @@
 ---
 title: "Punishments"
-description: "Categories, reasons and an escalation ladder, executed through your ban plugin's commands, with a history per player."
+description: "Categories, reasons and an escalation ladder, enforced by the plugin itself or through your ban plugin's commands, with approvals, evidence, appeals and a history per player."
 ---
 
-The punishments module does not ban anyone itself. It holds the reasons and, for each one, a ladder:
-first offence, second offence, and so on. When a staff member picks a reason, the module counts how
-many times that player was punished for it before, takes the matching step, and runs the command you
-configured for that step's type. LiteBans, AdvancedBan or anything else with a `/ban` answers.
+The punishments module holds the reasons and, for each one, a ladder: first offence, second offence,
+and so on. When a staff member picks a reason, the module counts how many times that player was
+punished for it before and takes the matching step. Who enforces that step is up to you: the plugin
+itself, with its own login screens, mutes and warnings (`engine: exylia`), or the command you
+configured for the step's type, answered by LiteBans, AdvancedBan or anything else with a `/ban`
+(`engine: commands`, the default).
 
 Module id `punishments`, switch `modules.punishments`, files under `modules/punishments/`.
 
@@ -17,6 +19,11 @@ Module id `punishments`, switch `modules.punishments`, files under `modules/puni
 | `/punish <player>` | `exyliastaff.punish` | Opens the categories menu. The player may be offline if the server has seen them. |
 | `/punish <player> <reason-id>` | `exyliastaff.punish` | Executes at once, with no confirm screen. |
 | `/history <player>` | `exyliastaff.punish.history` | Their punishments, newest first. `/phistory` is an alias. |
+| `/punish requests` | `exyliastaff.punish` | The ten newest pending [requests](#approvals), each with approve and deny buttons. |
+| `/punish approve <id>` | `exyliastaff.punish` | Applies a request, with you as the staff member. |
+| `/punish deny <id>` | `exyliastaff.punish` | Turns a request down. |
+| `/staffadmin import <plugin>` | `exyliastaff.admin` | Imports a ban plugin's history once. See [Importing a ban plugin](#importing-a-ban-plugin). |
+| `/staffadmin history clear <player> [reason-id]` | `exyliastaff.admin.history.clear` | Deletes a player's history, or one reason's. An active ban is not lifted. |
 
 The netherite axe in the hotbar opens the menu on the player you look at. A player cannot punish
 themself.
@@ -24,8 +31,9 @@ themself.
 ## The menu
 
 Categories, then reasons. Each reason shows its ladder with the steps already used, the current one
-marked, and the step that will be applied now. Clicking it opens a confirm screen when
-`require-confirmation` is on, otherwise executes. Cancel goes back to the reasons.
+marked, and the step that will be applied now. Its last line says whether a click punishes or sends
+the step for [approval](#approvals). Clicking it opens a confirm screen when `require-confirmation`
+is on, otherwise executes. Cancel goes back to the reasons.
 
 ## The ladder
 
@@ -35,21 +43,105 @@ A ladder line is `TYPE duration`, or just `TYPE`, with the types `BAN`, `TEMPBAN
 Different reasons do not advance each other, and `ladder-reset-days: 0` counts everything ever.
 
 <Callout type="warning" title="Only what this plugin issued counts">
-The history is `staff_punishments`, written by this module alone. A ban typed straight into LiteBans
-is not a step on the ladder. Punish through the menu and the ladder is always right.
+The history is `staff_punishments`. With `observe` on, a ban typed straight into LiteBans is recorded
+there too, but under the ban plugin's name as its reason (`litebans`), so it is not a step on any
+ladder. Punish through the menu and the ladder is always right.
 </Callout>
 
-## Execution
+## Engines
 
-The template for the step's type in `commands` runs with `%player%`, `%duration%`, `%reason%` and
+`engine` decides who enforces a step.
+
+| Engine | Who enforces | What it needs |
+|---|---|---|
+| `commands` | Your ban plugin, through the template of the step's type in `commands`. | A ban plugin, or vanilla. |
+| `exylia` | This plugin: the row in `staff_punishments` is the punishment. | Nothing else. Redis and [ExyliaProxyUtils](/docs/exyliaproxyutils/login-bans) refuse bans at the proxy. |
+
+### The native engine
+
+With `engine: exylia`, `commands` and `revoke-commands` are not used.
+
+- **Bans**, `BAN`, `TEMPBAN` and `IPBAN`, are refused at login on every backend, from the database,
+  with the `screen-ban` screen. Each active ban is also mirrored to Redis, where ExyliaProxyUtils
+  refuses it at the proxy before a backend is reached; the mirror is written again on every start and
+  reload, so a flushed Redis heals itself. When the database cannot be read at login, the player is let
+  in rather than locking everybody out.
+- **IP bans** hold the address the player was on when issued. One issued while they were offline
+  learns the address at their next login attempt.
+- **Kicks** show `screen-kick`. A player on another server is kicked through the proxy.
+- **Mutes**, `MUTE` and `TEMPMUTE`, cancel every chat line and every command in
+  `mute-blocked-commands`, answered with the `muted` lines.
+- **Warnings** show the `warned` lines at once, or at the player's next join on any server, and only
+  once.
+
+A ban or mute lifted or edited from [Exylia Staff Web](/docs/exyliastaff/staff-web) reaches the
+player's server and the mirror straight away.
+
+### Execution through commands
+
+With `engine: commands`, the template for the step's type in `commands` runs with `%player%`, `%duration%`, `%reason%` and
 `%staff%`. The duration is passed **as written** in the ladder, `7d` or `1h30m`, so write it the way
 your ban plugin reads it; a bare type passes `perm`. `console:` runs here, `console-proxy:` on the
 proxy through the library's bridge. A step type with no template is refused with "no command for
 TEMPBAN" and nothing is recorded.
 
-The row is recorded, the issuer told, and the punishment published on the `punishments` channel:
-every server announces it to staff with `exyliastaff.punish`, or to everyone when
+Either way, the row is recorded, the issuer told, and the punishment published on the `punishments`
+channel: every server announces it to staff with `exyliastaff.punish`, or to everyone when
 `broadcast.to-staff-only` is off.
+
+## Evidence and appeals
+
+Every punishment keeps the chat that led to it: the window the web sets, or, when there was none, the
+target's last `evidence-lines` lines. The screens show it as `%evidence%`, one `evidence-line` per
+line, stripped of any formatting the player typed.
+
+`appeal-url` is the appeal link on the screens, with `%id%` as the punishment's id. `auto` builds it
+from the linked web (`<web>/p/<workspace>/appeal?id=%id%`) and shows nothing while the network is not
+linked; empty never shows one.
+
+## Approvals
+
+`exyliastaff.punish` lets a staff member punish. The [punishment limit nodes](/docs/exyliastaff/permissions#punishment-limits)
+narrow it per type, permanent steps, category and reason; each is allowed unless it is set to
+`false`. A step one of them blocks is not refused: it becomes a request.
+
+<Steps>
+  <Step title="The request">
+    The staff member is told the step needs a superior's approval and gets its number. Every online
+    staff member with `exyliastaff.punish`, on every server, for whom the same step is not blocked,
+    gets `request-alert` with clickable approve and deny buttons. The web is told too.
+  </Step>
+  <Step title="Approval">
+    `/punish approve <id>`, or the button. The step is worked out again at that moment, so a ladder
+    that moved meanwhile is respected, and applied with the approver as the staff member and
+    `Requested by <name>` as its note. Nobody may resolve their own request, and an approver the step
+    is blocked for is refused with the nodes that block it.
+  </Step>
+  <Step title="The answer">
+    The requester is told who approved or denied it, on whichever server they are.
+  </Step>
+</Steps>
+
+The console is never blocked. A punishment from the web is checked against the staff member's
+LuckPerms nodes.
+
+## Observing other ban plugins
+
+With `observe` on, punishments made through LiteBans, LibertyBans, AdvancedBan or BanManager are
+recorded in the history, even a plain `/ban` that never touched this plugin, together with their
+lifts. They are read on any backend where the ban plugin is installed and, with ExyliaProxyUtils, on
+the proxy. On a network every entry goes through one Redis stream that each server reads in the same
+group, so it is recorded once. With `engine: commands`, the ban plugin's own copy of a punishment this
+plugin just issued is linked to it rather than recorded twice. IP punishments that name no player are
+skipped.
+
+## Importing a ban plugin
+
+`/staffadmin import <litebans|libertybans|advancedban|banmanager>` reads that plugin's whole history
+once: through its API when it is installed on this server, otherwise through the proxy's
+`punish-import` (see [ExyliaProxyUtils](/docs/exyliaproxyutils/punishments)). Rows arrive the same
+way as observed ones, and reach the web as they are read. It works with `observe` off. "is installed
+neither here nor on the proxy" means neither could run it.
 
 ## Configuration
 
@@ -152,7 +244,29 @@ require-confirmation: true
 broadcast:
   enabled: true
   to-staff-only: true
+engine: commands
+appeal-url: auto
+mute-blocked-commands:
+  - msg
+  - tell
+  - w
+  - whisper
+  - r
+  - reply
+  - me
+  - say
+  - mail
+evidence-lines: 1
+observe: true
 ```
+
+| Key | Default | What it does |
+|---|---|---|
+| `engine` | `commands` | `commands` runs the templates; `exylia` enforces natively. |
+| `appeal-url` | `auto` | The appeal link, `%id%` being the punishment. `auto` from the linked web, empty for none. |
+| `mute-blocked-commands` | `msg`, `tell`, `w`, `whisper`, `r`, `reply`, `me`, `say`, `mail` | Commands a muted player may not run, without the slash, matched on the bare label (`minecraft:msg` counts as `msg`). Only with `engine: exylia`. |
+| `evidence-lines` | `1` | How many of the target's last chat lines are kept when the web attached none. |
+| `observe` | `true` | Record what LiteBans, LibertyBans, AdvancedBan and BanManager do. |
 
 Reason ids must be unique across categories; the menus list categories and reasons in file order.
 `%reason%` in a template is the reason's display name, not its id. `revoke-commands` is how a
@@ -167,6 +281,17 @@ to staff on every announcement; it is empty by default.
 `never-played`, `unknown-reason`, `command-failed` with `%detail%`, `history-empty`, `self`,
 `no-target`; the three ladder lines `ladder-current`, `ladder-step` and `ladder-done` with `%index%`,
 `%type%` and `%duration%`; `duration-permanent`.
+
+Approvals: `request-sent`, `request-alert`, `requests-header`, `requests-line`, `requests-empty`,
+`request-approved`, `request-denied`, the requester's `request-approved-notice` and
+`request-denied-notice`, `request-missing`, `request-own`, and `request-blocked` with `%nodes%`; the
+last line of a reason in the menu is `reason-click` or `reason-click-approval`.
+
+The native engine: `screen-ban` and `screen-kick`, and the `muted` and `warned` lines, all lists
+taking `%reason%`, `%staff%`, `%date%`, `%expires%`, `%remaining%`, `%id%`, `%evidence%`, `%appeal%`
+and `%appeal_url%`; `evidence-line` with `%message%`, `evidence-none`, `appeal-line` with
+`%appeal_url%`, and `expires-never`. The import: `import-usage`, `import-started`, `import-proxy` and
+`import-unsupported` with `%origin%`.
 
 ## Placeholders
 

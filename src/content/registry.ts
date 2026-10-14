@@ -1823,10 +1823,10 @@ export const plugins: Plugin[] = [
     name: "ExyliaStaff",
     tagline: { en: "Twenty-five moderation modules, one paper trail", es: "Veinticinco módulos de moderación, un solo rastro" },
     summary: {
-      en: "Staff mode with a hotbar of tools, packet-level vanish with rank levels, freeze for screenshares, silent inventory mirrors for online and offline players, staff and network chat, reports and help requests with alerts on every server, replays of the last minute before a death, report or freeze, a punishment ladder run through your ban plugin, an x-ray suspicion detector, inventory restore with item revocation, a staff log and audit, in four languages, and a link to Exylia Staff Web.",
-      es: "Modo staff con una hotbar de herramientas, vanish a nivel de paquetes con niveles de rango, freeze para screenshares, espejos silenciosos de inventarios de jugadores conectados y desconectados, chat de staff y de red, reportes y peticiones de ayuda con alertas en todos los servidores, repeticiones del último minuto antes de una muerte, un reporte o un freeze, una escalera de sanciones ejecutada por tu plugin de baneos, un detector de sospecha de x-ray, restauración de inventarios con revocación de objetos, un registro y una auditoría del staff, en cuatro idiomas, y un enlace con Exylia Staff Web.",
+      en: "Staff mode with a hotbar of tools, packet-level vanish with rank levels, freeze for screenshares, silent inventory mirrors for online and offline players, staff and network chat, reports and help requests with alerts on every server, replays of the last minute before a death, report or freeze, a punishment ladder enforced natively or through your ban plugin, with superior approval, an x-ray suspicion detector, inventory restore with item revocation, a staff log and audit, in five languages, and a link to Exylia Staff Web.",
+      es: "Modo staff con una hotbar de herramientas, vanish a nivel de paquetes con niveles de rango, freeze para screenshares, espejos silenciosos de inventarios de jugadores conectados y desconectados, chat de staff y de red, reportes y peticiones de ayuda con alertas en todos los servidores, repeticiones del último minuto antes de una muerte, un reporte o un freeze, una escalera de sanciones aplicada de forma nativa o por tu plugin de baneos, con aprobación de un superior, un detector de sospecha de x-ray, restauración de inventarios con revocación de objetos, un registro y una auditoría del staff, en cinco idiomas, y un enlace con Exylia Staff Web.",
     },
-    version: "1.4.0",
+    version: "1.5.0",
     status: "stable",
     category: { en: "Moderation", es: "Moderación" },
     minecraft: "1.21+",

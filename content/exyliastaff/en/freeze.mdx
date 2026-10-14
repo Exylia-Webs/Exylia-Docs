@@ -14,7 +14,7 @@ Module id `freeze`, switch `modules.freeze`, files under `modules/freeze/`. Need
 
 | Command | Permission | What it does |
 |---|---|---|
-| `/freeze <player>` | `exyliastaff.freeze` | Freezes. `/ss` is an alias. |
+| `/freeze <player> [reason]` | `exyliastaff.freeze` | Freezes. The reason is shown to the player and kept with the session. `/ss` is an alias. |
 | `/unfreeze <player>` | `exyliastaff.freeze` | Releases. `/unss` is an alias. |
 | `/freezetoggle <player>` | `exyliastaff.freeze` | One or the other. `/sstoggle` is an alias. |
 
@@ -24,7 +24,8 @@ at, within five blocks. A player cannot freeze themself, and a target holding
 
 ## What the frozen player gets
 
-- The `frozen` lines, with the staff member's name, and then a reminder every `reminder-seconds`:
+- The `frozen` lines, with the staff member's name and the reason; a line holding `%reason%` is left
+  out when the freeze has none. Then a reminder every `reminder-seconds`:
   a title, an action bar and a sound, set by `reminder` in the messages file.
 - The `frozen` sidebar: who froze them and for how long.
 - Glow, the potion effects in `look.effects`, and the helmet, after the armour is saved to a snapshot.
@@ -58,10 +59,14 @@ players. Global chat bypasses this rule like every other.
 
 ## Logging out
 
-A freeze never survives a disconnect. On quit the freeze ends: the row is deleted, every server drops
-the session, and the player rejoins free. Logging out is how a player refuses a screenshare, so that is
-what the server reacts to instead. If `alert-quit` is on, every staff member with `exyliastaff.freeze`
-on every server is told they logged out, and `quit-commands` run with `%player%`:
+Logging out does not get a player out of a freeze. With `persist-on-quit` on, the default since 1.5.0,
+every server drops the session but the row stays: the player comes back frozen, on whichever server of
+the network they join, and staff everywhere get `alert-rejoin`. With it off, the freeze ends on quit:
+the row is deleted and the player rejoins free.
+
+Either way, logging out is how a player refuses a screenshare, so the server reacts to it. If
+`alert-quit` is on, every staff member with `exyliastaff.freeze` on every server is told they logged
+out, and `quit-commands` run with `%player%`:
 
 ```yaml
 quit-commands:
@@ -70,9 +75,9 @@ quit-commands:
 
 Other plugins hear it as `FrozenPlayerQuitEvent`; see the [API](/docs/exyliastaff/api#freezes-and-reports).
 
-A `/stop` ends every freeze the same way, but runs no quit commands, fires no event and raises no
-alert: a server going down is not a player running away. A row left behind by a crash is dropped on
-the next join, and the armour handed back.
+A `/stop` ends every freeze, whatever `persist-on-quit` says, but runs no quit commands, fires no event
+and raises no alert: a server going down is not a player running away. With `persist-on-quit` off, a
+row left behind by a crash is dropped on the next join, and the armour handed back.
 
 ## The replay
 
@@ -107,6 +112,7 @@ allowed-commands:
   - w
 block-teleports: true
 alert-quit: true
+persist-on-quit: true
 quit-commands: []
 ```
 
@@ -117,13 +123,14 @@ quit-commands: []
 | `look.helmet` | `PACKED_ICE` | Worn on the head. Empty for none. Its name is `helmet-name` in the messages file. |
 | `look.effects` | blindness, darkness | Potion effects held for the whole freeze. Unknown names are skipped. |
 | `allowed-commands` | `msg`, `r`, `reply`, `tell`, `w` | Commands a frozen player may still run, matched on the bare label. |
+| `persist-on-quit` | `true` | Keep a player frozen when they log out, until they come back on any server. |
 | `quit-commands` | `[]` | Run on logout. `console-proxy:` needs the library's proxy bridge. |
 
 ## Messages
 
-`lang/<language>/modules/freeze/messages.yml`: `frozen` and `unfrozen` are lists of lines with
-`%staff%`; `froze`, `unfroze`, `already-frozen`, `not-frozen` and `bypass` with `%target%`; `self`,
-`no-target`; the three alerts `alert-frozen`, `alert-unfrozen` and `alert-quit` with `%staff%`,
+`lang/<language>/modules/freeze/messages.yml`: `frozen` is a list of lines with `%staff%` and
+`%reason%`, `unfrozen` one with `%staff%`; `froze`, `unfroze`, `already-frozen`, `not-frozen` and `bypass` with `%target%`; `self`,
+`no-target`; the four alerts `alert-frozen`, `alert-unfrozen`, `alert-quit` and `alert-rejoin` with `%staff%`,
 `%target%` and `%server%`; `chat-format` and `chat-staff-format` with `%server%`, `%player%` and
 `%message%`; `blocked-command` and `blocked-action`; `reminder`, the library effect played on every
 reminder; and `helmet-name`.

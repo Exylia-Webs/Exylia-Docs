@@ -31,9 +31,10 @@ Nothing needs a port opened: each server keeps one outgoing connection to the ga
 
 <Steps>
   <Step title="Ask for a code">
-    On any one server, run `/staff web link`, from the console or in game with
-    `exyliastaff.web.link`. The plugin prints a code, how many minutes it is valid for, and a link to
-    approve it.
+    On any one server, run `/staffadmin weblink`, from the console or in game with
+    `exyliastaff.web.link`. The plugin prints a code, how long it is valid for, and a link to
+    approve it. Until the network is linked, admins with `exyliastaff.web.link` are reminded of this
+    command, clickable, a few seconds after they join.
   </Step>
   <Step title="Approve it on the web">
     Open the link, sign in and pick the workspace. The plugin waits for the approval and answers
@@ -46,13 +47,15 @@ Nothing needs a port opened: each server keeps one outgoing connection to the ga
 
 | Command | Permission | What it does |
 |---|---|---|
-| `/staff web link` | `exyliastaff.web.link` | Links the network. Refused while it is already linked. |
+| `/staffadmin weblink` | `exyliastaff.web.link` | Links the network. Refused while it is already linked. |
 | `/staff web status` | `exyliastaff.web.link` | This server's state, workspace, whether it sends the snapshots, whether LuckPerms is there, which anticheats are hooked, the last problem, and the managed configuration. |
 | `/staff web unlink` | `exyliastaff.web.link` | Unlinks the network and drops what was waiting to be sent. Every server disconnects within a minute. |
-| `/staff web` | `exyliastaff.staff` | A single-use code, valid for five minutes, that a staff member types on the web to bind their Discord account to their Minecraft account. |
+| `/staff web` | `exyliastaff.staff` | A single-use link, valid for five minutes: the Discord account that opens it is bound to this Minecraft account and joins the workspace without an invite. A staff member already bound gets a link to the web instead. |
 | `/appeal <code>` | None | A punished player confirms an appeal they opened on the web. |
 
-Account codes can be turned off on the web; `/staff web` then says so. When the web refuses this
+Account linking can be turned off on the web; `/staff web` then says so. Once the network is linked,
+staff with `exyliastaff.staff` whose account is not bound yet are reminded of `/staff web` when they
+join. When the web refuses this
 version of the plugin, online players with `exyliastaff.web.link` are told to update it.
 
 ## What reaches the web
@@ -68,7 +71,7 @@ From the web, a workspace can take over the plugin's behaviour files. A managed 
 
 - has a header saying `Managed by Exylia Staff Web — local edits are ignored, edit it on the web`;
 - has the web's values written over it before it is loaded, at startup, when its module enables and
-  on `/exyliastaff reload`, so an edit on disk never takes effect;
+  on `/staffadmin reload`, so an edit on disk never takes effect;
 - keeps working while the web is down, from the last revision cached in `web/managed.json`.
 
 The files the web can manage are `config.yml` and every module's `modules/<id>/config.yml`. It never
@@ -147,14 +150,67 @@ alert-staff: true
 ```yaml title="plugins/ExyliaStaff/modules/web/config.yml"
 gateway-url: https://staff-gateway.exylia.net
 web-url: https://staff.exylia.net
+chat-history:
+  log-public: true
+  log-private: true
+  log-commands: true
+  private-commands:
+    - msg
+    - tell
+    - w
+    - whisper
+    - m
+    - t
+    - pm
+    - dm
+    - message
+    - r
+    - reply
+    - essentials:msg
+    - essentials:tell
+    - essentials:w
+    - essentials:r
+    - essentials:reply
+    - minecraft:msg
+    - minecraft:tell
+    - minecraft:w
+  sensitive-commands:
+    - login
+    - l
+    - log
+    - register
+    - reg
+    - changepassword
+    - changepass
+    - cp
+    - unregister
+    - premium
+    - 2fa
+    - totp
+    - authme
+    - password
+    - pass
+    - email
 ```
 
-Leave both as they are unless Exylia support says otherwise. The network secret is never in a file:
+Leave both URLs as they are unless Exylia support says otherwise.
+
+`chat-history` is what the web's chat history keeps. Nothing is sent while the network is not linked,
+and how long it is kept is set on the web.
+
+| Key | Default | What it does |
+|---|---|---|
+| `log-public` | `true` | Public chat, cancelled lines included: a muted player's attempts are marked as such. |
+| `log-private` | `true` | Private messages sent with one of `private-commands`. Only staff with the web's permission to read private chat see them. |
+| `log-commands` | `true` | Every other command players run. |
+| `private-commands` | `msg`, `tell`, `r` and the rest above | Commands that send a private message, `<command> <player> <message>`. `r` and `reply` answer the last conversation. |
+| `sensitive-commands` | `login`, `register`, `changepassword` and the rest above | Stored without their arguments, so passwords never leave the server. A plain name also covers its namespaced form. | The network secret is never in a file:
 it is sealed in the database, so this file is safe to paste into a support ticket.
 
 ## Messages
 
-`lang/<language>/modules/web/messages.yml` holds the link, account, status and appeal lines;
+`lang/<language>/modules/web/messages.yml` holds the link, account, status and appeal lines, with
+`account-linked` and the two join reminders `remind-network` and `remind-account`, all with `%url%`;
 `lang/<language>/modules/alts/messages.yml` has `evasion-alert` with `%player%`, `%banned%` and
 `%type%`; `lang/<language>/modules/anticheat/messages.yml` has `spike-alert` with `%player%`,
 `%alerts%`, `%anticheat%` and `%check%`.
