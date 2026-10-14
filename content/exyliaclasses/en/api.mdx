@@ -1,11 +1,13 @@
 ---
 title: "API"
-description: "Reading the class catalogue, its abilities and energy, and what a player is wearing, warming up into and marked with."
+description: "Reading the class catalogue and what a player is wearing, using abilities and moving energy on demand, and the three class events."
 badge: "dev"
 ---
 
 `ClassesService` is what another plugin reads and drives ExyliaClasses through: the class catalogue,
-what each class can do and what it spends, and what a player is right now.
+what each class can do and what it spends, and what a player is right now. It can also fire an
+ability without its item and give or take energy, and three events let a plugin refuse a class or an
+ability and hear when a class ends.
 
 ```java
 ExyliaAPI.get(ClassesService.class).ifPresent(classes ->
@@ -73,7 +75,8 @@ asks: what would this set make somebody, before they wear it.
 | Method | What it does |
 |---|---|
 | `apply(Player, String classId)` | Asks the player to enter a class. Returns nothing. |
-| `remove(Player)` | Takes them out of their class, with its passive effects, bars and cooldowns. |
+| `remove(Player)` | Takes them out of their class, with its passive effects, energy, marks and bars. Ability cooldowns keep running. |
+| `useAbility(Player, Material trigger)` | Uses one of their abilities, as right-clicking its item would. Returns an `AbilityUseResult`. |
 
 `apply` runs the same flow equipping the armor runs: the permission is checked and refused out loud,
 and the warm-up runs before the class takes effect — so nothing has happened by the time the call
@@ -82,6 +85,47 @@ class still ends the moment the player's armor stops naming it, so this is not a
 in a class they are not dressed for.
 
 `remove` leaves the armor alone, so putting a piece back on puts them in the class again.
+
+`useAbility` runs the whole flow a click runs: cooldown and energy are checked and refused out loud,
+`AbilityUseEvent` fires, the energy is spent, the cooldown starts and the effects land on whoever the
+ability reaches. The one thing it does not do is consume an item, and the player does not need to hold
+one. The `trigger` is the ability's `ClassAbility.trigger()`. Call it on the thread that owns the player.
+
+| `AbilityUseResult` | Meaning |
+|---|---|
+| `USED` | The ability went off. |
+| `NOT_IN_CLASS` | The player is in no class. Warming up into one counts as none. |
+| `UNKNOWN_ABILITY` | Their class has no ability on that trigger. |
+| `ON_COOLDOWN` | Still cooling down. |
+| `NOT_ENOUGH_ENERGY` | They hold less than it costs. |
+| `CANCELLED` | An `AbilityUseEvent` handler refused it. |
+
+Every refusal except `CANCELLED` has already been told to the player in the plugin's own words.
+
+## Energy
+
+| Method | What it does |
+|---|---|
+| `giveEnergy(Player, double amount)` | Adds energy, never past the class's `max`. `false` when they are in no class or it spends none. |
+| `spendEnergy(Player, double amount)` | Takes energy, all of it or none. `false` when they hold less, are in no class, or it spends none. |
+
+Both throw on a negative amount and redraw the energy bar. Energy refills every tick on the player's
+own thread, so call these from that thread: a command, a listener for that player, or a task scheduled
+on them. `spendEnergy` is what a plugin charging energy for something of its own uses.
+
+## Events
+
+All three live in `net.exylia.lib.api.classes.event`, carry `getPlayer()` and `getPlayerClass()`, and
+are called on the thread that owns the player, which on Folia is their region thread.
+
+| Event | When | Cancellable |
+|---|---|---|
+| `ClassEquipEvent` | At the end of the warm-up, the moment the class would start, before any of it is applied. | Yes: the player stays dressed for the class but not in it until their armor changes again. |
+| `AbilityUseEvent` | Once a use would go through: in the class, off cooldown, energy held. Fires for a click and for `useAbility`. `getAbility()` is the `ClassAbility`. | Yes: no energy spent, no cooldown, no effect, no item consumed. |
+| `ClassRemoveEvent` | After the class is taken off, by armor, death, quit, reload or `remove`. `classOf` already answers empty. | No. A server shutting down does not fire it. |
+
+Cancelling says nothing to the player: the handler that refused is expected to tell them why. The
+player in `ClassRemoveEvent` may be on their way out, so check `isOnline()` before messaging them.
 
 ## Types
 
@@ -108,14 +152,13 @@ nobody and the ability behaves as `SELF` does. `radius` is ignored by `SELF`.
 
 <Callout type="tip" title="Queries are cheap, actions are not">
 Everything returning a value reads the plugin's cache and is safe from a menu redraw or a
-placeholder. `apply` and `remove` run the same flow a player's own gear change runs — potion effects,
+placeholder. `apply`, `remove` and `useAbility` run the same flow a player's own gear change or click runs — potion effects,
 cooldowns, bars, the messages they see — so call those on the main thread.
 </Callout>
 
 ## What it does not expose
 
-No events: ExyliaClasses publishes none. Ability execution, passive effects, the weapon and mark
-internals, and raw configuration rows are left out on purpose — a public contract cannot be broken
-later, so it carries what an integration needs and nothing that only made sense inside one version.
+What an ability actually applies, passive effects, the weapon and mark internals, and raw
+configuration rows are left out on purpose — a public contract cannot be broken later, so it carries what an integration needs and nothing that only made sense inside one version.
 
 If something you need is genuinely missing, ask on [Discord](https://discord.exylia.net).
