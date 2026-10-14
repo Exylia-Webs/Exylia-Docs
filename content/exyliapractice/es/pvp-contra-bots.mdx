@@ -1,0 +1,105 @@
+---
+title: "PvP contra bots"
+description: "Practicar contra bots de ExyliaPracticeBotV3, solo o en party: vincular un kit a un modo de combate, los dos menús, cómo se juega y termina una pelea, y lo que nunca registra."
+---
+
+Con [ExyliaPracticeBotV3](/docs/exyliapracticebot/introduccion) instalado, un jugador puede pelear contra
+bots en una arena real con un kit real, solo o con toda su party. Es práctica: no se registra nada.
+
+Sin el plugin de bots el módulo simplemente no existe. `/botpvp` no se registra, el botón **Bots** del menú
+de party muestra una barrera y "Bot plugin not installed.", y el botón del kit que vincula un modo indica
+que falta el plugin.
+
+## Prepararlo
+
+<Steps>
+  <Step title="Instala el plugin de bots">
+    ExyliaPracticeCore encuentra el bot cuando se registra su servicio, aunque el bot se active después.
+    `/botpvp` solo se registra si hay un plugin llamado `ExyliaPracticeBotV3` presente mientras
+    ExyliaPracticeCore se activa.
+  </Step>
+  <Step title="Vincula un kit a un modo de combate">
+    `/epc` → el kit → **Playability & ranked** → **BOT PRACTICE**. Cada clic pasa por sin vincular, luego
+    cada modo de combate que ofrece el bot (`SWORD`, `POT_PVP`, `UHC`, `CRYSTAL_PVP`, `MACE_PVP`,
+    `BOXING`), y de nuevo sin vincular.
+  </Step>
+  <Step title="Dale al kit una arena que acepte peleas contra bots">
+    El kit necesita al menos una arena compatible, y la arena tiene que aceptar el uso `BOT` — o no
+    declarar ningún uso, lo que lo acepta todo. Ver [Arenas](/docs/exyliapractice/arenas).
+  </Step>
+</Steps>
+
+Un modo solo se ofrece cuando tiene vinculado un kit **activado** con al menos una arena compatible. Si
+varios kits indican el mismo modo, gana el de mayor prioridad, y después el id.
+
+<Callout type="warning" title="Reglas que un bot ignora">
+Vincular un modo a un kit con la construcción desactivada, el PvP desactivado, el daño desactivado,
+`hits-to-win` o `points-to-win` envía un aviso que nombra la regla (`bot-pvp.rules-warning`). El plugin no
+puede imponerlas a un rival que no controla, y los objetivos de golpes y puntos cuentan golpes entre
+jugadores, así que la pelea pasa a ser el último en pie. Avisa en lugar de rechazar.
+</Callout>
+
+## Empezar una pelea
+
+| Entrada | Quién |
+|---|---|
+| `/botpvp`, `/bot-pvp`, `/practicebot` | Necesita `exyliapractice.botpvp`. El nodo no está declarado en `plugin.yml`, así que Bukkit solo se lo da a los operadores hasta que lo concedas. |
+| `/party game` → **Bots** | El líder de la party. En este camino no se comprueba ningún nodo. |
+| `openMenu(player, BOT_PVP)` en la [API](/docs/exyliapractice/api) | Hace la misma comprobación de permiso que el comando. |
+
+El flujo son dos menús:
+
+1. **Modo** (`lang/<language>/menus/player/botpvp/botpvp_mode.yml`) — un botón por modo jugable, dibujado
+   con el icono y el nombre del kit vinculado. Si no hay ningún modo jugable, al jugador se le dice "No bot
+   practice modes are set up yet." en su lugar.
+2. **Dificultad** (`lang/<language>/menus/player/botpvp/botpvp_difficulty.yml`) — `EASY`, `NORMAL`,
+   `HARD`, `INSANE` y `EXTREME`, cada una con una línea sobre cómo juega. Al pulsar una empieza la pelea.
+
+Un jugador solo se trae a sí mismo. El líder de una party se trae a todos los miembros conectados, un bot
+cada uno; un miembro que no es el líder recibe el mensaje de "no eres el líder" de la party. Todos los del
+grupo tienen que estar libres (en el lobby o en su party), y el servidor tiene que tener sitio para un bot
+más por jugador: por encima del límite del plugin de bots la pelea se rechaza con `%limit%` antes de tocar
+ninguna arena. Ver [Límites](/docs/exyliapracticebot/limites).
+
+## Cómo se juega una pelea
+
+- El kit y la arena se toman como en cualquier partida, clonando una si todas las copias están ocupadas,
+  con la pantalla de carga y la cuenta atrás de siempre.
+- Cuando acaba la cuenta atrás aparece un bot por jugador en el segundo spawn de la arena (el primero si
+  no tiene), con el modo y la dificultad elegidos, **llevando el kit de la propia partida**. Con un kit
+  vacío, el bot se equipa solo.
+- En una pelea de party los bots se reparten para que nadie tenga dos mientras otro está libre; los
+  jugadores son un solo equipo y no pueden dañarse entre ellos.
+- Cuando un jugador muere, los bots que iban a por él pasan a quien quede con menos bots encima. Un
+  jugador que se va se lleva su bot.
+- Cada luchador ve la línea `effects.bot-actionbar`: la vida sumada de los bots, el modo, la dificultad y
+  su ping.
+- El sidebar es `bot-practice` en `scoreboards.yml`, con `%bot_mode%`, `%bot_difficulty%` y
+  `%bots_alive%`. Ver [Scoreboards](/docs/exyliapractice/scoreboards).
+
+La pelea se **gana** cuando muere el último bot, y se **pierde** cuando todos los jugadores han caído. Si
+un bot no puede aparecer, la partida se cancela con "The bot could not be spawned. Nothing was recorded."
+
+## Lo que nunca hace
+
+Una pelea contra bots no registra nada: ni estadísticas, ni ELO, ni historial, ni repetición. No se puede
+espectar, y la regla de reaparecer en la cama nunca se aplica. `%exyliapracticecore_total_bot_players%`
+cuenta los jugadores que pelean contra bots ahora mismo. Ver [Placeholders](/docs/exyliapractice/placeholders).
+
+## Mensajes
+
+Todo lo que dice el módulo está en `bot-pvp` de `lang/<language>/messages.yml`:
+
+| Clave | Por defecto |
+|---|---|
+| `unavailable` | Bot practice is not available on this server. |
+| `no-modes` | No bot practice modes are set up yet. |
+| `no-kit` | That mode has no kit linked to it. |
+| `server-full` | The server is already running `%limit%` bots. Try again in a moment. |
+| `spawn-failed` | The bot could not be spawned. Nothing was recorded. |
+| `starting` | Practising `%mode%` » `%difficulty%`. |
+| `rules-warning` | Heads up: `%rule%` does not apply to a bot. The fight will be last one standing. |
+| `bot-name` | La placa de nombre del bot, con `%mode%` y `%difficulty%`. A propósito no `%player%`: con el nombre de su rival habría dos del mismo jugador en la arena. |
+| `bot-skin` | `Steve`. La skin que llevan los bots, por nombre de jugador. |
+| `difficulties.<nombre>` | `name`, `summary`, `icon` y `skin` de cada dificultad, con su nombre en minúsculas como clave. Una `skin` vacía mantiene `bot-skin`; un `icon` vacío mantiene el del propio menú para ese lugar de la escala; una dificultad que nadie lista se muestra con su propio nombre. |
+| `party-status`, `party-status-unavailable` | La línea del botón **Bots** del menú de party, con y sin el plugin de bots. |

@@ -760,6 +760,7 @@ const PRACTICE_NAV: NavGroup[] = [
       page("queue", "queue", "cola"),
       page("duels", "duels", "duelos"),
       page("parties", "parties", "parties"),
+      page("bot-pvp", "bot-pvp", "pvp-contra-bots"),
       page("spectating", "spectating", "espectadores"),
       page("lobby", "lobby", "lobby"),
     ],
