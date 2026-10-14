@@ -1,6 +1,6 @@
 ---
 title: "Match history"
-description: "Every match, both inventories, and the sixty-day window it lives in."
+description: "Every match, both inventories, its replay, and the window each of them lives in."
 ---
 
 Every finished match writes one row **per player** to `practice_match_history`. The two rows share a
@@ -24,12 +24,16 @@ A row is written for every non-cancelled match, ranked or not.
 | Command | What it does |
 |---|---|
 | `/history`, `/mh`, `/match-history` | Your own history |
-| `/history <player>` | Somebody else's |
+| `/history player <player>` | Somebody else's |
 | `/history inv <matchId>` | The inventory you finished that match with |
 | `/history invop <matchId>` | Your opponent's |
 
+`inv` and `invop` open only for a player who fought in that match. The three lookups that read the
+database answer at most once every two seconds per player.
+
 The menu opens on the category list, then the kits, then the matches — each row showing the result,
-the LP change, the opponent, the kit and how long it took. Clicking one opens the two inventory views.
+the LP change, the opponent, the kit and how long it took. Left-clicking one opens the two inventory
+views; right-clicking it plays its [replay](#replays).
 
 Five filters: **all**, **wins**, **losses**, **ranked**, **unranked**.
 
@@ -49,7 +53,7 @@ live match's inserts are not held up.
 
 <Callout type="note" title="Deleting a match costs nothing statistically">
 Every counter derived from a match — wins, damage, accuracy, combos, time played — was already
-committed to the season and lifetime rows when the match ended. The history row is the replay, not the
+committed to the season and lifetime rows when the match ended. The history row is the record, not the
 source of truth.
 </Callout>
 
@@ -69,3 +73,52 @@ enchantments included, as an unclickable menu.
 
 Because it is captured at the end, a player who died holding nothing shows nothing. The snapshot is
 what they had, not what the kit gave them.
+
+## Replays
+
+Every recorded match can be watched again from the history menu. A recording is the server's own
+record of where everybody was on every tick, not a copy of what any client drew, so watching one
+settles whether a hit landed. It includes the arena changing: blocks placed and broken, blocks that
+expire, doors, regenerations between points, totems, golden apples and splash potions. Recording runs
+for three seconds past the end of the match.
+
+| Setting | Default | What it does |
+|---|---|---|
+| `replay.enabled` | `true` | Record matches at all |
+| `replay.ranked-only` | `false` | Record ranked matches only |
+| `replay.retention-days` | `14` | Days a recording stays watchable. Past this it is deleted; the history row stays. |
+| `replay.max-concurrent-viewers` | `5` | Replays that may be watched at once, server-wide |
+
+Matches against bots are never recorded. Recordings live in their own table, `practice_match_replays`,
+one row per match.
+
+### Watching one
+
+The viewer is given a free copy of the match's arena, the same way the queue gets one, and becomes a
+flying camera in adventure mode that nothing can hurt, starting behind the first fighter. A border
+drawn only for them keeps them in the arena, and the bodies and blocks they see are sent to them
+alone, so two people can watch two matches in two copies of one arena without seeing each other.
+
+A replay is refused, with a message, when the viewer is in a match, queued or already watching one,
+when every copy of the arena is in use, or when `max-concurrent-viewers` is reached.
+
+The hotbar drives it, from `overlays/replay.yml` in the language folder:
+
+| Slot | Button |
+|---|---|
+| 1 | Back 10 seconds |
+| 2 | Play / pause |
+| 3 | Forward 10 seconds |
+| 5 | Speed: left-click slower, right-click faster, through `x0.125` to `x4` |
+| 7 | From the start |
+| 9 | Leave |
+
+The same controls exist as commands, which also take an exact speed or moment:
+
+| Command | What it does |
+|---|---|
+| `/replay pause` | Pause or resume |
+| `/replay speed <multiplier>` | Any speed from `0.0625` to `8` |
+| `/replay seek <minutes> [seconds]` | Jump to that moment |
+| `/replay sounds` | Sounds on or off |
+| `/replay leave` | Back to the lobby |

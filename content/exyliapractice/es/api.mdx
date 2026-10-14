@@ -61,6 +61,7 @@ jugador ya se le dijo por qué no.
 | `boolean isInMatch(UUID player)` | Si está en una partida. Cierto desde que empieza a montarse, y cierto para un espectador que la mira desde dentro — usa `MatchInfo.isActive()` cuando necesites que esté peleando de verdad. |
 | `boolean isInQueue(UUID player)` | Si está esperando en al menos una cola. |
 | `void sendToLobby(Player player)` | Lo lleva al lobby del practice y nada más. |
+| `boolean openMenu(Player player, PracticeMenu menu)` | Abre una de las pantallas de jugador: `QUEUE`, `PARTY`, `KIT_EDITOR`, `SETTINGS`, `STATS`, `MATCH_HISTORY`, `SPECTATE` o `BOT_PVP`. Hace las mismas comprobaciones que el comando o el objeto del lobby y avisa al jugador cuando la respuesta es no. `false` si la pantalla se negó a abrirse. Llámalo en el hilo dueño del jugador. |
 | `boolean leave(Player player)` | Lo saca de donde esté, rindiendo la partida. Responde si la petición fue *aceptada*, no si ya terminó; `false` para un estado sin salida, como una partida todavía cargando o una zona PvP. |
 
 ## Partidas
@@ -73,6 +74,7 @@ jugador ya se le dijo por qué no.
 | `boolean spectate(Player spectator, String matchId)` | Manda a un jugador a mirar. Se rechaza para una partida que no empezó o ya terminó, para una contra bots, y para una cuyos peleadores apagaron los espectadores. |
 | `boolean spectatePlayer(Player spectator, Player target)` | Lo mismo, para lo que esté peleando otro jugador. Mirar a alguien que a su vez es espectador se rechaza en vez de seguirlo en silencio. |
 | `boolean stopSpectating(Player spectator)` | Saca al espectador. `false` si no estaba mirando nada. |
+| `boolean cancelMatch(String matchId)` | Termina una partida sin resultado, en cualquier estado anterior al final, también una que carga. Nadie gana, no se mueve ELO, no se escribe nada en estadísticas ni historial; todos ven un empate y vuelven al lobby. `false` si ninguna partida tiene ese id o ya está terminando. |
 
 ## Cola
 
@@ -81,6 +83,7 @@ jugador ya se le dijo por qué no.
 | `Set<String> queuedKits(UUID player)` | Los kits en cuya cola espera. Un jugador puede esperar en varias a la vez y se lleva la primera partida que salga. |
 | `int queueSize(String kitId)` | Cuántos jugadores esperan por un kit. `0` para uno en el que no espera nadie. |
 | `boolean joinQueue(Player player, String kitId)` | Lo mete en una cola. Se rechaza si el jugador no está disponible, si sus estadísticas no terminaron de cargar, si la cola está bloqueada por una rotación de temporada, o si el kit no es de cola. |
+| `boolean borrowQueuedPlayer(Player player, Plugin borrower, BooleanSupplier giveBack)` | Presta un jugador en cola a una actividad de espera —un aim trainer, un parkour— sin que pierda su sitio en ninguna cola. Mira [prestar un jugador en cola](#prestar-un-jugador-en-cola). |
 | `boolean leaveQueue(Player player)` | Lo saca de todas las colas. Se rechaza una vez encontrada su partida: a esa altura ya no está esperando, y soltarlo lo dejaría libre para meterse en otro modo mientras la partida lo carga. |
 
 ## Duelos
@@ -90,6 +93,7 @@ jugador ya se le dijo por qué no.
 | `boolean sendDuelRequest(Player sender, Player target, String kitId, int rounds)` | Manda una petición de duelo. La arena la elige el plugin, entre las que admiten el kit; `rounds` es `1` para una sola pelea. A los dos jugadores se les avisa qué pasó. |
 | `void acceptDuelRequest(Player player, Player sender)` | Acepta la petición de `sender`. |
 | `void declineDuelRequest(Player player, Player sender)` | Rechaza la petición de `sender`. |
+| `DuelStartResult startDuel(Player first, Player second, String kitId, int rounds, String arenaId)` | Empieza un duelo no ranked sin petición de por medio, para un bracket o un NPC que ya decidió quién pelea. Los dos deben estar libres y sin party. `arenaId` es una preferencia, o `null`. Un rechazo no avisa a ninguno de los dos: el resultado —`ACCEPTED`, `UNKNOWN_KIT`, `SAME_PLAYER`, `UNAVAILABLE`— es para que lo explique quien llama. `ACCEPTED` significa que los dos están reclamados y la partida se está construyendo, no que se vaya a jugar. |
 | `List<String> pendingDuelSenders(Player target)` | Quién tiene una petición esperándolo. Nombres, no UUIDs, y solo los que siguen conectados: una petición de alguien que se desconectó no se puede aceptar. |
 
 ## Parties
@@ -99,6 +103,7 @@ jugador ya se le dijo por qué no.
 | `Optional<Party> partyOf(UUID player)` | Su party. Vacío si no está en ninguna. |
 | `boolean createParty(Player player)` | Crea una party liderada por el jugador. |
 | `boolean inviteToParty(Player leader, Player target)` | Invita a un jugador a la party del líder. |
+| `boolean joinParty(Player player, Player leader)` | Mete a un jugador en la party del líder. Se rechaza si el jugador no está disponible o ya está en una party, si la party está llena, y si está cerrada y el jugador no tiene invitación. |
 | `boolean leaveParty(Player player)` | Lo saca de su party. Si se va el líder, la party pasa a otro en vez de disolverse. |
 | `boolean disbandParty(Player leader)` | Disuelve la party. |
 
@@ -128,6 +133,37 @@ del conjunto de visibilidad. Soltar el claim devuelve todo eso — pero solo si 
 mientras tanto, así que pasar a un jugador de un modo a otro no le hace parpadear el kit del lobby en
 el medio. Pedir a un jugador que el practice está reteniendo rinde su partida, lo saca de su cola o lo
 saca de su zona PvP primero; un estado sin salida rechaza el claim.
+
+## Prestar un jugador en cola
+
+`borrowQueuedPlayer` le pasa el claim de sesión a tu plugin y mantiene al jugador en todas sus colas;
+el emparejamiento sigue para él igual que para alguien en el lobby. Mientras está prestado, `state`
+responde `EXTERNAL` e `isInQueue` sigue respondiendo `true`.
+
+`giveBack` corre en el momento en que el practice lo necesita: se encontró partida, salió de la cola,
+se desconectó. Devuelve al jugador como lo encontraste, suelta tu claim dentro del handler y responde
+`true`. Negarse cuesta la partida entera: todos los demás vuelven a la cola. El inventario, la
+posición y cualquier otra cosa que cambiaste te toca restaurarlos a ti. Responde `false` si el jugador
+no está esperando partida o si ya lo tiene otro.
+
+## Eventos
+
+Todos en `net.exylia.lib.api.practice.event`. Los cancelables se lanzan antes de que pase nada, que es
+lo que los convierte en el sitio limpio para rechazar.
+
+| Evento | Cancelable | Cuándo |
+|---|---|---|
+| `PracticeMatchCreateEvent` | Sí | Los jugadores de una partida están elegidos y reclamados, antes de buscar arena: `mode`, `kitId`, `players`, `ranked`. Cancelarlo manda a todos al lobby sin mensaje. |
+| `PracticeMatchStartEvent` | No | Terminó la primera cuenta atrás de una partida: `match` |
+| `PracticeMatchEndEvent` | No | Se decidió una partida: `match`, `reason` (`DEATH`, `HITS_TO_WIN`, `POINTS_TO_WIN`, `FORFEIT`, `CANCELLED`), `winners`, `losers`, `isDraw()`, `eloChanges` |
+| `PracticeQueueJoinEvent` | Sí | Antes de meter a un jugador en una cola: `player`, `kitId`, `ranked` |
+| `PracticeQueueLeaveEvent` | No | Un jugador dejó de esperar sin partida: `player`, `kitIds`, `reason` (`LEFT`, `DISCONNECTED`). No se lanza cuando la cola lo empareja. |
+| `PracticeDuelRequestEvent` | Sí | Antes de que exista una petición de duelo: `sender`, `target`, `kitId`, `rounds`, `arenaId` |
+| `PracticePartyJoinEvent` | Sí | Antes de meter a un jugador en una party: `player`, `party` |
+| `PracticePartyLeaveEvent` | No | Antes de sacar a un jugador, con la party todavía conteniéndolo: `player`, `party`, `reason` (`LEFT`, `KICKED`, `DISBANDED`, `DISCONNECTED`) |
+
+`eloChanges` es el cambio de ELO del kit por jugador, el mismo número que guarda la fila de historial;
+está vacío cuando no se movió ningún rating.
 
 ## Tipos
 
@@ -294,8 +330,9 @@ integración blanda.
 
 ## Lo que no expone
 
-ExyliaPracticeCore no publica eventos propios. Lo que escucha otro plugin en su lugar es el registro de
-sesiones de ExyliaLib, que informa de todos los modos del servidor y no solo de este:
+Además de los eventos de arriba, un plugin que quiera saber cuándo *cualquier* modo toma o suelta a un
+jugador escucha el registro de sesiones de ExyliaLib, que informa de todos los modos del servidor y no
+solo de este:
 
 ```java
 Sessions.watch(myPlugin,
@@ -303,7 +340,7 @@ Sessions.watch(myPlugin,
     claim -> { /* alguien fue soltado */ });
 ```
 
-El service está curado, no es un espejo del plugin. Los abridores de menú, el editor de kits, el manejo
+El service está curado, no es un espejo del plugin. Las pantallas de admin, la sesión del editor de kits, el manejo
 y la regeneración de instancias de arena, la rotación de temporada, las escrituras administrativas
 sobre las estadísticas de alguien y las filas crudas de configuración quedan afuera a propósito: son el
 plugin corriéndose a sí mismo, y un método público que metiera mano ahí sería una forma de romper una

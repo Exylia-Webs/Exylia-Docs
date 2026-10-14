@@ -60,6 +60,7 @@ been told why not.
 | `boolean isInMatch(UUID player)` | Whether they are in a match. True from the moment it starts being built, and true for a spectator watching from inside it — check `MatchInfo.isActive()` when you need them to actually be fighting. |
 | `boolean isInQueue(UUID player)` | Whether they are queued for at least one kit. |
 | `void sendToLobby(Player player)` | Moves them to the practice lobby and nothing else. |
+| `boolean openMenu(Player player, PracticeMenu menu)` | Opens one of the player screens: `QUEUE`, `PARTY`, `KIT_EDITOR`, `SETTINGS`, `STATS`, `MATCH_HISTORY`, `SPECTATE` or `BOT_PVP`. It runs the same checks the command or lobby item does and tells the player when the answer is no. `false` when the screen refused to open. Call it on the thread that owns the player. |
 | `boolean leave(Player player)` | Takes them out of whatever they are in, forfeiting a match. Answers whether the request was *accepted*, not whether it has finished; `false` for a state with no way out, such as a match still loading or a PvP zone. |
 
 ## Matches
@@ -72,6 +73,7 @@ been told why not.
 | `boolean spectate(Player spectator, String matchId)` | Sends a player in to watch. Refused for a match that has not started or has ended, for one against bots, and for one whose fighters have turned spectators off. |
 | `boolean spectatePlayer(Player spectator, Player target)` | The same, for whatever another player is fighting. Watching somebody who is themselves a spectator is refused rather than silently following them. |
 | `boolean stopSpectating(Player spectator)` | Takes a spectator out. `false` when they were not watching anything. |
+| `boolean cancelMatch(String matchId)` | Ends a match with no result, in any state short of ending, a loading one included. Nobody wins, no ELO moves, nothing is written to statistics or history; everybody sees a draw and is sent back to the lobby. `false` when no match has that id or it is already ending. |
 
 ## Queue
 
@@ -80,6 +82,7 @@ been told why not.
 | `Set<String> queuedKits(UUID player)` | The kits they are waiting on. A player may wait in several queues at once and takes the first match that comes up. |
 | `int queueSize(String kitId)` | How many players are waiting on a kit. `0` for one nobody is waiting on. |
 | `boolean joinQueue(Player player, String kitId)` | Puts them in a queue. Refused when the player is not available, when their statistics have not finished loading, when the queue is locked for a season rotation, or when the kit is not queueable. |
+| `boolean borrowQueuedPlayer(Player player, Plugin borrower, BooleanSupplier giveBack)` | Lends a queued player to a waiting activity — an aim trainer, a parkour — while they keep their place in every queue. See [lending a queued player](#lending-a-queued-player). |
 | `boolean leaveQueue(Player player)` | Takes them out of every queue. Refused once their match has been found, because at that point they are no longer waiting and letting go would leave them free to walk into another mode mid-load. |
 
 ## Duels
@@ -89,6 +92,7 @@ been told why not.
 | `boolean sendDuelRequest(Player sender, Player target, String kitId, int rounds)` | Sends a duel request. The arena is left to the plugin, which picks one the kit may be played in; `rounds` is `1` for a single fight. Both players are told what happened. |
 | `void acceptDuelRequest(Player player, Player sender)` | Accepts the request from `sender`. |
 | `void declineDuelRequest(Player player, Player sender)` | Declines the request from `sender`. |
+| `DuelStartResult startDuel(Player first, Player second, String kitId, int rounds, String arenaId)` | Starts an unranked duel with no request in between, for a bracket or an NPC that has already decided who fights. Both must be free and in no party. `arenaId` is a preference, or `null`. A refusal tells neither player anything: the result — `ACCEPTED`, `UNKNOWN_KIT`, `SAME_PLAYER`, `UNAVAILABLE` — is for the caller to explain. `ACCEPTED` means both are claimed and the match is being built, not that it will be fought. |
 | `List<String> pendingDuelSenders(Player target)` | Who has a request waiting for them. Names rather than UUIDs, and only the ones still online: a request from somebody who has logged out cannot be accepted. |
 
 ## Parties
@@ -98,6 +102,7 @@ been told why not.
 | `Optional<Party> partyOf(UUID player)` | Their party. Empty when they are in none. |
 | `boolean createParty(Player player)` | Creates a party led by the player. |
 | `boolean inviteToParty(Player leader, Player target)` | Invites a player to the leader's party. |
+| `boolean joinParty(Player player, Player leader)` | Adds a player to the leader's party. Refused when the player is not available or already in a party, when the party is full, and when it is closed and the player holds no invitation. |
 | `boolean leaveParty(Player player)` | Removes them from their party. A leader leaving hands the party over rather than ending it. |
 | `boolean disbandParty(Player leader)` | Ends the party. |
 
@@ -127,6 +132,37 @@ them out of the lobby's visibility set. Dropping the claim puts all of it back �
 else has taken them in the meantime, so handing a player from one mode straight to another does not
 flash a lobby kit in between. Asking for a player practice is holding forfeits their match, leaves
 their queue or exits their PvP zone first; a state with no way out refuses the claim.
+
+## Lending a queued player
+
+`borrowQueuedPlayer` hands the session claim to your plugin and keeps the player in every queue they
+are in; matchmaking runs for them exactly as for a player in the lobby. While lent, `state` answers
+`EXTERNAL` and `isInQueue` still answers `true`.
+
+`giveBack` runs the moment practice needs them — a match was found, they left the queue, they
+disconnected. Put the player back as you found them, drop your claim inside the handler, and answer
+`true`. Refusing costs the whole match: everybody else in it goes back to the queue. Inventory,
+location and anything else you changed are yours to restore. It answers `false` when the player is not
+waiting for a match or somebody else already holds them.
+
+## Events
+
+All in `net.exylia.lib.api.practice.event`. The cancellable ones fire before anything happens, which is
+what makes them the clean place to refuse.
+
+| Event | Cancellable | When |
+|---|---|---|
+| `PracticeMatchCreateEvent` | Yes | A match's players are chosen and claimed, before an arena is looked for: `mode`, `kitId`, `players`, `ranked`. Cancelling sends everybody to the lobby without a message. |
+| `PracticeMatchStartEvent` | No | The first countdown of a match ended: `match` |
+| `PracticeMatchEndEvent` | No | A match was decided: `match`, `reason` (`DEATH`, `HITS_TO_WIN`, `POINTS_TO_WIN`, `FORFEIT`, `CANCELLED`), `winners`, `losers`, `isDraw()`, `eloChanges` |
+| `PracticeQueueJoinEvent` | Yes | Before a player is added to a queue: `player`, `kitId`, `ranked` |
+| `PracticeQueueLeaveEvent` | No | A player stopped waiting without a match: `player`, `kitIds`, `reason` (`LEFT`, `DISCONNECTED`). Not fired when the queue pairs them. |
+| `PracticeDuelRequestEvent` | Yes | Before a duel request exists: `sender`, `target`, `kitId`, `rounds`, `arenaId` |
+| `PracticePartyJoinEvent` | Yes | Before a player is added to a party: `player`, `party` |
+| `PracticePartyLeaveEvent` | No | Before a player is removed, with the party still holding them: `player`, `party`, `reason` (`LEFT`, `KICKED`, `DISBANDED`, `DISCONNECTED`) |
+
+`eloChanges` is the kit ELO delta per player, the same number the history row stores; it is empty when
+no rating moved.
 
 ## Types
 
@@ -292,8 +328,9 @@ A server without the bot plugin simply answers empty, which is the point of a so
 
 ## What it does not expose
 
-ExyliaPracticeCore publishes no events of its own. What another plugin listens to instead is
-ExyliaLib's session registry, which reports every mode on the server rather than just this one:
+Beyond the events above, a plugin that wants to know when *any* mode takes or releases a player
+listens to ExyliaLib's session registry, which reports every mode on the server rather than just this
+one:
 
 ```java
 Sessions.watch(myPlugin,
@@ -301,7 +338,7 @@ Sessions.watch(myPlugin,
     claim -> { /* somebody was released */ });
 ```
 
-The service is curated rather than a mirror of the plugin. Menu openers, the kit editor, arena
+The service is curated rather than a mirror of the plugin. Admin screens, the kit editor session, arena
 instance handling and regeneration, season rotation, administrative writes to somebody's statistics
 and raw configuration rows are left out on purpose: they are the plugin running itself, and a public
 method that reached into them would be a way to break a match quietly.
