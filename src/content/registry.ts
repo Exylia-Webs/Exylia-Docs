@@ -290,12 +290,14 @@ const SHIELDS_NAV: NavGroup[] = [
     pages: [
       page("designs", "designs", "disenos"),
       page("community", "community", "comunidad"),
+      page("crate", "crate", "caja"),
     ],
   },
   {
     label: { en: "Reference", es: "Referencia" },
     pages: [
       page("commands", "commands", "comandos"),
+      page("placeholders", "placeholders", "placeholders"),
       page("api", "api", "api"),
       page("faq", "faq", "faq"),
     ],
@@ -1424,10 +1426,10 @@ export const plugins: Plugin[] = [
     name: "ExyliaShields",
     tagline: { en: "A shield design editor in a menu", es: "Un editor de escudos en un menú" },
     summary: {
-      en: "41 patterns and 16 colours layered into custom shield designs, saved in numbered slots, sold by permission and shareable through a community library.",
-      es: "41 patrones y 16 colores en capas para diseñar escudos, guardados en ranuras numeradas, vendidos por permiso y compartibles en una biblioteca comunitaria.",
+      en: "43 patterns and 16 colours layered into custom shield designs, saved in numbered slots, unlocked by permission, a crate or currency, and shareable through a community library.",
+      es: "43 patrones y 16 colores en capas para diseñar escudos, guardados en ranuras numeradas, desbloqueados por permiso, caja o moneda, y compartibles en una biblioteca comunitaria.",
     },
-    version: "1.0.3",
+    version: "1.2.0",
     status: "stable",
     category: { en: "Cosmetic", es: "Cosmético" },
     minecraft: "1.21+",

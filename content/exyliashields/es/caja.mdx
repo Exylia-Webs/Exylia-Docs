@@ -1,0 +1,150 @@
+---
+title: "La caja y la tienda"
+description: "Dos formas más de tener un patrón o un color: ganado en una caja con llaves, o comprado desde el editor."
+---
+
+Un patrón o un color es de un jugador si un permiso se lo concede, si una caja cayó en él, o si lo
+compró. Las dos últimas se escriben en su cuenta en vez de concederse como nodo, así que sobreviven a
+que caduque un rango. Las tres cuentan igual en el editor, en el selector de color y en la API.
+
+## Rarezas
+
+Cada patrón y cada color de `shields.yml` nombra un `tier`, y `crate.tiers` en `config.yml` declara
+cuáles son:
+
+```yaml title="shields.yml"
+shield_patterns:
+  stripe_bottom:
+    name: "Base Stripe"
+    tier: common
+```
+
+```yaml title="config.yml"
+crate:
+  tiers:
+    common: { name: "Common", color: "{muted}", chance: 60.0, priority: 1 }
+    rare: { name: "Rare", color: "{info}", chance: 25.0, priority: 2 }
+    epic: { name: "Epic", color: "{accent}", chance: 12.0, priority: 3 }
+    legendary: { name: "Legendary", color: "{highlight}", chance: 3.0, priority: 4 }
+```
+
+`chance` es un peso, no un porcentaje. Añade, renombra o borra cualquier rareza; una entrada que no
+nombra ninguna, o una que ya no existe, cae en la primera. El archivo que viene reparte los 43 patrones
+y 16 colores en 35 comunes, 14 raros, 7 épicos y 3 legendarios.
+
+## La caja
+
+Una llave abre una caja, y la caja puede caer en cualquier patrón o color. Las llaves viven en la
+cuenta del jugador, donde nada se puede soltar, duplicar ni perder por un inventario lleno.
+
+<Steps>
+  <Step title="Abrirla">
+    El botón **SHIELD CRATE** del menú de ranuras, `/shields crate`, o un clic en un bloque de caja atado.
+  </Step>
+  <Step title="Cuántas">
+    `menus/crate.yml` pregunta cuántas abrir a la vez, hasta `crate.max-at-once`.
+  </Step>
+  <Step title="Caen los rodillos">
+    `menus/crate_open.yml` dibuja un rodillo por caja. Cada cara es un escudo real: un patrón dibujado
+    con el tinte por defecto del editor sobre una base blanca, o un color como base de un escudo liso.
+  </Step>
+</Steps>
+
+Caer en algo que ya tiene — por permiso, por una caja anterior o por una compra — devuelve en su lugar
+`crate.duplicate-refund` llaves.
+
+### Llaves que se pueden llevar
+
+```text
+/shields item key <player> [1-64]
+```
+
+Una llave como objeto abre la caja al hacer click derecho en un bloque de caja atado con ella en la
+mano. Se puede intercambiar y soltar. Su material es `crate.key-item` en `config.yml`, y su nombre y
+lore `key_item` en `messages.yml`.
+
+### Ajustes
+
+```yaml title="config.yml"
+crate:
+  enabled: true
+  start-keys: 0
+  duplicate-refund: 1
+  reward: UNLOCK
+  blocks: []
+  max-at-once: 4
+  spin-frames: 34
+  stagger-seconds: 2.0
+  key-item:
+    material: TRIPWIRE_HOOK
+    glow: true
+```
+
+| Clave | Por defecto | Qué hace |
+|---|---|---|
+| `enabled` | `true` | Apagada, la caja lo dice en vez de abrirse. |
+| `start-keys` | `0` | Llaves que recibe un jugador la primera vez que se le ve. |
+| `duplicate-refund` | `1` | Llaves que se devuelven por algo que ya tenía. |
+| `reward` | `UNLOCK` | Los escudos no tienen fichas, así que `ITEM` y `BOTH` se comportan como `UNLOCK`. |
+| `blocks` | `[]` | Los bloques que abren la caja. Se atan con `/shields crate block add`. |
+| `max-at-once` | `4` | Cuántas cajas puede abrir un jugador de una vez. La pantalla admite siete. |
+| `spin-frames` | `34` | Cuántas caras recorre el primer rodillo. Máximo 200. |
+| `stagger-seconds` | `2.0` | Cuánto después de parar un rodillo para el siguiente. `0` los para a la vez. |
+
+`on-spin`, `on-win` y `on-duplicate` son bloques de efecto completos de ExyliaLib, que suenan mientras
+giran los rodillos y una vez por rodillo al caer.
+
+### Bloques de caja
+
+```text
+/shields crate block add      # el bloque que estás mirando
+/shields crate block remove
+/shields crate block list
+/shields crate block clear
+```
+
+Se escriben en `config.yml`, no en el mundo. Mientras un bloque está atado no se puede romper, volar ni
+empujar, y hacerle clic deja de hacer lo que hace su material.
+
+### Llaves y desbloqueos por comando
+
+Los ids de desbloqueo son la clave de la entrada con lo que es delante: `pattern:stripe_bottom`,
+`color:red`. Ver [Comandos y permisos](/docs/exyliashields/comandos) para cada subcomando; `keys` y
+`unlocks` también funcionan con un jugador desconectado.
+
+Las llaves y los desbloqueos se guardan en la tabla `exylia_crate_players` de ExyliaLib, en la propia
+base de datos de este plugin.
+
+## La tienda
+
+Un patrón o un color bloqueado se puede comprar desde el editor o el selector de color. La fila dibuja
+su precio y un clic pide al jugador que confirme antes de cobrar nada; después el menú vuelve con la
+fila desbloqueada.
+
+```yaml title="config.yml"
+shop:
+  enabled: true
+  tier-prices:
+    common: 250
+    rare: 750
+    epic: 2000
+    legendary: 5000
+```
+
+| Clave | Por defecto | Qué hace |
+|---|---|---|
+| `enabled` | `true` | Si los patrones y colores bloqueados se pueden comprar. |
+| `tier-prices` | `250` / `750` / `2000` / `5000` | El precio de cada entrada de una rareza que no fija el suyo, en la moneda por defecto. Una rareza que no aparece no está a la venta. |
+
+Un precio es un número (`500`, `2.5k`) o un bloque que nombra una moneda: `{amount: 50, currency: gems}`.
+Una entrada de `shields.yml` puede fijar su propio `price`, que gana al de su rareza. El dinero lo cobra
+ExyliaEconomy o Vault; sin ninguno instalado, o con la tienda apagada, las entradas bloqueadas se ven
+exactamente como siempre.
+
+Una entrada comprada queda desbloqueada en la cuenta, igual que una ganada en la caja. Una compra que no
+se pudo entregar devuelve el dinero. La confirmación y cada respuesta que envía son líneas propias de
+ExyliaLib, bajo `purchase` en el `messages.yml` de ExyliaLib, compartidas por todos los plugins de
+cosméticos.
+
+En los menús, `purchasable_template` sustituye a `no_permission_template` en una fila que está a la
+venta, con `%price%` para lo que cuesta y la acción `shield:buy`.

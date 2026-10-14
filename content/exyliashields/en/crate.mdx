@@ -1,0 +1,148 @@
+---
+title: "The crate and the shop"
+description: "Two more ways to own a pattern or a colour: won out of a crate with keys, or bought from the editor."
+---
+
+A pattern or colour is a player's if a permission grants it, if a crate landed on it, or if they bought
+it. The last two are written to their account rather than granted as a node, so they outlive a rank
+running out. All three count the same in the editor, the colour picker and the API.
+
+## Rarities
+
+Every pattern and colour in `shields.yml` names a `tier`, and `crate.tiers` in `config.yml` declares
+what the tiers are:
+
+```yaml title="shields.yml"
+shield_patterns:
+  stripe_bottom:
+    name: "Base Stripe"
+    tier: common
+```
+
+```yaml title="config.yml"
+crate:
+  tiers:
+    common: { name: "Common", color: "{muted}", chance: 60.0, priority: 1 }
+    rare: { name: "Rare", color: "{info}", chance: 25.0, priority: 2 }
+    epic: { name: "Epic", color: "{accent}", chance: 12.0, priority: 3 }
+    legendary: { name: "Legendary", color: "{highlight}", chance: 3.0, priority: 4 }
+```
+
+`chance` is a weight, not a percentage. Add, rename or delete any rarity; an entry that names none, or
+one that no longer exists, falls in the first. The shipped file sorts the 43 patterns and 16 colours as
+35 common, 14 rare, 7 epic and 3 legendary.
+
+## The crate
+
+One key opens one crate, and the crate can land on any pattern or colour. Keys live on the player's
+account, where nothing can drop, dupe or be lost to a full inventory.
+
+<Steps>
+  <Step title="Open it">
+    The **SHIELD CRATE** button in the slots menu, `/shields crate`, or a bound crate block clicked.
+  </Step>
+  <Step title="How many">
+    `menus/crate.yml` asks how many to open at once, up to `crate.max-at-once`.
+  </Step>
+  <Step title="The reels fall">
+    `menus/crate_open.yml` draws one reel per crate. Each face is a real shield: a pattern drawn in the
+    editor's default dye on a white base, or a colour as the base of a blank shield.
+  </Step>
+</Steps>
+
+Landing on something already owned — by permission, by an earlier crate or by a purchase — hands back
+`crate.duplicate-refund` keys instead.
+
+### Keys that can be held
+
+```text
+/shields item key <player> [1-64]
+```
+
+A key item opens the crate when a bound crate block is right clicked while holding it. It can be
+traded and dropped. Its material is `crate.key-item` in `config.yml`, its name and lore `key_item` in
+`messages.yml`.
+
+### Settings
+
+```yaml title="config.yml"
+crate:
+  enabled: true
+  start-keys: 0
+  duplicate-refund: 1
+  reward: UNLOCK
+  blocks: []
+  max-at-once: 4
+  spin-frames: 34
+  stagger-seconds: 2.0
+  key-item:
+    material: TRIPWIRE_HOOK
+    glow: true
+```
+
+| Key | Default | What it does |
+|---|---|---|
+| `enabled` | `true` | Off, the crate says so instead of opening. |
+| `start-keys` | `0` | Keys a player is given the first time they are seen. |
+| `duplicate-refund` | `1` | Keys handed back for something already owned. |
+| `reward` | `UNLOCK` | Shields have no token items, so `ITEM` and `BOTH` behave as `UNLOCK`. |
+| `blocks` | `[]` | The blocks that open the crate. Bind them with `/shields crate block add`. |
+| `max-at-once` | `4` | How many crates one player may open in one go. The screen fits seven. |
+| `spin-frames` | `34` | How many faces the first reel runs through. Capped at 200. |
+| `stagger-seconds` | `2.0` | How long after one reel stops the next one does. `0` stops them together. |
+
+`on-spin`, `on-win` and `on-duplicate` are full ExyliaLib effect blocks, played as the reels turn and
+once per reel as it lands.
+
+### Crate blocks
+
+```text
+/shields crate block add      # the block you are looking at
+/shields crate block remove
+/shields crate block list
+/shields crate block clear
+```
+
+They are written to `config.yml`, not into the world. While a block is bound it cannot be broken, blown
+up or pushed away, and clicking it no longer does what its material does.
+
+### Keys and unlocks by command
+
+Unlock ids are the entry's key with what it is in front: `pattern:stripe_bottom`, `color:red`. See
+[Commands and permissions](/docs/exyliashields/commands) for every subcommand; `keys` and `unlocks`
+work on a player who is offline too.
+
+Keys and unlocks are stored in ExyliaLib's `exylia_crate_players` table, in this plugin's own database.
+
+## The shop
+
+A locked pattern or colour can be bought from the editor or the colour picker. The row draws its price
+and a click asks the player to confirm before anything is charged; the menu then comes back with the
+row unlocked.
+
+```yaml title="config.yml"
+shop:
+  enabled: true
+  tier-prices:
+    common: 250
+    rare: 750
+    epic: 2000
+    legendary: 5000
+```
+
+| Key | Default | What it does |
+|---|---|---|
+| `enabled` | `true` | Whether locked patterns and colours can be bought. |
+| `tier-prices` | `250` / `750` / `2000` / `5000` | The price of every entry of a rarity that sets none of its own, in the default currency. A rarity left out is not for sale. |
+
+A price is a number (`500`, `2.5k`) or a block naming a currency: `{amount: 50, currency: gems}`. An
+entry in `shields.yml` can set its own `price`, which wins over its rarity's. The money is taken by
+ExyliaEconomy or Vault; with neither installed, or with the shop off, locked entries look exactly as
+they always have.
+
+A bought entry is unlocked on the account, the same as one won from the crate. A purchase that could
+not be handed over gives the money back. The confirmation and every answer it sends are ExyliaLib's own
+lines, under `purchase` in ExyliaLib's `messages.yml`, shared by every cosmetic plugin.
+
+In the menus, `purchasable_template` stands in for `no_permission_template` on a row that is for sale,
+with `%price%` for what it costs and the `shield:buy` action.

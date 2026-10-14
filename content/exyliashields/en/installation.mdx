@@ -1,6 +1,6 @@
 ---
 title: "Installation"
-description: "Dependencies, the files it writes, and what config.yml controls."
+description: "Dependencies, the files it writes, and what config.yml and messages.yml control."
 ---
 
 ## Installing
@@ -10,7 +10,8 @@ description: "Dependencies, the files it writes, and what config.yml controls."
     `ExyliaShields.jar`, plus `ExyliaLib` and `packetevents`, into `plugins/`.
   </Step>
   <Step title="Start the server">
-    It writes `config.yml`, `shields.yml` and four menu files, and creates three tables.
+    It writes `config.yml`, `shields.yml`, `database.yml` and the `lang/` folders with the menus and
+    messages in English, Spanish, Portuguese, French and Russian, and creates its tables.
   </Step>
   <Step title="Grant slots and a palette">
     A player with no `max_slots` node has nowhere to save a design. See
@@ -22,12 +23,15 @@ description: "Dependencies, the files it writes, and what config.yml controls."
 
 | File | Contents |
 |---|---|
-| `config.yml` | The force system, editor defaults, and the import prompt. |
-| `shields.yml` | `max_layers`, the 41 patterns and the 16 colours. |
-| `menus/slots.yml` | The slot screen. |
-| `menus/design_editor.yml` | The editor. |
-| `menus/color_picker.yml` | The colour picker. |
-| `menus/community_browser.yml` | The shared library. |
+| `config.yml` | The language, the force system, editor defaults, showcases, the crate and the shop. |
+| `shields.yml` | `max_layers`, the 43 patterns and the 16 colours, each with its rarity. |
+| `lang/<code>/messages.yml` | Every message, plus the words the menus draw and the crate key's name and lore. |
+| `lang/<code>/menus/slots.yml` | The slot screen. |
+| `lang/<code>/menus/design_editor.yml` | The editor. |
+| `lang/<code>/menus/color_picker.yml` | The colour picker. |
+| `lang/<code>/menus/community_browser.yml` | The shared library. |
+| `lang/<code>/menus/crate.yml` | The crate's first screen: how many to open at once. |
+| `lang/<code>/menus/crate_open.yml` | The reels falling, one column per crate. |
 | `database.yml` | Where everything is stored. H2 by default. |
 
 ## Tables
@@ -37,10 +41,13 @@ description: "Dependencies, the files it writes, and what config.yml controls."
 | `player_shield_data` | Each player's slots and which one is active. |
 | `shield_design_library` | Designs registered for sharing, with an owner and a use count. |
 | `shield_design_uses` | Who has used which library design. |
+| `exylia_crate_players` | ExyliaLib's: each player's crate keys and the patterns and colours they won or bought. |
 
 ## config.yml
 
 ```yaml
+language: default
+
 force_system: true
 
 ui:
@@ -48,19 +55,47 @@ ui:
   preview:
     enabled_material: "LIME_DYE"
     disabled_material: "GRAY_DYE"
-    enabled_status: "{success}Enabled"
-    disabled_status: "{error}Disabled"
 
-prompt:
-  prompt_text: "{info}Enter the design ID to import {muted}(or {error}cancel{muted} to go back):"
+showcase:
+  locations: []
+  pause-seconds: 3.0
+  radius: 24.0
+  only: []
 ```
 
 | Key | Default | What it does |
 |---|---|---|
+| `language` | `default` | Which folder under `lang/` the menus and messages are read from. See below. |
 | `force_system` | `true` | Only players with `exyliashields.use` may have designs on their shields. |
 | `ui.default_dye_color` | `PURPLE` | The colour selected when the editor opens. |
-| `ui.preview.*` | see above | The item and text of the preview toggle, on and off. |
-| `prompt.prompt_text` | see above | What a player is asked when importing a design without naming one. |
+| `ui.preview.*` | see above | The item of the preview toggle, on and off. Its text is in `messages.yml`. |
+| `showcase` | see above | Places that show the community's designs off on a loop. See [The community library](/docs/exyliashields/community#showcases). |
+
+`crate` and `shop` are on [The crate and the shop](/docs/exyliashields/crate).
+
+### language
+
+`default` follows the `language` set in ExyliaLib's own `config.yml`, so one line there switches every
+Exylia plugin; `en`, `es`, `pt`, `fr` or `ru` set this plugin alone. Each language is a complete folder
+you can edit:
+
+```
+plugins/ExyliaShields/
+  config.yml
+  shields.yml
+  lang/es/messages.yml
+  lang/es/menus/*.yml
+```
+
+English is the base the others are laid over, so a line not translated yet still arrives in English.
+A changed `language` takes effect on `/shields reload`.
+
+<Callout type="note" title="Servers that ran 1.0.4 keep their edits">
+On the first start of 1.2.0 the old `messages.yml` and `menus/` move to `lang/custom/`, the preview
+labels and the import prompt `config.yml` used to hold move into `lang/custom/messages.yml`, and
+`config.yml` is pointed at it with `language: custom`, so nothing a server edited is lost. Set
+`language` to `default` or a code to switch to the shipped translations.
+</Callout>
 
 <Callout type="warning" title="force_system strips, it does not just block">
 With it on, a player **without** `exyliashields.use` has their shield design removed whenever they
@@ -93,8 +128,29 @@ shield_colors:
 `max_layers` caps how deep a design may go. Each pattern names the vanilla pattern it applies and the
 banner it is **drawn as** in the menu; each colour names its display name and icon.
 
-The keys are the permission ids: `stripe_bottom` is `exyliashields.pattern.stripe_bottom`.
+The keys are the permission ids: `stripe_bottom` is `exyliashields.pattern.stripe_bottom`. Each entry
+also names a `tier` (its crate rarity) and may set a `price` for the shop — see
+[The crate and the shop](/docs/exyliashields/crate).
+
+## messages.yml
+
+Every line the plugin sends, and every word a menu draws, in `lang/<code>/messages.yml`. `prefix` is
+`{primary}&lSHIELDS {muted}» `.
+
+| Key | What it is |
+|---|---|
+| `slot_applied` | Sent when a slot becomes the worn design. `%slot%` is its number. |
+| `ui` | Words drawn inside menus: the click hint, `no_permission`, the active and inactive slot lines, the colour picker's two names, `unknown_owner`, how a pattern and a colour are described on the crate reels, and the preview button's `preview_enabled` / `preview_disabled`. |
+| `import` | `no_slots_available`, `design_not_found`, `success`, and `prompt`, what a player is asked when importing without naming an id. |
+| `showcase` | The `showcase` subcommands' answers, and `designer`, the line floating above a showcased design. |
+| `crate` | What the crate says as it opens and pays out: `won`, `duplicate`, `no-keys`, `busy`, `empty`, `disabled`, `keys-received`, `rewards-claimed`. |
+| `key_item` | The crate key item's `name` and `lore`. |
+| `crate_commands` | The `keys`, `unlocks` and `crate block` subcommands' answers. |
+
+What the shop's confirmation and purchase answers say is ExyliaLib's own, under `purchase` in
+ExyliaLib's `messages.yml`.
 
 ## Updating
 
-Replace the jar and restart. `/shields reload` re-reads this plugin's own files.
+Replace the jar and restart. `/shields reload` re-reads this plugin's own files, the messages and menus
+of the language in use included.
