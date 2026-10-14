@@ -8,12 +8,22 @@ another, which is what makes the two history tables safe to prune.
 
 | Table | One row per | Answers |
 |---|---|---|
-| `aim_profiles` | Player | Lifetime numbers, the duel record, the overall rating and the player's settings |
-| `aim_records` | Player **and** drill | The bests, which is what a drill's leaderboard ranks |
+| `aim_profiles` | Player | Lifetime numbers, the duel record, the overall rating per edition and the player's settings |
+| `aim_records` | Player, drill **and** edition | The bests, which is what a drill's leaderboard ranks |
 | `aim_sessions` | Finished solo run | The session history a player scrolls through |
 | `aim_matches` | Participant per duel | The duel history |
 
 The fifth table, `aim_arenas`, holds the arenas and is covered on [Arenas](/docs/exyliaaimtrainer/arenas).
+
+## Java and Bedrock
+
+Java and Bedrock players are ranked apart: touch and controller aim, with aim assist, is not the same
+contest as a mouse. A session reads its player's edition once, when it starts, and its result lands on
+that edition's records and boards and in that edition's profile totals. A player who plays on both keeps
+two sets of bests and two overall ratings. Settings and the duel record are the player's, whatever they
+play on.
+
+Rows written before editions existed are labelled Java once, on the first start of the new version.
 
 ## The profile
 
@@ -23,10 +33,10 @@ whose row is still loading plays with the default settings.
 | Field | Moved by |
 |---|---|
 | Sessions | Every stored solo run. Duels do not count here. |
-| Total hits, total shots, accuracy | Solo runs **and** duels. A shot is a hit or a miss; an expired target is neither. Accuracy is stored as a percentage so the overall board can sort on it. |
+| Total hits, total shots, accuracy | Solo runs **and** duels, per edition. A shot is a hit or a miss; an expired target is neither. Accuracy is stored as a percentage so the overall board can sort on it. |
 | Total time trained | Solo runs and duels. |
 | Fastest flick, fastest reaction | The lowest non-zero time, from solo runs and duels alike. |
-| Overall rating | Solo runs only: raised by however much the run raised the player's best rating in its drill. |
+| Overall rating | Solo runs only, per edition: the sum of the player's best rating in every drill configured now. It is recomputed from the records as runs land, on join and after a reset, so a drill removed from `config.yml` stops counting and a lost write never leaves it wrong for good. |
 | Matches, wins, losses, win rate | A decided duel. |
 | Rounds, round wins, round losses | A decided duel, from the final series score. |
 | Current streak, best streak | Duel win streak: up by one on a win, back to zero on a loss. |
@@ -36,8 +46,8 @@ whose row is still loading plays with the default settings.
 The profile row also carries a `freeze` column. It is always written as `true` and nothing reads it;
 it stays so an existing table needs no migration.
 
-`/aim profile`, or `/aim stats`, opens the profile screen: rating, accuracy, sessions and duels on the
-head; hits, shots, fastest flick and reaction and time trained; duels played, wins, losses, win rate
+`/aim profile`, or `/aim stats`, opens the profile screen, showing the rating, accuracy, hits and shots
+of the edition the player is on: rating, accuracy, sessions and duels on the head; hits, shots, fastest flick and reaction and time trained; duels played, wins, losses, win rate
 and rounds; the current and best duel streak; and buttons to **Records**, **Sessions**,
 **Duel history** and **Leaderboards**. `/aim profile <player>` opens someone else's, read from the
 database when they are offline. The name has to be one ExyliaLib's player cache knows; otherwise the
@@ -45,12 +55,13 @@ command answers `player-not-found`.
 
 ## Records
 
-One row per player and drill, keyed `uuid:drill`. A run is merged into its row when it **did
-anything**: a hit, a miss, an expired target, a false start or a single tracked tick. A run that ended
-during the countdown stores nothing.
+One row per player, drill and edition, keyed `uuid:drill` on Java and `uuid:drill:bedrock` on Bedrock. A
+run is merged into its row when it **ran its course** and **did anything**: a hit, a miss, an expired
+target, a false start or a single tracked tick.
 
-A run counts whether it ran its course or not. Leaving mid-run, quitting, being taken back by
-ExyliaPracticeCore or pressing **Play again** mid-run all store the run as far as it got.
+A run cut short stores nothing. Leaving mid-run, quitting, being taken back by ExyliaPracticeCore,
+pressing **Play again** or changing drill mid-run all drop the run: a few hundred milliseconds with one
+lucky hit would extrapolate to a record no full run can reach.
 
 | Field | Merge rule |
 |---|---|
@@ -67,8 +78,7 @@ ExyliaPracticeCore or pressing **Play again** mid-run all store the run as far a
 | `bestOnTarget` | The higher percentage of the run spent on target. Only a TRACK drill sets one. |
 | `totalHits`, `totalShots`, `totalTimeMillis` | Added up |
 
-When the rating beats the old best, the difference is added to the profile's overall rating, the
-result screen and chat call it a personal best, and the cached boards are dropped so the player sees
+When the rating beats the old best, the profile's overall rating is recomputed, the result screen and chat call it a personal best, and the cached boards are dropped so the player sees
 themselves on the board they just climbed.
 
 <Callout type="note" title="Duels set no records">
@@ -77,14 +87,16 @@ writes two history rows. It never touches `aim_records`, so it cannot put anybod
 raise their overall rating.
 </Callout>
 
-The **Records** screen, reached from the profile, lists every row the player holds in the order the
+The **Records** screen, reached from the profile, lists every row the player holds on the edition they
+are on, in the order the
 drills appear in `config.yml`; a row for a drill no longer in the file goes last. Each row shows the
 best rating and the size and distance it was set at, the other bests, and the drill's lifetime
 sessions, accuracy and time.
 
 ## Leaderboards
 
-There is one board per **drill**, sorted by one of seven categories, and one **overall** board.
+There is one board per **drill**, sorted by one of seven categories, and one **overall** board, each
+twice: once for Java and once for Bedrock.
 
 | Category | Sorts by | Default name |
 |---|---|---|
@@ -98,7 +110,7 @@ There is one board per **drill**, sorted by one of seven categories, and one **o
 
 Names and icons live in `messages.yml` under `menu.categories`.
 
-A player appears **once** per drill board, since the records are one row per player and drill. A zero
+A player appears **once** per drill board, since the records are one row per player, drill and edition. A zero
 never takes a place: an unset reaction, a combo in a drill that has none, an accuracy from runs below
 the shot floor. So the `reaction` board of a flick drill and the `combo` board of anything but a fight
 stay empty.
@@ -111,7 +123,8 @@ and distance its **rating** was set at, whichever category the board is sorted b
 
 ### The overall board
 
-Everybody by the sum of their best rating in every drill, read from `aim_profiles`. It sorts by
+Everybody by the sum of their best rating in every drill, read from `aim_profiles`. The Bedrock overall
+board lists only players who have played on Bedrock. It sorts by
 `rating` or by `accuracy` (lifetime accuracy) and nothing else: the category row on that board offers
 those two, and asking for another category shows the rating board.
 
@@ -121,10 +134,12 @@ those two, and asking for another category shows the rating board.
 in config order. `/aim leaderboard <drill>` opens that drill's board sorted by `rating`, and
 `/aim leaderboard <drill> <category>` by that category; `overall` works as the drill. An unknown drill
 opens the picker instead of an empty board, and an unknown category falls back to `rating`. Inside, the
-category buttons re-sort the open board in place, and the top three rows wear medals.
+category buttons re-sort the open board in place, and the top three rows wear medals. A board opens on
+the viewer's own edition; the edition button swaps the open board to the other one, keeping its category.
 
 The same boards are readable through PlaceholderAPI, as
-`%exyliaaimtrainer_top_<drill>_<category>_<n>%` and its `_value`. See
+`%exyliaaimtrainer_top_<drill>_<category>_<n>%` and its `_value` for Java, and
+`%exyliaaimtrainer_top_bedrock_<drill>_<category>_<n>%` for Bedrock. See
 [Placeholders](/docs/exyliaaimtrainer/placeholders).
 
 ### The cache
@@ -187,7 +202,7 @@ From `/aimtraineradmin` → **Players**, behind a confirmation. A reset:
 
 - puts the profile back to zero — lifetime numbers, the duel record and the overall rating — while
   **keeping** the player's settings and last picks;
-- deletes every record the player holds, so they leave every drill board;
+- deletes every record the player holds, on both editions, so they leave every drill board;
 - deletes their session history;
 - drops the leaderboard cache.
 

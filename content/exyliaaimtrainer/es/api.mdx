@@ -92,9 +92,14 @@ Un jugador tiene como mucho una petición esperándole. Un reto más nuevo susti
 | `AimPreferences preferences(UUID)` | Los ajustes de un jugador, o los valores por defecto del servidor mientras su fila carga. |
 | `CompletableFuture<List<AimMatchRecord>> history(UUID)` | Los últimos duelos de un jugador, del más reciente al más antiguo, hasta `history.entries`. |
 | `CompletableFuture<List<AimSessionRecord>> sessions(UUID)` | Las últimas sesiones de ejercicio de un jugador, de la más reciente a la más antigua, hasta `history.entries`. |
-| `CompletableFuture<List<AimRecord>> records(UUID)` | Los mejores resultados de un jugador, una fila por ejercicio jugado, sin un orden concreto. |
-| `CompletableFuture<List<AimRecord>> leaderboard(String drillId, AimRecordCategory category)` | La tabla de un ejercicio, una fila por jugador. |
-| `CompletableFuture<List<AimProfile>> overallLeaderboard()` | Todos por la suma de sus mejores ratings en cada ejercicio. |
+| `CompletableFuture<List<AimRecord>> records(UUID)` | Los mejores resultados de un jugador, una fila por ejercicio jugado, sin un orden concreto: sus mejores de Bedrock mientras está en Bedrock, sus mejores de Java en otro caso. |
+| `CompletableFuture<List<AimRecord>> leaderboard(String drillId, AimRecordCategory category)` | La tabla de **Java** de un ejercicio, una fila por jugador. |
+| `CompletableFuture<List<AimProfile>> overallLeaderboard()` | Todos por la suma de sus mejores ratings en cada ejercicio, en la tabla de **Java**. |
+
+La API es anterior al soporte de Bedrock, y cada tabla que sirvió siempre fue la de Java, así que los dos
+métodos de tabla siguen leyendo solo Java; las tablas de Bedrock se alcanzan desde los menús y los
+placeholders `%exyliaaimtrainer_top_bedrock_*%`. Ver
+[Estadísticas](/docs/exyliaaimtrainer/estadisticas#java-y-bedrock).
 
 Que `profile` esté vacío durante una carga es deliberado: quien llama desde el hilo del servidor debería
 degradar en lugar de esperar, y quien puede esperar debería pedir `loadProfile`.
@@ -234,7 +239,7 @@ tuviera ni segura de leer. Llama a `match(UUID)` cuando necesites el estado actu
 |---|---|---|
 | `AimDuelRequestEvent` | Un reto pasó las comprobaciones del plugin y está a punto de enviarse. **Cancelable.** | `from()`, `to()`, `drillId()`, `bestOf()` |
 | `AimTrainingStartEvent` | Se aceptó un ejercicio y se tomó al jugador; está a punto de moverse. | `player()`, `rules()` |
-| `AimTrainingEndEvent` | Una ronda de ejercicio terminó; los números son finales y están a punto de guardarse. | `player()`, `rules()`, `performance()`, `reason()` |
+| `AimTrainingEndEvent` | Una ronda de ejercicio terminó; los números son finales, y se guardan cuando la ronda se completó. | `player()`, `rules()`, `performance()`, `reason()` |
 | `AimTargetHitEvent` | Se acertó un objetivo, en un ejercicio o en un duelo. | `player()`, `millis()`, `grade()`, `reaction()`, `inMatch()` |
 | `AimMatchStartEvent` | Ambos jugadores llegaron a la arena; la cuenta atrás de la primera ronda empieza a continuación. | `match()` |
 | `AimRoundEndEvent` | Se puntuó una ronda. | `match()`, `round()` |
@@ -247,7 +252,8 @@ siete.
 ### AimDuelRequestEvent es la única compuerta
 
 Se dispara cuando el retador ya pasó todas las comprobaciones del plugin —no retarse a sí mismo,
-PacketEvents presente, ninguno de los dos ocupado ni retenido por otro plugin— y antes de que la petición
+fuera de la espera entre peticiones, PacketEvents presente, ninguno de los dos en un duelo, en una cola de
+práctica ni retenido por otro plugin— y antes de que la petición
 se guarde o nadie se entere. Cancelarlo no envía nada: ninguna línea al retador, ninguna petición al
 retado, y `duel(...)` devuelve `false`. Decirle al retador por qué te toca a ti. Una revancha desde la
 pantalla de resultado sigue el mismo camino y también lo dispara. Aceptar una petición no dispara nada
@@ -274,11 +280,11 @@ ni un descanso:
 | `DISCONNECTED` | El jugador se desconectó. |
 | `MATCH_FOUND` | ExyliaPracticeCore le encontró una partida mientras entrenaba. |
 
-Una ronda cortada por una repetición o un cambio de ejercicio se guarda como cualquier otra, bajo el
-ejercicio que era, pero no dispara evento de fin: Play again o Change drill a mitad de ronda son las únicas
-formas en que una ronda termina en silencio.
-Una ronda vacía —ni acierto, ni fallo, ni objetivo caducado, ni salida en falso, ni un solo tick de
-seguimiento— dispara su evento pero no se guarda.
+Solo se guarda una ronda `COMPLETED`, y solo cuando hizo algo: un acierto, un fallo, un objetivo caducado,
+una salida en falso o un tick de seguimiento. Cualquier otro motivo dispara su evento para una ronda que
+después se descarta. Una ronda cortada por una repetición o un cambio de ejercicio también se descarta y no
+dispara evento de fin: Play again o Change drill a mitad de ronda son las únicas formas en que una ronda
+termina en silencio.
 
 ### AimTargetHitEvent
 
@@ -303,7 +309,7 @@ empate se repite con el mismo número de ronda, y tres seguidos cancelan el duel
 fijado. Se dispara *antes* de escribir perfiles e historial, que ocurre de forma asíncrona después: lee el
 ganador del evento, no de los perfiles. Con `cancelled()` en `true`, `winner()` es `null` y no se guarda
 nada: lo detuvo un administrador o `cancelMatch`, hubo tres empates seguidos, no se pudo mover a un jugador
-a la arena, o el servidor se está deteniendo.
+a la arena —incluido un teletransporte cancelado o fallido—, o el servidor se está deteniendo.
 
 ```java
 @EventHandler

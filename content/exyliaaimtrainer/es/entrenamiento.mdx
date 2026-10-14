@@ -11,7 +11,7 @@ y cómo una partida se convierte en un número está en [Ejercicios](/docs/exyli
 
 ## Empezar un ejercicio
 
-Tres formas de entrar:
+Cuatro formas de entrar:
 
 - `/aim train <drill>`. Sin ejercicio arranca `training.default-drill` (`gridshot` por defecto), o el
   primer ejercicio de `config.yml` si ese ya no existe.
@@ -32,6 +32,9 @@ Antes de mover nada, el inicio se rechaza, con un mensaje, cuando:
 | El jugador espera en una cola de ExyliaPracticeCore y practice no lo presta | Practice cannot lend you right now. |
 | Otro plugin tiene al jugador | You are busy in `<plugin>`. |
 | Otro plugin desaconseja tomar al jugador | Not right now: `<reason>`. |
+
+Un segundo inicio, repetición o cambio de ejercicio en los dos segundos siguientes al anterior se ignora
+sin mensaje, así un bucle de empezar y salir no puede machacar la arena.
 
 <Callout type="note" title="Sin arena no hay ejercicio">
 Un ejercicio siempre se juega en una arena. Sin ninguna lista el jugador se rechaza antes de reclamarlo,
@@ -54,7 +57,9 @@ presta, le guarda el sitio en la cola y lo pide de vuelta cuando encuentra una p
     Entra en un grupo propio: no ve a nadie, nadie lo ve y no se le puede tocar desde fuera.
   </Step>
   <Step title="La arena">
-    Se elige la arena lista que aloja a menos jugadores y se le teletransporta a su spawn.
+    Se elige la arena lista que aloja a menos jugadores y se le teletransporta a su spawn. Si ese
+    teletransporte se cancela o falla, el ejercicio nunca empieza: al jugador se le devuelve donde
+    estaba y lee "You could not be taken to the arena. The drill was cancelled."
   </Step>
   <Step title="Se le viste al llegar">
     Solo cuando ya está en la arena se vacía su inventario y su modo de juego pasa a **aventura**. El orden
@@ -93,7 +98,7 @@ que no está en un ejercicio, incluido quien está en un duelo. Ver
 Un ejercicio que llega a su fin no manda a nadie a casa. Por orden:
 
 1. Suena el efecto `session-complete` ("TIME").
-2. La partida se guarda, si pasó algo en ella.
+2. La partida se guarda, si pasó algo en ella. Solo se guarda una partida que llegó a su fin.
 3. Se abre la pantalla **session summary**: rating, puntuación, dificultad, duración, ping, aciertos,
    fallos, precisión de tiro, centrado, rachas, tiempos de flick y de reacción, tiempo sobre el objetivo y
    la diferencia con su mejor marca en ese ejercicio.
@@ -120,7 +125,7 @@ cualquier otro valor que eligiera el dueño se conserva.
 ### Repetir
 
 Repetir es reiniciar del todo. Haga lo que haga la sesión — descansar, contar hacia atrás o ir por la
-mitad de una partida — la partida actual se detiene y se guarda, la cuenta atrás se descarta y empieza
+mitad de una partida — la partida actual se detiene y se descarta sin guardarse, la cuenta atrás se descarta y empieza
 una nueva. La nueva partida lee los ajustes **actuales** del jugador, así que un cambio hecho en
 `/aim settings` mientras descansa se aplica, y sortea una secuencia aleatoria nueva.
 
@@ -131,7 +136,7 @@ dentro de una sesión no rechaza al jugador por estar ocupado: cambia la sesión
 arena, esté descansando, en la cuenta atrás o a mitad de partida. Funciona como Play again con otro
 ejercicio:
 
-- la partida en curso se detiene y se guarda bajo el ejercicio que era;
+- la partida en curso se detiene y se descarta, sin guardarse;
 - el nuevo ejercicio pasa a ser la última elección del jugador en su perfil;
 - el chat lo confirma: "Drill started: `<drill>` · ×`<difficulty>` difficulty.";
 - empieza una nueva cuenta atrás, con los ajustes actuales del jugador.
@@ -155,11 +160,9 @@ un ítem real, así que nada se puede tirar, mover ni sacar de la arena.
 Los slots 0 a 4 quedan para el inventario real, porque el slot 0 lleva el arma del ejercicio cuando tiene
 una. Toda la capa se desactiva con `hud.hotbar: false`.
 
-<Callout type="warning" title="menus/hotbar.yml se reescribe en cada arranque y cada recarga">
-El archivo se copia desde el jar cada vez que el plugin arranca y cada vez que recarga, para que un botón
-añadido en una versión llegue a los servidores que ya lo tienen. Una edición no sobrevive. Para quitar la
-capa usa `hud.hotbar`.
-</Callout>
+Los botones viven en `menus/hotbar.yml`, dentro de la carpeta `lang/` del plugin. El archivo es tuyo,
+como las pantallas de jugador: una edición sobrevive a un reinicio y a una recarga, y un botón añadido en
+una versión sigue llegando como clave nueva. Ver [Menús](/docs/exyliaaimtrainer/menus#la-hotbar).
 
 ## Cómo termina una sesión
 
@@ -168,31 +171,34 @@ capa usa `hud.hotbar`.
 | `COMPLETED` | El ejercicio llegó a su fin. La sesión sigue en descanso. | La pantalla de resumen y la línea de mejor marca. |
 | `LEFT` | `/aim leave`, un botón **Leave**, o se acabó el descanso. | "Drill stopped." si se cortó una partida; `/aim leave` además dice "You left." |
 | `DISCONNECTED` | El jugador se desconectó. | Nada. |
-| `CANCELLED` | Un cambio de mundo, un teletransporte que no hizo el plugin (una perla de ender, una fruta de chorus), una muerte causada por otro plugin, otro plugin reclamando al jugador, un administrador deteniendo la sesión, la arena desactivada o borrada, el plugin deshabilitándose. | Nada; se le manda a casa. |
+| `CANCELLED` | Salir del mundo de la arena, un teletransporte que no hizo el plugin (una perla de ender, una fruta de chorus), una muerte causada por otro plugin, otro plugin reclamando al jugador, un administrador deteniendo la sesión, la arena desactivada o borrada, el plugin deshabilitándose. | Nada; se le manda a casa. |
 | `MATCH_FOUND` | ExyliaPracticeCore le encontró una partida mientras entrenaba. | "A practice match was found. Good luck!" |
 
-Una partida se guarda siempre que **haya pasado algo**: un acierto, un fallo, un objetivo caducado, una
-salida en falso o un tick de tracking. Eso vale también para una partida cortada: sus números llegan al
-perfil, a los récords del ejercicio y al historial igual que una terminada, solo que sin el resumen. Salir
-a mitad de partida ni anula una buena ni esconde una mala. Ver
-[Estadísticas](/docs/exyliaaimtrainer/estadisticas).
+Solo se guarda una partida que llegó a su fin, y solo si **pasó algo** en ella: un acierto, un fallo, un
+objetivo caducado, una salida en falso o un tick de tracking. Una partida cortada —al salir, al repetir, al
+cambiar de ejercicio, por una partida de practice, por un administrador o por cualquier otra cosa de
+arriba— no llega ni al perfil, ni a los récords del ejercicio, ni al historial: unos cientos de
+milisegundos con un acierto afortunado extrapolarían a un récord que ninguna partida completa puede
+alcanzar. Ver [Estadísticas](/docs/exyliaaimtrainer/estadisticas).
 
 El `AimTrainingEndEvent` lleva los mismos motivos; ver [API](/docs/exyliaaimtrainer/api).
 
 ## Cómo se juzga un clic
 
-Nada de un objetivo existe en el servidor. Cada uno son dos entidades enviadas solo a su jugador: un block
-display que se ve y una hitbox de interacción montada encima que es la que se golpea. Nadie más los ve, el
-servidor no los tickea y no se guarda nada.
+Nada de un objetivo existe en el servidor. En Java cada uno son dos entidades enviadas solo a su jugador:
+un block display que se ve y una hitbox de interacción montada encima que es la que se golpea. Un cliente
+de Bedrock no dibuja ninguna de las dos, así que el objetivo de un jugador de Bedrock es un slime tan ancho
+como el objetivo (ver [Compatibilidad](/docs/exyliaaimtrainer/compatibilidad#jugadores-de-bedrock)). Nadie
+más los ve, el servidor no los tickea y no se guarda nada.
 
 | Qué | Cómo se decide |
 |---|---|
-| Un acierto | El propio cliente del jugador hace la misma prueba de hitbox que hace contra un rival de PvP y avisa de un ataque sobre la hitbox. El acierto se juzga donde el jugador vio el objetivo, a sus propios FPS. Ese paquete de ataque se descarta, así el servidor nunca ve un clic sobre una entidad que no tiene. |
+| Un acierto | El propio cliente del jugador hace la misma prueba de hitbox que hace contra un rival de PvP y avisa de un ataque sobre la hitbox. El acierto se juzga donde el jugador vio el objetivo, a sus propios FPS. Ese paquete de ataque se descarta, así el servidor nunca ve un clic sobre una entidad que no tiene. Un ataque que el cliente no pudo haber hecho se ignora y su golpe se juzga por sí solo: fuera del alcance de la pelea o, en Java, con la mira lejos del objetivo. La mirada que se comprueba es la que llegó con el clic, no hacia donde giró el jugador un tick después. |
 | Un fallo | Un golpe que no vino con ningún ataque. Antes de llamarlo fallo, el servidor lanza su propio rayo desde los ojos por la última rotación del jugador; si ese rayo cruza un objetivo, es un acierto. Solo si no, es fallo. |
 | Un objetivo en movimiento | Se juzga donde el cliente lo dibujó: se guarda cada posición enviada y la comprobación mira hacia atrás el ping del jugador más los dos ticks en que el cliente suaviza un movimiento. |
 | Alcance | 64 bloques en todo ejercicio salvo una pelea, dado como atributo temporal que se quita al salir. Una pelea `COMBO` se juega a los tres bloques del juego. |
 | Una pelea | Un golpe sobre un objetivo que sigue rojo del anterior (medio segundo) no hace nada, como en el juego. En una pelea 1.9 cada golpe, acierte o no, y cada cambio de slot reinician el cooldown de ataque, y un acierto con un golpe cargado al 90% o menos es **rushed** y cuenta como fallo. |
-| Una reacción | Se mide desde que se envió la luz, **restando el ping del jugador**, para que dos jugadores con conexiones distintas se califiquen por sus manos. |
+| Una reacción | Se mide desde que se envió la luz, **restando el ping del jugador**, para que dos jugadores con conexiones distintas se califiquen por sus manos. El ping que se resta tiene un tope, y lo que queda por debajo de un mínimo humano es una salida en falso. |
 | Tracking | Se comprueba cada tick con la rotación que el cliente envió por última vez, contra donde el cliente dibujó el objetivo, perdonando medio tick a cada lado. |
 | Centrado | El rayo del servidor a través del objetivo dice lo centrado que fue un acierto. Si el rayo no lo toca porque la mira se estaba moviendo, ese acierto queda sin medir en vez de contarse como borde. |
 
@@ -207,6 +213,7 @@ jugadores de fuera no se les toca.
 | Qué | Regla |
 |---|---|
 | Daño | Se cancela todo daño al jugador, y también cualquier ataque suyo contra lo que sea. |
+| Al entrar y al salir | Entre el reclamo y la llegada a la arena, y entre la salida y la llegada a casa, el jugador sigue llevando sus ítems reales, así que el daño, el hambre, tirar, recoger, colocar y romper bloques, usar un ítem y abrir un cofre o el cofre de ender también se rechazan entonces. |
 | Hambre | Congelada. |
 | Ítems | Tirar y recoger se cancelan. |
 | Bloques | Romper y colocar se cancelan. |
@@ -215,7 +222,7 @@ jugadores de fuera no se les toca.
 | Comandos | Solo funcionan las etiquetas de `training.allowed-commands`. Cualquier otra responde "Leave with /aim leave before using that command." El prefijo `plugin:comando` se quita antes de comprobar. |
 | Modo de juego | Aventura, llegue como llegue. El modo original vuelve con la instantánea. |
 | Movimiento | **Congelado** durante la cuenta atrás y el ejercicio: se descartan los paquetes de movimiento del cliente. Girar sigue funcionando y es lo que apunta. |
-| Salir por otros medios | Un teletransporte que no hizo el plugin o un cambio de mundo termina el ejercicio, o hace abandonar el duelo. |
+| Salir por otros medios | Un teletransporte que no hizo el plugin termina el ejercicio, o hace abandonar el duelo. Salir del mundo de la arena también, y el jugador se queda en el mundo al que fue en lugar de volver a casa. |
 | Una muerte de otro origen | Si otro plugin mata igualmente al jugador, se conserva el inventario, se vacían los drops, la consola avisa y se saca al jugador. |
 
 <Callout type="note" title="Quedarse quieto no es un ajuste">
@@ -253,7 +260,8 @@ casa, se le devuelven inventario y modo de juego **allí**, y el reclamo se libe
 ningún otro modo lo vista mientras sus cosas siguen de camino.
 
 Casa es `arena.return-location` si está puesta; si no, el punto exacto del que salió; si no, el spawn de
-su mundo. Ver [Arenas](/docs/exyliaaimtrainer/arenas).
+su mundo. Un jugador que salió del mundo de la arena por su cuenta —un portal, un warp— se restaura donde
+fue. Ver [Arenas](/docs/exyliaaimtrainer/arenas).
 
 <Callout type="note" title="Tras un crash">
 Una instantánea que dejó un reinicio se restaura en la siguiente conexión del jugador, y se le devuelve a

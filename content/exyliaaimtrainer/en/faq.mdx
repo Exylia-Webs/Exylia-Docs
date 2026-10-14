@@ -29,7 +29,8 @@ database — the console prints `Loaded N arenas and M drills` once they have.
 
 ## "Finish what you are doing first."
 
-The player is already in a drill or a duel. "You are busy in `<plugin>`" means another Exylia plugin holds
+The player is already in a drill or a duel (or, for a duel request, already in a duel: a drill does not
+stop them challenging). "You are busy in `<plugin>`" means another Exylia plugin holds
 them — an FFA arena, an event, a practice match — and "Not right now: `<reason>`" means nobody holds them
 but a plugin advises against it, in its own words.
 
@@ -37,7 +38,10 @@ but a plugin advises against it, in its own words.
 
 "`<name>` is busy right now" means another plugin, or this one, holds that player. "`<name>` is
 `<reason>`" means nobody holds them but a plugin advises against it — this plugin's own reason is
-"answering a duel request", given while a request sits open on either side of them.
+"answering a duel request", given while a request sits open on either side of them. "`<name>` is waiting
+in a queue" means they are in an ExyliaPracticeCore queue: a queued player cannot duel, even while
+training. "Wait `<time>` before challenging again" is `match.duel-request-cooldown`, fifteen seconds by
+default, counted from the last request that reached somebody.
 
 A player can only have one request waiting for them; a newer challenge replaces the older one. Requests
 expire after `match.duel-request-expiry`, thirty seconds by default, and both sides are told.
@@ -52,7 +56,9 @@ crosshair before it is called a miss.
 Latency is accounted for where it would otherwise cost the player:
 
 - **Reaction** times have the player's ping subtracted: the light took half a round trip to reach them and
-  the click half a round trip to come back.
+  the click half a round trip to come back. The correction is capped at
+  `scoring.max-ping-correction-millis` (100 ms) and never more than half the time, because the client
+  controls its ping; a reaction still under `min-reaction-millis` (80 ms) is a false start.
 - **Moving targets** — strafing flicks, tracking and fights — are judged where the client drew them when
   the click or the aim left it: the server keeps every position it sent and rewinds by the ping plus the two
   ticks the client smooths a move over.
@@ -69,6 +75,10 @@ In a fight, a hit on a target still red from the last one — ten ticks, as in t
 (`attack-cooldown: true`) every swing, hit or miss, and every change of held slot starts the cooldown over,
 and a hit on a swing charged no more than 90% is **rushed** and counts as a miss.
 
+On a strafing flick target, which never leaves, two hits less than 250 ms apart count once, so holding the
+button on it scores nothing extra. A hit the client reports while the crosshair is nowhere near the target,
+or a fighter out of reach, is ignored.
+
 ## What is the difference between score and rating?
 
 The **score** is the drill's own number: points per minute for flicks and fights, a reaction score for
@@ -84,8 +94,8 @@ and what the overall board adds up, so nobody climbs by making their targets eas
 
 No. Every player is frozen for the drill, since it measures their hands and not their legs. While in a
 drill or a duel they can only run the commands in `training.allowed-commands` — by default `aim`,
-`aimtrainer`, `at`, `msg`, `r`, `tell` and `w`. An ender pearl, a teleport from another plugin or a world
-change takes them out of the session.
+`aimtrainer`, `at`, `msg`, `r`, `tell` and `w`. An ender pearl, a teleport from another plugin or leaving
+the arena's world takes them out of the session.
 
 ## A player stays in the arena after the drill ends
 
@@ -125,7 +135,9 @@ once every round has been played; when it does, the winner of the last round tak
 
 A board never places a zero, and there is one row per player. An accuracy only counts from sessions of at
 least `leaderboard.accuracy-min-shots` shots, twenty by default. Duels set no records at all: only drill
-sessions reach the boards and the overall rating.
+sessions that ran their course reach the boards and the overall rating; a run cut short is not stored.
+Java and Bedrock have separate boards, and a board opens on the viewer's own edition: a Bedrock player is
+on the Bedrock boards, reached with the edition button.
 
 The board is cached for `leaderboard.cache-seconds`, five minutes by default. Beating a best rating drops
 the cache at once, so a player who just set one sees themselves; a better accuracy or streak without a
@@ -156,12 +168,21 @@ That is `chat.isolation`, on by default: whoever is in a drill or a duel reads t
 and the rest of the server reads none of it. Set it to `false` to leave chat as the server's chat plugin
 delivers it.
 
-## My changes to the hotbar menu disappear
+## My edits to a menu or a message do not show
 
-`menus/hotbar.yml` is written from the jar on every start and every reload, over whatever is there. The
-other player menus follow the release while you have not touched them; an edited one is kept and the new
-version lands beside it as a `.new` file. `menus/admin/` is rewritten on every start. See
+Menus, messages and sidebars live under `lang/<code>/`, one folder per language, and the plugin reads the
+folder of the language `config.yml` names: `language: default` follows ExyliaLib's language. Edit the
+files of the language in use, or set `language` to the one you edited. A server updated from a version
+before languages has its old files in `lang/custom/` and `language: custom`. The player menus and the
+hotbar keep your edits across updates; `menus/admin/` is rewritten on every start and reload. See
+[Configuration · language](/docs/exyliaaimtrainer/configuration#language) and
 [Menus](/docs/exyliaaimtrainer/menus).
+
+## Can Bedrock players play?
+
+Yes, through Geyser and Floodgate. Their targets are drawn as slimes, which Bedrock can show, and they are
+ranked on Bedrock boards of their own: touch and controller aim is not the same contest as a mouse. See
+[Compatibility](/docs/exyliaaimtrainer/compatibility#bedrock-players).
 
 ## My PlaceholderAPI placeholders show up unresolved
 

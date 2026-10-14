@@ -26,6 +26,8 @@ scoring:
   false-start-penalty-millis: 150
   reaction-reference-millis: 250
   reaction-scale: 1000
+  max-ping-correction-millis: 100
+  min-reaction-millis: 80
   tracking-scale: 10
   combo-points: 5
   size-exponent: 1.0
@@ -80,8 +82,9 @@ Sobre el objetivo el 62.5% de la sesión: **625**. Los menús escriben la puntua
 
 <Callout type="note" title="Segundos jugados, no segundos configurados">
 La puntuación por minuto divide por lo que duró realmente la partida. Un ejercicio completado duró su
-`duration`. Una partida cortada — el jugador se fue, repitió o lo sacaron para una partida de practice — se
-guarda igualmente, puntuada sobre el tiempo que duró.
+`duration`. Una partida cortada — el jugador se fue, repitió o lo sacaron para una partida de practice — no se
+guarda: unos cientos de milisegundos con un acierto afortunado extrapolarían a un récord que ninguna
+partida completa puede alcanzar.
 </Callout>
 
 ## Dificultad
@@ -90,7 +93,9 @@ guarda igualmente, puntuada sobre el tiempo que duró.
 dificultad = weight × (1 / multiplicador de tamaño) ^ size-exponent × (multiplicador de distancia) ^ distance-exponent
 ```
 
-Limitada a `min-difficulty..max-difficulty` y redondeada a dos decimales. `weight` es el del ejercicio; los
+Limitada a `min-difficulty..max-difficulty` y redondeada a dos decimales. Un ejercicio `REACTION` es la
+excepción: su objetivo está justo delante y no necesita puntería, así que ni el tamaño ni la distancia lo
+hacen más difícil, y su dificultad es solo el peso del ejercicio, limitada igual. `weight` es el del ejercicio; los
 dos multiplicadores son los [ajustes](/docs/exyliaaimtrainer/ajustes) del jugador. Un multiplicador por
 debajo de `0.05` cuenta como `0.05`.
 
@@ -125,8 +130,9 @@ quien dispara a objetivos a mitad de tamaño al doble de distancia supera a quie
 de cerca con la misma puntuación, y nadie sube haciendo sus objetivos fáciles.
 
 Cuando el rating de una sesión supera el mejor del jugador en ese ejercicio, es un **récord personal**: el
-récord lo guarda, junto con el tamaño y la distancia con los que se logró, y lo que subió se suma al
-**rating general** del jugador, la suma de su mejor rating en cada ejercicio. Cada otro mejor del récord —
+récord lo guarda, junto con el tamaño y la distancia con los que se logró, y el **rating general** del
+jugador —la suma de su mejor rating en cada ejercicio configurado ahora, en su edición— se recalcula desde
+sus récords. Cada otro mejor del récord —
 puntuación, precisión de tiro, racha, aciertos, combo, reacción — se guarda por su cuenta, haga lo que haga el
 rating. Las tablas y sus categorías están en [Estadísticas](/docs/exyliaaimtrainer/estadisticas).
 
@@ -163,7 +169,7 @@ Qué se mide depende del tipo:
 |---|---|---|
 | `FLICK` | Desde el acierto anterior hasta este. El primer acierto de una partida no tiene nada que medir y no se califica. | `flick` |
 | `COMBO` | Desde el golpe anterior que conectó hasta este. El primero no se califica. | `flick` |
-| `REACTION` | Desde la luz hasta el golpe, menos el ping del jugador. | `reaction` |
+| `REACTION` | Desde la luz hasta el golpe, menos el ping del jugador corregido como se explica abajo. | `reaction` |
 | `TRACK` | Nada: el tracking no tiene golpes que calificar. | — |
 
 Un grado cuenta para los totales de grados de la pantalla de resultado y dispara el feedback de abajo. No
@@ -175,8 +181,20 @@ toca la puntuación, el rating ni las tablas.
 
 Una reacción se corrige con el ping del jugador: la luz tardó medio viaje de ida y vuelta en llegarle y el
 clic medio viaje en volver, así que se quitan ambas mitades y dos jugadores con conexiones distintas se
-califican por sus manos. El ping se lee al empezar la partida y de nuevo cada segundo. Una reacción corregida
-nunca baja de 1 ms.
+califican por sus manos. El ping se lee al empezar la partida y de nuevo cada segundo.
+
+El cliente controla su ping —un keepalive retrasado lo infla—, así que la corrección tiene un tope:
+
+```text
+correction = min(ping, max-ping-correction-millis, raw reaction / 2)
+reaction   = raw reaction − correction
+```
+
+Con los valores por defecto se quitan como mucho 100 ms, y nunca más de la mitad del tiempo bruto. Una
+reacción que, ya corregida, sigue siendo más rápida que `min-reaction-millis` (80 ms) es una adivinanza, no
+una mano: cuenta como **salida en falso**, reproduce el efecto `false-start`, y la luz se gasta y se vuelve a
+armar. Un clic que llegó antes de la luz, aunque el tick que la encendió corriera primero, también es una
+salida en falso.
 
 Los objetivos móviles se juzgan igual. Las comprobaciones propias del plugin sobre un objetivo que hace
 strafe o un luchador — el rayo que lanza tras un swing, la precisión de un golpe y cada comprobación de
@@ -196,6 +214,10 @@ Un **fallo** es cualquiera de:
   propio rayo por la mira, así un cliente cuyo alcance nunca creció sigue haciendo clic donde mira.
 - En un ejercicio `ordered`, un golpe a un objetivo que no está encendido.
 - En una pelea de 1.9, un golpe precipitado.
+
+Sobre un objetivo de flick en movimiento, dos golpes separados por menos de 250 ms cuentan una vez: el
+segundo no es ni acierto ni fallo, así que un autoclicker mantenido sobre un objetivo que nunca se va no
+suma nada extra.
 
 Un fallo resta `miss-penalty`, rompe la racha y termina el combo. Un swing en un ejercicio `TRACK` no es
 ninguna de las dos cosas.
@@ -236,7 +258,8 @@ La precisión se muestra en la pantalla de resultado. No forma parte de la puntu
 
 ## Feedback
 
-Cómo se ve y suena un golpe es un efecto de ExyliaLib bajo `feedback`. Cada grado tiene un `effect` y una
+Cómo se ve y suena un golpe es un efecto de ExyliaLib bajo `feedback` en `messages.yml`, donde se
+traduce con el resto del texto del plugin. Cada grado tiene un `effect` y una
 línea de `chat`, vacía para ninguna. Por defecto un grado no muestra título, escribe la action bar de abajo
 durante 1.5 segundos y reproduce `ENTITY_EXPERIENCE_ORB_PICKUP` a volumen 0.7 con un tono que baja con el
 grado:
@@ -256,7 +279,7 @@ golpe activados.
 |---|---|---|
 | `miss` | Un clic que no dio a nada | Action bar `{error}✘ MISS {muted}· {letters}%accuracy%% accuracy`, sonido `ENTITY_PLAYER_ATTACK_NODAMAGE` 1.0 · 1.0 |
 | `expired` | Un objetivo `FLICK` se quedó sin tiempo | Action bar `{warning}⌛ EXPIRED {muted}· {letters}%accuracy%% accuracy`, sonido `BLOCK_NOTE_BLOCK_SNARE` 0.6 · 0.7 |
-| `false-start` | Un clic en `REACTION` antes de la luz | Action bar `{error}✘ TOO EARLY {muted}· {letters}wait for the light`, sonido `ENTITY_VILLAGER_NO` 0.8 · 0.9 |
+| `false-start` | Un clic en `REACTION` antes de la luz, o más rápido que `min-reaction-millis` | Action bar `{error}✘ TOO EARLY {muted}· {letters}wait for the light`, sonido `ENTITY_VILLAGER_NO` 0.8 · 0.9 |
 | `armed` | Un objetivo `REACTION` se encendió | Sonido `BLOCK_NOTE_BLOCK_PLING` 1.0 · 1.8 |
 | `rushed` | Un golpe `COMBO` dentro del cooldown | Action bar `{error}✘ RUSHED {muted}· {letters}wait for the cooldown`, sonido `ENTITY_PLAYER_ATTACK_WEAK` 1.0 · 1.0 |
 

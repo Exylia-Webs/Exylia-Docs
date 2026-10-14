@@ -31,7 +31,8 @@ base de datos: la consola imprime `Loaded N arenas and M drills` cuando ya está
 
 ## "Finish what you are doing first."
 
-El jugador ya está en un ejercicio o en un duelo. "You are busy in `<plugin>`" significa que otro plugin de
+El jugador ya está en un ejercicio o en un duelo (o, para una petición de duelo, ya está en un duelo: un
+ejercicio no le impide retar). "You are busy in `<plugin>`" significa que otro plugin de
 Exylia lo tiene —una arena de FFA, un evento, una partida de practice— y "Not right now: `<reason>`"
 significa que nadie lo tiene pero un plugin lo desaconseja, con sus propias palabras.
 
@@ -39,7 +40,11 @@ significa que nadie lo tiene pero un plugin lo desaconseja, con sus propias pala
 
 "`<name>` is busy right now" significa que otro plugin, o este, tiene a ese jugador. "`<name>` is
 `<reason>`" significa que nadie lo tiene pero un plugin lo desaconseja: el motivo de este plugin es
-"answering a duel request", que da mientras haya una petición abierta en cualquiera de sus dos lados.
+"answering a duel request", que da mientras haya una petición abierta en cualquiera de sus dos lados. "`<name>` is waiting
+in a queue" significa que está en una cola de ExyliaPracticeCore: un jugador en cola no puede batirse en
+duelo, ni siquiera mientras entrena. "Wait `<time>` before challenging again" es
+`match.duel-request-cooldown`, quince segundos por defecto, contados desde la última petición que llegó a
+alguien.
 
 Un jugador solo puede tener una petición esperándole; un reto más nuevo sustituye al anterior. Las
 peticiones caducan tras `match.duel-request-expiry`, treinta segundos por defecto, y se avisa a ambos lados.
@@ -54,7 +59,10 @@ servidor a través de la mira antes de contarlo como fallo.
 La latencia se compensa donde de otro modo le costaría al jugador:
 
 - A los tiempos de **reacción** se les resta el ping del jugador: la luz tardó medio viaje de ida y vuelta en
-  llegarle y el clic medio viaje en volver.
+  llegarle y el clic medio viaje en volver. La corrección tiene un tope de
+  `scoring.max-ping-correction-millis` (100 ms) y nunca pasa de la mitad del tiempo, porque el cliente
+  controla su ping; una reacción que sigue por debajo de `min-reaction-millis` (80 ms) es una salida en
+  falso.
 - Los **objetivos en movimiento** —flicks que hacen strafe, seguimiento y combates— se juzgan donde el
   cliente los dibujaba cuando salió el clic o la mira: el servidor guarda cada posición que envió y rebobina
   el ping más los dos ticks con que el cliente suaviza un movimiento.
@@ -70,6 +78,10 @@ En un combate, un golpe a un objetivo aún rojo del anterior —diez ticks, como
 ejercicios 1.8 y 1.9 por igual, así que spamear en un combate 1.8 no acierta más que hacer clics limpios. En
 un ejercicio 1.9 (`attack-cooldown: true`) cada golpe, acierte o falle, y cada cambio de slot reinicia el
 cooldown, y un acierto con un golpe cargado al 90% o menos es **apresurado** y cuenta como fallo.
+
+Sobre un objetivo de flick que hace strafe, que nunca se va, dos aciertos separados por menos de 250 ms
+cuentan una vez, así que mantener el botón pulsado sobre él no suma nada extra. Un acierto del que avisa el
+cliente con la mira lejos del objetivo, o un luchador fuera de alcance, se ignora.
 
 ## ¿Qué diferencia hay entre puntuación y rating?
 
@@ -87,8 +99,8 @@ y lo que suma la tabla general, así que nadie sube poniéndose objetivos fácil
 
 No. Todo jugador queda inmóvil durante el ejercicio, que mide sus manos y no sus piernas. Dentro de un
 ejercicio o un duelo solo puede usar los comandos de `training.allowed-commands`: por defecto `aim`,
-`aimtrainer`, `at`, `msg`, `r`, `tell` y `w`. Una perla de ender, un teletransporte de otro plugin o un
-cambio de mundo lo saca de la sesión.
+`aimtrainer`, `at`, `msg`, `r`, `tell` y `w`. Una perla de ender, un teletransporte de otro plugin o salir
+del mundo de la arena lo saca de la sesión.
 
 ## Un jugador se queda en la arena al terminar el ejercicio
 
@@ -129,7 +141,9 @@ una vez jugadas todas las rondas; cuando pasa, el ganador de la última ronda se
 
 Una tabla nunca coloca un cero, y hay una fila por jugador. Una precisión solo cuenta desde sesiones de al
 menos `leaderboard.accuracy-min-shots` disparos, veinte por defecto. Los duelos no fijan ningún récord: solo
-las sesiones de ejercicio llegan a las tablas y al rating general.
+las sesiones de ejercicio que llegaron a su fin llegan a las tablas y al rating general; una partida
+cortada no se guarda. Java y Bedrock tienen tablas separadas, y una tabla se abre en la edición de quien
+mira: un jugador de Bedrock está en las tablas de Bedrock, a las que se llega con el botón de edición.
 
 La tabla se guarda en caché `leaderboard.cache-seconds`, cinco minutos por defecto. Superar un mejor rating
 vacía la caché al momento, así que quien acaba de conseguirlo se ve; una mejor precisión o racha sin mejor
@@ -160,12 +174,21 @@ Es `chat.isolation`, activado por defecto: quien está en un ejercicio o un duel
 resto del servidor no lee nada de él. Pon `false` para dejar el chat tal como lo entrega el plugin de chat
 del servidor.
 
-## Mis cambios en el menú de la hotbar desaparecen
+## Mis cambios en un menú o un mensaje no se ven
 
-`menus/hotbar.yml` se escribe desde el jar en cada arranque y en cada recarga, encima de lo que haya. Los
-demás menús de jugador siguen a la versión mientras no los hayas tocado; uno editado se conserva y la versión
-nueva queda al lado como archivo `.new`. `menus/admin/` se reescribe en cada arranque. Ver
+Los menús, los mensajes y las sidebars viven bajo `lang/<code>/`, una carpeta por idioma, y el plugin lee
+la carpeta del idioma que nombra `config.yml`: `language: default` sigue el idioma de ExyliaLib. Edita los
+archivos del idioma en uso, o pon en `language` el que editaste. Un servidor actualizado desde una versión
+anterior a los idiomas tiene sus archivos antiguos en `lang/custom/` y `language: custom`. Los menús de
+jugador y la hotbar conservan tus cambios entre actualizaciones; `menus/admin/` se reescribe en cada
+arranque y recarga. Ver [Configuración · language](/docs/exyliaaimtrainer/configuracion#language) y
 [Menús](/docs/exyliaaimtrainer/menus).
+
+## ¿Pueden jugar los jugadores de Bedrock?
+
+Sí, a través de Geyser y Floodgate. Sus objetivos se dibujan como slimes, que Bedrock puede mostrar, y se
+clasifican en tablas de Bedrock propias: apuntar con táctil o mando no es la misma competición que con
+ratón. Ver [Compatibilidad](/docs/exyliaaimtrainer/compatibilidad#jugadores-de-bedrock).
 
 ## Mis placeholders de PlaceholderAPI aparecen sin resolver
 

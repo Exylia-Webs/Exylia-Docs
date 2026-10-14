@@ -25,6 +25,8 @@ scoring:
   false-start-penalty-millis: 150
   reaction-reference-millis: 250
   reaction-scale: 1000
+  max-ping-correction-millis: 100
+  min-reaction-millis: 80
   tracking-scale: 10
   combo-points: 5
   size-exponent: 1.0
@@ -79,8 +81,9 @@ On target 62.5% of the session: **625**. Menus write the score with `pts`.
 
 <Callout type="note" title="Seconds played, not seconds configured">
 The per-minute score divides by the time the run actually lasted. A completed drill lasted its
-`duration`. A run cut short — the player left, replayed or was pulled into a practice match — is still
-stored, scored over the time it ran.
+`duration`. A run cut short — the player left, replayed or was pulled into a practice match — is not
+stored at all: a few hundred milliseconds with one lucky hit would extrapolate to a record no full run can
+reach.
 </Callout>
 
 ## Difficulty
@@ -89,7 +92,9 @@ stored, scored over the time it ran.
 difficulty = weight × (1 / size multiplier) ^ size-exponent × (distance multiplier) ^ distance-exponent
 ```
 
-Clamped to `min-difficulty..max-difficulty` and rounded to two decimals. `weight` is the drill's; the two
+Clamped to `min-difficulty..max-difficulty` and rounded to two decimals. A `REACTION` drill is the
+exception: its target sits dead ahead and needs no aim, so neither size nor distance makes it harder, and
+its difficulty is the drill's weight alone, clamped the same way. `weight` is the drill's; the two
 multipliers are the player's [settings](/docs/exyliaaimtrainer/settings). A multiplier below `0.05` counts
 as `0.05`.
 
@@ -123,8 +128,8 @@ shoots half-size targets at twice the distance outranks one who shoots big ones 
 score, and nobody climbs by making their targets easy.
 
 When a session's rating beats the player's best for that drill, it is a **personal best**: the record keeps
-it, together with the size and distance it was set at, and what it rose by is added to the player's
-**overall rating**, the sum of their best rating in every drill. Every other best on the record — score,
+it, together with the size and distance it was set at, and the player's **overall rating** — the sum of
+their best rating in every drill configured now, on their edition — is recomputed from their records. Every other best on the record — score,
 accuracy, streak, hits, combo, reaction — is kept on its own, whatever the rating did. The boards and their
 categories are on [Statistics](/docs/exyliaaimtrainer/stats).
 
@@ -161,7 +166,7 @@ What is timed depends on the kind:
 |---|---|---|
 | `FLICK` | From the previous hit to this one. The first hit of a run has nothing to time and is not graded. | `flick` |
 | `COMBO` | From the previous hit that landed to this one. The first is not graded. | `flick` |
-| `REACTION` | From the light to the hit, minus the player's ping. | `reaction` |
+| `REACTION` | From the light to the hit, minus the player's ping as corrected below. | `reaction` |
 | `TRACK` | Nothing: tracking has no hits to grade. | — |
 
 A grade counts towards the grade totals on the result screen and drives the feedback below. It does not
@@ -173,8 +178,19 @@ touch the score, the rating or the boards.
 
 A reaction is corrected by the player's ping: the light took half a round trip to reach them and the click
 half a round trip to come back, so both halves are taken off and two players on different connections are
-graded on their hands. The ping is read when the run starts and again every second. A corrected reaction
-is never below 1 ms.
+graded on their hands. The ping is read when the run starts and again every second.
+
+The client controls its ping — a delayed keepalive inflates it — so the correction is capped:
+
+```text
+correction = min(ping, max-ping-correction-millis, raw reaction / 2)
+reaction   = raw reaction − correction
+```
+
+With the defaults, at most 100 ms comes off, and never more than half the raw time. A reaction still
+faster than `min-reaction-millis` (80 ms) once corrected is a guess, not a hand: it counts as a **false
+start**, plays the `false-start` effect, and the light is spent and re-armed. A click that arrived before
+the light, even if the tick that lit it ran first, is a false start too.
 
 Moving targets are judged the same way. The plugin's own checks on a strafing target or a fighter — the ray
 it casts behind a swing, the precision of a hit, and every tracking check — test the target where the
@@ -194,6 +210,9 @@ A **miss** is any of:
   through the crosshair, so a client whose reach never grew still clicks where it looks.
 - In an `ordered` drill, a hit on a target that is not lit.
 - In a 1.9 fight, a rushed hit.
+
+On a moving flick target, two hits less than 250 ms apart count once: the second is neither a hit nor a
+miss, so an autoclicker held on a target that never leaves scores nothing extra.
 
 A miss costs `miss-penalty`, breaks the streak and ends the combo. A swing in a `TRACK` drill is neither.
 
@@ -232,7 +251,8 @@ Precision is shown on the result screen. It is not part of the score or the rati
 
 ## Feedback
 
-What a hit looks and sounds like is an ExyliaLib effect under `feedback`. Each grade has an `effect` and a
+What a hit looks and sounds like is an ExyliaLib effect under `feedback` in `messages.yml`, where it is
+translated with the rest of the plugin's text. Each grade has an `effect` and a
 `chat` line, empty for none. By default a grade shows no title, writes the action bar below for 1.5 seconds,
 and plays `ENTITY_EXPERIENCE_ORB_PICKUP` at volume 0.7 with a pitch that drops with the grade:
 
@@ -250,7 +270,7 @@ An ungraded first hit plays only the `good` sound, and only for a player with hi
 |---|---|---|
 | `miss` | A click that hit nothing | Action bar `{error}✘ MISS {muted}· {letters}%accuracy%% accuracy`, sound `ENTITY_PLAYER_ATTACK_NODAMAGE` 1.0 · 1.0 |
 | `expired` | A `FLICK` target ran out of time | Action bar `{warning}⌛ EXPIRED {muted}· {letters}%accuracy%% accuracy`, sound `BLOCK_NOTE_BLOCK_SNARE` 0.6 · 0.7 |
-| `false-start` | A `REACTION` click before the light | Action bar `{error}✘ TOO EARLY {muted}· {letters}wait for the light`, sound `ENTITY_VILLAGER_NO` 0.8 · 0.9 |
+| `false-start` | A `REACTION` click before the light, or faster than `min-reaction-millis` | Action bar `{error}✘ TOO EARLY {muted}· {letters}wait for the light`, sound `ENTITY_VILLAGER_NO` 0.8 · 0.9 |
 | `armed` | A `REACTION` target lit up | Sound `BLOCK_NOTE_BLOCK_PLING` 1.0 · 1.8 |
 | `rushed` | A `COMBO` hit inside the cooldown | Action bar `{error}✘ RUSHED {muted}· {letters}wait for the cooldown`, sound `ENTITY_PLAYER_ATTACK_WEAK` 1.0 · 1.0 |
 

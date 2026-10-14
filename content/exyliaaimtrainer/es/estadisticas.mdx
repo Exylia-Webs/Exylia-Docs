@@ -8,12 +8,23 @@ se reconstruye a partir de otra, que es lo que permite podar sin riesgo las dos 
 
 | Tabla | Una fila por | Responde |
 |---|---|---|
-| `aim_profiles` | Jugador | Los números de por vida, el récord de duelos, el rating global y los ajustes del jugador |
-| `aim_records` | Jugador **y** ejercicio | Los mejores resultados, que es lo que ordena la tabla de un ejercicio |
+| `aim_profiles` | Jugador | Los números de por vida, el récord de duelos, el rating global por edición y los ajustes del jugador |
+| `aim_records` | Jugador, ejercicio **y** edición | Los mejores resultados, que es lo que ordena la tabla de un ejercicio |
 | `aim_sessions` | Ronda en solitario terminada | El historial de sesiones que el jugador consulta |
 | `aim_matches` | Participante por duelo | El historial de duelos |
 
 La quinta tabla, `aim_arenas`, guarda las arenas y se explica en [Arenas](/docs/exyliaaimtrainer/arenas).
+
+## Java y Bedrock
+
+Los jugadores de Java y de Bedrock se clasifican por separado: apuntar con táctil o mando, con asistencia
+de puntería, no es la misma competición que con ratón. Una sesión lee la edición de su jugador una vez, al
+empezar, y su resultado va a los récords y tablas de esa edición y a los totales del perfil de esa
+edición. Un jugador que juega en las dos conserva dos juegos de mejores resultados y dos ratings globales.
+Los ajustes y el récord de duelos son del jugador, juegue donde juegue.
+
+Las filas escritas antes de que existieran las ediciones se marcan como Java una vez, en el primer
+arranque de la nueva versión.
 
 ## El perfil
 
@@ -23,10 +34,10 @@ cuya fila aún se está cargando juega con los ajustes por defecto.
 | Campo | Lo mueve |
 |---|---|
 | Sesiones | Cada ronda en solitario guardada. Los duelos no cuentan aquí. |
-| Impactos totales, disparos totales, precisión | Rondas en solitario **y** duelos. Un disparo es un impacto o un fallo; un objetivo que expira no es ninguno de los dos. La precisión se guarda como porcentaje para que la tabla global pueda ordenar por ella. |
+| Impactos totales, disparos totales, precisión | Rondas en solitario **y** duelos, por edición. Un disparo es un impacto o un fallo; un objetivo que expira no es ninguno de los dos. La precisión se guarda como porcentaje para que la tabla global pueda ordenar por ella. |
 | Tiempo total entrenado | Rondas en solitario y duelos. |
 | Flick más rápido, reacción más rápida | El menor tiempo distinto de cero, de rondas en solitario y de duelos por igual. |
-| Rating global | Solo rondas en solitario: sube lo que la ronda haya subido el mejor rating del jugador en su ejercicio. |
+| Rating global | Solo rondas en solitario, por edición: la suma del mejor rating del jugador en cada ejercicio configurado ahora. Se recalcula desde los récords a medida que llegan las rondas, al entrar y tras un reinicio, así que un ejercicio quitado de `config.yml` deja de contar y una escritura perdida nunca lo deja mal para siempre. |
 | Duelos, victorias, derrotas, porcentaje de victorias | Un duelo decidido. |
 | Rondas, rondas ganadas, rondas perdidas | Un duelo decidido, a partir del marcador final de la serie. |
 | Racha actual, mejor racha | Racha de duelos ganados: sube uno al ganar, vuelve a cero al perder. |
@@ -36,7 +47,8 @@ cuya fila aún se está cargando juega con los ajustes por defecto.
 La fila del perfil también lleva una columna `freeze`. Siempre se escribe como `true` y nada la lee;
 se conserva para que una tabla existente no necesite migración.
 
-`/aim profile`, o `/aim stats`, abre la pantalla del perfil: rating, precisión, sesiones y duelos en la
+`/aim profile`, o `/aim stats`, abre la pantalla del perfil, que muestra el rating, la precisión, los
+impactos y los disparos de la edición en la que está el jugador: rating, precisión, sesiones y duelos en la
 cabeza; impactos, disparos, flick y reacción más rápidos y tiempo entrenado; duelos jugados, victorias,
 derrotas, porcentaje de victorias y rondas; la racha de duelos actual y la mejor; y botones a
 **Récords**, **Sesiones**, **Historial de duelos** y **Tablas**. `/aim profile <jugador>` abre el de otro,
@@ -45,12 +57,13 @@ ExyliaLib; si no, el comando responde `player-not-found`.
 
 ## Récords
 
-Una fila por jugador y ejercicio, con clave `uuid:drill`. Una ronda se fusiona con su fila cuando **hizo
-algo**: un impacto, un fallo, un objetivo expirado, una salida en falso o un solo tick de seguimiento
-evaluado. Una ronda que terminó durante la cuenta atrás no guarda nada.
+Una fila por jugador, ejercicio y edición, con clave `uuid:drill` en Java y `uuid:drill:bedrock` en
+Bedrock. Una ronda se fusiona con su fila cuando **llegó a su fin** y **hizo algo**: un impacto, un fallo,
+un objetivo expirado, una salida en falso o un solo tick de seguimiento evaluado.
 
-Una ronda cuenta tanto si se completó como si no. Salir a mitad, desconectarse, que ExyliaPracticeCore
-reclame al jugador o pulsar **Jugar otra vez** a mitad guardan la ronda hasta donde llegó.
+Una ronda cortada no guarda nada. Salir a mitad, desconectarse, que ExyliaPracticeCore reclame al jugador,
+pulsar **Jugar otra vez** o cambiar de ejercicio a mitad descartan la ronda: unos cientos de milisegundos
+con un impacto afortunado extrapolarían a un récord que ninguna ronda completa puede alcanzar.
 
 | Campo | Regla de fusión |
 |---|---|
@@ -67,8 +80,8 @@ reclame al jugador o pulsar **Jugar otra vez** a mitad guardan la ronda hasta do
 | `bestOnTarget` | El mayor porcentaje de la ronda sobre el objetivo. Solo un ejercicio TRACK lo fija. |
 | `totalHits`, `totalShots`, `totalTimeMillis` | Se suman |
 
-Cuando el rating supera al mejor anterior, la diferencia se suma al rating global del perfil, la
-pantalla de resultado y el chat lo anuncian como récord personal, y se descartan las tablas en caché
+Cuando el rating supera al mejor anterior, se recalcula el rating global del perfil, la pantalla de
+resultado y el chat lo anuncian como récord personal, y se descartan las tablas en caché
 para que el jugador se vea en la tabla que acaba de escalar.
 
 <Callout type="note" title="Los duelos no fijan récords">
@@ -77,14 +90,15 @@ tiempos más rápidos — y escribe dos filas de historial. Nunca toca `aim_reco
 a nadie en la tabla de un ejercicio ni subir su rating global.
 </Callout>
 
-La pantalla de **Récords**, a la que se llega desde el perfil, lista cada fila del jugador en el orden en
-que aparecen los ejercicios en `config.yml`; la fila de un ejercicio que ya no está en el archivo va al
+La pantalla de **Récords**, a la que se llega desde el perfil, lista cada fila del jugador en la edición en
+la que está, en el orden en que aparecen los ejercicios en `config.yml`; la fila de un ejercicio que ya no está en el archivo va al
 final. Cada fila muestra el mejor rating con el tamaño y la distancia con que se consiguió, el resto de
 mejores resultados, y las sesiones, precisión y tiempo de por vida en ese ejercicio.
 
 ## Tablas de clasificación
 
-Hay una tabla por **ejercicio**, ordenada por una de siete categorías, y una tabla **global**.
+Hay una tabla por **ejercicio**, ordenada por una de siete categorías, y una tabla **global**, cada una
+dos veces: una para Java y otra para Bedrock.
 
 | Categoría | Ordena por | Nombre por defecto |
 |---|---|---|
@@ -98,8 +112,8 @@ Hay una tabla por **ejercicio**, ordenada por una de siete categorías, y una ta
 
 Los nombres y los iconos están en `messages.yml`, bajo `menu.categories`.
 
-Un jugador aparece **una vez** por tabla de ejercicio, porque los récords son una fila por jugador y
-ejercicio. Un cero nunca ocupa un puesto: una reacción sin fijar, un combo en un ejercicio que no tiene,
+Un jugador aparece **una vez** por tabla de ejercicio, porque los récords son una fila por jugador,
+ejercicio y edición. Un cero nunca ocupa un puesto: una reacción sin fijar, un combo en un ejercicio que no tiene,
 una precisión de rondas por debajo del mínimo de disparos. Por eso la tabla `reaction` de un ejercicio
 de flick y la tabla `combo` de todo lo que no sea una pelea se quedan vacías.
 
@@ -112,8 +126,8 @@ categoría por la que se ordena la tabla.
 
 ### La tabla global
 
-Todos los jugadores por la suma de su mejor rating en cada ejercicio, leída de `aim_profiles`. Se ordena
-por `rating` o por `accuracy` (la precisión de por vida) y nada más: la fila de categorías de esa tabla
+Todos los jugadores por la suma de su mejor rating en cada ejercicio, leída de `aim_profiles`. La tabla global
+de Bedrock solo lista a jugadores que han jugado en Bedrock. Se ordena por `rating` o por `accuracy` (la precisión de por vida) y nada más: la fila de categorías de esa tabla
 ofrece esas dos, y pedir otra muestra la de rating.
 
 ### Abrir una tabla
@@ -123,10 +137,12 @@ en el orden de la configuración. `/aim leaderboard <ejercicio>` abre la tabla d
 por `rating`, y `/aim leaderboard <ejercicio> <categoría>` por esa categoría; `overall` sirve como
 ejercicio. Un ejercicio desconocido abre el selector en lugar de una tabla vacía, y una categoría
 desconocida vuelve a `rating`. Dentro, los botones de categoría reordenan la tabla abierta sin
-cerrarla, y las tres primeras filas llevan medalla.
+cerrarla, y las tres primeras filas llevan medalla. Una tabla se abre en la
+edición de quien mira; el botón de edición cambia la tabla abierta a la otra, conservando su categoría.
 
 Las mismas tablas se leen desde PlaceholderAPI, como
-`%exyliaaimtrainer_top_<drill>_<category>_<n>%` y su `_value`. Ver
+`%exyliaaimtrainer_top_<drill>_<category>_<n>%` y su `_value` para Java, y
+`%exyliaaimtrainer_top_bedrock_<drill>_<category>_<n>%` para Bedrock. Ver
 [Placeholders](/docs/exyliaaimtrainer/placeholders).
 
 ### La caché
@@ -190,7 +206,7 @@ Desde `/aimtraineradmin` → **Players**, tras una confirmación. Un reinicio:
 
 - deja el perfil a cero — números de por vida, récord de duelos y rating global — **conservando** los
   ajustes del jugador y sus últimas elecciones;
-- borra todos los récords del jugador, así que sale de todas las tablas de ejercicio;
+- borra todos los récords del jugador, en las dos ediciones, así que sale de todas las tablas de ejercicio;
 - borra su historial de sesiones;
 - descarta la caché de las tablas.
 

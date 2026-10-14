@@ -3,15 +3,17 @@ title: "Menus"
 description: "The twenty menu files, which ones survive an update, what each screen does, and every aimtrainer action a file can bind."
 ---
 
-Twenty files ship under `plugins/ExyliaAimTrainer/menus/`, and they are updated in three different ways.
+Twenty files ship under `plugins/ExyliaAimTrainer/lang/<code>/menus/`, one set per language (`en`, `es`,
+`pt`, `fr`, `ru`; `custom` for a server that had menus before languages existed). See
+[Configuration · language](/docs/exyliaaimtrainer/configuration#language). They are updated in two
+different ways.
 
 | Files | Count | On every start and every reload |
 |---|---|---|
-| `menus/*.yml` (the player screens) | 13 | Kept up to date without undoing your edits. **Yours.** |
-| `menus/hotbar.yml` | 1 | Copied from the jar over whatever is there. |
+| `menus/*.yml` (the player screens and `hotbar.yml`) | 14 | Kept up to date without undoing your edits. **Yours.** |
 | `menus/admin/*.yml` | 6 | The folder is replaced with the one in the jar. |
 
-The player screens go through ExyliaLib's bundled-file update:
+The player screens and the hotbar go through ExyliaLib's bundled-file update:
 
 - a missing file is written, unless it was installed before and you deleted it;
 - a key new in a release is added to your file at once, comments included;
@@ -19,11 +21,9 @@ The player screens go through ExyliaLib's bundled-file update:
   `/exylialib updates`, where you apply or keep it;
 - anything you changed or deleted is never touched.
 
-<Callout type="danger" title="hotbar.yml and admin/ are not yours">
-`menus/hotbar.yml` is overwritten from the jar on every start **and** by the `hotbar` step of every
-`/aimtraineradmin reload`, and `menus/admin/` is replaced wholesale on every start and every reload. Edits
-to either are lost without a warning. The hotbar can still be turned off for everyone with
-`hud.hotbar: false`.
+<Callout type="danger" title="admin/ is not yours">
+`menus/admin/` is replaced wholesale on every start and every reload. Edits to it are lost without a
+warning.
 </Callout>
 
 A file that fails to parse is reported in the console with its path and the reason, and that one screen
@@ -40,12 +40,12 @@ The format is ExyliaLib's declarative menu YAML; see the [library's menus page](
 | `settings.yml` | `/aim settings`, **Settings** in the hub, the drill list, the hotbar and the summary screen | Size and distance (left click up, right click down, shift click to type an exact value), colour and style (left next, right previous), the five switches, and the difficulty they add up to. **Back** returns to the screen it was opened from. |
 | `opponents.yml` | `/aim duel`, **Duel** | Every online player you can see, those free to duel first. Refreshed every second while open. A busy player shows why and cannot be clicked. |
 | `duel.yml` | A free player in the picker | Their record, the format picker and the drill list. The format you pick is remembered on your profile. A drill click sends the request. |
-| `profile.yml` | `/aim profile`, the hub | Lifetime numbers, duel record, duel streak, and buttons to Records, Sessions, Duel history and Leaderboards. |
-| `records.yml` | **Records** in a profile | Your best result per drill, in `config.yml` order. Always your own, even from another player's profile. |
+| `profile.yml` | `/aim profile`, the hub | Lifetime numbers, duel record, duel streak, and buttons to Records, Sessions, Duel history and Leaderboards. The rating, accuracy, hits and shots are those of the edition the player is on. |
+| `records.yml` | **Records** in a profile | Your best result per drill on the edition you are on, in `config.yml` order. Always your own, even from another player's profile. |
 | `sessions.yml` | `/aim sessions`, **History** in the hub, the profile | Your recent drills, newest first. A personal best is drawn as a star. |
 | `history.yml` | `/aim history`, the sessions screen, the profile | Your recent duels, newest first, as a victory or a defeat. |
 | `leaderboard_drills.yml` | `/aim leaderboard`, **Leaderboards** | The overall board, then one board per drill. |
-| `leaderboard.yml` | A board in the picker, `/aim leaderboard <drill>` | The top `leaderboard.entries` players. The category buttons along the bottom re-sort the open board in place. The overall board has only Rating and Accuracy. |
+| `leaderboard.yml` | A board in the picker, `/aim leaderboard <drill>` | The top `leaderboard.entries` players of the viewer's own edition. The category buttons along the bottom re-sort the open board in place; the **Edition** button (slot 36) swaps it to the Java or Bedrock board, keeping the category. The overall board has only Rating and Accuracy. |
 | `drill_result.yml` | A drill ending | Rating, score, difficulty, accuracy, speed, and your previous best with the change. A **Personal best** item appears when you beat it. Play again, Change drill, Settings and Leave. |
 | `result.yml` | Coming back from a duel that ended less than a minute ago | Winner, runner-up, the series score and a **Rematch** button, greyed out when the opponent has left. |
 
@@ -110,9 +110,14 @@ namespace. Actions that read a row only work from the screen that supplies that 
 | `aimtrainer:duel_send` | `<drill>` | On the duel screen: sends the request with the selected format. |
 | `aimtrainer:leaderboard_drill` | — | Row action in `leaderboard_drills.yml`: opens that board by rating. |
 | `aimtrainer:leaderboard_category` | — | Row action in the categories of `leaderboard.yml`: re-sorts the open board. |
-| `aimtrainer:rematch` | — | Sends a request with the same drill and format to the opponent of your last duel. `result.yml` passes `%match_id%`, which the action ignores. |
+| `aimtrainer:leaderboard_edition` | — | On `leaderboard.yml`: swaps the open board between Java and Bedrock, keeping its category. |
+| `aimtrainer:rematch` | — | Sends a request with the same drill and format, and a fresh seed, to the opponent of your last duel. `result.yml` passes `%match_id%`, which the action ignores. |
 
-A setting changed while you are in a drill is saved and applies from the next one.
+A setting changed while you are in a drill is saved and applies from the next one. `train`, `replay` and
+a drill change from inside a session share a two-second wait: a click inside it does nothing.
+
+Every action checks the node of the command it stands for, and `open` the node of the screen it opens;
+see [Permissions](/docs/exyliaaimtrainer/permissions#menus-check-the-same-nodes).
 
 ### Admin actions
 
@@ -132,7 +137,8 @@ A setting changed while you are in a drill is saved and applies from the next on
 | `aimtrainer:admin_player_reset` | `<player uuid>` | Opens the confirmation for `admin_player_reset_do`. |
 | `aimtrainer:admin_player_reset_do` | `<player uuid>` | Resets the profile, the records and the session history. |
 
-None of these check `exyliaaimtrainer.admin`. See [Permissions](/docs/exyliaaimtrainer/permissions).
+Every one checks `exyliaaimtrainer.admin`; a click without it does nothing. See
+[Permissions](/docs/exyliaaimtrainer/permissions).
 
 ## What a drill row knows
 

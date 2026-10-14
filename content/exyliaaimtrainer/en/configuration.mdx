@@ -1,18 +1,31 @@
 ---
 title: "Configuration"
-description: "config.yml key by key, how an older file is migrated, what messages.yml and scoreboards.yml hold, and where the menus and the database are set."
+description: "config.yml key by key, the language, how an older file is migrated, what messages.yml and scoreboards.yml hold, and where the menus and the database are set."
 ---
 
 Everything is generated in `plugins/ExyliaAimTrainer/` on first boot, with comments. Edit the files there,
 never the copies in the jar. Times are seconds with decimals unless a key says ticks; twenty ticks are one
 second. Distances and sizes are blocks. Colours use palette tokens such as `{primary}` or `{success}`.
 
+| File | Holds |
+|---|---|
+| `config.yml` | The language, training, every drill, the settings players pick from, scoring, grades, the HUD channels, duels, the practice integration, boards, history, arenas, chat isolation and `debug`. |
+| `lang/<code>/messages.yml` | Every line the plugin sends, the hit feedback and the boss bar text. |
+| `lang/<code>/scoreboards.yml` | The two sidebars. |
+| `lang/<code>/menus/` | Every screen, and `hotbar.yml` for the buttons shown during a drill. |
+| `database.yml` | The database engine. |
+
+`<code>` is the language the plugin runs in: `en`, `es`, `pt`, `fr` or `ru`, or ExyliaLib's own language
+while `config.yml` says `language: default`. See [language](#language).
+
 ## config.yml
 
-Sixteen drills ship; two are shown here. The whole list, and what each number does to a drill, is on
+Eighteen drills ship; two are shown here. The whole list, and what each number does to a drill, is on
 [Drills](/docs/exyliaaimtrainer/drills).
 
 ```yaml title="plugins/ExyliaAimTrainer/config.yml"
+language: default
+
 training:
   countdown: 3.0
   rest-seconds: 5.0
@@ -127,6 +140,8 @@ scoring:
   false-start-penalty-millis: 150
   reaction-reference-millis: 250
   reaction-scale: 1000
+  max-ping-correction-millis: 100
+  min-reaction-millis: 80
   tracking-scale: 10
   combo-points: 5
   size-exponent: 1.0
@@ -146,38 +161,9 @@ performance:
     good: 0.33
     ok: 0.42
 
-feedback:
-  perfect:
-    effect:
-      action-bar:
-        text: "{success}⚡ PERFECT {muted}· {letters}%time%s {muted}· {info}x%streak%"
-        duration: 1.5
-        time-style: auto
-      sound:
-        name: ENTITY_EXPERIENCE_ORB_PICKUP
-        volume: 0.7
-        pitch: 1.8
-        category: MASTER
-    chat: ""
-  # excellent, good, ok and slow have the same shape.
-  miss:
-    action-bar:
-      text: "{error}✘ MISS {muted}· {letters}%accuracy%% accuracy"
-      duration: 1.5
-      time-style: auto
-    sound:
-      name: ENTITY_PLAYER_ATTACK_NODAMAGE
-      volume: 1.0
-      pitch: 1.0
-      category: MASTER
-  # expired, false-start, armed, rushed, countdown, go, session-complete,
-  # personal-best, match-found, round-won, round-lost, round-draw,
-  # match-won and match-lost are effects of the same shape.
-
 hud:
   boss-bar:
     enabled: true
-    text: "{primary}&l%drill% {muted}· {letters}%time% {muted}· {success}%hits% {letters}hits {muted}· {info}%accuracy%% {muted}· {highlight}%score% pts"
     colour: PURPLE
     overlay: PROGRESS
     refresh-ticks: 5
@@ -193,6 +179,7 @@ match:
   round-delay: 3.0
   result-delay: 5.0
   duel-request-expiry: 30.0
+  duel-request-cooldown: 15.0
 
 practice:
   train-while-queued: true
@@ -219,6 +206,17 @@ chat:
 debug: false
 ```
 
+### `language`
+
+| Key | Default | What it does |
+|---|---|---|
+| `language` | `default` | The language of the plugin's menus, messages and sidebars. `default` follows the language set in ExyliaLib's `config.yml`; `en`, `es`, `pt`, `fr` or `ru` set this plugin alone. Each one is a folder under `lang/` you can edit. |
+
+`custom` holds the files a server had before languages existed: the first start after updating moves
+the old `messages.yml`, `scoreboards.yml` and `menus/` into `lang/custom/` and sets `language: custom`,
+so nothing an owner edited is lost. A fresh install has neither and starts in `default`. A reload picks
+up a changed language without a restart.
+
 ### `training`
 
 | Key | Default | What it does |
@@ -236,7 +234,7 @@ commands, records, boards and placeholders. Menus list drills in file order, and
 for how the four kinds use these numbers.
 
 <Callout type="note" title="An empty drills section brings the shipped ones back">
-If `drills` is missing or empty when the file is read, the sixteen shipped drills are used. To offer
+If `drills` is missing or empty when the file is read, the eighteen shipped drills are used. To offer
 fewer, delete the blocks you do not want and keep at least one.
 </Callout>
 
@@ -252,7 +250,7 @@ fewer, delete the blocks you do not want and keep at least one.
 | `size` | Zero or less is `0.8`. | Edge of a target in blocks, before the player's size setting. |
 | `height` | At least `0`. | Height of a target, or `0` for a cube. The player-shaped targets ship with `1.8`. |
 | `distance.min`, `distance.max` | `min` at least `1.0`; `max` at least `min`. | How far from the eyes a target is placed, before the player's distance setting. |
-| `spread.yaw` | `0` to `340`. | Total horizontal spread in degrees around where the player faces: `60` is 30 to either side. |
+| `spread.yaw` | `0` to `360`. | Total horizontal spread in degrees around where the player faces: `60` is 30 to either side, `360` all the way round. |
 | `spread.pitch-min`, `spread.pitch-max` | `-80` to `80`; `max` at least `min`. | Lowest and highest elevation; negative is below eye level. |
 | `grid` | Left out unless used. | `columns`, `rows`, `spacing`: targets on fixed cells straight ahead instead of anywhere in the spread. `columns: 0` turns it off; with columns, `rows` is at least `1` and a `spacing` of zero or less is `10.0` degrees. |
 | `lifetime` | At least `0`. | Seconds a `FLICK` target stays up before it counts as expired. `0` never expires. |
@@ -296,6 +294,8 @@ How a session becomes a score, and a score a rating. The formulas are on
 | `false-start-penalty-millis` | `150` | `0` | `REACTION`: milliseconds added to the average per click before the light. |
 | `reaction-reference-millis` | `250` | `1` | `REACTION`: an average this fast scores exactly `reaction-scale`. |
 | `reaction-scale` | `1000` | `1` | |
+| `max-ping-correction-millis` | `100` | `0` | `REACTION`: the most ping taken off a reaction. The client controls its ping, so the correction is capped, and it never takes more than half the raw time. |
+| `min-reaction-millis` | `80` | `1` | `REACTION`: a reaction faster than this, once the ping is off, is a guess and counts as a false start. |
 | `tracking-scale` | `10` | `1` | `TRACK`: points per percent of the session spent on target. |
 | `combo-points` | `5` | `0` | `COMBO`: extra points for a hit that extends a combo. |
 | `size-exponent` | `1.0` | | Difficulty is `(1 / size multiplier)` to this power. |
@@ -314,40 +314,14 @@ time, in seconds, that still earns that grade. Slower than `ok` is `slow`.
 
 ### `feedback`
 
-Every entry is an ExyliaLib effect: `title`, `action-bar`, `boss-bar`, `sound`, `particle` and
-`firework`, each optional. A sub-section that does nothing is left out of the file, and removing a section
-keeps that channel quiet.
-
-| Key | Fires when | Placeholders |
-|---|---|---|
-| `perfect`, `excellent`, `good`, `ok`, `slow` | A hit earned that grade. Each has an `effect` and a `chat` line, empty for none. | `%grade%`, `%time%` (seconds, two decimals), `%hits%`, `%streak%`, `%combo%`, `%accuracy%` |
-| `miss` | A click that hit nothing. | the same, `%grade%` empty |
-| `expired` | A `FLICK` target ran out of time. | the same |
-| `false-start` | A `REACTION` click before the light. | the same |
-| `rushed` | A `COMBO` hit inside the attack cooldown. | the same |
-| `armed` | A `REACTION` target lit up. | — |
-| `countdown` | Counting down before the first target; refreshed with the time left. | `%time%` |
-| `go` | The first target is live. | — |
-| `session-complete` | A drill ended. | — |
-| `personal-best` | The run beat the player's best rating on that drill. | `%rating%` |
-| `match-found` | Both duellists have arrived in the arena. | — |
-| `round-won`, `round-lost` | A round was decided. | — |
-| `round-draw` | A round ended without a winner and is replayed. | — |
-| `match-won`, `match-lost` | The duel was decided. | — |
-
-Players can switch channels off for themselves: with **Hit feedback** off, the action bar of the grade,
-`miss`, `expired`, `false-start`, `rushed` and `armed` effects is dropped; with **Hit sounds** off, their
-sound. The title, the boss bar, the particle, the firework and the grade's `chat` line are always played.
-The very first hit of a session has no time to grade and plays only the sound of `good`.
-
-The effect keys are ExyliaLib's; see the [library's effects page](/docs/exylialib/effects).
+The hit feedback is no longer in `config.yml`: it is translated, so it lives in `messages.yml` under
+`feedback`. See [Hit feedback](#hit-feedback).
 
 ### `hud`
 
 | Key | Default | What it does |
 |---|---|---|
 | `boss-bar.enabled` | `true` | Whether a boss bar shows during a drill or a round. Each player can also turn it off. |
-| `boss-bar.text` | drill · time · hits · accuracy · score | Knows `%drill%`, `%time%`, `%hits%`, `%misses%`, `%accuracy%`, `%score%`, `%streak%` and `%opponent_score%`. Its progress is the time left. |
 | `boss-bar.colour` | `PURPLE` | `PINK`, `BLUE`, `RED`, `GREEN`, `YELLOW`, `PURPLE` or `WHITE`. |
 | `boss-bar.overlay` | `PROGRESS` | `PROGRESS`, `NOTCHED_6`, `NOTCHED_10`, `NOTCHED_12` or `NOTCHED_20`. |
 | `boss-bar.refresh-ticks` | `5` | Ticks between two redraws. At least `1`. |
@@ -355,7 +329,8 @@ The effect keys are ExyliaLib's; see the [library's effects page](/docs/exyliali
 | `hotbar` | `true` | The Change drill, Settings, Play again and Leave buttons drawn over the hotbar, from `menus/hotbar.yml`. |
 | `hit-particle` | `ELECTRIC_SPARK\|8\|0.15\|0.15\|0.15\|0.05` | Particles where a target was hit, in ExyliaLib's particle notation. Empty for none. Each player can turn them off. |
 
-The sidebar lives in `scoreboards.yml`. See [HUD](/docs/exyliaaimtrainer/hud).
+The boss bar's text is in `messages.yml` under `hud.boss-bar`; its progress is the time left. The sidebar
+lives in `scoreboards.yml` and the hotbar buttons in `menus/hotbar.yml`. See [HUD](/docs/exyliaaimtrainer/hud).
 
 ### `match`
 
@@ -368,6 +343,7 @@ The sidebar lives in `scoreboards.yml`. See [HUD](/docs/exyliaaimtrainer/hud).
 | `round-delay` | `3.0` | Seconds between a round ending and the next countdown. |
 | `result-delay` | `5.0` | Seconds the result stays on screen before both players are sent back. |
 | `duel-request-expiry` | `30.0` | Seconds a request stays open. Never less than one. |
+| `duel-request-cooldown` | `15.0` | Seconds a player waits between two duel requests, counted from the last one that reached its target. A refused request costs nothing; leaving and rejoining does not clear the wait. `0` removes it. |
 
 See [Duels](/docs/exyliaaimtrainer/duels).
 
@@ -401,7 +377,7 @@ Only read when ExyliaPracticeCore is installed. See [Compatibility](/docs/exylia
 
 | Key | Default | What it does |
 |---|---|---|
-| `max-players-per-arena` | `0` | Players one arena hosts at once: one per drill, two per duel. `0` is unlimited. A new drill goes to the ready arena with the fewest players. |
+| `max-players-per-arena` | `0` | Players one arena hosts at once: one per drill, two per duel, a duel still showing its result included. `0` is unlimited. A new drill goes to the ready arena with the fewest players; a duel needs room for both. |
 | `return-location` | empty | Where a player is sent after leaving, as `world,x,y,z` or `world,x,y,z,yaw,pitch`. Empty sends them back to where they came from. |
 
 ### `chat`
@@ -425,10 +401,13 @@ only moves what is still exactly as shipped; a value you changed and a drill you
 | 2 | Shipped drill descriptions still reading as shipped are replaced by the shorter lines. |
 | 3 | A `gridshot` without a `grid` block is copied to a new `scatter` drill and `gridshot` becomes the 3×3 grid, unless `scatter` already exists. Every `combo.cooldown-ticks` becomes `combo.attack-cooldown` (`true` for any value above zero). `combo` and `combo_19` get `weapon: DIAMOND_SWORD` if they have none, and their names and descriptions are updated if unchanged. `sixshot`, `microshot`, `spidershot` and `axe` are added if missing. |
 | 4 | `training.rest-seconds` still at the old `20` becomes `5`. |
+| 5 | `language: custom` is added, and the server's old `messages.yml`, `scoreboards.yml` and `menus/` move into `lang/custom/`. |
+| 6 | `feedback` and `hud.boss-bar.text` move into `messages.yml`, as `feedback` and `hud.boss-bar`. |
+| 7 | `flick_180` and `flick_360` are written in, unless the file already has drills with those ids. |
 
 ## messages.yml
 
-Every line the plugin says. `%prefix%` expands to the `prefix` value at the top of the file,
+`lang/<code>/messages.yml`. Every line the plugin says, the hit feedback and the boss bar text. `%prefix%` expands to the `prefix` value at the top of the file,
 `{primary}&lAIM &8•&r` by default. Colours are palette tokens; MiniMessage tags work too, and the duel
 request uses `<click>` and `<hover>` for its Accept and Decline buttons.
 
@@ -443,15 +422,17 @@ share one bracket, `[center; sound:…]`.
 | `no-permission`, `player-only`, `player-not-found` | The three command refusals. The last knows `%player%`. |
 | `reload` | `started`, `done` (`%steps%`, `%ms%`), `failed`. |
 | `common` | `busy`, `busy-elsewhere` (`%plugin%`), `busy-advice` (`%reason%`), `not-in-anything`, `left`, `command-blocked`, `no-packets`, `no-arena`, and the words `yes` and `no`. |
-| `training` | `started` (`%drill%`, `%difficulty%`), `stopped`, `unknown-drill` (`%drill%`), `rest-hint` (`%seconds%`), and the single line sent beside the summary screen: `personal-best` when the rating beat the player's best, `below-best` when it did not. Both know `%drill%`, `%kind%`, `%score%`, `%rating%`, `%difficulty%`, `%hits%`, `%misses%`, `%expired%`, `%shots%`, `%accuracy%`, `%streak%`, `%precision%`, `%avg_flick%`, `%best_flick%`, `%avg_reaction%`, `%best_reaction%`, `%false_starts%`, `%on_target%`, `%longest_lock%`, `%combo%`, `%ping%`, `%duration%`, `%best_rating%` and `%delta%`. |
+| `training` | `started` (`%drill%`, `%difficulty%`), `stopped`, `unknown-drill` (`%drill%`), `arena-unreachable` (the teleport into the arena was cancelled or failed, so the drill never started), and the single line sent beside the summary screen: `personal-best` when the rating beat the player's best, `below-best` when it did not. Both know `%drill%`, `%kind%`, `%score%`, `%rating%`, `%difficulty%`, `%hits%`, `%misses%`, `%expired%`, `%shots%`, `%accuracy%`, `%streak%`, `%precision%`, `%avg_flick%`, `%best_flick%`, `%avg_reaction%`, `%best_reaction%`, `%false_starts%`, `%on_target%`, `%longest_lock%`, `%combo%`, `%ping%`, `%duration%`, `%best_rating%` and `%delta%`. |
 | `settings` | What the settings screen says when a value changes: `size` and `distance` (`%value%`, `%difficulty%`), `colour` and `style` (`%value%`), `toggled` (`%setting%`, `%state%`), the words `on` and `off`, `applies-next-drill` for a change made while in a drill, and `input-title` (`%min%`, `%max%`) for the window that asks for an exact value. |
-| `match` | `starting` (`%opponent%`), `round-start` (`%round%`, `%rounds%`, `%drill%`), `round-won`, `round-lost`, `round-draw` (`%round%`), `ready` and `opponent-ready` (`%opponent%`), `no-arena`, `unknown-format` (`%format%`), `cancelled`, `opponent-left` (`%opponent%`), `forfeited`; the `round-summary` list (`%round%`, `%winner%`, `%score%`, `%opponent_score%`, `%hits%`, `%accuracy%`, `%score_for%`, `%score_against%`) and the `match-summary` list (`%winner%`, `%loser%`, `%score_winner%`, `%score_loser%`, `%format%`, `%drill%`, `%hits%`, `%accuracy%`, `%duration%`). |
-| `duel` | `request-sent` (`%target%`), the `request-received` list (`%player%`, `%drill%`, `%format%`, `%seconds%`), `accepted`, `expired` (`%player%`, to whoever was challenged), `expired-sent` (`%target%`, to whoever challenged), `no-pending`, `target-busy` (`%target%`), `target-not-ready` (`%target%`, `%reason%`), `self-duel`, `denied` (`%player%`), `denied-by` (`%target%`), and `awaiting-answer`: the reason other plugins read while a request waits for an answer. |
+| `match` | `starting` (`%opponent%`), `round-start` (`%round%`, `%rounds%`, `%drill%`), `round-won`, `round-lost`, `round-draw` (`%round%`), `ready` and `opponent-ready` (`%opponent%`), `no-arena`, `unknown-format` (`%format%`), `cancelled`, `opponent-left` (`%opponent%`), `forfeited`, `could-not-start` (an accepted duel could not take one of the players); the `round-summary` list (`%round%`, `%winner%`, `%score%`, `%opponent_score%`, `%hits%`, `%accuracy%`, `%score_for%`, `%score_against%`) and the `match-summary` list (`%winner%`, `%loser%`, `%score_winner%`, `%score_loser%`, `%format%`, `%drill%`, `%hits%`, `%accuracy%`, `%duration%`). |
+| `duel` | `request-sent` (`%target%`), `request-cooldown` (`%time%`, `%seconds%`), the `request-received` list (`%player%`, `%drill%`, `%format%`, `%time%`, `%seconds%`), `accepted`, `expired` (`%player%`, to whoever was challenged), `expired-sent` (`%target%`, to whoever challenged), `no-pending`, `target-busy` (`%target%`), `target-not-ready` (`%target%`, `%reason%`), `self-duel`, `denied` (`%player%`), `denied-by` (`%target%`), `awaiting-answer`: the reason other plugins read while a request waits for an answer; `queued` and `target-queued` (`%target%`) for a side waiting in a practice queue. |
 | `practice` | The `queue-prompt` list, whose button runs `/aim`; `match-found`; `cannot-borrow`. |
-| `admin` | What the admin screens confirm: `arena-created`, `arena-removed`, `arena-exists`, `arena-not-found`, `arena-renamed` (`%arena%`, `%name%`), `spawn-set`, `arena-enabled`, `arena-disabled` (all `%arena%`), `match-cancelled` (`%id%`), `session-stopped` and `stats-reset` (`%player%`), `cancelled`. |
+| `admin` | What the admin screens confirm: `arena-created`, `arena-removed`, `arena-exists`, `arena-not-found`, `arena-renamed` (`%arena%`, `%name%`), `spawn-set`, `arena-enabled`, `arena-disabled` (all `%arena%`), `match-cancelled` (`%id%`), `session-stopped` and `stats-reset` (`%player%`), `cancelled`; the confirmation titles and descriptions `confirm-delete-arena` (`%arena%`), `confirm-cancel-duel`, `confirm-reset-stats` (`%player%`); the arena prompts `prompt-arena-id`, `prompt-arena-name` and their hints; and `wizard-spawn`. |
 | `menu` | Words menus need that are not a whole line: `victory-title`, `defeat-title`, `none` (`—`), `loading`, the empty texts `empty-history`, `empty-records`, `empty-leaderboard`, `empty-opponents`, `empty-arenas`, `empty-matches`, `empty-sessions`; `state-none`, `state-training`, `state-match` for `%exyliaaimtrainer_state_label%`; `reason-busy`; `set` and `not-set`; `overall-board`; and the maps below. |
+| `feedback` | The hit feedback: see [Hit feedback](#hit-feedback). |
+| `hud` | `boss-bar`: the boss bar's text during a drill or a round. Knows `%drill%`, `%time%`, `%hits%`, `%misses%`, `%accuracy%`, `%score%`, `%streak%` and `%opponent_score%`. Its colour, overlay and refresh stay in `config.yml`. |
 
-`menu` also holds four maps:
+`menu` also holds six maps:
 
 ```yaml title="plugins/ExyliaAimTrainer/messages.yml"
 menu:
@@ -493,17 +474,90 @@ menu:
     action_bar: Hit feedback
     hit_sounds: Hit sounds
     particles: Hit particles
+  grades:
+    perfect: Perfect
+    excellent: Excellent
+    good: Good
+    ok: Ok
+    slow: Slow
+  editions:
+    java: Java
+    bedrock: Bedrock
 ```
 
 `categories` names and iconises the seven leaderboard categories, `kinds` names each drill kind on a row,
-`units` is what follows a score of that kind, and `toggles` names the five switches in the settings screen.
+`units` is what follows a score of that kind, `toggles` names the five switches in the settings screen,
+`grades` names each grade for `%exyliaaimtrainer_grade%`, and `editions` names the Java and Bedrock boards.
 A category missing from the map shows its key on a `PAPER` icon.
 
 Two keys are written to the file and read by nothing: `menu.reason-self` and `menu.difficulty-label`.
 
+### Hit feedback
+
+What a hit looks and sounds like, under `feedback`. Before languages it lived in `config.yml`; an older
+file is moved here on its first start, sounds included.
+
+Every entry is an ExyliaLib effect: `title`, `action-bar`, `boss-bar`, `sound`, `particle` and
+`firework`, each optional. A sub-section that does nothing is left out of the file, and removing a section
+keeps that channel quiet.
+
+```yaml title="plugins/ExyliaAimTrainer/lang/en/messages.yml"
+feedback:
+  perfect:
+    effect:
+      action-bar:
+        text: "{success}⚡ PERFECT {muted}· {letters}%time%s {muted}· {info}x%streak%"
+        duration: 1.5
+        time-style: auto
+      sound:
+        name: ENTITY_EXPERIENCE_ORB_PICKUP
+        volume: 0.7
+        pitch: 1.8
+        category: MASTER
+    chat: ""
+  # excellent, good, ok and slow have the same shape.
+  miss:
+    action-bar:
+      text: "{error}✘ MISS {muted}· {letters}%accuracy%% accuracy"
+      duration: 1.5
+      time-style: auto
+    sound:
+      name: ENTITY_PLAYER_ATTACK_NODAMAGE
+      volume: 1.0
+      pitch: 1.0
+      category: MASTER
+  # expired, false-start, armed, rushed, countdown, go, session-complete,
+  # personal-best, match-found, round-won, round-lost, round-draw,
+  # match-won and match-lost are effects of the same shape.
+```
+
+| Key | Fires when | Placeholders |
+|---|---|---|
+| `perfect`, `excellent`, `good`, `ok`, `slow` | A hit earned that grade. Each has an `effect` and a `chat` line, empty for none. | `%grade%`, `%time%` (seconds, two decimals), `%hits%`, `%streak%`, `%combo%`, `%accuracy%` |
+| `miss` | A click that hit nothing. | the same, `%grade%` empty |
+| `expired` | A `FLICK` target ran out of time. | the same |
+| `false-start` | A `REACTION` click before the light, or one faster than `min-reaction-millis`. | the same |
+| `rushed` | A `COMBO` hit inside the attack cooldown. | the same |
+| `armed` | A `REACTION` target lit up. | — |
+| `countdown` | Counting down before the first target; refreshed with the time left. | `%time%` (seconds), `%time_precise%` (the same with its unit) |
+| `go` | The first target is live. | — |
+| `session-complete` | A drill ended. | — |
+| `personal-best` | The run beat the player's best rating on that drill. | `%rating%` |
+| `match-found` | Both duellists have arrived in the arena. | — |
+| `round-won`, `round-lost` | A round was decided. | — |
+| `round-draw` | A round ended without a winner and is replayed. | — |
+| `match-won`, `match-lost` | The duel was decided. | — |
+
+Players can switch channels off for themselves: with **Hit feedback** off, the action bar of the grade,
+`miss`, `expired`, `false-start`, `rushed` and `armed` effects is dropped; with **Hit sounds** off, their
+sound. The title, the boss bar, the particle, the firework and the grade's `chat` line are always played.
+The very first hit of a session has no time to grade and plays only the sound of `good`.
+
+The effect keys are ExyliaLib's; see the [library's effects page](/docs/exylialib/effects).
+
 ## scoreboards.yml
 
-Two sidebars, `training` and `match`, each an ExyliaLib sidebar with `enabled`, `title`, `lines` and
+`lang/<code>/scoreboards.yml`. Two sidebars, `training` and `match`, each an ExyliaLib sidebar with `enabled`, `title`, `lines` and
 `update` (`interval` in ticks, `10` by default, `smart`, `cache`). The lines are driven by the plugin's
 `%exyliaaimtrainer_*%` placeholders. A player sees the board of what they are doing only while they are in a drill or
 a duel, and only with their **Sidebar** switch on. See [HUD](/docs/exyliaaimtrainer/hud) and
@@ -511,9 +565,9 @@ a duel, and only with their **Sidebar** switch on. See [HUD](/docs/exyliaaimtrai
 
 ## menus/
 
-Every screen is a YAML file under `menus/`, plus `hotbar.yml` for the buttons shown during a drill.
-`menus/admin/` and `menus/hotbar.yml` are rewritten from the jar on every start and every reload; the
-other files are kept up to date without undoing your edits. The file list, what each screen does and every
+Every screen is a YAML file under `lang/<code>/menus/`, plus `hotbar.yml` for the buttons shown during a
+drill. `menus/admin/` is rewritten from the jar on every start and every reload; the other files,
+`hotbar.yml` included, are kept up to date without undoing your edits. The file list, what each screen does and every
 `aimtrainer:` action are on [Menus](/docs/exyliaaimtrainer/menus).
 
 ## database.yml

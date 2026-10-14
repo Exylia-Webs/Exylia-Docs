@@ -6,7 +6,8 @@ description: "Direct challenges, what both players shoot, best-of formats, how a
 A duel is always a chosen opponent: there is no queue and no matchmaking. Two players play the same drill
 from the same spawn of the same arena, at the same time, and a round goes to the higher score. Both
 engines are built from the same rules and the same random seed, so the targets appear in the same places,
-in the same order, on both screens.
+in the same order, on both screens. A Java player and a Bedrock player can duel each other; each one's
+numbers go to their own edition.
 
 Neither sees the other. Each duellist sits in an isolation group of their own, because an opponent
 standing in the line of fire would be a target that is not one.
@@ -34,15 +35,24 @@ The request is refused, with a message, when:
 | Situation | Message |
 |---|---|
 | The target is yourself | You cannot duel yourself. |
+| You sent a request less than `match.duel-request-cooldown` seconds ago | Wait `<time>` before challenging again. |
 | PacketEvents is not available | Targets need PacketEvents, which this server does not have. |
-| You are already in a drill or a duel | Finish what you are doing first. |
+| You are already in a duel | Finish what you are doing first. |
+| You are waiting in an ExyliaPracticeCore queue, training or not | Leave your queue before duelling. |
 | Another plugin holds you | You are busy in `<plugin>`. |
 | Another plugin advises against taking you | Not right now: `<reason>`. |
-| The target is held by any plugin, this one included | `<target>` is busy right now. |
+| The target is waiting in a practice queue | `<target>` is waiting in a queue. |
+| The target is in a duel, or held by another plugin | `<target>` is busy right now. |
 | The target's plugin advises against it | `<target>` is `<reason>`. |
+
+A drill is no reason to refuse, on either side: a player in a drill can challenge and be challenged, and
+leaves the drill when the duel is accepted. A denied or expired request costs them nothing.
 
 A plugin listening to `AimDuelRequestEvent` can also cancel the request before it is sent; see
 [API](/docs/exyliaaimtrainer/api).
+
+Only a request that reached its target starts the `duel-request-cooldown` wait (`15` seconds by default);
+a refused one costs nothing. The wait outlives a relog, so quitting is no way around it.
 
 ## The request
 
@@ -65,18 +75,20 @@ Neither side holds a claim yet, so this plugin tells the other Exylia plugins th
 ## Accepting
 
 `/aim accept` checks both sides again — either may have walked into something while the request sat open
-— and both read "Duel accepted." Then the duel needs an arena:
+— and both read "Duel accepted." Whichever of them was in a drill leaves it, unstored, and the duel waits
+until both are home. If either quits meanwhile, the other reads "The duel could not start. Try again in a
+moment." Then the duel needs an arena:
 
-- **A ready arena with room.** The one hosting the fewest players is picked, a duel counting as two, within
-  `arena.max-players-per-arena`. With none, both players read "No arena is ready. Ask an administrator."
+- **A ready arena with room for two.** The one hosting the fewest players is picked, a duel counting as two
+  — one still showing its result included — within `arena.max-players-per-arena`. With none, both players read "No arena is ready. Ask an administrator."
   and nothing starts. See [Arenas](/docs/exyliaaimtrainer/arenas).
 - **The arenas loaded.** Right after a start, until the arenas have been read from the database, an
-  accepted duel does nothing at all.
+  accepted duel does not start, and both read "The duel could not start. Try again in a moment."
 
 Both players are claimed before anything moves. If the second claim fails, the first is undone —
-inventory included — and nobody is teleported. Then both read "Duel against `<opponent>` is starting…",
+inventory included — nobody is teleported, and both read "The duel could not start." Then both read "Duel against `<opponent>` is starting…",
 are teleported to the arena's spawn, emptied and put in adventure on arrival, and see the `match-found`
-effect.
+effect. A teleport that is cancelled or fails cancels the duel instead of playing it where a player stood.
 
 ## What both players shoot
 
@@ -87,7 +99,7 @@ The rules of a duel are fixed **when the request is sent**, from the challenger:
 | The drill | The one picked, with its own duration, targets, spread and motion. |
 | Size and distance | With `match.use-preferences: false` (the default), the drill as written: size and distance at ×1 for both. With `true`, **the challenger's** size and distance, for both. |
 | Target colour and style | The challenger's, for both. |
-| The random seed | One seed, so both sequences are identical. |
+| The random seed | One seed, so both sequences are identical. Every round, a replayed draw included, draws its own sequence from it, so the targets cannot be learned from one round to the next. |
 
 <Callout type="warning" title="use-preferences does not give each player their own">
 The comment on `use-preferences` in `config.yml` says `true` keeps each player's own size and distance.
@@ -109,6 +121,7 @@ match:
   round-delay: 3.0
   result-delay: 5.0
   duel-request-expiry: 30.0
+  duel-request-cooldown: 15.0
 ```
 
 | Key | Default | What it does |
@@ -120,6 +133,7 @@ match:
 | `round-delay` | `3.0` | Seconds between a round ending and the next countdown. |
 | `result-delay` | `5.0` | Seconds the result stays on screen, in the arena, before both are sent back. `0` sends them at once. |
 | `duel-request-expiry` | `30.0` | Seconds a request stays open. |
+| `duel-request-cooldown` | `15.0` | Seconds a player waits between two requests. `0` removes the wait. |
 
 A best-of `n` is won by the first side to `n/2 + 1` rounds: two for a BO3, three for a BO5, one for a BO1.
 The series also ends once `n` rounds have been won, which is what an even length needs: a BO2 that stands
@@ -181,7 +195,8 @@ first means a server that stops during the pause loses nothing.
 Once back, a player whose duel ended less than a minute ago gets the **result screen**: VICTORY or DEFEAT,
 both players' rounds, points, hits and accuracy, the format, the drill and the duration. Its **Rematch**
 button, while the opponent is still online, sends a new request to them with the same settings — the same
-drill, format and seed, so the same target sequence. The request goes through every check a new one does.
+drill, format, size and distance — and a fresh seed, so the targets are not the ones both have already
+seen. The request goes through every check a new one does, the cooldown included.
 
 See [Statistics](/docs/exyliaaimtrainer/stats) for what the record holds.
 
@@ -189,8 +204,8 @@ See [Statistics](/docs/exyliaaimtrainer/stats) for what the record holds.
 
 | Ending | Caused by | Stored? |
 |---|---|---|
-| **Forfeit** — the opponent wins | `/aim leave`, a **Leave** button, quitting, changing world, a teleport the plugin did not make, a death from another plugin, another plugin taking the player back. The leaver reads "You forfeited the duel.", the winner "`<opponent>` left. You win by forfeit." | Yes, as a normal result, at any point of the series. |
-| **Cancel** — nobody wins | An administrator cancelling it, its arena being disabled or deleted, the plugin disabling, three draws in a row, a teleport or an inventory save failing. Both read "The duel was cancelled." | No. |
+| **Forfeit** — the opponent wins | `/aim leave`, a **Leave** button, quitting, leaving the arena's world, a teleport the plugin did not make, a death from another plugin, another plugin taking the player back. The leaver reads "You forfeited the duel.", the winner "`<opponent>` left. You win by forfeit." | Yes, as a normal result, at any point of the series. |
+| **Cancel** — nobody wins | An administrator cancelling it, its arena being disabled or deleted, the plugin disabling, three draws in a row, a teleport into the arena cancelled or failing, an inventory save failing. Both read "The duel was cancelled." | No. |
 
 A cancelled duel has no result screen. Both endings fire `AimMatchEndEvent`, with a flag that says which.
 

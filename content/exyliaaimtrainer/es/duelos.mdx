@@ -6,7 +6,8 @@ description: "Retos directos, qué disparan los dos jugadores, formatos al mejor
 Un duelo siempre es contra un rival elegido: no hay cola ni emparejamiento. Dos jugadores juegan el mismo
 ejercicio desde el mismo spawn de la misma arena, a la vez, y la ronda es para la puntuación más alta. Los
 dos motores se construyen con las mismas reglas y la misma semilla aleatoria, así que los objetivos
-aparecen en los mismos sitios y en el mismo orden en las dos pantallas.
+aparecen en los mismos sitios y en el mismo orden en las dos pantallas. Un jugador de Java y uno de
+Bedrock pueden batirse entre sí; los números de cada uno van a su propia edición.
 
 Ninguno ve al otro. Cada duelista está en un grupo de aislamiento propio, porque un rival plantado en la
 línea de tiro sería un objetivo que no lo es.
@@ -34,15 +35,26 @@ La solicitud se rechaza, con un mensaje, cuando:
 | Situación | Mensaje |
 |---|---|
 | El objetivo eres tú | You cannot duel yourself. |
+| Enviaste una solicitud hace menos de `match.duel-request-cooldown` segundos | Wait `<time>` before challenging again. |
 | PacketEvents no está disponible | Targets need PacketEvents, which this server does not have. |
-| Ya estás en un ejercicio o un duelo | Finish what you are doing first. |
+| Ya estás en un duelo | Finish what you are doing first. |
+| Estás esperando en una cola de ExyliaPracticeCore, entrenando o no | Leave your queue before duelling. |
 | Otro plugin te tiene | You are busy in `<plugin>`. |
 | Otro plugin desaconseja tomarte | Not right now: `<reason>`. |
-| Al objetivo lo tiene cualquier plugin, este incluido | `<target>` is busy right now. |
+| El objetivo está esperando en una cola de práctica | `<target>` is waiting in a queue. |
+| El objetivo está en un duelo, o lo tiene otro plugin | `<target>` is busy right now. |
 | El plugin del objetivo lo desaconseja | `<target>` is `<reason>`. |
+
+Un ejercicio no es motivo de rechazo, en ninguno de los dos lados: un jugador en un ejercicio puede retar y
+ser retado, y deja el ejercicio cuando se acepta el duelo. Una solicitud rechazada o caducada no le cuesta
+nada.
 
 Un plugin que escuche `AimDuelRequestEvent` también puede cancelar la solicitud antes de que se envíe; ver
 [API](/docs/exyliaaimtrainer/api).
+
+Solo una solicitud que llegó a su objetivo inicia la espera de `duel-request-cooldown` (`15` segundos por
+defecto); una rechazada no cuesta nada. La espera sobrevive a una reconexión, así que salir no sirve para
+saltársela.
 
 ## La solicitud
 
@@ -66,18 +78,22 @@ que ambos están "answering a duel request". Es un consejo que respetan, no un b
 ## Aceptar
 
 `/aim accept` vuelve a comprobar a los dos — cualquiera pudo meterse en algo mientras la solicitud
-esperaba — y ambos leen "Duel accepted." Después el duelo necesita una arena:
+esperaba — y ambos leen "Duel accepted." Quien de los dos estuviera en un ejercicio lo deja, sin guardarlo, y el
+duelo espera a que los dos estén en casa. Si cualquiera se desconecta mientras tanto, el otro lee "The duel
+could not start. Try again in a moment." Después el duelo necesita una arena:
 
-- **Una arena lista con sitio.** Se elige la que aloja a menos jugadores, contando un duelo como dos,
-  dentro de `arena.max-players-per-arena`. Si no hay ninguna, los dos leen "No arena is ready. Ask an
+- **Una arena lista con sitio para dos.** Se elige la que aloja a menos jugadores, contando un duelo como
+  dos —incluido uno que todavía muestra su resultado—, dentro de `arena.max-players-per-arena`. Si no hay ninguna, los dos leen "No arena is ready. Ask an
   administrator." y no empieza nada. Ver [Arenas](/docs/exyliaaimtrainer/arenas).
 - **Las arenas cargadas.** Justo después de arrancar, hasta que las arenas se han leído de la base de
-  datos, un duelo aceptado no hace nada.
+  datos, un duelo aceptado no empieza, y los dos leen "The duel could not start. Try again in a moment."
 
 Los dos jugadores se reclaman antes de mover nada. Si falla el segundo reclamo se deshace el primero —
-inventario incluido — y no se teletransporta a nadie. Después ambos leen "Duel against `<opponent>` is
+inventario incluido —, no se teletransporta a nadie, y los dos leen "The duel could not start." Después
+ambos leen "Duel against `<opponent>` is
 starting…", se les teletransporta al spawn de la arena, se les vacía y se les pone en aventura al llegar,
-y ven el efecto `match-found`.
+y ven el efecto `match-found`. Un teletransporte cancelado o fallido cancela el duelo en lugar de jugarlo
+donde estaba un jugador.
 
 ## Qué disparan los dos
 
@@ -88,7 +104,7 @@ Las reglas de un duelo se fijan **cuando se envía la solicitud**, a partir del 
 | El ejercicio | El elegido, con su duración, objetivos, dispersión y movimiento. |
 | Tamaño y distancia | Con `match.use-preferences: false` (por defecto), el ejercicio tal cual: tamaño y distancia a ×1 para los dos. Con `true`, el tamaño y la distancia **del retador**, para los dos. |
 | Color y estilo del objetivo | Los del retador, para los dos. |
-| La semilla aleatoria | Una sola, así que las dos secuencias son idénticas. |
+| La semilla aleatoria | Una sola, así que las dos secuencias son idénticas. Cada ronda, incluida una tirada repetida, saca de ella su propia secuencia, así que los objetivos no se pueden aprender de una ronda a la siguiente. |
 
 <Callout type="warning" title="use-preferences no da a cada uno los suyos">
 El comentario de `use-preferences` en `config.yml` dice que `true` mantiene el tamaño y la distancia de
@@ -110,6 +126,7 @@ match:
   round-delay: 3.0
   result-delay: 5.0
   duel-request-expiry: 30.0
+  duel-request-cooldown: 15.0
 ```
 
 | Clave | Por defecto | Qué hace |
@@ -121,6 +138,7 @@ match:
 | `round-delay` | `3.0` | Segundos entre el final de una ronda y la siguiente cuenta atrás. |
 | `result-delay` | `5.0` | Segundos que el resultado sigue en pantalla, en la arena, antes de devolver a los dos. `0` los devuelve al momento. |
 | `duel-request-expiry` | `30.0` | Segundos que una solicitud sigue abierta. |
+| `duel-request-cooldown` | `15.0` | Segundos que un jugador espera entre dos solicitudes. `0` quita la espera. |
 
 Un al mejor de `n` lo gana el primero en llegar a `n/2 + 1` rondas: dos en un BO3, tres en un BO5, una en
 un BO1. La serie también termina cuando se han ganado `n` rondas, que es lo que necesita una longitud par:
@@ -184,8 +202,9 @@ durante la pausa no pierde nada.
 Ya de vuelta, un jugador cuyo duelo terminó hace menos de un minuto recibe la **pantalla de resultado**:
 VICTORY o DEFEAT, las rondas, puntos, aciertos y precisión de los dos, el formato, el ejercicio y la
 duración. Su botón **Rematch**, mientras el rival siga conectado, le envía una solicitud nueva con los
-mismos ajustes — mismo ejercicio, formato y semilla, así que la misma secuencia de objetivos. La solicitud
-pasa por todas las comprobaciones de una nueva.
+mismos ajustes — mismo ejercicio, formato, tamaño y distancia — y una semilla nueva, así que los objetivos
+no son los que los dos ya han visto. La solicitud pasa por todas las comprobaciones de una nueva, la espera
+incluida.
 
 Ver [Estadísticas](/docs/exyliaaimtrainer/estadisticas) para lo que guarda el historial.
 
@@ -193,8 +212,8 @@ Ver [Estadísticas](/docs/exyliaaimtrainer/estadisticas) para lo que guarda el h
 
 | Final | Lo provoca | ¿Se guarda? |
 |---|---|---|
-| **Abandono** — gana el rival | `/aim leave`, un botón **Leave**, desconectarse, cambiar de mundo, un teletransporte que no hizo el plugin, una muerte causada por otro plugin, otro plugin reclamando al jugador. Quien sale lee "You forfeited the duel.", el ganador "`<opponent>` left. You win by forfeit." | Sí, como un resultado normal, en cualquier punto de la serie. |
-| **Cancelación** — no gana nadie | Un administrador que lo cancela, su arena desactivada o borrada, el plugin deshabilitándose, tres empates seguidos, un fallo al teletransportar o al guardar un inventario. Los dos leen "The duel was cancelled." | No. |
+| **Abandono** — gana el rival | `/aim leave`, un botón **Leave**, desconectarse, salir del mundo de la arena, un teletransporte que no hizo el plugin, una muerte causada por otro plugin, otro plugin reclamando al jugador. Quien sale lee "You forfeited the duel.", el ganador "`<opponent>` left. You win by forfeit." | Sí, como un resultado normal, en cualquier punto de la serie. |
+| **Cancelación** — no gana nadie | Un administrador que lo cancela, su arena desactivada o borrada, el plugin deshabilitándose, tres empates seguidos, un teletransporte a la arena cancelado o fallido, un fallo al guardar un inventario. Los dos leen "The duel was cancelled." | No. |
 
 Un duelo cancelado no tiene pantalla de resultado. Los dos finales disparan `AimMatchEndEvent`, con una
 marca que dice cuál fue.

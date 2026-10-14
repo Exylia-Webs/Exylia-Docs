@@ -10,7 +10,7 @@ is on [Duels](/docs/exyliaaimtrainer/duels). What the drills are and how a run b
 
 ## Starting a drill
 
-Three ways in:
+Four ways in:
 
 - `/aim train <drill>`. Without a drill it starts `training.default-drill` (`gridshot` by default), or
   the first drill in `config.yml` when that one no longer exists.
@@ -30,6 +30,9 @@ Before anything moves, the start is refused, with a message, when:
 | The player waits in an ExyliaPracticeCore queue and practice will not lend them | Practice cannot lend you right now. |
 | Another plugin holds the player | You are busy in `<plugin>`. |
 | Another plugin advises against taking the player | Not right now: `<reason>`. |
+
+A second start, replay or drill change within two seconds of the last one is ignored without a message,
+so a start-and-leave loop cannot hammer the arena.
 
 <Callout type="note" title="No arena, no drill">
 A drill always runs in an arena. With none ready the player is refused before they are claimed, so a
@@ -53,7 +56,9 @@ keeps their place in the queue and asks for them back when a match is found. Tha
     outside.
   </Step>
   <Step title="The arena">
-    The ready arena hosting the fewest players is picked and the player is teleported to its spawn.
+    The ready arena hosting the fewest players is picked and the player is teleported to its spawn. If
+    that teleport is cancelled or fails, the drill never starts: the player is given back where they
+    stood and reads "You could not be taken to the arena. The drill was cancelled."
   </Step>
   <Step title="Dressed on arrival">
     Only once they stand in the arena is their inventory emptied and their game mode set to
@@ -92,7 +97,7 @@ not in a drill, a duellist included. See [Placeholders](/docs/exyliaaimtrainer/p
 A drill that runs its course does not send anyone home. In order:
 
 1. The `session-complete` effect plays ("TIME").
-2. The run is stored, if anything happened in it.
+2. The run is stored, if anything happened in it. Only a run that ran its course is ever stored.
 3. The **session summary** screen opens: rating, score, difficulty, duration, ping, hits, misses,
    accuracy, precision, streaks, flick and reaction times, time on target, and the change against the
    player's best on that drill.
@@ -118,7 +123,7 @@ the owner chose is kept.
 ### Playing again
 
 Play again is a full restart. Whatever the session is doing — resting, counting down, or halfway through
-a run — the current run is stopped and stored, the countdown is dropped, and a new countdown begins. The
+a run — the current run is stopped and dropped unstored, the countdown is dropped, and a new countdown begins. The
 new run reads the player's **current** settings, so a change made in `/aim settings` while resting
 applies to it, and it draws a new random sequence.
 
@@ -128,7 +133,7 @@ applies to it, and it draws a new random sequence.
 a session, does not refuse the player as busy: it swaps the session to that drill in the same arena,
 whether they are resting, counting down or mid-run. It works like Play again with another drill:
 
-- the run in progress is stopped and stored under the drill it was;
+- the run in progress is stopped and dropped, unstored;
 - the new drill becomes the player's last choice on their profile;
 - the chat confirms "Drill started: `<drill>` · ×`<difficulty>` difficulty.";
 - a new countdown begins, reading the player's current settings.
@@ -152,11 +157,9 @@ real item, so nothing can be dropped, moved or walked out with.
 Slots 0 to 4 are left to the real inventory, because slot 0 holds the drill's weapon when it has one. The
 whole overlay can be turned off with `hud.hotbar: false`.
 
-<Callout type="warning" title="menus/hotbar.yml is rewritten on every start and every reload">
-The file is copied over from the jar each time the plugin starts and each time it reloads, so a button
-added in a release reaches servers that already have it. An edit to it does not survive. Turn the
-overlay off with `hud.hotbar` instead.
-</Callout>
+The buttons live in `menus/hotbar.yml` under the plugin's `lang/` folder. The file is yours, like the
+player screens: an edit survives a restart and a reload, and a button added in a release still arrives
+as a new key. See [Menus](/docs/exyliaaimtrainer/menus#the-hotbar).
 
 ## How a session ends
 
@@ -165,30 +168,33 @@ overlay off with `hud.hotbar` instead.
 | `COMPLETED` | The drill ran its course. The session carries on resting. | The summary screen and the best line. |
 | `LEFT` | `/aim leave`, a **Leave** button, or the rest ran out. | "Drill stopped." when a run was cut short; `/aim leave` also says "You left." |
 | `DISCONNECTED` | The player quit. | Nothing. |
-| `CANCELLED` | A world change, a teleport the plugin did not make (an ender pearl, a chorus fruit), a death from another plugin, another plugin taking the player back, an administrator stopping the session, the arena being disabled or deleted, the plugin disabling. | Nothing; they are sent home. |
+| `CANCELLED` | Leaving the arena's world, a teleport the plugin did not make (an ender pearl, a chorus fruit), a death from another plugin, another plugin taking the player back, an administrator stopping the session, the arena being disabled or deleted, the plugin disabling. | Nothing; they are sent home. |
 | `MATCH_FOUND` | ExyliaPracticeCore found the player a match while they trained. | "A practice match was found. Good luck!" |
 
-A run is stored whenever **anything happened** in it: a hit, a miss, an expired target, a false start or
-a tracked tick. That holds for a run cut short as well: its numbers reach the profile, the drill's records
-and the session history exactly like a finished one, only without the summary. Leaving mid-run neither
-voids a good run nor hides a bad one. See [Statistics](/docs/exyliaaimtrainer/stats).
+Only a run that ran its course is stored, and only when **anything happened** in it: a hit, a miss, an
+expired target, a false start or a tracked tick. A run cut short — by leaving, a replay, a drill change,
+a practice match, an administrator or anything else above — reaches neither the profile, nor the drill's
+records, nor the session history: a few hundred milliseconds with one lucky hit would extrapolate to a
+record no full run can reach. See [Statistics](/docs/exyliaaimtrainer/stats).
 
 The `AimTrainingEndEvent` carries the same reasons; see [API](/docs/exyliaaimtrainer/api).
 
 ## How a click is judged
 
-Nothing about a target exists on the server. Each one is two entities sent only to its player: a block
-display that is seen, and an interaction hitbox riding it that is hit. Nobody else sees them, the server
-ticks nothing for them, and nothing is saved.
+Nothing about a target exists on the server. On Java each one is two entities sent only to its player: a
+block display that is seen, and an interaction hitbox riding it that is hit. A Bedrock client draws
+neither, so a Bedrock player's target is one slime as wide as the target (see
+[Compatibility](/docs/exyliaaimtrainer/compatibility#bedrock-players)). Nobody else sees them, the
+server ticks nothing for them, and nothing is saved.
 
 | What | How it is decided |
 |---|---|
-| A hit | The player's own client runs the same hitbox test it runs on a PvP opponent and reports an attack on the hitbox. The hit is judged where the player saw the target, at their own frame rate. The attack packet is then dropped, so the server never sees a click on an entity it does not have. |
+| A hit | The player's own client runs the same hitbox test it runs on a PvP opponent and reports an attack on the hitbox. The hit is judged where the player saw the target, at their own frame rate. The attack packet is then dropped, so the server never sees a click on an entity it does not have. An attack the client could not have made is ignored and its swing judged on its own: out of the fight's reach, or, on Java, with the crosshair nowhere near the target. The look checked is the one the click arrived with, not where the player turned a tick later. |
 | A miss | A swing that no attack came with. Before calling it a miss, the server casts its own ray from the eyes along the player's last rotation; if that ray crosses a target, it is a hit after all. Only then is it a miss. |
 | A moving target | Judged where the client drew it: every position sent is kept, and the check looks back by the player's ping plus the two ticks the client smooths a move over. |
 | Reach | 64 blocks for every drill but a fight, given as a temporary attribute and removed on the way out. A `COMBO` fight is played at the game's three blocks. |
 | A fight | A hit on a target still red from the last one (half a second) does nothing, as in the game. In a 1.9 fight every swing, hit or miss, and every change of held slot restart the attack cooldown, and a hit on a swing charged no more than 90% is **rushed** and counts as a miss. |
-| A reaction | Timed from the moment the light was sent, **minus the player's ping**, so two players on different connections are graded on their hands. |
+| A reaction | Timed from the moment the light was sent, **minus the player's ping**, so two players on different connections are graded on their hands. The ping taken off is capped, and what is left below a human floor is a false start. |
 | Tracking | Checked every tick along the rotation the client last sent, against where the client drew the target, forgiving half a tick either side. |
 | Precision | The server's ray through the target says how central a hit was. A ray that misses because the crosshair was moving leaves that hit unmeasured rather than scoring it as an edge. |
 
@@ -203,6 +209,7 @@ are left alone.
 | What | Rule |
 |---|---|
 | Damage | Every damage event on the player is cancelled, and so is any attack they make on anything. |
+| On the way in and out | Between the claim and arriving in the arena, and between leaving and being home, the player still holds their real items, so damage, hunger, drops, pickups, placing and breaking blocks, using an item, and opening a chest or the ender chest are refused then too. |
 | Hunger | Frozen. |
 | Items | Dropping and picking up are cancelled. |
 | Blocks | Breaking and placing are cancelled. |
@@ -211,7 +218,7 @@ are left alone.
 | Commands | Only the labels in `training.allowed-commands` run. Anything else reads "Leave with /aim leave before using that command." A `plugin:command` prefix is stripped before the check. |
 | Game mode | Adventure, whatever the player arrived in. The original mode comes back with the snapshot. |
 | Movement | **Frozen** while the countdown and the drill run: the client's own movement packets are dropped. Turning still works and is what aims. |
-| Leaving by other means | A teleport the plugin did not make or a world change ends the drill, or forfeits the duel. |
+| Leaving by other means | A teleport the plugin did not make ends the drill, or forfeits the duel. Leaving the arena's world does too, and the player stays in the world they went to rather than being sent home. |
 | A death from elsewhere | If another plugin kills the player anyway, the inventory is kept, the drops are cleared, the console warns and the player is taken out. |
 
 <Callout type="note" title="Standing still is not a setting">
@@ -249,7 +256,8 @@ game mode are restored **there**, and the claim is released last, so no other mo
 their things are still on the way back.
 
 Home is `arena.return-location` when it is set, otherwise the exact spot they started from, otherwise
-their world's spawn. See [Arenas](/docs/exyliaaimtrainer/arenas).
+their world's spawn. A player who left the arena's world on their own — a portal, a warp — is restored where
+they went instead. See [Arenas](/docs/exyliaaimtrainer/arenas).
 
 <Callout type="note" title="After a crash">
 A snapshot left behind by a restart is restored on the player's next join, and they are sent back to

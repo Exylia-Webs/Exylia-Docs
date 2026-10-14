@@ -91,9 +91,13 @@ A player has at most one request waiting for them. A newer challenge replaces th
 | `AimPreferences preferences(UUID)` | A player's settings, or the server defaults while their row is loading. |
 | `CompletableFuture<List<AimMatchRecord>> history(UUID)` | A player's last duels, newest first, as many as `history.entries`. |
 | `CompletableFuture<List<AimSessionRecord>> sessions(UUID)` | A player's last drill sessions, newest first, as many as `history.entries`. |
-| `CompletableFuture<List<AimRecord>> records(UUID)` | A player's best results, one row per drill they have played, in no particular order. |
-| `CompletableFuture<List<AimRecord>> leaderboard(String drillId, AimRecordCategory category)` | One drill's board, one row per player. |
-| `CompletableFuture<List<AimProfile>> overallLeaderboard()` | Everybody by the sum of their best ratings across every drill. |
+| `CompletableFuture<List<AimRecord>> records(UUID)` | A player's best results, one row per drill they have played, in no particular order: their Bedrock bests while they are on Bedrock, their Java bests otherwise. |
+| `CompletableFuture<List<AimRecord>> leaderboard(String drillId, AimRecordCategory category)` | One drill's **Java** board, one row per player. |
+| `CompletableFuture<List<AimProfile>> overallLeaderboard()` | Everybody by the sum of their best ratings across every drill, on the **Java** board. |
+
+The API predates Bedrock support, and every board it ever served was Java's, so the two board methods
+still read Java only; the Bedrock boards are reachable through the menus and the
+`%exyliaaimtrainer_top_bedrock_*%` placeholders. See [Statistics](/docs/exyliaaimtrainer/stats#java-and-bedrock).
 
 `profile` being empty during a load is deliberate: a caller on the server thread should degrade rather
 than wait, and one that can wait should ask `loadProfile` instead.
@@ -228,7 +232,7 @@ plugin holding one nor safe to read. Call `match(UUID)` when you need the curren
 |---|---|---|
 | `AimDuelRequestEvent` | A challenge passed the plugin's own checks and is about to be sent. **Cancellable.** | `from()`, `to()`, `drillId()`, `bestOf()` |
 | `AimTrainingStartEvent` | A drill was accepted and the player claimed; they are about to be moved. | `player()`, `rules()` |
-| `AimTrainingEndEvent` | A run is over; the numbers are final and about to be stored. | `player()`, `rules()`, `performance()`, `reason()` |
+| `AimTrainingEndEvent` | A run is over; the numbers are final, and stored when the run completed. | `player()`, `rules()`, `performance()`, `reason()` |
 | `AimTargetHitEvent` | A target was hit, in a drill or in a duel. | `player()`, `millis()`, `grade()`, `reaction()`, `inMatch()` |
 | `AimMatchStartEvent` | Both players arrived in the arena; the first round's countdown starts next. | `match()` |
 | `AimRoundEndEvent` | A round was scored. | `match()`, `round()` |
@@ -239,8 +243,9 @@ it is not something to register a listener for — it is there so a helper can t
 
 ### AimDuelRequestEvent is the one gate
 
-It fires after the sender has passed every check the plugin makes — not themselves, PacketEvents present,
-neither side busy nor held by another plugin — and before the request is stored or anybody hears of it.
+It fires after the sender has passed every check the plugin makes — not themselves, off the request
+cooldown, PacketEvents present, neither side in a duel, in a practice queue or held by another plugin —
+and before the request is stored or anybody hears of it.
 Cancelling it sends nothing: no line to the sender, no request to the target, and `duel(...)` returns
 `false`. Telling the sender why is yours to do. A rematch from the result screen goes through the same
 path and fires it too. Accepting a request fires nothing of its own.
@@ -265,9 +270,10 @@ the next events names the new drill.
 | `DISCONNECTED` | The player quit. |
 | `MATCH_FOUND` | ExyliaPracticeCore found them a match while they trained. |
 
-A run cut short by a replay or a drill change is stored like any other, under the drill it was, but fires
-no end event: Play again or Change drill used mid-run are the only ways a run ends silently. An empty run — no hit, miss, expired target or false
-start, and not one tracked tick — fires its event but is not stored.
+Only a `COMPLETED` run is stored, and only when it did something — a hit, a miss, an expired target, a
+false start or one tracked tick. Every other reason fires its event for a run that is then dropped. A run
+cut short by a replay or a drill change is dropped too and fires no end event: Play again or Change drill
+used mid-run are the only ways a run ends silently.
 
 ### AimTargetHitEvent
 
@@ -292,7 +298,7 @@ replayed under the same round number, and three in a row cancel the duel.
 It fires *before* profiles and history are written, which happens asynchronously afterwards — read the
 winner from the event, not from the profiles. With `cancelled()` `true`, `winner()` is `null` and nothing
 is stored at all: an administrator or `cancelMatch` stopped it, three draws in a row, a player could not be
-moved into the arena, or the server is stopping.
+moved into the arena — a teleport cancelled or failing included — or the server is stopping.
 
 ```java
 @EventHandler
