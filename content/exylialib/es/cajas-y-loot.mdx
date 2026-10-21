@@ -1,0 +1,200 @@
+---
+title: "Cajas y loot"
+description: "Lo que sale de un cofre, un spawner o un bloque roto, Fortuna para los drops propios de un plugin, y una caja de llaves que cualquier plugin abre sobre su propio catálogo."
+---
+
+## Tablas de loot
+
+Una tabla de loot es una `List<LootEntry>` que es de quien la llama: leída de una config, de una columna
+con `LootCodec`, o construida en código. No hay registro ni nada que liberar.
+
+```java
+List<LootEntry> table = Loot.parseAll(section.getStringList("loot"));
+
+List<ItemStack> filled = Loot.roll(table);      // lo de un cofre
+ItemStack single = Loot.pick(table);            // un sorteo
+```
+
+### Dos lecturas de un mismo peso
+
+| Llamada | El peso significa | Para |
+|---|---|---|
+| `Loot.roll(table)` | Un **porcentaje**: cada línea tira por su cuenta. | Un cofre, un spawner. |
+| `Loot.pick(table)` | Una **parte** del total: sale exactamente una línea. | Un rellenado, un item por slot. |
+
+| Llamada | Devuelve |
+|---|---|
+| `roll(table)` | Items, mezclados. Nunca vacío si la tabla no lo está: se fuerza una línea, elegida a partes iguales, no por peso. |
+| `roll(table, false)` | Lo mismo, pero nada es una respuesta válida — un tick de spawner que no produjo nada. |
+| `rollEntries(table[, forceOne])` | Las líneas que salieron, en el orden escrito, para tablas con líneas de comando o de dinero. |
+| `pickEntry(table)` | Una línea por peso; `null` si todos los pesos son cero. |
+| `itemOf(entry)` / `amountOf(entry)` | El item con un tamaño de stack nuevo, o solo la cantidad (nunca menos de uno). |
+
+Todo esto es cálculo y es seguro desde cualquier hilo; meter los items en un cofre va en el hilo dueño
+del bloque.
+
+### Una línea
+
+| Parte | Qué es |
+|---|---|
+| `type` | `ITEM`, `COMMAND` o `ECONOMY`. Una línea guardada sin tipo es un item. |
+| `itemSnapshot` | Un material, un texto de cabeza o `bytes:`. Un item insertado conserva su nombre, lore y componentes. |
+| `command` | El comando de consola de una línea `COMMAND`. |
+| `currency` | En qué paga una línea `ECONOMY`; vacío es la moneda por defecto. |
+| `minAmount` / `maxAmount` | Tamaño de stack, ambos extremos incluidos. En dinero, la cantidad pagada, en unidades enteras. |
+| `weight` | Ver arriba. Por defecto `50.0`. |
+| `tier` | Una etiqueta como `RARE`. La librería nunca la lee. |
+
+`Loot.roll` solo devuelve items. Una tabla que paga dinero se lee con `rollEntries`, y pagar es cosa de
+quien llama: `Loot.amountOf(entry)` en `entry.currency()`.
+
+### En un archivo de config
+
+```
+MATERIAL MIN MAX WEIGHT [TIER]
+DIAMOND_SWORD 1 1 5 RARE
+SPLASH:HEALING 1 2 20
+GOLDEN_APPLE 1 2 15
+```
+
+El material también acepta `POTION:`, `SPLASH:`, `LINGERING:` y `TIPPED:` seguidos de un tipo de poción,
+con el nombre viejo o el nuevo (`SPEED` y `SWIFTNESS`). Una línea que no se puede leer se salta, nunca
+es fatal; pasa un reporter como segundo argumento de `parseAll` para enterarte.
+
+### Editar en pantalla
+
+```java
+Loot.editor(this, template.entries())                                   // items y comandos
+        .title("{primary}&lLOOT TABLE")
+        .onSave(entries -> manager.save(template, entries))
+        .open(player);
+
+Loot.editor(this, entries, EnumSet.allOf(LootType.class));              // también líneas de dinero
+```
+
+Añadir ofrece **un item**, **un comando**, **dinero** (mínimo y máximo, con selector de moneda, solo si
+la tabla acepta `ECONOMY`) y **todo lo de un cofre**: el admin hace clic izquierdo en un contenedor y
+cada item dentro se vuelve una línea con peso `100`, cantidad de 1 a su tamaño de stack. Editar una
+línea edita sus números; el item es un campo más y solo se pide si se cambia. Una tabla copiada en un
+editor se pega en cualquier otro.
+
+## Weighted, Fortuna y multiplicadores fraccionarios
+
+Pequeñas ayudas para los drops propios de un plugin, fuera de las tablas de loot del servidor.
+
+```java
+Material block = Weighted.pick(blocks, BlockEntry::weight).material();
+```
+
+`Weighted.pick(list, weight)` tira una entrada por peso. Los pesos cero o negativos nunca salen; una
+lista sin ningún peso positivo se trata como pesos iguales, así que siempre elige algo.
+
+```java
+int level = Fortune.level(tool);
+int amount = Fortune.apply(Fortune.Mode.VANILLA, 1, level, 0);   // de 1 a 4 con Fortuna III
+double chance = Fortune.chance(0.5, level, 0.2);                  // 0.5% sube a 0.8%
+ItemStack held = Fortune.limit(tool, 2, false);                   // como mucho Fortuna II, sin Toque de seda
+```
+
+| `Fortune.Mode` | Efecto |
+|---|---|
+| `OFF` | Ninguno. |
+| `VANILLA` | La fórmula de los minerales, unas x2.2 de media con Fortuna III. |
+| `LINEAR` | `amount × (1 + level × perLevel)`, con la fracción tirada. |
+| `CHANCE` | Las cantidades no cambian; sube la probabilidad de cada línea. |
+
+`Fortune.factor(mode, level, perLevel)` es el multiplicador para algo que no se cuenta en items, como el
+dinero. `Fortune.limit` limita una herramienta para calcular drops en un sitio que permite menos.
+
+`Multipliers.scale(3, 1.2)` es 3 o 4, 3.6 de media: la fracción se tira, así las cantidades pequeñas
+ganan lo que dice el multiplicador en vez de no ganar nunca. `Multipliers.scale(items, factor)` lo hace
+sobre una lista de stacks.
+
+## Cajas
+
+Una caja de llaves que un plugin obtiene entregando su catálogo: una llave entra, una recompensa
+aleatoria sale. La tirada, las llaves, los carretes, el pago, los bloques que la abren y las filas de
+jugadores son compartidos; qué es una recompensa queda en el plugin. ExyliaKillEffect, ExyliaHitEffect,
+ExyliaArrows y ExyliaEmotes funcionan sobre ella.
+
+```java
+crates = Crates.of(this).start(new CrateCatalogue<Trim>() {
+            public Collection<Trim> all() { return registry.all(); }
+            public String id(Trim trim) { return trim.id(); }
+            public String tier(Trim trim) { return trim.tier(); }
+            public String name(Trim trim) { return trim.displayName(); }
+            public String icon(Trim trim) { return trim.icon(); }
+            public String description(Trim trim) { return trim.description(); }
+            public ItemStack token(Trim trim, Player viewer) { return null; }      // sin item token
+            public boolean ownsOtherwise(Player player, Trim trim) { return player.hasPermission(trim.permission()); }
+        },
+        () -> config.get().crate(),
+        () -> messages.get().crate(),
+        bound -> config.update(c -> c.withCrate(c.crate().withBlocks(bound))),
+        menus, actions, "crate", "crate_open");
+```
+
+La librería no trae archivo de menú ni de mensajes. Lee los dos menús del plugin por los ids que se
+pasan a `start`, y sus ajustes y mensajes de secciones que el plugin anida en sus propios archivos:
+
+```yaml
+crate:
+  enabled: true
+  start-keys: 0            # se dan una vez, al crear la fila del jugador
+  duplicate-refund: 1      # llaves devueltas cuando un carrete cae en algo que ya tiene
+  reward: UNLOCK           # UNLOCK, ITEM o BOTH
+  blocks: []               # server,world,x,y,z,yaw,pitch — lo escribe bindBlock
+  max-at-once: 4           # tope de 7
+  spin-frames: 34
+  stagger-seconds: 2.0     # espacio entre un carrete y el siguiente
+  key-item:
+    material: TRIPWIRE_HOOK
+    name: '{primary}&lCRATE KEY'
+    glow: true
+  tiers:
+    common:    { name: Common,    color: '{muted}',     chance: 60.0, priority: 1 }
+    legendary: { name: Legendary, color: '{highlight}', chance: 3.0,  priority: 4 }
+```
+
+Mensajes: `won`, `duplicate`, `no-keys`, `busy`, `empty`, `disabled`, `keys-received`,
+`rewards-claimed`. Una línea vacía no se envía.
+
+| Modo | Hace |
+|---|---|
+| `UNLOCK` | Escribe la recompensa en la fila del jugador. |
+| `ITEM` | Entrega el token del catálogo y no desbloquea nada, así que nunca es duplicado. |
+| `BOTH` | Desbloquea, y entrega el token solo si era nuevo. |
+
+Un catálogo cuyo `token` responde `null` trata `ITEM` y `BOTH` como `UNLOCK`: una llave nunca compra
+nada.
+
+Los menús reciben dos acciones en el namespace del `PluginActions` pasado a `start`: `<namespace>:crate`
+abre la pregunta de cuántas, y `<namespace>:crate_open <amount>` gasta esas llaves y abre los carretes.
+Las filas de carrete llevan `%reward_id%`, `%reward_name%`, `%reward_material%`,
+`%reward_description%`, `%reward_tier%`, `%reward_tier_id%`, `%reward_tier_color%` y `%refund%`; en
+cualquier sitio, `%keys%`, `%unlocked_count%` y `%catalogue_count%`.
+
+| Llamada | Qué hace |
+|---|---|
+| `open(player)`, `spin(player, amount)` | La pregunta, o los carretes. |
+| `keys(uuid)`, `owns(uuid, id)`, `unlocked(uuid)` | Desde memoria, para jugadores aquí. |
+| `fetchKeys`, `addKeys`, `setKeys`, `unlock`, `lock`, `clearUnlocks` | Para jugadores aquí o no; futures. |
+| `keyItem(viewer)`, `isKey(item)`, `giveKeyItems(player, n)` | Llaves en item que se pueden intercambiar. Son inertes: nunca se colocan, se comen ni se lanzan. |
+| `bindBlock`, `unbindBlock`, `boundBlocks`, `clearBlocks` | Bloques que la abren; se guardan por el callback de `start`. |
+| `tierIds()`, `count(tier)`, `odds(tier)` | Las rarezas y las probabilidades que respeta una apertura. |
+| `importing(...)`, `legacyKeys(key, value)` | Sembrar una fila desde la tabla vieja del plugin una vez; aceptar llaves antiguas. |
+| `onChange(uuid -> …)`, `rebuild()`, `stop()` | Redibujar tus menús; reconstruir los bloques al recargar. |
+
+La tirada elige una rareza por peso entre las que tienen algo, y luego una recompensa dentro, a partes
+iguales. Las llaves se gastan antes del primer fotograma y nunca bajan de cero; un giro a la vez por
+jugador. Cada carrete paga al caer; cerrar la ventana no cambia nada, y salir paga de golpe los que
+siguen cayendo. Las recompensas van por el `PluginRewards` del plugin, que `start` deja encolando en
+`PendingRewards.database(plugin)` y reclamando al entrar.
+
+Las filas viven en `exylia_crate_players` en la base de datos del plugin: `keys` y los ids
+desbloqueados, separados por comas.
+
+<Callout type="note" title="Comprar en vez de abrir">
+Un cosmético que también se puede comprar directamente se entrega a través de la misma caja con
+[`CosmeticPurchases`](/docs/exylialib/cosmeticos#comprar-un-cosmético).
+</Callout>

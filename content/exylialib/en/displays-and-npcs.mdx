@@ -1,22 +1,26 @@
 ---
 title: "Displays and NPCs"
-description: "Solid objects and player-shaped bodies, sent as packets and animated by the client."
+description: "Solid objects, timed effects and player-shaped bodies, sent as packets and animated by the client."
 ---
 
-Three modules with the same shape: none of them creates a real entity, all three are drawn straight to
-a client, and all three own the lifetime of what they show.
+None of these creates a real entity. Everything is drawn straight to a client, and each module owns the
+lifetime of what it shows.
 
 | Module | Entry point | What it draws |
 |---|---|---|
 | Displays | `Displays.of(plugin)` | Item, block, head and text displays that move, spin and fall. |
-| NPCs | `Npcs.of(plugin)` | Player-shaped bodies: a corpse, a statue, a double. |
-| Ragdolls | `Ragdolls.of(plugin)` | A body cut into its six parts, thrown, opened out or carried off. |
+| Vfx | `Vfx.at(location)` | A timeline of displays, beams, sounds, particles and shakes, with ground telegraphs and floating numbers. |
+| NPCs | `Npcs.of(plugin)` | Player-shaped bodies: a corpse, a statue, a double, or a placed NPC people click. |
+| Ragdolls | `Ragdolls.of(plugin)` | A body cut into its parts and choreographed. See [Ragdolls](/docs/exylialib/ragdolls). |
 
-All three need **PacketEvents**. Without it the module says so once and draws nothing.
+[Holograms](/docs/exylialib/holograms) and [models worn by mobs](/docs/exylialib/mobs-and-models) are
+built on the same displays and have their own pages.
 
-<Callout type="note" title="Most callers never touch either API">
-All three are reachable from a [sequence](/docs/exylialib/sequences) line, which is how every cosmetic
-plugin in the ecosystem uses them. The API is for what configuration cannot describe.
+All of them need **PacketEvents**. Without it the module says so once and draws nothing.
+
+<Callout type="note" title="Most callers never touch the API">
+Displays, NPCs and ragdolls are all reachable from a [sequence](/docs/exylialib/sequences) line, which is
+how every cosmetic plugin in the ecosystem uses them. The API is for what configuration cannot describe.
 </Callout>
 
 ## Why the client animates it
@@ -46,18 +50,29 @@ effects:
   - '[CIRCLE] CRYING_OBSIDIAN;as:block;radius:0.3;points:20;size:0.1;size_to:1.4;to:0,0.2,0;life:0.5;light:15'
   # One item, thrown up, tumbling, falling back down.
   - '[DISPLAY] TRIDENT;from:0,0.5,0;to:0,4,0;gravity:14;spin:3;axis:z;life:1.4;size:1.5'
+  # A line of text that rides with whoever set it off, on a dark panel.
+  - '[DISPLAY] {primary}&lCRITICAL;as:text;rise:0.6;life:1.2;ease:back_out;follow:true;background:#000000;background_alpha:96'
 ```
+
+`as:` says what the line's first word is:
+
+| `as:` | The first word is |
+|---|---|
+| `item` | A material, or `{item:name}` for an item the plugin hands over when it plays. The default on `[DISPLAY]`. |
+| `block` | A material or a full block state: `oak_stairs[facing=north]`. |
+| `head` | A texture, `{victim}` or `{killer}`. |
+| `text` | A line of text; `%placeholders%` are filled on every play. |
 
 ### How it moves
 
 | Parameter | What it does | Default |
 |---|---|---|
-| `life:` | Seconds it exists. | `1` |
+| `life:` | Seconds it exists; `1500ms` also works. | `1` |
 | `from:x,y,z` | Where it starts, relative to its point. | `0,0,0` |
 | `to:x,y,z` | Where it ends. | `0,0,0` |
 | `rise:` | Shorthand for `to:0,n,0`. | |
 | `gravity:` | Blocks per second squared, **added** to the line. | `0`; vanilla is about `32` |
-| `ease:` | `in`, `out`, `in_out`. | linear |
+| `ease:` | The curve, below. An unknown name is linear. | `linear` |
 | `spin:` | Turns over its whole life; `x,y,z` tumbles on three axes. | `0` |
 | `axis:` | Which axis a single-number spin turns around. | `y` |
 | `orbit:` | Turns each point carries round the anchor. | `0` |
@@ -67,22 +82,51 @@ effects:
 | `tilt:` `roll:` `turn:` | A fixed rotation, in degrees. | `0` |
 | `face_out:` | Each point faces away from the centre. | `false` |
 | `pull:` | How far each point travels towards the centre; negative throws it outwards. | `0` |
+| `follow:` | `true` seats it on whoever set the sequence off, so it goes where they go; `victim` on the victim. | stays put |
 | `glow:` | Outline colour: a name, `#rrggbb` or a `{palette}` token. | none |
 | `light:` | Fixed light level, `0` to `15`. | the light where it stands |
-| `model:` | Custom model data. | none |
+| `model:` | Custom model data, for items and heads. | none |
 | `billboard:` | `FIXED`, `VERTICAL`, `HORIZONTAL`, `CENTER`. | `FIXED`, `CENTER` for text |
-| `hold:` | Item display context: `0` the model, `5` head, `7` dropped, `8` item frame. | `0` |
+| `hold:` | Item display context, `0` to `8`: `0` the model, `5` head, `7` dropped, `8` item frame. | `0` |
 
 `orbit:` is the movement a straight line cannot express and the one that separates a shape that
 appears from a shape that is alive. `vary:0.4` gives the pieces sizes that differ by up to two fifths
 — a hash of each point's position, not a random number, so it is the same every play. `spin:0.5,2,1`
 tumbles on three axes, because nothing thrown in the world spins about exactly one.
 
+### Easing
+
+`linear`, `in`, `out` and `in_out` are the plain curves. `back` overshoots and settles, `anticipate`
+pulls back before it goes, `elastic` springs, `bounce` lands and bounces, `snap` cuts straight to the end,
+`smooth` passes through every pose without a corner, and `hold` stays put until the end. The families
+`sine`, `quad`, `cubic`, `quart`, `quint`, `expo`, `circ`, `back`, `elastic` and `bounce` each take
+`_in`, `_out` or `_in_out`: `back_out`, `quart_in_out`. `easeOutQuart` is read too.
+
+### Text lines
+
+| Parameter | What it does | Default |
+|---|---|---|
+| `background:` | Panel colour, or `none`. | no panel |
+| `background_alpha:` | The panel's alpha, `0` to `255`. | `64` |
+| `opacity:` | Text opacity, `0` to `255`. | opaque |
+| `see_through:` | Shows through walls. | `true` |
+| `text_shadow:` | Chat-style drop shadow. | `false` |
+| `align:` | `left`, `center` or `right`. | `center` |
+| `line_width:` | Wrap width, in pixels. | `200` |
+| `view_range:` | A multiple of the client's entity distance. Any kind of line. | `1` |
+| `cull:` | Culling box, `cull:4` or `cull:4,3`, for a wide piece that vanishes at the edge of the screen. Any kind of line. | the client's |
+
+<Callout type="note" title="Text displays draw no panel">
+A text display has no background unless one is set. Before 1.311 it kept the client's grey panel;
+an effect that relied on it now wants `background:#000000;background_alpha:64`.
+</Callout>
+
 ### Making a movement land
 
 <Steps>
   <Step title="ease:in for a slam">
     It holds the movement back and spends it late: a wind-up and a strike, from the same two numbers.
+    `back_out` is the opposite: it arrives early, overshoots and settles.
   </Step>
   <Step title="gravity: for debris only">
     It is added to the line rather than replacing it, so `from:0,9,0;to:0,1,0;gravity:40` descends
@@ -123,19 +167,121 @@ DisplayMotion thrown = DisplayMotion.builder()
         .life(1200)
         .from(0, 7, 0).to(0, 0, 0)
         .spin(Rotation.Axis.Z, 3)
+        .ease(DisplayMotion.Easing.BACK_OUT)
         .build();
 
 displays.show(blade, thrown, where, observers);
 ```
 
-| Method | What it does |
+| `PluginDisplays` | What it does |
 |---|---|
-| `show(model, motion, at, viewers)` | Shows one display; it removes itself when the motion ends. Returns a `DisplayHandle`, or `null` when nobody can see it or PacketEvents is absent. |
-| `removeAll()` | Everything this plugin is showing. |
-| `active()` | How many it has on screen. |
-| `isSupported()` | Whether displays can be shown at all here. |
+| `show(model, motion, at, viewers)` | Shows one display to a fixed list; it removes itself when the motion ends. Returns a `DisplayHandle`, or `null` when nobody can see it or PacketEvents is absent. |
+| `show(model, motion, at, radius)` | A **tracked** audience: who is in range is read again every half second, and a player who walks up is sent it mid-flight. |
+| `show(model, motion, at, radius, who)` | Tracked, with a filter. |
+| `rideOn(model, motion, entity, viewers)` | Seated on an entity; the client carries it. |
+| `removeAll()` / `active()` / `isSupported()` | Everything this plugin shows, how many, whether it can. |
+
+`DisplayModel` is `item`, `block`, `text(component)` or `text(player -> component)` for a line that differs
+per viewer, then `glow`, `light`, `billboard`, `held`, and for text `background`, `opacity`,
+`seeThrough`, `textShadow`, `align` and `lineWidth`. `shadow(radius, strength)` gives any display a
+ground shadow, and exists only in the API.
+
+### Motions
+
+| `DisplayMotion` | What it is |
+|---|---|
+| `builder()` | `life`, `from`, `to`, `scale`, `rotation`, `spin`, `gravity`, `ease`, and `easePosition`, `easeRotation`, `easeScale` for one curve each; `turnTo(rotation)` turns towards a pose as it goes. |
+| `chain(a, b, c…)` | Motions back to back, each with its own easing: a rise, a hang, a drop. |
+| `between(from, to, millis, easing)` | A glide between two keyframes, the short way round. |
+| `spline(keyframes, life)` | A smooth curve through every keyframe. |
+| `of(keyframes, life)` / `still(life)` | Exact poses, or none. |
+| `looping(cycle, accel, maxSpeed)` | Repeats, optionally speeding up each cycle. |
+
+### Changing a display while it plays
+
+Every call on a `DisplayHandle` is safe from any thread.
+
+| `DisplayHandle` | What it does |
+|---|---|
+| `showing(item)`, `text(…)`, `glow(rgb)`, `light(level)`, `restyle(model)` | Changes how it looks; the motion carries on untouched. |
+| `pose()` | Where it is on screen now. |
+| `then(motion)` | Plays a new motion from there. |
+| `moveTo(keyframe, millis, easing)` | Glides to a pose, keeping any longer life it had left. |
+| `speedUp(factor)` | Plays the rest faster. |
+| `settle(millis)` | Eases back to where it started, then goes. |
+| `remove()` / `isShowing()` | Lifetime. |
+
+```java
+DisplayHandle reel = displays.show(DisplayModel.item(icon),
+        DisplayMotion.builder().life(10_000).spin(Rotation.Axis.Z, 40).build(), at, 24);
+
+reel.showing(nextIcon);       // swap the item, the spin carries on
+reel.speedUp(2.0);            // the reel slows down by being told to stop sooner
+```
+
+## Vfx, telegraphs and indicators
+
+A `Vfx` is one effect written as a timeline: what happens at which millisecond, played as a unit and
+cancelled as a unit. It is how a boss's slam, a crate opening or a lottery draw is built in code.
+
+```java
+Vfx slam = Vfx.at(centre).track(48);
+Telegraphs.circle(slam, 0, centre, 5, 900, 0xFF9500);       // fills for 0.9 s: the dodge window
+
+DisplayMotion rubble = DisplayMotion.chain(
+        DisplayMotion.builder().life(150).to(0, 0.6, 0).ease(DisplayMotion.Easing.OUT).build(),
+        DisplayMotion.builder().life(300).from(0, 0.6, 0).to(0, -0.2, 0).ease(DisplayMotion.Easing.BOUNCE_OUT).build());
+
+slam.sound(900, Sound.ENTITY_GENERIC_EXPLODE, 0.8f, 0.6f)
+    .display(900, DisplayModel.block(Material.DEEPSLATE.createBlockData()).light(15), rubble, centre)
+    .shake(900, 10, 2, 50);
+
+VfxRun run = slam.play(plugin);
+run.cancel();                 // the caster died mid wind-up
+```
+
+| `Vfx` | What it does |
+|---|---|
+| `at(location)` | Starts one. |
+| `viewers(players)` / `nearby(radius)` / `track(radius)` | Who sees it: a list, everyone in range when it is built, or everyone in range while it plays. |
+| `lod(true)` | Lower detail; turned on by itself past fifteen viewers. |
+| `display(at, model, motion)` / `ride(at, model, motion, entity)` | A display. |
+| `beam(at, from, to, model, thickness, life)` | A beam between two points. |
+| `sound`, `particle`, `firework` | What they say; the firework is a packet, not an entity. |
+| `lines(at, sequence, target)` | Plays a compiled sequence. |
+| `shake(at, radius, times, every)` | Shakes the camera of players in range. |
+| `call(at, runnable)` | Runs code at that moment. |
+| `play(plugin)` | Plays it and returns a `VfxRun`: `cancel()`, `speedUp(factor)`, `isDone()`, `viewers()`. |
+
+The whole effect counts against `max-per-effect`; what goes over is dropped and counted in `dropped()`.
+
+**Ground telegraphs** show where something will land. They are glass plates laid flat on the ground,
+lit, and their fill doubles as the timer:
+
+| `Telegraphs` | Shape |
+|---|---|
+| `circle(vfx, at, centre, radius, fillMillis, rgb)` | A disc that fills outwards. |
+| `ring(…)` | A ring that closes inwards. |
+| `cone(vfx, at, apex, yaw, radius, degrees, fillMillis, rgb)` | A cone, for a cleave. |
+| `line(vfx, at, from, to, width, fillMillis, rgb)` | A strip, for a charge or a fissure. |
+| `cross(vfx, at, centre, length, fillMillis, rgb)` | A cross. |
+
+**Floating indicators** are the numbers that pop off something hit:
+
+```java
+Indicators numbers = Indicators.of(plugin).range(32);
+numbers.damage(entity, finalDamage, critical);
+numbers.heal(player, 4);
+numbers.text(entity, Text.component("{warning}Blocked"));
+```
+
+Hits of the same kind within 0.3 s merge into one summed number, at most four float over one entity, and
+the default range is 24 blocks. Damage is drawn in `{error}`, a critical in `{warning}` with a ✦, and a heal in `{success}` as `+4 ❤`.
+Call them from the entity's own thread.
 
 ## NPCs
+
+### From a sequence
 
 ```yaml
 effects:
@@ -147,14 +293,15 @@ effects:
 
 | Parameter | What it does | Default |
 |---|---|---|
-| `pose:` | `lying`, `standing`, `crawling`, `sneaking` or `spinning`. | `lying` |
+| `pose:` | `lying`, `standing`, `crawling`, `sneaking` or `spinning`. An unknown pose stands. | `lying` |
 | `life:` | Seconds it stays, from `0.2` to `120`. | `5` |
-| `equip:` | Wears the armour and weapon they died in. | `true` |
+| `equip:` | Wears the armour and weapon they have on. | `true` |
 | `glow:` | Outline colour. | none |
 | `y:` | Height above the anchor. | `0` |
 | `face:` | Turns to face whoever set the sequence off. | `true` |
 | `from:x,y,z` / `to:x,y,z` | Where it appears and where it ends up. | `0,0,0` |
 | `over:` | Seconds the movement takes. | `0.7` |
+| `move_after:` | Seconds before the movement or flinch starts. | `0` |
 | `ease:` | `out`, `in`, `in_out` or `linear`. | `out` |
 | `gravity:` | Blocks per second squared, added to the line. | `0` |
 | `turn:` | Degrees it turns on the spot over the movement. | `0` |
@@ -170,9 +317,20 @@ effects:
 `spin:` is the one to reach for when a body should not settle: `turn:` is one turn spread over the
 movement and then finished, `spin:` never stops. A body caught in a vortex is `spin:220`, one hanging
 in the light is `bob:0.3;spin:40`, and one still swinging at whatever killed it is
-`swing:0.5;hold:NETHERITE_SWORD`. `scale:` is the client's own scale attribute, so the whole model
-grows — `0.4` is a doll and `2.5` is something the room is not big enough for; it needs a 1.20.5
-client, and an older one sees a player-sized body.
+`swing:0.5;hold:NETHERITE_SWORD`. `scale:` is the client's own scale attribute (`0.0625` to `16`), so the
+whole model grows; it needs a 1.20.5 client, and an older one sees a player-sized body.
+
+A body reads better at about **half vanilla gravity**. `pose:lying` is the pose a sleeping player is drawn
+in, which is the only way to put a body on the floor without a model of your own.
+
+<Callout type="note" title="Why an NPC cannot take a player name">
+`{victim}` and `{killer}` read the texture from the connection this server already holds — no lookup,
+no waiting, no failure halfway. A name would be a request to Mojang, and an effect cannot wait for one,
+so the line refuses it. A base64 texture is accepted, but it carries no signature, and a modern client
+draws an unsigned texture as the default skin.
+</Callout>
+
+### From code
 
 ```java
 PluginNpcs npcs = Npcs.of(this);
@@ -186,164 +344,171 @@ NpcHandle body = npcs.show(NpcModel.of(victim)
 body.lookAt(killer.getLocation());
 ```
 
-A body reads better at about **half vanilla gravity** — a real one is heavier than the eye expects and
-slower than the number says. `pose:lying` is the pose a sleeping player is drawn in, which is the only
-way to put a body on the floor without a model of your own; `pose:standing` with `face:true` is a
-different effect entirely: somebody who has stopped, and is looking at you.
-
-<Callout type="note" title="Why an NPC cannot take a player name">
-`NpcModel.of(player)` reads the texture from the connection this server already holds — no lookup, no
-waiting, no failure halfway. A name would be a request to Mojang, and an effect cannot wait for one.
-A base64 texture written into the file works, and is resolved when the file is read.
-</Callout>
+`NpcModel` is `of(player)`, `of(name, texture, signature)` or `of(name)` for the default skin, then
+`pose`, `glow`, `wearing`, `holding`, `offHand` and `scale`. An `NpcMotion` passed to `show` describes the
+same movement as the line. The `NpcHandle` can `look`, `lookAt`, `pose`, `moveTo` (a short hop glides,
+a long one jumps), `teleportTo`, `using(true)` to raise a bow or shield, `equip`, `swing`, `hurt` and
+`remove`.
 
 <Callout type="warning" title="An NPC always has its own identity">
 It is announced under a UUID of its own, never the wearer's: a second entry under a real player's id
-takes that player's skin off their own body until they relog. It is also announced **unlisted**, so
-it never appears in the tab list beside real players.
+takes that player's skin off their own body until they relog. It is also announced **unlisted**, so it
+never appears in the tab list beside real players.
 </Callout>
+
+### Placed NPCs
+
+A placed NPC stays where it is put until it is removed: a shopkeeper, a quest giver, a lobby guide. It is
+drawn for every player in range and taken away as they leave.
+
+```java
+PlacedNpc guide = npcs.place("guide", NpcSpec.builder()
+        .skin(NpcSkin.player("Notch"))
+        .look(NpcLook.EACH_VIEWER)
+        .lookRange(10)
+        .equip(EquipmentSlot.HAND, new ItemStack(Material.COMPASS))
+        .animations(animations)                  // read from config, below
+        .build(), location);
+
+guide.visibleIf(player -> player.hasPermission("lobby.guide"));
+guide.onClick((player, click) -> menus.open(player, "guide"));
+```
+
+| `NpcSpec` | What it does | Default |
+|---|---|---|
+| `skin` | `NpcSkin.none()`, `player(name)`, `texture(value, signature)`, or `mirror()`: each viewer sees their own skin. | none |
+| `pose` | `STANDING`, `SNEAKING`, `LYING`… | `STANDING` |
+| `scale` | `0.0625` to `16`. | `1` |
+| `glow` | Outline, drawn in the nearest of the sixteen team colours. | none |
+| `equip(slot, item)` | What it wears and holds. | nothing |
+| `look` | `FIXED` faces its location's way; `NEAREST` turns one head to the nearest player; `EACH_VIEWER` turns to each player on their own screen. | `FIXED` |
+| `lookRange` | How close a player must be to be looked at. | `8` |
+| `viewDistance` | Blocks; past this it is not drawn. | `48` |
+| `sitting` | Sits on an invisible seat, hips at the location. | `false` |
+| `animations` | Click, idle and greeting animations. | none |
+
+- **Range.** Who sees it is worked out off the main thread four times a second. `visibleIf` is checked on
+  every pass and must read memory only.
+- **Skins.** `player(name)` reads an online player's skin from their connection, and otherwise asks Mojang
+  off the main thread, once a run. The NPC wears the default skin until it arrives and is redrawn then.
+  A `texture` without its signature is drawn as the default skin.
+- **The head.** With nobody in range a turned head eases back home over about a second.
+- **No name, no tab entry.** The nametag is always hidden and collision is off. Once drawn it leaves the
+  player list, so commands stop completing it.
+- **Clicks.** Only a player who has it drawn can click it, and a second click within 200 ms is dropped.
+  `onClick` runs on that player's thread with a `Click`.
+
+`PlacedNpc` also has `moveTo`, `update(spec)`, `swing`, `hurt`, `play(animation)`, `perform(performance)`,
+`isViewing`, `viewerCount` and `remove`; `npcs.placed(id)`, `allPlaced()` and `unplace(id)` find them.
+
+### Animations
+
+`NpcAnimations` is a configuration section, so server owners set them per NPC:
+
+```yaml
+animations:
+  left-click: 'flinch'
+  right-click: 'wave'
+  idle: 'nod'
+  idle-every: 20s
+  greet: 'wave'
+  greet-range: 4.0
+  greet-cooldown: 30s
+  perform-range: 24.0
+```
+
+| Key | When it plays | Default |
+|---|---|---|
+| `left-click` / `right-click` | On a click, for everyone who sees it, before the click handler. | none |
+| `idle` / `idle-every` | On a timer, only while somebody sees it. `0` never. | none / `20s` |
+| `greet` | For a player who walks up, seen **only by that player**. | none |
+| `greet-range` / `greet-cooldown` | How close, and how long before the same player is greeted again. | `4` / `30s` |
+| `perform-range` | How close a player must be to be shown a performance. | `24` |
+
+A value is a preset — `wave`, `wave-offhand`, `nod`, `bow`, `flinch`, `punch`, `cheer` — or moves
+joined by commas, with waits between them: `swing, 250ms, offhand, 1s, crouch, 500ms, stand`. The moves
+are `swing`, `offhand`, `hurt`, `crouch` and `stand`; an animation that crouched always ends standing.
+They are vanilla packets and need no resource pack.
+
+### Ragdoll performances
+
+A value with a `:` is a **performance**: the NPC is hidden and a [ragdoll](/docs/exylialib/ragdolls)
+wearing its skin dances in its place, then the NPC comes back. It keeps its hitbox the whole time, so it
+can still be clicked.
+
+| Value | What plays |
+|---|---|
+| `anim:wave` | `plugins/<YourPlugin>/animations/wave.json`. |
+| `emote:<id>` | An emote the plugin resolves with `npcs.emotes(id -> …)`. |
+| `follow:1;keys:…` | `[RAGDOLL]` options ending in `keys:`. |
+
+Unwritten options default to `intact:0;follow:1;breathe:1`. One performance plays at a time; a loop stops
+after eight seconds unless told otherwise. A performance is skipped while the NPC sits, when nobody is
+within `perform-range`, or when its emote is unknown. Moving or changing the NPC ends it.
+
+### Clicks as configuration: `Interactions`
+
+Placed NPCs and holograms hand a click over as a `Click` — `LEFT`, `RIGHT`, `SHIFT_LEFT` or
+`SHIFT_RIGHT`. `Interactions` turns a list of configuration lines into what that click does:
+
+```java
+Interaction onGuide = Interactions.compile(this, config.guideClick(), "npc guide");
+guide.onClick((player, click) -> onGuide.run(player, click, Map.of("npc", "guide")));
+```
+
+```yaml
+guide-click:
+  - 'right:[SOUND] UI_BUTTON_CLICK;0.6;1.4'
+  - 'right:menu open guide'
+  - 'shift_left:console: warp %player_name% spawn'
+  - 'left:[MESSAGE] {error}Hey, that hurts.'
+```
+
+A line may start with a filter — `left:`, `right:`, `shift_left:`, `shift_right:`, `shift:`, `any:`, or
+several as `left,right:` — and no filter means every click. Then `[DELAY] 1s`, `[SERVER] name`,
+`[TELEPORT] world;x;y;z`, `[ACTION] ns:id`, any other `[TOKEN]` played as a sequence line for the
+clicker, or a command: bare or `player:` as the player, `console:`, `player-proxy:` or `console-proxy:`.
+`%placeholders%` resolve for the clicker, from the `data` map first. A step that is refused stops the
+lines after it. `Interactions.token(plugin, name, token)` adds a token of the plugin's own.
 
 ## Ragdolls
 
-A body that comes apart. The player is cut into its six parts — head, torso, two arms, two legs — each
-one wearing the colours of their own skin, and then those parts are moved as a single piece of
-choreography: thrown, opened out, spun, flattened, spelled into letters, or carried off whole.
-
-```yaml
-effects:
-  # Thrown apart. The pieces leave outwards, fall, bounce and rest.
-  - '[RAGDOLL] {victim};intact:0.3;life:2.6;speed:4.2;up:6.4;spin:2.2;detail:2;light:15'
-  # Lifted, opened out, and taken upwards. Nothing is left on the floor.
-  - '[RAGDOLL] {victim};pose:vortex;rise:3.0;open:0.7;turns:1.8;life:3.0;detail:2;glow:{highlight}'
-```
-
-The head takes `{victim}`, `{killer}`, or a base64 texture, exactly as `[NPC]` does. If what died was
-not a player the line says so once and draws nothing.
-
-### The poses
-
-| Pose | What happens | Also written |
-|---|---|---|
-| `burst` | Thrown apart: the pieces leave outwards, fall, bounce and rest. The default. | |
-| `spread` | Lifted off the ground and opened out, arms and legs wide, turning slowly — then let go. | `starfish`, `open` |
-| `knocked` | Held open like `spread`, then struck several times from different sides. | `knock`, `batted`, `hit` |
-| `vortex` | Taken: the pieces spiral inwards and upwards and are gone at the top. Nothing is left. | `taken`, `ascend`, `spiral` |
-| `balloon` | The head swells far too big, wobbles, and bursts. The body waits underneath it. | `bighead`, `swell`, `pop` |
-| `helicopter` | The arms go flat above the head as a rotor, the body counter-turns, and it leaves forwards. | `chopper`, `rotor` |
-| `plane` | Arms out as wings, nose up, banking as it climbs. A negative climb is a dive. | `fly`, `glide`, `jet` |
-| `flatten` | Driven straight down and left flat: a player-shaped stain, not a pile of blocks. | `pancake`, `squash`, `flat` |
-| `melt` | Sinks. The pieces lose their height where they stand and are gone. No throw, no bounce. | `sink`, `dissolve` |
-| `sign` | The pieces lay themselves out into letters and hold there, then let go and fall. | `letters`, `spell`, `word` |
-| `thrown` | Sent somewhere in one piece, turning end over end. With no gravity it never comes back. | `launched`, `ejected`, `carried` |
-
-### Its parameters
-
-| Parameter | What it does | Default |
-|---|---|---|
-| `pose:` | Which of the eleven above. | `burst` |
-| `life:` | Seconds the pieces last. | `2.2` |
-| `intact:` | Seconds the body stands whole before anything happens to it. | `0.3` |
-| `detail:` | Cells each part is cut into on each axis, `1` to `4`. `1` is one colour per limb. | `1` |
-| `size:` | How big it is; `1` is player-sized. | `1` |
-| `light:` | Light level, `0` to `15`. | the world's own |
-| `glow:` | Outline colour — a name, `#rrggbb` or a `{palette}` token. | none |
-| `fade:` | Shrinks away at the end instead of vanishing. | `false` |
-| `settle:` | Stops turning once it lands. | `true` |
-| `y:` | Height above the anchor. | `0` |
-| `face:` | Turns to face whoever set the sequence off. | `true` |
-| `speed:` `up:` | How fast the pieces leave, outwards and upwards. | `3.2` / `6.5` |
-| `spread:` | How much the pieces differ from each other, `0` to `1`. | `0.45` |
-| `gravity:` `bounce:` | Blocks per second squared, and the speed kept on landing. | `26` / `0.32` |
-| `spin:` | Turns a second. | `1.8` |
-| `rise:` `open:` | How far off the ground a held body hangs, and how far its arms and legs open out. | `1.1` / `0.55` |
-| `lift:` `hang:` `turns:` | Seconds the lift takes, seconds it hangs there, and turns it makes while it hangs. | `0.45` / `0.9` / `0.35` |
-| `hits:` `every:` `force:` | For `knocked`: how many blows, seconds between them, and how far one shoves it in blocks. | `3` / `0.32` / `0.85` |
-| `swell:` | For `balloon`: how many times its own size the head reaches. | `3` |
-| `squash:` | For `flatten`: what is left of a piece's height. | `0.14` |
-| `sign:` `letters:` | For `sign`: what the body spells, and how tall one letter is in blocks. | `EZ` / `2.4` |
-| `dir:` | Which way it is thrown or flies, in degrees. `0` is east, `90` is south. | the anchor's own facing |
-
-```java
-PluginRagdolls ragdolls = Ragdolls.of(this);
-
-ragdolls.show(RagdollModel.of(victim).detail(2).light(15),
-        RagdollMotion.builder().pose(RagdollPose.VORTEX).rise(3.0).build(),
-        victim.getLocation(), observers);
-```
-
-<Callout type="tip" title="`detail` is the only expensive parameter here">
-A part is drawn as a `detail` × `detail` grid, so six parts cost `6 × detail²` displays: `detail:1` is
-six, `detail:2` is twenty-four, and `detail:4` is ninety-six. Two reads as a body at any distance
-somebody actually watches one from; four is for a body that hangs still in front of the camera.
-</Callout>
-
-<Callout type="note" title="A pose is choreography, not physics">
-Every one of these is solved in advance and handed to the client as poses, so what separates them is
-what the file wanted to say, never what the server could afford. Nothing here is simulated, and
-nothing here is ticked.
-</Callout>
+A body cut into its six parts and moved as choreography: thrown apart, opened out, spelled into letters,
+danced frame by frame or imported from Blockbench and Emotecraft. They have their own page:
+[Ragdolls](/docs/exylialib/ragdolls).
 
 ### Real skins: `ragdoll-skin-quality`
 
-A ragdoll wears the player's real skin with nothing to set up: no key, no account. The head is the
-player's real face, and the rest of the body is cut into pieces, each one made into a texture by
-[Exylia Skins](https://skins.exylia.net), a free service with a cache shared by every server. A piece
-any server already made arrives at once; a brand-new one waits its turn and is drawn in blocks of the
-nearest colour until it arrives. The only setting is how finely the body is cut, in ExyliaLib's own
-`plugins/ExyliaLib/config.yml`:
+Ragdolls wear the player's real skin through Exylia Skins, with no key and no account. The setting and how
+it works are on the [Ragdolls](/docs/exylialib/ragdolls#real-skins-ragdoll-skin-quality) page.
 
-```yaml title="plugins/ExyliaLib/config.yml"
-ragdoll-skin-quality: normal
-```
-
-| Quality | Pieces per skin | What it looks like |
-|---|---|---|
-| `high` | 18 | 4-pixel cubes; a breaking body comes apart in 19 pieces. |
-| `normal` (default) | 10 | Every skin pixel kept exactly; 11 larger pieces. |
-| `low` | 5 | One head per part; a third of the rows lost. |
-
-- **Made once, for everybody.** A piece is named by the hash of its pixels and uploaded once, ever, for
-  every server, whatever quality it uses. Each plugin that shows bodies also keeps the pieces it got in
-  its own database (its `database.yml`, table `exylia_ragdoll_skins`), so a restart asks for nothing.
-- **Prepared on join.** A skin is prepared when its owner joins. A skin changed mid-session (such as
-  SkinsRestorer's `/skin`) is prepared again the next time it is read.
-- **Offline mode.** A player with no skin wears the default skin the game gives their UUID (Steve,
-  Alex and the other default skins, wide or slim). SkinsRestorer skins are read from the player's
-  profile, offline mode included.
-- **Never a wait.** A piece whose texture has not arrived yet is drawn in blocks until it does.
-- **Applied live.** `/exylialib reload` reads the quality, and a change prepares the skins of everybody
-  online again.
-
-<Callout type="note" title="Upgrading from a MineSkin key">
-Older versions needed a `mineskin-key`. It is no longer used: the library removes it from
-`config.yml` on its own the next time it starts.
-</Callout>
-
-## What all three guarantee
+## What they guarantee
 
 | | |
 |---|---|
 | **Nothing the server carries** | Not entities: not ticked, not saved, not in any chunk, no hitbox. Two players standing together can be shown different ones. |
-| **Nothing can be left behind** | Nothing else would clean them up, so the module owns their lives: they go when the motion or life ends, when the plugin is disabled, or when the server stops. There is no fourth case. |
+| **Nothing can be left behind** | Nothing else would clean them up, so the module owns their lives: they go when the motion or life ends, when the plugin is disabled, or when the server stops. |
 | **One timer, not one per object** | Every display on the server is moved from a single asynchronous driver. |
 | **A spin is cut up for you** | The client turns by the shortest arc, so spins are split into sixths of a turn; `spin:3` is correct without anybody knowing that. |
-| **Capped work** | A file asking for two hundred turns is capped at forty-eight poses rather than sending two hundred packets. |
+| **Capped work** | A short motion is capped at forty-eight poses, a long one at one pose a tick up to 256, rather than sending whatever a file asks for. |
 | **PacketEvents or nothing** | There is no fallback worth pretending about. |
 
 ## The ceiling on what displays may cost
 
-`plugins/ExyliaLib/displays.yml` holds two numbers for the whole server, because what a client can be
+`plugins/ExyliaLib/displays.yml` holds three numbers for the whole server, because what a client can be
 sent is a fact about the server rather than about the plugin that happened to send it.
 
-```yaml
+```yaml title="plugins/ExyliaLib/displays.yml"
 max-viewer-displays: 20000
 max-per-effect: 128
+max-model-parts: 30000
 ```
 
 | Key | What it caps |
 |---|---|
 | `max-viewer-displays` | Display-**viewer pairs** at once: one display seen by thirty players counts as thirty. Effects that would go over are dropped before their packets are built, so a crowded arena loses the tail of an effect instead of its tick rate. The console says so at most once a minute. `0` removes the ceiling. |
-| `max-per-effect` | How many displays one shape may draw — a `points:900` written by hand is caught at load rather than on the wire. |
+| `max-per-effect` | How many displays one shape or one `Vfx` may draw — a `points:900` written by hand is caught at load rather than on the wire. |
+| `max-model-parts` | [Model](/docs/exylialib/mobs-and-models) cubes times viewers. Past three quarters of it, models are drawn in less detail; nothing is refused. `0` removes the ceiling. |
 
 The budget counts viewers because that is the number that reaches the network: two hundred displays in
 an empty corner are nothing, and the same two hundred with thirty players around them are six thousand

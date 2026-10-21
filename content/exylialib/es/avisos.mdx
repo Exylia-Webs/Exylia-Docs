@@ -1,0 +1,116 @@
+---
+title: "Avisos y toasts"
+description: "Toasts de logro para lo que merece verse, y mensajes que esperan a un jugador que quizá no esté conectado para leerlos."
+---
+
+Dos formas de decirle algo a un jugador sin una simple línea de chat: un **toast** aparece en la
+esquina ahora, un **aviso** le espera si no está.
+
+## Toasts
+
+El aviso de logro de la esquina superior derecha:
+
+```java
+Toasts.send(player, Material.EMERALD, "{success}Vendido {highlight}x16 Diamond", Toasts.Frame.GOAL);
+Toasts.send(player, crateKeyItem, "{primary}&lLLAVE RECIBIDA", Toasts.Frame.TASK);
+```
+
+| | |
+|---|---|
+| Icono | Un `Material` (el aire se dibuja como papel) o un `ItemStack`, así que se ven modelos propios y cabezas. |
+| Marco | `TASK` (cuadrado, sin sonido), `GOAL` (redondeado), `CHALLENGE` (con picos y la fanfarria de desafío). `Frame.of(nombre)` lee uno sin importar mayúsculas, `TASK` si no lo conoce. |
+| Título | Formato Exylia — tokens de la paleta, códigos `&`, degradados — rellenado por jugador. Caben unos 25 caracteres por línea; el cliente pasa el resto a una segunda. |
+
+En una secuencia es una línea, con `who:` como último segmento opcional igual que `[TITLE]`:
+
+```yaml
+- '[TOAST] NETHER_STAR;CHALLENGE;{highlight}&lDROP LEGENDARIO;who:both'
+```
+
+El toast es un logro falso que existe en un cliente durante un paquete: nunca aparece en la pantalla de
+logros, el servidor no concede nada, no se guarda nada y no se anuncia nada en el chat. Seguro desde
+cualquier hilo.
+
+<Callout type="note" title="Sin PacketEvents">
+El título se muestra como diga el `config.yml` de ExyliaLib, y el plugin nunca tiene que comprobar
+cuál:
+
+```yaml
+toasts:
+  # What a toast becomes without PacketEvents: action-bar, title, chat or none.
+  fallback: action-bar
+```
+
+`title` lo muestra como subtítulo bajo un título vacío.
+</Callout>
+
+## Avisos
+
+Mensajes que se dejan a un jugador — correo de palabras, no de ítems. Una venta, una subasta caducada,
+una invitación de clan: lo que un plugin quiera que lea, esté conectado o no.
+
+```java
+notices = Notices.of(this)
+        .summary("sold", (player, sold) -> List.of(Text.from(this,
+                "%prefix% {letters}Mientras no estabas se vendieron {highlight}%count% {letters}ítems por {success}%total%")
+                .with("%count%", sold.size())
+                .with("%total%", Formats.money(sold.stream().mapToDouble(n -> n.number("price")).sum()))))
+        .click("sold", "/market claim")
+        .live("sold", (player, notice) ->
+                Toasts.send(player, Material.EMERALD, "{success}Ítem vendido", Toasts.Frame.GOAL));
+
+// cualquier hilo
+notices.send(seller, "sold", "%prefix% {letters}Vendido {highlight}%item% {letters}por {success}%price%",
+        Map.of("item", "Diamond x16", "price", 4500));
+```
+
+| Método | Qué hace |
+|---|---|
+| `Notices.of(plugin)` | Los avisos del plugin; la misma instancia en cada llamada. |
+| `send(uuid, category, message)` | Deja un mensaje. |
+| `send(uuid, category, message, values)` | Lo mismo con valores `%clave%`, guardados aparte para que un resumen los pueda sumar. |
+| `summary(category, summary)` | Resume los avisos pendientes de una categoría en unas pocas líneas al entrar. |
+| `click(category, command)` | Cada línea de entrada de la categoría ejecuta el comando al hacer clic. |
+| `channel(category, channel)` | Un jugador que silenció ese canal en `/settings` no ve la categoría, ni en directo ni al entrar. |
+| `live(category, hook)` | Corre en el hilo del jugador tras cada aviso de la categoría mostrado **en directo** — un sonido, un toast, un título. No corre para el resumen de entrada, donde diez toasts a la vez serían ruido. |
+| `footer(uuid -> lines)` | Líneas tras el resumen de entrada, o solas — "tienes 3 ítems por reclamar". |
+
+Un `Notice` da a un resumen o a un hook su `category()`, `message()`, `values()`, `sentAt()`,
+`text(plugin)` (el mensaje rellenado), `fill(text)` (otra plantilla, mismos valores) y `number(key)`.
+
+### Adónde va un aviso
+
+| El jugador está | Qué pasa |
+|---|---|
+| Conectado en este servidor | Se muestra al momento, como su propio mensaje. |
+| Conectado en otro servidor que comparte la base de datos | Se escribe y se anuncia por Redis; su servidor lo muestra. Sin Redis espera a su próxima entrada. |
+| Desconectado | Se guarda en la base de datos del plugin (`exylia_notices`) y se muestra en su próxima entrada, a los tres segundos para que no quede enterrado bajo los mensajes de entrada. |
+
+### El resumen de entrada
+
+Los avisos pendientes se agrupan por categoría, los más antiguos primero. Una categoría con `summary`
+muestra las líneas que devuelva. Una sin él muestra un aviso suelto tal cual, y dos o más como lista:
+
+```
+EXYLIA • Mientras no estabas (7)
+ ▎ Vendido Diamond x16 por $4,500
+ ▎ ...                          (cinco como mucho)
+ ▎ y 2 más
+```
+
+Un resumen que lanza una excepción se avisa y la categoría se lista en su lugar. Cada aviso se muestra
+**exactamente una vez**: se toma borrando su fila, así que dos servidores compitiendo por un jugador
+nunca lo muestran los dos.
+
+### Límites
+
+- 500 avisos pendientes por jugador y plugin; a partir de ahí uno nuevo se rechaza y la consola lo
+  dice.
+- Un aviso que nadie leyó se borra tras `notices.keep-days` (30 por defecto, al menos 1) en el
+  `config.yml` de ExyliaLib.
+- Una categoría tiene de 1 a 64 caracteres.
+- Los mensajes se guardan en bruto y los renderiza el servidor que los muestra, con su paleta y su
+  prefijo.
+
+Todos los métodos son seguros desde cualquier hilo; la base de datos solo se toca de forma asíncrona.
+Todo se para con el plugin.

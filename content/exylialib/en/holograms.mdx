@@ -1,0 +1,261 @@
+---
+title: "Holograms"
+description: "Packet holograms declared in configuration: styled lines, motion, pages per viewer, buttons and clicks."
+---
+
+A hologram is a stack of display entities sent as packets. Nothing exists on the server, so a piston
+cannot push one, a mob cannot kill one, and a crash cannot leave one behind. Every plugin declares its
+holograms in its own configuration; ExyliaLib has no hologram file and no hologram command.
+
+```java
+Hologram trophy = Holograms.show(this, "trophy", location, config.trophy());
+```
+
+Holograms need **PacketEvents**. Without it `Holograms.isSupported()` is `false`, a warning is logged
+once, and every call still works but draws nothing. A section with `enabled: false` does the same.
+
+## Showing one
+
+| Method | What it does |
+|---|---|
+| `show(plugin, id, location, config)` | Shows it. Reusing an id replaces the old one, so calling it again after a reload is safe. The location is before the configured offset. |
+| `show(plugin, id, location, config, data)` | Same, with a `Map<String, Object>` that placeholders read. |
+| `show(plugin, id, location, config, visibleIf)` | Same, with a `Predicate<Player>` that applies from the first frame. |
+| `get(plugin, id)` / `all(plugin)` | Find them. |
+| `remove(plugin, id)` / `removeAll(plugin)` | Remove them. A disabled plugin's holograms are removed for it. |
+| `isSupported()` | Whether holograms can be drawn here. |
+
+Every method is safe from any thread. Placeholders used in lines are resolved off the main thread, so
+their resolvers must be async-safe. A line with no placeholders never schedules a refresh.
+
+## The configuration
+
+```yaml
+spawn-hologram:
+  enabled: true
+  type: TEXT
+  lines:
+    - '<head:Notch><spin:45>'
+    - '<size:2><shine:highlight,speed=15,pause=1,width=4>{primary}&lWELCOME'
+    - '<gap:0.1><flow>{secondary}Season II · open now'
+    - '<if:"%player_level% >= 10">{success}You qualify'
+    - '<button:join>{letters}Click to join'
+  per-player: true
+  view-distance: 32
+  offset-y: 2
+  properties:
+    billboard: CENTER
+    distance-scale:
+      enabled: true
+      start: 8
+      end: 32
+      max: 2.5
+  config:
+    update-interval: 20
+  click:
+    commands:
+      - '[PAGE] next'
+    sound: 'UI_BUTTON_CLICK;0.6;1.4'
+    buttons:
+      join:
+        - 'arena join'
+  pages:
+    - lines:
+        - '{primary}&lRULES'
+        - '{letters}No griefing.'
+      click:
+        - '[PAGE] previous'
+  page-interval: 10s
+```
+
+| Key | What it does | Default |
+|---|---|---|
+| `enabled` | Show it at all. A section never written shows nothing. | `false` |
+| `type` | `TEXT`, `ITEM` or `BLOCK`. | `TEXT` |
+| `lines` | The text, top first, for `TEXT`. This is page 1. | none |
+| `item` / `block` | The material that floats, for the other two. | none |
+| `per-player` | One render per viewer, so placeholders can differ per player. Costs one set of packets per viewer. | `false` |
+| `view-distance` | Blocks; past this nothing is sent. | `48` |
+| `offset-x/y/z` | Shift from the location the plugin gives. | `0` |
+| `config.update-interval` | Ticks between re-renders; `1s` and `500ms` also work. | `20` |
+| `config.auto-update` | Re-render on that interval. | `true` |
+| `pages` | More pages, each with its own `lines` and `click`. | none |
+| `page-interval` | Turns each viewer to the next page on its own; `5s`, `1m` work. `0` is off. | `0` |
+
+`persistent`, `config.spawn-on-chunk-load` and `config.remove-on-chunk-unload` are still read, so old
+files load, but they do nothing.
+
+### `properties`
+
+| Key | What it does | Default |
+|---|---|---|
+| `billboard` | `CENTER`, `VERTICAL`, `HORIZONTAL` or `FIXED`. | `CENTER` |
+| `alignment` | `CENTER`, `LEFT` or `RIGHT`. | `CENTER` |
+| `scale-x/y/z` | Size on each axis. | `1` |
+| `shadow` | Text shadow. | `true` |
+| `see-through` | Visible through blocks. | `false` |
+| `line-width` | Wrap width, in pixels. | `200` |
+| `line-spacing` | Blocks between lines. | `0.25` |
+| `text-opacity` | `0` to `255`. | `255` |
+| `default-background` | Use the client's own grey panel. | `false` |
+| `background-color` | `#AARRGGBB`. | `#00000000` |
+| `brightness` | `0` to `15`; `-1` uses the light where it stands. | `-1` |
+| `glowing` | Outline. | `false` |
+| `distance-scale` | Size by distance, below. | off |
+
+### Size by distance
+
+`properties.distance-scale` grows the hologram as a viewer walks away, so it stays readable from across
+a spawn. It is `min` up to `start` blocks, grows evenly, and stays at `max` from `end` on, worked out
+per viewer in steps of `0.1`.
+
+| Key | Default |
+|---|---|
+| `enabled` | `false` |
+| `start` / `end` | `8` / `32` |
+| `min` / `max` | `1` / `2.5`, each clamped to `0.1`–`10` |
+
+One line can carry its own curve with `<autoscale>` (the hologram's curve) or `<autoscale:start,end,max>`.
+
+## Line tags
+
+A line can start with tags that style that line alone. Only known tags at the start of a line are read;
+the first unknown one stops the reading and stays in the text, so `<gradient:...>` still reaches the
+text parser. A value containing `>` is quoted: `<if:"%kills% > 10">`. Durations take a bare number of
+seconds, `s` or `ms`.
+
+### Look and layout
+
+| Tag | What it does |
+|---|---|
+| `<size:n>` | Scale, `0.1` to `10`. A model at size 1 is half a block tall. |
+| `<opacity:n>` | Text opacity, `0` to `255`. |
+| `<background:#AARRGGBB>` | This line's panel. |
+| `<shadow>` / `<shadow:false>` | Text shadow. |
+| `<gap:n>` | Extra blocks above the line, `-5` to `5`. |
+| `<align:left\|center\|right>` | Alignment. |
+| `<width:px>` | Wrap width, `1` to `10000`. |
+| `<billboard:fixed\|center\|vertical\|horizontal>` | How it faces the viewer. |
+| `<seethrough>` | Visible through blocks. |
+| `<brightness:n>` | `-1` to `15`. |
+
+### Models
+
+| Tag | What it does |
+|---|---|
+| `<item:DIAMOND>` | The line is an item. |
+| `<block:BEACON>` | The line is a block, drawn `FIXED` unless the line sets a billboard. |
+| `<head:...>` | A player head: a name, a UUID, a base64 texture or a `textures.minecraft.net` URL. |
+| `<glow>` / `<glow:#RRGGBB>` | Outline on a model line; bare uses the team colour. |
+
+### Motion and text
+
+The client animates motion between keyframes sent every half second, so periods start at two seconds.
+
+| Tag | What it does | Bare default |
+|---|---|---|
+| `<spin:deg>` | Degrees a second, up to `±300`. | `90` |
+| `<sway:deg,period=s>` | Rocks side to side, for item and block lines. | `15`, period `4` |
+| `<bob:blocks,period=s>` | Rises and falls. | `0.08`, period `3` |
+| `<pulse:frac,period=s>` | Breathes in size. | `0.06`, period `2` |
+| `<typewriter:chars>` | Types itself out the first time a viewer sees it. | `24` a second |
+| `<scramble:chars>` | Random glyphs settle into the text the first time a viewer sees it. | `20` a second |
+| `<shine:colour,speed=,pause=,width=>` | A highlight sweeping across the text. | `letters`, speed `10`, pause `2.5`, width `3` |
+| `<flow:chars>` | The line's colours flow along it; negative runs backwards. | `4` |
+| `<rainbow:chars>` | Rainbow, flowing. | `6` |
+| `<frames:s>` | Cycles texts split by `\|\|`: `<frames:2>First\|\|Second`. | `2` |
+| `<marquee:chars,speed=>` | Scrolls a long text through a window. | `24` chars, speed `6` |
+| `<fade:s>` | Fades out and back in, once every that many seconds. | `3` |
+| `<blink:s>` | Blinks. | `1` |
+
+Shining and flowing lines are redrawn at most ten times a second.
+
+### Who sees it
+
+| Tag | What it does |
+|---|---|
+| `<range:blocks>` | This line's own view range. |
+| `<perm:node>` / `<perm:!node>` | Only viewers with, or without, the permission. |
+| `<if:"expr">` | A condition worked out per viewer. |
+
+## Clicks and buttons
+
+`click` makes the hologram clickable. Without commands it cannot be clicked, unless code sets
+`onClick`.
+
+| Key | What it does | Default |
+|---|---|---|
+| `commands` | What runs on a click. | none |
+| `width` | Hitbox width in blocks; its height covers the lines. | `1.5` |
+| `cooldown` | Before the same player's next click counts. | `500ms` |
+| `hover-scale` | How much it grows while aimed at; `1` turns it off. | `1.08` |
+| `style` | `BUTTON` draws a panel behind it and behind button lines; `NONE` draws nothing. | `BUTTON` |
+| `color` / `hover-color` | Panel colour at rest and aimed at: a palette name or `#RRGGBB`. | `{primary}` / `{secondary}` |
+| `sound` | A `[SOUND]` value played on click. | none |
+| `buttons` | Named command lists for `<button:name>` lines. | none |
+| `range` | How far aiming and clicking reach, up to `32`. | `8` |
+
+A command line runs as the player, or from the console with `console:`. It can start with a filter —
+`left:`, `right:`, `shift_left:`, `shift_right:` or `shift:` — and takes the effect tokens (`[MESSAGE]`,
+`[SOUND]`, `[TITLE]`, `[SERVER]`, `[TELEPORT] world;x;y;z`, `[ACTION] ns:id`, `[DELAY] 1s`, …).
+
+A `<button:join>` line runs `click.buttons.join` when that line is clicked, and gets its own background
+that lights when aimed at. The aimed target grows by `hover-scale` and sinks briefly when pressed.
+
+<Callout type="warning" title="An empty hand reaches three blocks">
+A right-click with nothing in hand is only sent by the client within vanilla reach, so `range` beyond
+that works for left-clicks and for clicks holding an item.
+</Callout>
+
+### Pages
+
+Every viewer sees one page at a time, kept per player. `lines` is page 1 and runs `click.commands`;
+each entry under `pages` runs its own `click` while the viewer is on it.
+
+| `[PAGE]` | Goes to |
+|---|---|
+| `[PAGE]` or `[PAGE] next` | The next page, wrapping round. |
+| `[PAGE] previous` (`prev`, `back`) | The previous page, wrapping round. |
+| `[PAGE] first` / `[PAGE] last` | The ends. |
+| `[PAGE] 2` | A page, counted from 1. |
+
+`page-interval` turns pages on its own, and its timer restarts on every turn.
+
+## The `Hologram` handle
+
+| Method | What it does |
+|---|---|
+| `moveTo(location)` | Moves it. |
+| `attachTo(entity)` | Rides an entity, moved by the client with it; `null` lets go. Lines keep their stack, and range is measured from the entity. |
+| `lines(list)` / `pages(list)` | Replaces the text (on a paged hologram, `lines` replaces page 1). |
+| `page(player)` / `page(player, n)` / `nextPage` / `previousPage` / `pageCount()` | Pages per viewer, counted from 0. |
+| `refresh()` / `updateData(map)` | Re-renders, optionally with new data. |
+| `onClick(player -> …)` / `onClick((player, click) -> …)` | Code clicks; the cooldown applies. `Click` says which button and whether shift was held. |
+| `visibleIf(predicate)` | Who sees it, on top of the view distance. |
+| `isViewing(player)` / `viewerCount()` | Who is looking. |
+| `remove()` / `removed()` | Lifetime. |
+
+## `HologramLine`: lines as data
+
+An editor that lets staff style lines reads and writes them through `HologramLine` instead of parsing
+tags by hand.
+
+```java
+HologramLine line = HologramLine.parse("<size:2><spin>&6Champion");
+
+String edited = line.toBuilder()
+        .size(1.5)
+        .spin(null)          // null removes a tag
+        .glow("#8a51c4")
+        .build()
+        .raw();              // tags in a fixed order, then the text
+```
+
+`of(text)` builds a plain line, `builder()` an empty one; every tag is a nullable field, `null` meaning
+not written. `item`, `block` and `head` clear each other. `isModel()` and `hasTags()` answer what they
+say. The bare defaults are constants: `DEFAULT_SPIN`, `DEFAULT_BOB`, `DEFAULT_TYPEWRITER` and the rest.
+
+<Callout type="tip" title="The palette reaches holograms">
+Reloading ExyliaLib's colours re-renders every hologram, and the library's `small-text` and
+`text-shadow` settings apply to them too.
+</Callout>

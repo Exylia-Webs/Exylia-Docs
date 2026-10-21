@@ -1,10 +1,10 @@
 ---
-title: "Sidebars, hologramas y nametags"
+title: "Sidebars, hologramas, nametags y bordes"
 description: "Todo lo que se dibuja en la pantalla de un jugador, enviado como paquetes y declarado en configuración."
 ---
 
-Cuatro módulos con algo en común: ninguno crea estado real en el servidor. Ningún equipo de scoreboard,
-ningún armor stand, ninguna entidad que se quede colgada.
+Módulos con algo en común: ninguno crea estado real en el servidor. Ningún equipo de scoreboard, ningún
+armor stand, ninguna entidad que se quede colgada, ningún cambio en el borde propio del mundo.
 
 ## Sidebars
 
@@ -12,7 +12,7 @@ ningún armor stand, ninguna entidad que se quede colgada.
 Scoreboards.show(this, player, config.ffa());
 ```
 
-`SidebarConfig` se anida en tu propio record de config, así que el sidebar vive en el archivo del
+`SidebarConfig` se anida en tu propio record de config, así que la sidebar vive en el archivo del
 dueño:
 
 ```yaml
@@ -21,7 +21,7 @@ scoreboard:
   title:
     - "{primary}&lFFA"
   lines:
-    - " {muted}❙ {letters}Bajas: {success}%kills%"
+    - " {muted}❙ {letters}Kills: {success}%kills%"
     - " {muted}❙ {letters}KDR: {highlight}%kdr%"
   update:
     interval: 15
@@ -30,19 +30,28 @@ scoreboard:
 
 | Clave | Qué hace |
 |---|---|
-| `enabled` | Mostrarlo o no — una sección puede quedarse escrita pero apagada. |
-| `title` | Una lista. Varias entradas se animan: cada refresco muestra la siguiente. |
-| `lines` | De arriba abajo. Máximo 15; las de más se descartan. |
-| `update.interval` | **Ticks** entre refrescos. 20 ticks es un segundo. |
+| `enabled` | Mostrarla o no — una sección puede seguir escrita pero apagada. |
+| `title` | Una lista. Varias entradas animan: cada refresco muestra la siguiente. |
+| `lines` | De arriba abajo. Como mucho 15; las de más se descartan. |
+| `update.interval` | **Ticks** entre refrescos (20 por defecto). También lee `1s`. |
 | `update.smart` | Enviar solo las líneas que cambiaron en vez del tablero entero. |
 
-`Scoreboards.show` devuelve un `Board`: `refresh()`, `updateData(map)`, `hide()`. Los tableros se
-**apilan por jugador** — mostrar uno pausa el anterior, y cerrarlo devuelve el anterior. Eso es lo que
-permite que el sidebar de un evento tape el de un hub sin que ninguno de los dos plugins sepa del otro.
+`Scoreboards.show` devuelve un `Board`: `refresh()`, `updateData(map)`, `stop()`, `stopped()`.
+`Scoreboards.hide(player)`, `get(player)` y `has(player)` funcionan desde fuera. Los tableros **se
+apilan por jugador** — mostrar uno pausa el anterior, y cerrarlo lo devuelve. Eso permite que la
+sidebar de un evento tape la del hub sin que ningún plugin sepa del otro.
 
 <Callout type="tip" title="Una línea que se expande">
-Un placeholder que devuelve texto con saltos de línea se convierte en varias líneas. Es cómo un solo
-valor `%objectives%` dibuja tres filas sin que el archivo sepa cuántas habrá.
+Un placeholder que devuelve texto con saltos de línea se convierte en varias líneas. Así un solo valor
+`%objectives%` puede dibujar tres filas sin que el archivo sepa cuántas habrá.
+</Callout>
+
+<Callout type="note" title="Otras sidebars en el servidor">
+Un tablero visible recupera el hueco de la sidebar cada tres segundos, y al momento tras un teleport,
+un cambio de mundo, un respawn o una entrada, así que otro plugin que lo reclame no deja al jugador sin
+la nuestra. Si está instalado **TAB**, se le pide que se aparte: el primer tablero que se muestra a un
+jugador apaga la sidebar de TAB para ese jugador, y el último que se quita — o que el jugador salga —
+la vuelve a encender. Solo se toca a un jugador cuya sidebar de TAB estaba visible.
 </Callout>
 
 ## Hologramas
@@ -54,56 +63,97 @@ Holograms.show(this, "trophy", location, config.trophy());
 | Clave | Qué hace |
 |---|---|
 | `enabled` | Mostrarlo o no. |
-| `kind` | `TEXT`, `ITEM` o `BLOCK`. |
-| `lines` | El texto, para `TEXT`. |
-| `item` / `block` | Qué flota, para los otros dos. |
-| `offset-x/y/z` | Dónde se sitúa respecto a la ubicación dada. |
-| `view-distance` | Más allá, no se envía nada. |
-| `refresh` | Cada cuánto se vuelve a dibujar el texto. |
+| `type` | `TEXT`, `ITEM` o `BLOCK`. |
+| `lines` | El texto, para `TEXT`. Una línea puede empezar con etiquetas que le dan estilo solo a ella. |
+| `item` / `block` | Lo que flota, para los otros dos. |
+| `per-player` | Cada espectador tiene su propia copia, así los placeholders pueden variar por jugador. |
+| `view-distance` | Más allá de esto no se envía nada. |
+| `offset-x/y/z` | Dónde queda respecto a la ubicación dada. |
+| `properties` | Cómo se dibuja: billboard, escala, fondo y el resto. |
+| `config.update-interval` | **Ticks** entre redibujados del texto. |
+| `click`, `pages`, `page-interval` | Lo que ejecuta un clic, y más páginas que cada espectador va pasando. |
 
-Son paquetes de display entity: por jugador cuando el texto difiere según quién mira, compartidos cuando
-no. No existe nada en el servidor, así que un holograma no puede ser empujado por un pistón, matado por
-un mob, ni quedarse ahí si el plugin se cae.
+Son paquetes de display. No existe nada en el servidor, así que un holograma no lo puede empujar un
+pistón, matar un mob ni quedarse atrás cuando el plugin falla.
 
 `Holograms.get(plugin, id)`, `all(plugin)`, `remove(plugin, id)` y `removeAll(plugin)` los gestionan por
-id. `isSupported()` responde con honestidad cuando falta PacketEvents.
+id. `isSupported()` responde con honestidad cuando falta PacketEvents. Las etiquetas por línea, los clics y
+las páginas están en [Hologramas](/docs/exylialib/hologramas).
 
 ## Nametags
 
 ```java
 PluginNametags tags = Nametags.of(this);
 
-tags.paint(viewer, target, style);                 // cómo un jugador ve a otro
+tags.paint(viewer, target, style);                 // cómo ve un jugador a otro
 tags.paintEachOther(team, style);                  // un equipo entero, mutuamente
 tags.reset(viewer, target);
 tags.resetEverywhere(target);
 ```
 
-La gracia entera es que es **por espectador, no por jugador**: el mismo jugador puede ser rojo para uno
-y azul para otro, que es lo que necesita un juego por equipos y lo que un equipo de scoreboard no puede
-hacer sin pelearse con el resto de plugins por el mismo nombre de equipo.
+La clave es **por espectador, no por jugador**: el mismo jugador puede ser rojo para uno y azul para
+otro, que es lo que necesita un juego por equipos y lo que un equipo de scoreboard no puede hacer sin
+pelearse con todos los demás plugins por el mismo nombre de equipo.
 
-El color del nombre, el del brillo y la colisión viajan juntos como un estilo. Los clientes vanilla
-están incluidos — esto no es una funcionalidad de mod de cliente.
+`NametagStyle.of(color)` fija el color del nombre; `withGlow()` lo resalta a través de las paredes,
+`withCollision()` permite empujarlo y `showingInvisible()` lo dibuja tenue mientras es invisible. Los
+clientes vanilla están incluidos — no es una función de mods de cliente.
 
-Sin PacketEvents, `Nametags.isSupported()` es `false` y cada llamada no hace nada en vez de lanzar.
+Sin PacketEvents, `Nametags.isSupported()` es `false` y cada llamada no hace nada en vez de lanzar una
+excepción.
+
+## Bordes del mundo que solo ven algunos
+
+Un borde por arena, por partida o por zona, en el mismo mundo, cada uno con su borde y su reloj:
+
+```java
+VirtualBorder zone = Packets.of(this).worldBorders().create(arena.center(), 200);
+match.players().forEach(zone::show);
+zone.size(20, Duration.ofMinutes(2));
+```
+
+| En un `VirtualBorder` | Qué hace |
+|---|---|
+| `show(viewer)` / `hide(viewer)` | Sustituye el borde que ve, o le devuelve el del mundo. |
+| `size(size)` / `size(size, over)` | Lo redimensiona; un cambio con tiempo es un paquete y cada cliente lo anima. |
+| `center(x, z)` | Lo mueve. |
+| `warning(blocks, seconds)` | Cuándo se pone roja la pantalla. Por defecto los 5 bloques o 15 segundos de vanilla. |
+| `damage(perBlock, buffer)` | Daño fuera de él. Por defecto los 0,2 por bloque pasados 5 de vanilla; cero no hiere a nadie. |
+| `contains(location)`, `size()`, `viewers()` | Lecturas, también a mitad de un cambio. |
+| `remove()` | Lo oculta a todos. |
+
+`worldBorders().seenBy(player)` devuelve el borde que ve un jugador, o `null` mientras ve el del mundo.
+
+Los paquetes del borde propio del mundo se descartan de camino a un espectador que ve uno virtual en
+ese mundo, así que un `/worldborder` no lo puede sobrescribir, y un respawn o un cambio de mundo vuelve
+a enviar el correcto. El servidor hiere a los espectadores que estén fuera como hace vanilla, cada diez
+ticks con el tipo de daño `OUTSIDE_BORDER` — un cliente modificado, una perla o un vehículo no le
+preguntan al cliente antes.
+
+<Callout type="warning" title="Límites">
+Un borde por jugador, entre todos los plugins. Solo cuadrados. La colisión, la colocación de bloques y
+los portales del servidor siguen el borde propio del mundo. Sin PacketEvents un borde se puede crear y
+moldear, pero no lo ve nadie ni hiere a nadie.
+</Callout>
 
 ## Waypoints y cooldowns de cliente
 
-Para jugadores en Lunar (por Apollo) o Feather:
+Para jugadores en Lunar (por Apollo), Feather o SurvivalCore:
 
 ```java
-Clients.of(this).waypoints().show(player,
-        Waypoint.at("koth", location).colour("#ff5555"));
+PluginClients clients = Clients.of(this);
 
-Clients.of(this).waypoints().remove(player, "koth");
-Clients.of(this).waypoints().clear(player);
+clients.waypoints().show(player, Waypoint.at("koth", location).colour("#ff5555"));
+clients.waypoints().remove(player, "koth");
+clients.clear(player);   // solo lo que dibujó este plugin
 ```
 
-El waypoint se indexa por **nombre**, y el nombre es la clave — dos waypoints llamados `spawn` son uno.
-Que estén separados por plugin es lo que evita que el marcador de un plugin de lobby y el de un evento
-se borren mutuamente.
+Lo que un plugin envía con `Clients.of(this)` va a nombre de ese plugin, así que el marcador `spawn`
+de un lobby y el de un evento no se borran entre sí, `clear(player)` quita solo los de este plugin, y
+desactivarlo los retira. En Lunar un nombre de waypoint sigue siendo un solo hueco por jugador, así que
+dos plugins que muestran `spawn` ahí comparten un marcador.
 
-Los cooldowns de cliente y los marcadores de compañero funcionan igual. Un jugador cuyo cliente no
-soporta nada de esto simplemente no recibe nada; quien llama nunca ramifica según qué cliente use cada
-uno.
+Los cooldowns de cliente, los temporizadores del HUD, los marcadores de compañeros, los puntos de
+reunión, los haces, los bordes de zona y las barras del HUD funcionan igual. Un jugador cuyo cliente no
+soporta nada de esto simplemente no recibe nada; quien llama nunca distingue qué cliente usa cada uno. Todo
+lo que ofrece está en [Integración de cliente](/docs/exylialib/integracion-de-cliente).

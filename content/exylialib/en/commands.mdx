@@ -1,0 +1,92 @@
+---
+title: "Commands"
+description: "Every /exylialib subcommand, who may run it, and what it answers."
+---
+
+The library registers one command, `/exylialib`, with no aliases. Subcommands tab-complete. Each sits
+behind its own permission so a server can hand one out without the others; every one of them is `op` by
+default.
+
+| Command | Permission | What it does |
+|---|---|---|
+| `/exylialib` | `exylialib.admin` | The status panel. See [below](#the-status-panel). |
+| `/exylialib reload` | `exylialib.admin` | Re-reads the library's own files and redraws with the new colours. See [The library's own files](/docs/exylialib/library-config). |
+| `/exylialib update` | `exylialib.admin` | Checks GitHub now and stages a newer ExyliaLib for the next restart. |
+| `/exylialib plugins` | `exylialib.admin` | The same for every Exylia plugin that names its repository: one line per plugin. |
+| `/exylialib updates` | `exylialib.updates` | Default changes shipped by plugin updates, waiting for a decision. |
+| `/exylialib updates apply <number\|plugin\|all>` | `exylialib.updates` | Writes the new defaults and reloads what they belong to. |
+| `/exylialib updates keep <number\|plugin\|all>` | `exylialib.updates` | Marks them reviewed and leaves the values alone. |
+| `/exylialib editor [plugin]` | `exylialib.editor` | Opens a [web editor](/docs/exylialib/web-editor) session. |
+| `/exylialib editor apply <code> [confirm]` | `exylialib.editor` | Brings down what was saved in the browser. |
+| `/exylialib editor trust <code> <challenge>` | `exylialib.editor` | Lets a second browser edit the session. |
+| `/exylialib logs <player\|*> [plugin] [action]` | `exylialib.logs` | The [staff log](#staff-log). |
+| `/exylialib pendingrewards [player]` | `exylialib.pendingrewards` | [Rewards still owed](#pending-rewards). |
+| `/exylialib export <plugin>` | `exylialib.admin` | Writes that plugin's tables to a dump in `plugins/ExyliaLib/dumps/`. |
+| `/exylialib import <plugin> <file> [force]` | `exylialib.admin` | Reads a dump back. `force` **merges**, it does not replace. |
+| `/exylialib wipe <plugin> <table\|*> [code]` | `exylialib.admin.wipe` | Empties one table or all of them, after a typed code and an automatic dump. |
+
+`/settings` is the library's other command, and it is **off** until `settings.command.enabled` is turned on
+in `config.yml`. It opens the screen where players set the preferences every Exylia plugin registers, and
+needs `exylialib.settings`, which every player has by default.
+
+## The status panel
+
+The bare `/exylialib` prints everything about the library on this server in one panel:
+
+- **Library** — version, platform, whether auto-update is on and how often it checks, debug, small text.
+- **Network** — whether Redis is on, this server's id on it, and the proxy bridge: a ping sent now and
+  timed, so a proxy that went away reads as gone. A silent proxy reads as *no answer*, with the usual
+  cause (ExyliaProxyUtils missing, or on another Redis or key prefix). Players on the network when the
+  bridge answers.
+- **Modules** — active scoreboards, holograms and effects, how many plugins use menus and regions, actions
+  registered, config files loaded.
+- **Database** — the engine, and one line per plugin with its own state, so one plugin's unreachable
+  database is not hidden behind nine healthy ones.
+- **Depending plugins** — every plugin using the library, with its version.
+
+Without Redis the panel arrives at once; with it, as soon as the proxy answers, or after five seconds.
+
+## Moving and wiping data
+
+`export` names the tables it found before it starts. A plugin only appears once it has asked for its
+first table, so a plugin that registers one lazily exports fewer than it owns — read the names.
+
+`import` refuses to write into tables that already hold rows, and hands back the exact command that
+would go through. `force` merges: rows whose key is in the dump are overwritten, rows that are not stay
+where they are.
+
+`wipe` runs twice. The first run deletes nothing: it lists what would go and gives a six-digit code. The
+same command with that code within 60 seconds — same sender, same plugin, same table — writes a dump
+first and only then deletes; if the dump fails, nothing is deleted. Restart afterwards: until then the
+plugin still holds the rows in memory, and its writes to the wiped tables are ignored so they cannot come
+back.
+
+## Staff log
+
+Every Exylia plugin can record what staff do — who did what to whom, where, and which items moved — into
+its own database. `/exylialib logs` reads them all together:
+
+```
+/exylialib logs Steve                  # everything done by or to Steve
+/exylialib logs * ExyliaMarket         # every market entry
+/exylialib logs Steve * trade          # Steve's trades, in any plugin
+```
+
+`*` (or `all`) means no filter. A player gets a menu with an entry per action and the items it moved; the
+console gets the newest lines as text. Retention, write interval, row limits and what is never recorded
+are in the `logs` block of `config.yml`.
+
+## Pending rewards
+
+Rewards a plugin could not hand over yet wait in that plugin's pending store until the player claims
+them. `/exylialib pendingrewards` lists who is owed what, across every plugin. A player gets a menu,
+straight to one player's batches when a name is given: left click gives a batch to its owner (who must be
+online), shift-right click cancels it (it asks twice). The console gets a summary. Every give and cancel
+is written to the server console.
+
+## Updates on join
+
+An admin is told on join when there is something to act on:
+
+- with `exylialib.admin`, when plugin updates are staged and waiting for a restart;
+- with `exylialib.updates`, when default changes are waiting in `/exylialib updates`, once per batch.

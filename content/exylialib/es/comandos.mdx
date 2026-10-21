@@ -1,0 +1,94 @@
+---
+title: "Comandos"
+description: "Cada subcomando de /exylialib, quién puede usarlo y qué responde."
+---
+
+La librería registra un solo comando, `/exylialib`, sin alias. Los subcomandos se autocompletan. Cada uno
+tiene su propio permiso para que un servidor pueda dar uno sin los demás; todos son de `op` por defecto.
+
+| Comando | Permiso | Qué hace |
+|---|---|---|
+| `/exylialib` | `exylialib.admin` | El panel de estado. Ver [abajo](#el-panel-de-estado). |
+| `/exylialib reload` | `exylialib.admin` | Relee los archivos propios de la librería y redibuja con los colores nuevos. Ver [Los archivos de la librería](/docs/exylialib/config-de-la-libreria). |
+| `/exylialib update` | `exylialib.admin` | Busca ahora en GitHub y deja preparada una ExyliaLib más nueva para el próximo reinicio. |
+| `/exylialib plugins` | `exylialib.admin` | Lo mismo para cada plugin de Exylia que nombra su repositorio: una línea por plugin. |
+| `/exylialib updates` | `exylialib.updates` | Valores por defecto cambiados por actualizaciones de plugins, esperando una decisión. |
+| `/exylialib updates apply <número\|plugin\|all>` | `exylialib.updates` | Escribe los defectos nuevos y recarga aquello a lo que pertenecen. |
+| `/exylialib updates keep <número\|plugin\|all>` | `exylialib.updates` | Los marca como revisados y deja los valores como están. |
+| `/exylialib editor [plugin]` | `exylialib.editor` | Abre una sesión del [editor web](/docs/exylialib/editor-web). |
+| `/exylialib editor apply <código> [confirm]` | `exylialib.editor` | Trae lo que se guardó en el navegador. |
+| `/exylialib editor trust <código> <reto>` | `exylialib.editor` | Deja editar la sesión a un segundo navegador. |
+| `/exylialib logs <jugador\|*> [plugin] [acción]` | `exylialib.logs` | El [registro del staff](#registro-del-staff). |
+| `/exylialib pendingrewards [jugador]` | `exylialib.pendingrewards` | [Recompensas aún debidas](#recompensas-pendientes). |
+| `/exylialib export <plugin>` | `exylialib.admin` | Escribe las tablas de ese plugin en un volcado en `plugins/ExyliaLib/dumps/`. |
+| `/exylialib import <plugin> <archivo> [force]` | `exylialib.admin` | Lee un volcado de vuelta. `force` **fusiona**, no reemplaza. |
+| `/exylialib wipe <plugin> <tabla\|*> [código]` | `exylialib.admin.wipe` | Vacía una tabla o todas, tras un código tecleado y un volcado automático. |
+
+`/settings` es el otro comando de la librería, y está **apagado** hasta que se activa
+`settings.command.enabled` en `config.yml`. Abre la pantalla donde los jugadores ajustan las preferencias
+que registra cada plugin de Exylia, y necesita `exylialib.settings`, que todos los jugadores tienen por
+defecto.
+
+## El panel de estado
+
+`/exylialib` a secas muestra todo sobre la librería en este servidor en un panel:
+
+- **Librería** — versión, plataforma, si la auto-actualización está activa y cada cuánto mira, depuración,
+  texto en versalitas.
+- **Red** — si Redis está activo, el id de este servidor en él, y el puente con el proxy: un ping enviado
+  ahora y cronometrado, así que un proxy que se fue se ve caído. Un proxy que no contesta sale como *sin
+  respuesta*, con la causa habitual (falta ExyliaProxyUtils, o está en otro Redis o con otro prefijo).
+  Jugadores en la red cuando el puente contesta.
+- **Módulos** — scoreboards, hologramas y efectos activos, cuántos plugins usan menús y regiones, acciones
+  registradas, archivos de config cargados.
+- **Base de datos** — el motor, y una línea por plugin con su propio estado, para que la base inalcanzable
+  de un plugin no quede escondida tras otras nueve sanas.
+- **Plugins dependientes** — cada plugin que usa la librería, con su versión.
+
+Sin Redis el panel llega al momento; con él, en cuanto contesta el proxy o a los cinco segundos.
+
+## Mover y borrar datos
+
+`export` nombra las tablas que encontró antes de empezar. Un plugin solo aparece cuando ya pidió su primera
+tabla, así que uno que registra alguna de forma perezosa exporta menos de las que tiene — lee los nombres.
+
+`import` se niega a escribir en tablas que ya tienen filas, y devuelve el comando exacto que sí pasaría.
+`force` fusiona: las filas cuya clave está en el volcado se sobrescriben, las que no están se quedan donde
+están.
+
+`wipe` se ejecuta dos veces. La primera no borra nada: lista lo que se iría y da un código de seis dígitos.
+El mismo comando con ese código en 60 segundos — mismo emisor, mismo plugin, misma tabla — escribe primero un
+volcado y solo entonces borra; si el volcado falla, no se borra nada. Reinicia después: hasta entonces el
+plugin sigue teniendo las filas en memoria, y sus escrituras en las tablas vaciadas se ignoran para que no
+vuelvan.
+
+## Registro del staff
+
+Cada plugin de Exylia puede registrar lo que hace el staff — quién hizo qué a quién, dónde, y qué items se
+movieron — en su propia base de datos. `/exylialib logs` los lee todos juntos:
+
+```
+/exylialib logs Steve                  # todo lo que hizo Steve o se le hizo
+/exylialib logs * ExyliaMarket         # cada entrada del mercado
+/exylialib logs Steve * trade          # los intercambios de Steve, en cualquier plugin
+```
+
+`*` (o `all`) significa sin filtro. Un jugador recibe un menú con una entrada por acción y los items que
+movió; la consola recibe las líneas más nuevas como texto. La retención, el intervalo de escritura, los
+límites de filas y lo que nunca se registra están en el bloque `logs` de `config.yml`.
+
+## Recompensas pendientes
+
+Las recompensas que un plugin aún no pudo entregar esperan en su almacén de pendientes hasta que el jugador
+las reclama. `/exylialib pendingrewards` lista a quién se le debe qué, en todos los plugins. Un jugador
+recibe un menú, directo a los lotes de un jugador si se da un nombre: clic izquierdo entrega un lote a su
+dueño (que tiene que estar conectado), shift-clic derecho lo cancela (lo pregunta dos veces). La consola
+recibe un resumen. Cada entrega y cancelación se escribe en la consola del servidor.
+
+## Avisos al entrar
+
+A un admin se le avisa al entrar cuando hay algo que hacer:
+
+- con `exylialib.admin`, cuando hay actualizaciones de plugins preparadas esperando un reinicio;
+- con `exylialib.updates`, cuando hay valores por defecto cambiados esperando en `/exylialib updates`, una
+  vez por tanda.

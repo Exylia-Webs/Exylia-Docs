@@ -1,0 +1,296 @@
+---
+title: "Mobs y modelos"
+description: "Modelos de Blockbench que llevan los mobs sin resource pack, y mobs personalizados desde plantillas con habilidades, lanzamientos y fases."
+---
+
+Dos módulos que funcionan juntos y por separado. **Models** pone un modelo de Blockbench sobre cualquier
+entidad viva, dibujado con displays de bloque, objeto y cabeza, así que no hace falta resource pack.
+**Mobs** convierte una plantilla en una entidad viva con nombre, equipo, atributos, habilidades, fases de
+combate y reacciones, y puede llevar uno de esos modelos.
+
+| Módulo | Punto de entrada | Para qué sirve |
+|---|---|---|
+| Models | `Models.of(plugin)` | Archivos `.bbmodel` que llevan las entidades, animados según su estado. |
+| Mobs | `Mobs.of(plugin)` | Plantillas que se spawnean en cualquier sitio, con habilidades, lanzamientos y fases. |
+| Mob store | `Mobs.store()` | El almacén compartido de plantillas desde el que spawnean otros plugins. |
+
+Los modelos necesitan **PacketEvents**. Un mob es una entidad real, pero lo que dibuja (avisos,
+reacciones, un modelo) son displays y necesita PacketEvents como cualquier otro. Ningún módulo tiene
+comando: cada editor de abajo se abre desde código.
+
+## Modelos
+
+Deja un archivo de Blockbench en la carpeta del plugin y ponlo por nombre:
+
+```text
+plugins/<TuPlugin>/models/stone_golem.bbmodel
+plugins/<TuPlugin>/models/stone_golem.animation.json   (opcional)
+```
+
+El nombre del modelo es el nombre del archivo en minúsculas. La carpeta se revisa como mucho una vez por
+segundo, así que guardar en Blockbench es el reload. Un `<nombre>.animation.json` (o `<nombre>.json`) de
+Bedrock o GeckoLib al lado añade animaciones.
+
+```java
+PluginModels models = Models.of(this);
+
+ModelOptions options = ModelOptions.DEFAULT
+        .withScale(1.3)
+        .withState(ModelState.ATTACK, "animation.golem.smash");
+
+ModelInstance golem = models.attach(zombie, "stone_golem", options);
+if (golem != null) {
+    golem.onEvent(event -> {
+        if (event.equals("impact")) shockwave(zombie.getLocation());
+    });
+}
+```
+
+### Qué se lee
+
+Los grupos pasan a ser huesos con sus pivotes y rotaciones, y cada cubo pasa a ser un display. Se leen
+keyframes de rotación, posición y escala con interpolación lineal, por pasos, Catmull-Rom y Bézier; los
+keyframes de timeline, sonido y partícula llegan como eventos por `onEvent`. Se leen proyectos de
+Blockbench 4 y 5. Las mallas, los locators y Molang se reportan una vez en `problems(name)` y se dejan
+fuera.
+
+### Cómo se dibuja un cubo sin resource pack
+
+Gana la primera coincidencia:
+
+1. **Un sufijo en el nombre.** `body@stone` o `@minecraft:gold_block` es ese bloque, `@diamond_sword` ese
+   objeto. `@mainhand`, `@offhand` y `@helmet` muestran lo que el portador tiene o lleva en ese hueco.
+   `@head` pone la textura en una cabeza de jugador, `@hide` no dibuja nada. El sufijo de un grupo se
+   aplica a cada cubo suyo que no tenga uno propio.
+2. **Su textura.** Un cubo cuyos texels coinciden todos con un bloque es ese bloque. Un cubo con diseño
+   pasa a ser una cabeza de jugador con textura hecha con Exylia Skins, mostrada como su bloque principal
+   hasta que la cabeza está lista.
+3. **Sin textura.** Hormigón gris claro.
+
+### Opciones
+
+| `ModelOptions` | Qué hace | Por defecto |
+|---|---|---|
+| `scale` | Tamaño, hasta `16`. | `1` |
+| `states` | Estado → nombre de animación, por encima de la coincidencia automática. | ninguno |
+| `lookAt` | La cabeza sigue la mirada del portador. | `true` |
+| `heads` | Los cubos con textura pasan a cabezas de jugador; apagado, se quedan en su bloque principal. | `true` |
+| `viewRange` | Bloques, hasta `128`. | `48` |
+| `hitboxes` | Un modelo más de un cuarto mayor que su portador tiene hitboxes propias. | `true` |
+| `nametag` | El nombre del portador se dibuja encima del modelo en vez de a la altura del portador. | `true` |
+| `tweaks` | Desplazamiento, huesos ocultos o de otro material, velocidades e hitbox. | ninguno |
+
+### Animaciones según el estado
+
+El modelo reproduce `idle`, `walk` y `run` por su cuenta según la velocidad del portador, y `attack`,
+`hurt`, `death`, `spawn` y los lanzamientos cuando ocurren. Una animación se empareja con un estado, en
+orden, por: la opción `states`; su nombre exacto o la parte tras el último punto
+(`animation.golem.walk`); un nombre que contiene el estado como palabra (`golem_walk_cycle`). Un
+lanzamiento `cast:<habilidad>` busca `<habilidad>`, `cast_<habilidad>`, `<habilidad>_cast`, `cast` y
+luego `attack`; `run` sin nada encontrado reproduce `walk`. Las fases de combate eligen `<estado>_p2`
+antes que `<estado>` cuando el mob está en la fase 2.
+
+| `ModelInstance` | Qué hace |
+|---|---|
+| `play(name)` | Reproduce encima de la base, moviendo solo los huesos que la animación toca. |
+| `play(name, strikeInMillis)` | Ajusta la animación para que su clave de timeline `release` (o `impact`) caiga en ese tiempo, entre un cuarto y cuatro veces su ritmo. |
+| `stop()` | Suelta la acción en curso. |
+| `phase(n)` | Lo pasa a una fase de combate. |
+| `resize(scale)` | Crece o encoge en medio segundo. |
+| `glow(rgb)` / `flash(rgb, millis)` | Contorno, hasta que se diga otra cosa o un momento. |
+| `die(apart)` / `die(apart, x, y, z)` | Reproduce la muerte, y luego se encoge o se deshace, lanzado en esa dirección. |
+| `comeApart()` | Se rompe en sus propios cubos, que rebotan en suelo y paredes, se quedan y se funden. |
+| `remove()` | Fuera de todos los clientes ya. |
+
+Las piernas se encuentran por el nombre de sus huesos (`leg`, `thigh`, `knee`, `foot`, `paw`, `hoof`…).
+Sus pies se quedan en el suelo: plantados al andar, con el cuerpo inclinándose un poco en las cuestas.
+
+### Ajustes y su editor
+
+`ModelTweaks` guarda lo que un dueño de servidor ajusta sin abrir Blockbench: un desplazamiento, huesos
+ocultos o dibujados en otro material, una velocidad por estado y un tamaño de hitbox.
+
+```java
+models.tweakEditor("stone_golem", options)
+        .title("Gólem de piedra")
+        .onSave(saved -> store(saved))
+        .open(player);
+```
+
+El editor lista los huesos cambiados y tiene botones para tamaño y posición, velocidades, hitbox, y una
+vista previa que pone el modelo delante del jugador y va pasando sus animaciones.
+
+## Mobs personalizados
+
+```java
+PluginMobs mobs = Mobs.of(this);
+
+MobTemplate golem = MobTemplate.of("stone_golem", EntityType.IRON_GOLEM)
+        .withName("{primary}&lGÓLEM DE PIEDRA &8[{success}%health%&8/{info}%max_health%&8]")
+        .withAttributes(Map.of("max_health", 220.0, "attack_damage", 9.0))
+        .withFlags(Set.of(MobFlag.AGGRESSIVE, MobFlag.NO_VANILLA_DROPS, MobFlag.BOSS_BAR))
+        .withSkills(List.of(MobSkills.preset("slam").skill(), MobSkills.preset("judgement").skill()))
+        .withFight(MobFight.NONE
+                .withGlobalCooldown(Duration.ofMillis(1500))
+                .withPhases(List.of(new MobPhase(0.5, "enrage", "{error}☠", 1.25, 1.3, 1, 1.15, "#ff3b3b"))))
+        .withModel(MobModel.of("stone_golem").withScale(1.3).withDeath(MobModel.Death.ANIMATION_APART))
+        .withExp(120);
+
+mobs.register(golem);
+mobs.spawn(golem, spot);                       // cualquier hilo; un CompletableFuture<LivingEntity>
+mobs.onDeath(death -> { /* pagar a death.killer() */ });
+```
+
+`%health%` y `%max_health%` en el nombre se redibujan con cada golpe y curación. Volver a hacer
+`register` con el mismo id sustituye la plantilla, así que recargar es volver a registrar.
+
+### La plantilla
+
+| Parte | Qué guarda |
+|---|---|
+| `type`, `name` | El tipo de entidad, y su nombre en texto Exylia. |
+| `equipment` | Armadura, mano secundaria y mano principal. |
+| `attributes` | `max_health`, `attack_damage`, `movement_speed`, `armor`, `armor_toughness`, `knockback_resistance`, `follow_range`, `attack_knockback`, `scale`. |
+| `flags` | `GLOWING`, `BABY`, `SILENT`, `FIRE_IMMUNE`, `NO_VANILLA_DROPS`, `NO_VANILLA_EXP`, `NO_ITEM_PICKUP`, `NO_SUN_BURN`, `AGGRESSIVE`, `WANDERS`, `NO_INTERACT`, `PASSIVE`, `BOSS_BAR`. |
+| `effects` | Efectos de poción, `SPEED\|1\|infinite`. |
+| `skills` | Lo que hace, abajo. |
+| `exp` | La experiencia que suelta. |
+| `rewards`, `money` | Se guardan para el plugin; la librería nunca los paga. |
+| `behaviour` | Modo golpes, tiempo de vida y cuánto se aleja. |
+| `look` | Variante, cuerpo, contorno, aura y reacciones. |
+| `fight` | Cooldown global, grupos de rotación y fases. |
+| `model` | Un modelo que lleva, y cómo muere. |
+
+La librería no guarda plantillas. Un plugin las guarda donde quiere; `MobCodec` convierte cada parte en un
+texto JSON para una columna de base de datos y al revés, dejando fuera los valores por defecto y saltando
+una pieza mala con un aviso en vez de tirar la plantilla entera.
+
+### Modo golpes
+
+`MobBehaviour` con `hits` por encima de cero hace que la vida deje de importar: solo cuenta el cuerpo a
+cuerpo de un jugador, un golpe por jugador cada `hitCooldown`, y el último golpe lo rompe
+(`MobDeath.Cause.BROKEN`). Es la piñata, la caja que hay que abrir a golpes. `lifetime` quita el mob al
+cabo de un rato (`Cause.EXPIRED`), y `roam` lo ata a donde apareció: pasados esos bloques vuelve
+andando, y ocho más allá se le teletransporta de vuelta.
+
+### Habilidades
+
+Una habilidad es un disparador, un tipo y sus números:
+
+| Disparador | Cuándo |
+|---|---|
+| `SPAWN`, `DEATH` | Al aparecer, al morir. |
+| `INTERVAL` | Con su cooldown, a través de su grupo de rotación. |
+| `ATTACK`, `DAMAGED` | Al golpear, al recibir un golpe. |
+| `LOW_HEALTH` | Por debajo de `threshold` de su vida. |
+| `PHASE` | Cuando su combate entra en una fase. |
+
+| Tipo | Qué hace |
+|---|---|
+| `LEAP`, `JUMP`, `DASH` | Salta hacia el objetivo, salta en vertical, o embiste a quien se ponga delante. |
+| `PULL`, `PUSH` | Atrae al objetivo, lanza lejos a todos los que estén en rango. |
+| `AREA_DAMAGE`, `LIGHTNING`, `IGNITE` | Daño en un radio, un destello inofensivo más daño, fuego. |
+| `PROJECTILE`, `BARRAGE`, `CHAIN` | Una bola de fuego, calavera, flecha o bola de nieve; impactos repartidos por un disco; un golpe que salta entre jugadores. |
+| `ZONE`, `SHIELD`, `HEAL` | Una zona que hace daño, una parte de cada golpe bloqueada, vida recuperada. |
+| `POTION`, `SPEED`, `SIZE`, `BABY` | Un efecto en el objetivo o la zona; un acelerón; un tamaño al azar; bebé un rato. |
+| `SUMMON`, `TELEPORT` | Repone sus esbirros desde otra plantilla; aparece detrás del objetivo o en algún sitio cercano. |
+| `EFFECT`, `COMMAND` | Líneas de secuencia reproducidas en el mob; un comando de consola. |
+
+### Lanzamientos
+
+Un `cast` convierte una habilidad en un movimiento que un jugador puede leer y esquivar: una preparación
+que deja quieto al mob y muestra un [aviso en el suelo](/docs/exylialib/displays-y-npcs#vfx-avisos-en-el-suelo-e-indicadores),
+un impacto y una recuperación corta.
+
+| Campo del lanzamiento | Qué hace |
+|---|---|
+| `name`, `style`, `tint` | Su nombre (y la animación del modelo), cómo se ven su preparación y su impacto, su color. |
+| `aim` | `AUTO`, `TARGET`, `NEAREST`, `FARTHEST`, `RANDOM`, `ALL`, `CONE`, `LINE`, `SELF`, `GROUND`. |
+| `windup`, `spread` | Segundos de preparación (diez como mucho); los grados del cono o el ancho de la línea. |
+| `when` | Parte de vida, distancia al objetivo, jugadores cerca y fase que necesita. |
+| `group` | Su grupo de rotación: una habilidad `INTERVAL` por periodo del grupo, elegida según `chance`. |
+| `then` | Otra habilidad del mismo mob que la sigue, cuatro seguidas como mucho. |
+
+### La biblioteca de habilidades
+
+`MobSkills.library()` tiene presets listos, cada uno un lanzamiento por etapas con su estilo: `slam`,
+`meteor`, `blades`, `charge`, `chain`, `bubble`, `portal`, `miasma`, `nova`, `blink`, `renew`, `enrage`,
+`rain`, `pounce`, `hook`, `volley`, `cleave`, `fissure`, `vortex`, `dread`, `eruption`, `smite`,
+`judgement`, `supernova`, `tempest`, `starfall` y `prism`. `MobSkills.preset(id).skill()` es la
+habilidad; el editor de un plugin usa la lista como menú. `mobs.preview(player, skill)` lanza una con un
+doble de cristal que solo ve ese jugador, y no impacta nada.
+
+`mobs.theme(MobTheme)` pone los colores con los que dibuja cada habilidad — aviso, peligro, curación,
+escudo, arcano, fuego, hielo, veneno, descarga y crítico —, tokens de la paleta por defecto.
+
+### Fases
+
+`MobFight` guarda un cooldown global entre movimientos, el periodo de cada grupo de rotación, y las
+fases. Una `MobPhase` empieza **por debajo** de una parte de la vida y reproduce su `style` (`enrage` si
+está vacío, `none` para nada), añade un `suffix` al nombre, y multiplica velocidad, daño, daño recibido
+(`resist`) y tamaño, con un contorno opcional. Un modelo pasa a sus animaciones `_p2` con ella.
+
+### Aspecto y reacciones
+
+`MobLook` pone la variante, el cuerpo, el contorno y el aura, y cuatro reacciones, cada una `AUTO` salvo
+que se ponga otra:
+
+| Reacción | Ids | AUTO |
+|---|---|---|
+| aparición | `rise`, `portal`, `drop`, `bolt` | `drop` en modo golpes, si no `rise` |
+| golpe | `spark`, `pop` | `pop` en modo golpes, si no `spark` |
+| muerte | `ragdoll`, `shatter`, `pinata` | `pinata` en modo golpes, `ragdoll` para un humanoide, si no `shatter` |
+| poca vida | `wounded`, `frantic` | `frantic` en modo golpes, si no `wounded` |
+
+`numbers` muestra números de daño flotantes. `none` apaga una reacción. `mobs.visuals(MobVisuals)` pone
+el techo del servidor: rango de los indicadores, lanzamientos dibujados a la vez, reacciones sí o no, y
+sacudida de cámara.
+
+### Un modelo en un mob
+
+`MobModel.of("stone_golem")` pone un modelo a cada mob de la plantilla, con su escala, estados, ajustes
+y una muerte:
+
+| `Death` | Qué pasa |
+|---|---|
+| `AUTO` | Su animación de muerte y luego se encoge; si no tiene, se deshace. |
+| `ANIMATION` | La animación de muerte, y luego se encoge. |
+| `APART` | Se deshace en sus cubos al momento, lanzados lejos del asesino. |
+| `ANIMATION_APART` | La animación de muerte, y luego se deshace. |
+| `VANILLA` | El modelo se va, y la reacción de muerte de la plantilla se reproduce sobre el cuerpo vanilla. |
+
+Los cubos de modelo cuentan contra `max-model-parts` en [`displays.yml`](/docs/exylialib/displays-y-npcs#el-techo-de-lo-que-pueden-costar-los-displays).
+
+### Plantillas aleatorias
+
+`MobTemplate.random(id, random)` saca un mob con rango para enseñar lo que puede ser una plantilla: un
+**elite**, un **champion** o, rara vez, un **boss**, cada uno con vida, daño, armadura, un repertorio de la
+biblioteca, fases y, desde champion, combos que encadenan dos movimientos. La misma semilla da el mismo
+mob. Nunca usa modo golpes, recompensas ni modelo.
+
+### Golpes, muertes y los editores
+
+| `PluginMobs` | Qué hace |
+|---|---|
+| `onHit(handler)` / `offHit` | Cada golpe contado: golpes restantes en modo golpes, vida restante si no, y el daño. |
+| `onDeath(handler)` / `offDeath` | Quién lo mató, el registro de daño, quién hizo más daño, la parte de los jugadores, y la causa: `KILLED`, `BROKEN` o `EXPIRED`. |
+| `isMob(entity)` / `templateOf(entity)` / `count(id)` / `live()` | Qué entidades son tuyas. |
+| `skillsEditor`, `attributesEditor`, `flagsEditor`, `behaviourEditor`, `lookEditor`, `fightEditor` | Editores en el juego para cada parte, que devuelven lo que guardó el jugador. |
+
+Quita los manejadores en `onDisable`, o un plugin apagado y vuelto a encender recibe los avisos dos veces.
+
+### El almacén compartido
+
+ExyliaMobs guarda sus plantillas en su propia base de datos y las ofrece a través de `MobStore`, así que
+otro plugin puede spawnearlas sin depender de él:
+
+```java
+Mobs.store().ifPresent(store -> {
+    MobTemplate template = store.mobs().template("pinata_classic");
+    if (template != null) store.mobs().spawn(template, spot);
+});
+```
+
+`stored()` lee cada plantilla con sus pagos, `save(template, payouts)` escribe una, y
+`edit(player, id, back)` abre el editor propio del almacén. El almacén desaparece cuando su plugin se
+desactiva.

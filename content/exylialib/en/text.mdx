@@ -1,6 +1,6 @@
 ---
 title: "Text and placeholders"
-description: "One parser for every player-facing string, the shared palette, and one registry for %placeholders%."
+description: "One parser for every player-facing string, the shared palette, a plugin's own message lines, and one registry for %placeholders%."
 ---
 
 ## Four notations, one string
@@ -11,7 +11,7 @@ freely:
 | Form | Example |
 |---|---|
 | Palette token | `{primary}`, `{error}` |
-| Legacy code | `&a`, `&l` |
+| Legacy code | `&a`, `&l`, and `§a` |
 | Legacy hex | `&#8a51c4`, `&x&8&a&5&1&c&4` |
 | MiniMessage | `<bold>`, `<gradient:#8a51c4:#ff6b9d>…</gradient>` |
 
@@ -19,7 +19,13 @@ freely:
 Text.of("{primary}&lWELCOME &8[{success}online&8]").send(player);
 ```
 
-Italics are off unless asked for, which is the opposite of vanilla's default for renamed items.
+A section sign reads as a legacy code exactly like `&`. That matters for placeholder output: what
+PlaceholderAPI hands back is usually already translated to `§`, and a line carrying one used to reach
+the screen raw.
+
+Lines the library puts on items — menu icons, items built from a config — are not italic unless they
+ask to be, the opposite of vanilla's default for renamed items. A component you put on an item yourself
+gets that through `PluginMessages.item` (below) or `decorationIfAbsent(ITALIC, FALSE)`.
 
 ## The API
 
@@ -27,19 +33,47 @@ Italics are off unless asked for, which is the opposite of vanilla's default for
 |---|---|
 | `Text.of(string)` | The chainable form. |
 | `Text.from(plugin, string)` | The same, for a message belonging to a plugin, so `%prefix%` resolves. |
-| `Text.component(string)` | Straight to a `Component`. |
-| `.with(name, value)` | Substitutes a value **as literal text**. |
-| `.withFormatted(name, value)` | Substitutes a value that carries its own formatting. |
+| `Text.component(string)` | Straight to a `Component`; the shortest path when there is nothing to substitute. |
+| `.with("%coins%", value)` | Substitutes a value **as literal text**. The first argument is the exact text it replaces. |
+| `.withFormatted("%class%", value)` | Substitutes a value that carries its own formatting — a display name from a config. |
+| `.withColored("%tag%", value)` | A value a player had a hand in that may still be coloured — a clan tag, a nickname. Colours, gradients and decorations work; click, hover, fonts, selectors and line breaks stay text. |
+| `.withVerbatim("%sample%", value)` | Like `withFormatted`, but the value keeps its own letters (no small capitals) — somebody's words drawn inside a server line. |
+| `.withAll(values, formatted, verbatim)` | Many values at once, keyed by bare name; cheaper than a chain of `with` calls. |
 | `.forPlayer(player)` | Resolves `%placeholders%` for that viewer. |
 | `.forPlayerFormatted(player)` | The same, honouring resolver values that carry formatting. |
+| `.verbatim()` / `Text.verbatim(string)` | Draws the line in the letters it was written in, whatever `small-text` says. For a chat message or a name. |
 | `.build()` / `.send(receiver)` | Finish, or finish and deliver. |
 | `.plain()` / `.legacy()` / `.raw()` | Serialisers. `legacy()` is for old APIs that demand it. |
+| `.wire()` / `Text.fromWire(plugin, wire)` | The text and its values as one string for a Redis channel, and back; the receiving server builds it with its own prefix, palette and sound. |
 
 <Callout type="warning" title="with or withFormatted is a decision, not a detail">
 Getting it backwards is a bug in both directions: a display name printing `{highlight}` to the screen,
 or a player called `<rainbow>` recolouring your message. Ask **whose value it is** — a server owner
 wrote it, or a player typed it.
 </Callout>
+
+Text a player typed that has to travel as a string — into a config line, to another plugin — goes
+through `Text.escape(typed)`, which neutralises tags, legacy codes and palette tokens so it reads exactly
+as typed when parsed later. `Text.strip(typed)` removes every bit of formatting for good, parsing until
+nothing changes, for a name or description stored without it.
+
+Three more for plugins that build components themselves: `Text.tag(resolver)` adds a MiniMessage tag of
+your own for the whole server (standard tags are tried first, so it cannot take `<red>` away);
+`Text.click("suggest_command", "/msg Notch ")` builds a click event by the name a config writes, which
+survives Adventure 5 where a switch over `ClickEvent.Action` does not; and `Text.shadowed(component)`
+puts the server's configured text shadow under a component painted after the parse.
+
+### Values inside tag arguments
+
+A placeholder written inside a tag argument resolves before the parse, so the tag sees the value:
+
+```yaml
+icon: "<head:%player_name%> {letters}%player_name%"
+```
+
+Angle brackets are dropped from such a value, so it cannot close the tag or open another. Click and
+hover tags are the exception: their values go in after the parse, where a command or a tooltip cannot
+be broken by them.
 
 ## The palette
 
@@ -57,7 +91,17 @@ and changing one recolours every plugin in the ecosystem at once:
 | `{success}` | `#8fffc1` | `{warning}` | `#ff9500` |
 | `{success_light}` | `#a1ffc3` | `{warning_light}` | `#ffd2a8` |
 
-`Colors.get(token)` reads one as a `TextColor`, and `Colors.names()` lists them.
+`colors.yml` also holds `server-ip`, written `{server-ip}` in any message, so the address on every
+scoreboard and message changes in one place. `Colors.get(token)` reads a colour as a `TextColor`, and
+`Colors.names()` lists them.
+
+## The look: small capitals and shadow
+
+Every line an Exylia plugin writes is drawn in Unicode small capitals and with a soft shadow in its own
+colour, switched in ExyliaLib's `config.yml` (`small-text`, `text-shadow`). Both apply to the template,
+never to substituted values: a player named `Steve` stays `Steve` and a balance stays `1500`. Text that
+is somebody else's words rather than the server's — a chat message, a name — uses `verbatim()` so it
+keeps its letters too.
 
 ## The prefix
 
@@ -69,10 +113,57 @@ Prefixes.set(this, messages.prefix());                 // on enable, and again o
 Text.from(this, messages.ready()).send(player);        // %prefix% resolves to yours
 ```
 
+`Text.of` leaves `%prefix%` alone, and a plugin that never set one leaves it visible, so the omission is
+obvious rather than silent.
+
 <Callout type="note" title="Set it again after a reload">
 An edited prefix that is not re-registered stays stale until the next restart. Every Exylia plugin
 calls `Prefixes.set` as the last step of loading its configs for exactly this reason.
 </Callout>
+
+## A plugin's own lines
+
+A plugin that reads its lines from a messages file holds one `PluginMessages` and builds a `Values` bag
+per message:
+
+```java
+messages = PluginMessages.of(this);                                  // onEnable
+
+messages.send(player, lang.created(), Values.of("mine", mine.id()));
+messages.send(player, lang.renamed(), Values.of("old", old).putText("new", typedName));
+menus.open(player, "mine_list", values.map());                       // the same bag as a menu context
+```
+
+- Every line goes through `Text.from`, so `%prefix%` is this plugin's and an effect tag at the start
+  plays.
+- **A blank line sends nothing.** Emptying a message in the file is how an owner turns it off;
+  `Text.send` itself still sends an empty line.
+- `put` is a value the server wrote and its formatting is honoured; `putText` is something a player
+  typed and stays literal. Names are bare: `"mine"` fills `%mine%`, and `null` becomes an empty string.
+- `Values` takes the three shapes its consumers want: `applyTo(text)` in one `withAll`, `map()` for a
+  menu context, `apply(string)` spliced into a raw line. Spliced in, a typed value goes through
+  `Values.inert`, so a player who types `%player_ip%` never has it resolved.
+- `messages.text(line, values)`, `item(line, values)` (not italic) and `plain(line, values)` give the
+  same line as a `Text`, an item `Component` or plain text for the console.
+
+## Effects and centring inside a message
+
+A message can carry a sound, particles, a firework or centring, in one bracketed block at the very start
+of the line:
+
+```yaml
+level-up: "[sound:ENTITY_PLAYER_LEVELUP|1.0|1.2;particle:FLAME|20;center]{success}Well done"
+```
+
+`;` separates the kinds, `,` several of one kind, and `|` a kind's own arguments. The kinds are
+`sound`, `particle`, `firework` and `center` (each also in plural, `centered` too). The tag never reaches
+the screen, a log or an item name; only a player gets the effects; a bracket that means nothing, such as
+`[Server] Restarting`, is left alone; and a malformed entry is reported once without eating the message.
+
+Centring is measured in pixels on what the player will read — values included, bold counted, small
+capitals measured as the glyph drawn. A value that breaks lines (a rewards list, a top three) centres
+every line it makes, not just the first. `Centering.center(line)`, `centerWithin(line, width)` and
+`pixelWidth(line)` do the same directly.
 
 ## Placeholders
 
@@ -87,7 +178,15 @@ Placeholders.group(this, "clan")
 ```
 
 That declares `%clan_name%` and `%clan_members%`. The final name is **the group prefix, an underscore
-and the entry name** — `add("")` registers the bare prefix itself.
+and the entry name** — `add("")` registers the bare prefix itself. Registering the same name again
+replaces it, so a reload duplicates nothing, and the whole group goes when the plugin disables.
+
+| Written | Means |
+|---|---|
+| `%clan_top_3%` | Argument `3`. |
+| `%eco_balance:comma%` | Formatted: `comma`, `compact`, `percent`, `upper`, `lower`, `yesno`, `time`, `fixed1`, `fixed2`, or a `DecimalFormat` pattern. |
+| `%clan_name\|No clan%` | A fallback when there is no value. |
+| `%%` | A literal percent sign. |
 
 ### Arguments
 
@@ -101,13 +200,24 @@ The longest registered name wins and whatever is left becomes arguments:
 is cut from the text **as written**, so a value's capitals survive even though the name is matched
 folded.
 
+For an argument that is an id which may itself contain `_`, `:` or `|`, mark the names `.verbatim()`:
+everything after the name reaches the resolver as **one** argument, exactly as written, with no
+splitting, no format and no fallback.
+
+```java
+Placeholders.group(this, "exyliashields")
+        .verbatim()
+        .add("unlocked", r -> r.argCount() == 0 ? total(r) : owns(r, r.arg(0, "")))
+        .register();
+```
+
+`%exyliashields_unlocked_pattern:globe%` arrives with `["pattern:globe"]`. A verbatim name takes the
+whole rest, so do not register another name that starts with it.
+
 ### No answer is not an empty string
 
-A resolver returning `null` means "no value", and the text keeps whatever fallback was written:
-
-```text
-%clan_name|No clan%
-```
+A resolver returning `null` means "no value", and the text keeps whatever fallback was written — or
+the placeholder itself, so a typo shows. Return `""` only when empty is the real answer.
 
 Returning `"-"` instead would make "nobody is in third place" indistinguishable from "that arena does
 not exist".
@@ -117,6 +227,7 @@ not exist".
 | Call | What it does |
 |---|---|
 | `Placeholders.apply(text, viewer)` | Resolve everything for a viewer. |
+| `Placeholders.apply(text, viewer, data)` | The same, with values for this one message; a registered resolver still wins. |
 | `Placeholders.applyRelational(text, viewer, target)` | Resolve a two-player placeholder. |
 | `Placeholders.compile(text)` | Compile once, resolve many times. |
 | `Placeholders.isDynamic(text)` | Whether it contains anything to resolve at all. |
@@ -126,18 +237,36 @@ not exist".
 
 Registering a group registers the expansion; there is nothing to install from eCloud. Outside, the
 plugin's own name is the identifier: `total_players` registered by ExyliaFFA is read as
-`%exyliaffa_total_players%`.
+`%exyliaffa_total_players%`. That spelling also works in any Exylia text, with or without
+PlaceholderAPI, and asks that plugin only — the way to reach a name two plugins both register.
 
 A group whose prefix already **is** the plugin's name is handled too — PlaceholderAPI strips that word
-as the identifier, and the library puts it back rather than making anybody write it twice.
+as the identifier, and the library puts it back rather than making anybody write it twice. Such a group
+registers nothing short, so its names never clash with another plugin's.
 
-There is no second identifier: a plugin answers under its own name only.
+A plugin may add one shorter identifier of its own:
+
+```java
+Placeholders.identifier(this, "practice");   // %practice_stats_kills% as well as %exyliapracticecore_stats_kills%
+```
+
+Both spellings keep working. The identifier is one word with no `_`, `%` or space; one another plugin
+already answers to is refused with a warning rather than taken from it, and it is forgotten when the
+plugin disables.
 
 ## Lines written for several lines
 
 A value containing `<nl>` becomes several lore lines. `Lines.value(section, key)` reads a config key
 that may be a string or a list into that one canonical form, normalising real line breaks and literal
-`\n` on the way.
+`\n` on the way; `Lines.read(section, keys...)` returns the lines themselves, trying each key in order
+so a renamed key still reads old files.
 
 Only lines that actually mention the multi-line value are stretched, and the rest of the template
 repeats around each one — so a bullet stays a bullet on the second line.
+
+## Performance
+
+Text with no formatting characters skips the parser, and everything else is parsed once and cached, so
+re-sending the same line every tick is a lookup. Values substituted with `with` and `forPlayer` are put
+in after the parse, which is what keeps that cache shared across players. Concatenating a value into
+the string instead gives every player a different string and misses it.

@@ -1,0 +1,235 @@
+---
+title: "Replays"
+description: "Record a fight tick by tick from the server's own state and play it back as packet bodies, with a black box that keeps the last minute around everyone."
+---
+
+Recording what happened and watching it again: a duel, a round, a report. A recording is the server's
+own state, tick by tick; a playback draws it as packet bodies on the screens of whoever asked.
+
+```java
+PluginReplays replays = Replays.of(this);
+
+ReplayRecorder recorder = replays.record(arena.spawn());
+recorder.follow(red);
+recorder.follow(blue);
+
+// when the duel ends
+duels.saveReplay(duelId, recorder.stop().toBytes());
+
+// when somebody asks to see it
+Replay replay = Replay.from(duels.replayOf(duelId));
+ReplayPlayback watching = replays.play(replay, arena.spawn(), List.of(viewer));
+watching.speed(0.25);
+watching.onEnd(() -> lobby.send(viewer));
+```
+
+<Callout type="note" title="PacketEvents is needed to watch">
+Recording works on any server. Playing back draws packet bodies, so without PacketEvents `play`
+returns `null` and `Replays.isSupported()` is `false`.
+</Callout>
+
+## What is recorded
+
+Every tick, for everybody followed:
+
+| | |
+|---|---|
+| Position | to a thousandth of a block |
+| Yaw, pitch and head | at the protocol's own resolution |
+| Pose | standing, sneaking, crawling, sleeping, gliding, riptide, dying |
+| Flags | sprinting, on the ground, on fire, invisible, glowing, which hand is raised |
+| Health | to the nearest half point |
+| Equipment | all six slots, written when one changes |
+
+Plus marks for things that happen once: swings, hits, attacks (critical, sweep, knockback, on a
+shield), deaths, respawns, totems, teleports, mounting, pickups, block mining, block changes and
+explosions. All read off the server's own events, so a plugin gets them without a listener.
+
+Every sample is stamped with the server's tick, not the wall clock, so two players sampled in the same
+tick land on the same frame. A player who is dead or in **spectator mode** is recorded as not there.
+
+A recording shows what the server decided, not what a player's client predicted. For "did that hit
+land", that is the authority.
+
+## The anchor
+
+A recording holds no world and no coordinates: every position is relative to the anchor it was made
+against. Play it back against the same spot in an arena pasted elsewhere, on another server, a week
+later. There is no rotation: an anchor facing another way offsets the replay, it does not turn it.
+
+## The arena
+
+Only the plugin knows which events belong to its match, so it offers them:
+
+```java
+recorder.follow(arrow);                       // anything with a position: pearls, potions, crystals, TNT
+recorder.block(at, became, was);              // a block that changed; pass `was` or the break is silent
+recorder.explosion(at, power);                // the flash and the bang; its blocks are block() calls
+recorder.markAt("trap", at, null);            // something that happened at a place
+recorder.reset();                             // the arena was pasted fresh
+```
+
+Or let the recorder watch a box by itself:
+
+```java
+recorder.watch(48);   // everything within 48 blocks of the anchor
+```
+
+`watch(radius)` follows whatever is in the box or enters it (players, mobs, items, arrows, boats) and
+records every block that changes from the server's events: placed, broken, blown up, burnt, grown,
+pistons and flowing liquids. Displays, interaction entities, markers, hologram stands, paintings and
+item frames are left out. A change reported twice is drawn once.
+
+Limits: 400 followed things per recording (the newest past that are dropped), tens of thousands of
+block changes (past that the arena stops being recorded and the fight does not).
+
+## Sound
+
+A playback makes its own noise from the marks it already has: the hit sound and damage particles, a
+block's own break or place sound and pieces, explosions scaled to the blast, bows, pearls and fuses.
+
+With PacketEvents, the black box and recorders that `watch` also keep the sounds, explosions and potion
+splashes the server **actually sent** (`SOUND`, `BLAST` and `WORLD_EVENT` marks), so a wind charge
+sounds like a wind charge. Plugin chimes in the `MASTER` and `UI` categories are not recorded.
+`playback.sounds(false)` turns all of it off.
+
+## Playing back
+
+```java
+replays.play(replay, arena.spawn(), List.of(viewer));                       // PACKET
+replays.play(replay, arena.spawn(), List.of(viewer), ReplayWorld.SOLID);    // SOLID
+replays.play(replay, anchors, viewers, ReplayWorld.PACKET);                 // one anchor per scene
+```
+
+| `ReplayWorld` | Changed blocks are |
+|---|---|
+| `PACKET` (default) | drawn for the viewers only. Costs nothing and needs no cleanup, but the server does not have them, so a viewer walking into one is pushed back. |
+| `SOLID` | written into the world and put back exactly when the playback stops. Only for an arena nobody else is using. |
+
+Bodies are packet entities driven like real players: a step and a head turn each tick, metadata only
+when it changes, the hurt animation with the direction of the hit, critical sparks and sweeps, deaths
+that fall over and vanish in a puff, footsteps in the sound of the block underfoot. Slow motion still
+sends a step every tick, interpolated. A playback is private: two players can watch two recordings in
+the same arena without seeing each other's.
+
+```java
+watching.pause();  watching.resume();
+watching.speed(0.25);                 // 1/16 to 8
+watching.seek(1200);                  // a minute in; backwards as freely as forwards
+watching.step(1);                     // one frame on, held
+watching.loop(true);
+watching.follow(red.getUniqueId());   // first person; null gives the viewer their own eyes back
+watching.highlight(red.getUniqueId());// draw one body glowing
+watching.reveal(true);                // draw invisible players glowing
+watching.onMark(mark -> ...);
+```
+
+**First person** puts every viewer's camera on that body, and their own screen shows what that player
+had: the item in hand, the hearts, the swing, hits taken and totems.
+
+A playback that reaches the end **pauses on the last frame** and calls `onEnd`, unless it loops. It ends
+when stopped, when the last viewer leaves, or when the plugin or the server stops.
+
+## Marks
+
+`SWING`, `HURT`, `ATTACK`, `EQUIP`, `BLOCK`, `EXPLOSION`, `MOUNT`, `DISMOUNT`, `PICKUP`, `BREAKING` and
+`SHIELD_DISABLED` are drawn by the module and never reach `onMark`. `DEATH`, `RESPAWN`, `TOTEM`,
+`TELEPORT` and `CHAT` are drawn and also reach it. Anything else is the plugin's own:
+
+```java
+recorder.mark("round", null, "2");
+recorder.mark("combo", red, String.valueOf(hits));
+playback.onMark(mark -> { if (mark.kind().equals("combo")) overlay.show(viewer, mark.text()); });
+```
+
+`playback.placeOf(mark)` gives a place mark back in the arena the replay is running in.
+
+## A recorder has to be stopped
+
+`stop()` returns the `Replay`; `cancel()` throws it away. One of the two must happen on every path,
+abandoned matches included. A forgotten recorder stops itself at **30 minutes** and warns in the
+console; one whose plugin is disabled is cancelled.
+
+`toBytes()` gives a blob for a database column; `Replay.from(bytes)` reads it back. Format 3 is
+current, and format 2 recordings still play.
+
+## The black box
+
+A recorder must be started before something happens. The black box is always running and keeps only
+the last stretch, so a recording can be cut out **after** the fact:
+
+```java
+ReplayBlackBox box = replays.blackBox(BlackBoxSettings.defaults()
+        .hidden(vanish::isVanished));
+
+// in a death listener
+box.capture(event.getEntity()).thenAccept(replay -> store.save(replay.toBytes(chunks)));
+```
+
+| `BlackBoxSettings` | Default | Range |
+|---|---|---|
+| `seconds` | 60 | 10 to 300 |
+| `radius` | 32 blocks around every player | 8 to 96 |
+| `maxEntities` (non-players, whole server) | 1500 | |
+| `terrain` | `true` | |
+| `verticalMargin` | 6 blocks | 4 to 128 |
+| `maxChunks` per capture | 400 | |
+| `hidden` | nobody | |
+
+- **Captures.** `capture(player)`, `capture(uuid, seconds)` (the player need not be online),
+  `capture(uuid, seconds, afterSeconds)` to include the fall after a death, `capture(location, seconds)`
+  for a place. A capture with nothing in its window completes exceptionally.
+- **It follows the person.** Everything within the radius of anywhere they were: a chase, a pearl, an
+  elytra flight. A long teleport, a portal or a world change cuts it into **scenes**, each with its own
+  anchor.
+- **The ground.** With terrain on, every chunk section along the way is kept as it was when the scene
+  started, between the lowest and highest point anybody stood, plus `verticalMargin`, chunk by chunk.
+  Schematic regenerations and expiring temporary blocks are recorded too.
+- **Lag.** Once a second it writes every player's ping (`PING`) and the server's TPS and MSPT
+  (`SERVER`, `"tps;mspt"`); a player leaving writes `QUIT` with the reason. `replay.last(kind, actor,
+  tick)` reads the value at any tick.
+- **Shared.** One box serves the server; plugins asking for one share it and it keeps the larger of
+  each setting. Hidden players (staff in vanish) and spectators are never in it.
+
+`replay.toBytes(chunks)` stores each terrain section once in a `ReplayChunks` store, keyed by the
+SHA-1 of its content, and writes only the keys into the blob; `Replay.from(blob, chunks)` reads them
+back. A section the store lost is a hole in the ground, not a broken recording.
+
+## Stages and the viewer
+
+A recording with terrain can be watched anywhere. `replays.stage(replay)` lays each scene's ground on
+its own plot of the [temporary world](/docs/exylialib/world#the-temporary-world), at its real height,
+at most 8,000 blocks a tick, and the playback runs there with the arena written for real.
+
+```java
+replays.stage(replay).thenAccept(stage -> Tasks.of(this).runAtEntity(viewer, () ->
+        ReplayViewer.open(this, viewer, stage, focus).thenAccept(watching -> {
+            watching.hud(status -> Component.text(status.elapsed() + " / " + status.length()));
+            watching.onLeave(() -> overlay.hide(viewer));
+        })));
+```
+
+`ReplayViewer` is the shared camera and controls, so every plugin's replay screen behaves the same. The
+viewer flies in adventure mode and cannot be hurt; the plugin's own hotbar or menu calls `toggle`,
+`skip(seconds)`, `frame(ticks)`, `faster` / `slower` (1/16 to 8), `restart`, `next(kinds)` /
+`previous(kinds)` (jump to a second before the next attack or death), `cycleFollow`, `follow`,
+`goTo`. `hud` feeds the action bar every four ticks from a `Status` (tick, speed, paused, scene,
+following). Where they were, their game mode and flight are put back exactly when they leave, quit or
+the plugin stops; somebody who logs in on the temporary world after a crash is sent to the main world's
+spawn.
+
+## Folia
+
+- Folia has no server-wide tick, so the clock there is wall time in 50 ms steps, held per region tick.
+- Players are picked up again when Folia drops their timers on a respawn or a world change.
+- `SERVER` marks carry the TPS of a player's region, with `?` for MSPT.
+- Staging places blocks and loads chunks on each plot's own region.
+
+## What is not in it
+
+- **What a player saw.** Client prediction, FOV and view bobbing never existed on the server.
+- **Mob variants.** A non-player keeps its type, item, block, baby flag and name; colours, breeds and
+  horse armour use the client's defaults.
+- **Block entities.** Block states are kept, not sign text or chest contents.
+- **Changes nobody reported.** A recorder that does not `watch` has only what the plugin offered. A
+  direct `setType` fires no event: call `reset()` or `block()` from whatever made it.

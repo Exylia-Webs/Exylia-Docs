@@ -1,0 +1,206 @@
+---
+title: "Webhooks de Discord"
+description: "Mensajes a Discord escritos como plantillas de config, enviados como tarjetas Components V2, con pings, rate limits y webhooks muertos resueltos."
+---
+
+Un plugin que publica en Discord — un evento que empieza, un ganador, alguien que entra a un clan —
+escribe una plantilla en su config y le pasa valores. La librería arma la tarjeta, mantiene los pings
+bajo control, encola y espacia las peticiones, y nunca toca el hilo principal. Sin bot y sin conexión al
+gateway: webhooks sobre el `java.net.http` que ya trae la JVM.
+
+```java
+PluginWebhooks webhooks = Webhooks.of(this);
+WebhookTarget target = WebhookTarget.parse(config.webhookUrl()).target();
+
+webhooks.send(target, lang.captureStarted(), Map.of(
+        "zone", zone.name(),
+        "player", player.getName(),
+        "player_head", Webhooks.head(player.getUniqueId())));
+```
+
+## Dos niveles de confianza
+
+| | Quién pone la URL | `@everyone` / `@here` en la plantilla |
+|---|---|---|
+| `Webhooks.of(plugin)` | El dueño del servidor, en una config. | Hace ping. |
+| `Webhooks.of(plugin).playerOwned()` | Un jugador, en el juego. | Nunca hace ping. |
+
+Los dos comparten las mismas colas; solo cambia la regla de `@everyone`. El Discord de un clan no es del
+dueño del servidor para andar haciendo ping.
+
+### Del servidor: un anuncio
+
+```java
+public record Settings(
+        @Comment("El webhook al que se anuncian los eventos. Vacío lo desactiva.")
+        String webhook,
+        WebhookTemplate started) {
+
+    public Settings() {
+        this("", new WebhookTemplate("CAPTURA INICIADA", "La zona **%zone%** ya está abierta.")
+                .withMessage("<@&123456789012345678> ¡Empezó una captura!"));
+    }
+}
+
+WebhookTarget.Parsed parsed = WebhookTarget.parse(settings.webhook());
+if (parsed.ok()) {
+    Webhooks.of(this).send(parsed.target(), settings.started(), Map.of("zone", zone.name()));
+} else if (parsed.rejection() != WebhookTarget.Rejection.BLANK) {
+    getLogger().warning("Webhook ignorado: " + parsed.rejection().message());
+}
+```
+
+### De un jugador: el registro de un clan
+
+```java
+PluginWebhooks clanLog = Webhooks.of(this).playerOwned();
+
+// Se pide, se comprueba con Discord y se guarda.
+clanLog.ask(leader, "{primary}Pega la URL del webhook de tu clan").thenAccept(check ->
+        tasks.runAtEntity(leader, () -> {
+            if (check.connected()) clan.webhook(check.target().secret());
+        }));
+
+// El webhook se borró en Discord.
+Webhooks.of(this).onInvalidated(dead -> clans.byWebhook(dead).ifPresent(clan -> clan.webhook(null)));
+```
+
+`ask` usa un input de texto sensible: un diálogo si el cliente lo tiene, y si no la línea de chat se toma
+antes de que la lea cualquier otro plugin y nunca se muestra. Guarda `secret()` como una contraseña — la
+URL es todo lo que hace falta para publicar como el webhook.
+
+## La API
+
+| Llamada | Qué hace |
+|---|---|
+| `Webhooks.of(plugin)` | La vista del plugin para webhooks del servidor. |
+| `Webhooks.trusted(valor)` | Marca un valor como texto propio del dueño, insertado tal cual (ver [Valores](#valores)). |
+| `Webhooks.head(uuid)` | La URL de la imagen de la cabeza de un jugador, de `webhook-head` en el `config.yml` de ExyliaLib (`https://mc-heads.net/avatar/%uuid%/64` por defecto). |
+| `send(target, template[, valores])` | Encola el mensaje. Devuelve un `CompletionStage<WebhookResult>`; nunca bloquea y nunca termina con excepción. |
+| `verify(target)` | Le pregunta a Discord si el webhook existe, con su nombre, canal y servidor. |
+| `ask(player, prompt)` | Le pide la URL al jugador, rechaza una mala explicando por qué y luego la verifica. |
+| `onInvalidated(listener)` | Corre cuando Discord informa que un webhook al que este plugin envía ya no existe. |
+| `playerOwned()` / `allowsEveryone()` | La vista donde `@everyone` nunca hace ping, y cuál de las dos es esta. |
+
+`WebhookTarget.parse(url)` nunca lanza: `ok()` y `target()`, o un `rejection()` — `BLANK`, `MALFORMED`,
+`NOT_HTTPS`, `HOST`, `EXTRA`, `PATH`, `INCOMPLETE` — cuyo `message()` se lo explica al jugador en inglés.
+Solo se acepta `https://` en `discord.com`, `discordapp.com`, `ptb.discord.com` o `canary.discord.com`
+con una ruta `/api/webhooks/<id>/<token>`, y cada petición va a una URL reconstruida a partir de las
+partes. `masked()` y `toString()` ocultan el token, así que un target se puede loguear sin riesgo.
+
+`WebhookResult` es `SENT`, `DROPPED` (cola llena, plugin desactivado o servidor apagándose),
+`INVALIDATED` (404 o 401), `FAILED`, `RATE_LIMITED` o `SKIPPED` (la plantilla está desactivada o no tiene
+nada). `WebhookCheck.status()` es `CONNECTED`, `NOT_FOUND`, `UNAUTHORIZED`, `RATE_LIMITED`, `UNREACHABLE`
+o `CANCELLED` (solo desde `ask`).
+
+## La plantilla
+
+`WebhookTemplate` es un record que se anida en cualquier record de config; un archivo escrito a mano lee
+las mismas claves con `WebhookTemplate.read(section)`.
+
+```yaml
+started:
+  enabled: true
+  # Mensaje plano sobre la tarjeta, y la única parte que puede hacer ping.
+  message: '<@&123456789012345678> ¡Empezó una captura!'
+  # Vacío conserva el nombre y el avatar propios del webhook.
+  username: ''
+  avatar-url: ''
+  # Un token de paleta como {primary}, o #rrggbb.
+  color: '{primary}'
+  title: 'CAPTURA INICIADA'
+  url: ''
+  description: 'La zona **%zone%** ya está abierta.'
+  author:
+    name: '%player%'
+    icon: '%player_head%'
+    url: ''
+  thumbnail: ''
+  image: ''
+  fields:
+    - 'Duración|%duration%|inline'
+    - 'Jugadores|%players%'
+  # 'etiqueta|url' o 'etiqueta|url|emoji'. Hasta 20, cinco por fila.
+  buttons:
+    - 'Mapa en vivo|https://map.example.com|🗺️'
+  footer: '%server%'
+  timestamp: true
+  # Los mensajes de esta plantilla dentro de esta ventana se juntan en uno.
+  coalesce: 0s
+```
+
+- **Components V2.** El `message` es un bloque de texto propio; todo lo demás es una tarjeta con `color`
+  como barra de acento: la línea del autor y el título (enlazado a `url`) junto al `thumbnail` — o el
+  icono del autor si está vacío — y después la descripción, los campos, la imagen a todo el ancho, los
+  botones y una línea chica de pie con la hora del envío en la zona horaria de cada lector.
+- **Tarjeta o no.** Se manda tarjeta cuando alguno de `title`, `description`, `fields`, `author.name`,
+  `image`, `buttons` o `footer` tiene algo. Solo con `message` se manda ese mensaje; sin ninguno se salta
+  y se avisa una vez.
+- **Los botones** son botones de enlace, porque un webhook no puede recibir clics. El emoji es un emoji
+  unicode o uno del servidor escrito `<:nombre:id>`; un botón cuya URL no es `http(s)` válida se omite.
+- **Los campos** son `nombre|valor` o `nombre|valor|inline`. Se parte la plantilla, no el texto ya
+  relleno, así que un `|` dentro de un valor se queda en su columna. Una tanda de campos inline pasa a
+  ser una línea compacta `**nombre:** valor` cada uno, porque una tarjeta no puede ponerlos lado a lado.
+- **Formato.** El texto de la plantilla conserva su markdown de Discord. `&l` pasa a negrita hasta el
+  siguiente código de color o el final de la línea; el resto de códigos legacy, tokens de paleta y tags
+  de MiniMessage se quitan. La sintaxis propia de Discord (`<@&id>`, `<#id>`, `<:emoji:id>`,
+  `<t:unix:R>`) se deja tal cual. Un color de paleta se lee de la paleta viva en cada envío.
+- **Límites.** Lo que se pasa de largo se corta con `…` en vez de rechazarse: mensaje 2000, usuario 80,
+  título 256, nombre de campo 256, valor de campo 1024, 25 campos, pie 2048, autor 256, etiqueta de
+  botón 80, 20 botones. Pasado el total de 4000 caracteres de Discord, se corta primero la descripción,
+  luego los campos, el pie y el encabezado. Un usuario que contenga `discord` o `clyde` se omite, porque
+  Discord lo rechaza.
+- **Agrupar.** Con `coalesce: 3s` un mensaje espera hasta tres segundos, y los siguientes de la misma
+  plantilla, plugin y webhook se juntan en él, una línea de descripción cada uno. Un registro de clan
+  con veinte entradas por segundo pasa a ser unos pocos mensajes en vez de veinte.
+
+## Valores
+
+Los valores son un `Map` por nombre a secas (`"player"` llena `%player%`). Un placeholder sin valor se
+deja visible, para que una errata se note.
+
+**Un valor es texto de otro salvo que se marque lo contrario.** Se le quita el formato de Minecraft para
+siempre, se aplanan los saltos de línea, se escapa el markdown de Discord para que `**x**` se lea tal
+cual, y se rompen las menciones, así que un `@everyone` o un `<@&id>` inyectados no hacen ping a nadie.
+`Webhooks.trusted(valor)` es para texto que escribió el dueño, como un nombre de servidor cuyo
+`**negrita**` debe verse; aun así no puede hacer ping.
+
+En una parte de URL (`avatar-url`, `url`, `author.icon`, `author.url`, `thumbnail`, `image`) el valor
+entra sin cambios, y la parte se omite si el resultado no es una URL `http(s)` válida.
+
+## Menciones
+
+Cada mensaje lleva `allowed_mentions`. Los pings salen solo del `message` de la plantilla, leído
+**antes** de sustituir ningún valor:
+
+| Escrito en `message` | Hace ping a |
+|---|---|
+| `<@&id>` | Ese rol. |
+| `<@id>`, `<@!id>` | Ese usuario. |
+| `@everyone`, `@here` | Todos — solo desde `Webhooks.of(plugin)`. |
+
+Hasta 100 roles y 100 usuarios. Una mención escrita en la tarjeta solo notifica si el `message` también
+la nombra.
+
+## Entrega
+
+- **Fuera del hilo principal.** Las peticiones corren en el scheduler asíncrono de la librería; un rate
+  limit, un reintento o una ventana de agrupado es una tarea diferida, nunca un hilo dormido. Los stages
+  y `onInvalidated` terminan fuera del hilo principal, así que salta con `Tasks` antes de tocar a un
+  jugador.
+- **En orden y acotado.** Una cola por webhook, hasta 50 en espera por webhook y 1000 en total. Pasado
+  eso se descarta el mensaje en espera más viejo de ese webhook (`DROPPED`), avisado como mucho una vez
+  por minuto.
+- **Rate limits.** Un 429 se reintenta después de su `retry_after`; un límite global pausa todos los
+  webhooks, y un bucket que informa que no le queda nada espera su reset antes del siguiente mensaje.
+- **Reintentos.** Un 5xx o un error de red se reintenta a 1 s y a 2 s, tres intentos en total. Cualquier
+  otro 4xx no se reintenta, y el motivo de Discord se avisa una vez.
+- **Webhooks muertos.** Un 404 o 401 marca el webhook como muerto durante seis horas: su cola se descarta
+  (`INVALIDATED`), `onInvalidated` corre una vez por cada plugin que tenía mensajes para él, y los envíos
+  siguientes responden al instante sin petición. Eso mantiene al servidor fuera de la lista de baneo por
+  peticiones inválidas de Cloudflare, que cortaría los webhooks de todos los plugins.
+- **HTTP.** Nunca se siguen redirecciones; conectar expira a los 5 s y una petición a los 10 s.
+
+Los mensajes en espera de un plugin se descartan un tick después de su `onDisable`, así que un mensaje
+enviado desde `onDisable` todavía tiene su oportunidad. Cuando la librería se detiene, cada mensaje
+encolado tiene un intento más, 3 segundos en total.

@@ -1,0 +1,289 @@
+---
+title: "Mobs and models"
+description: "Blockbench models worn by mobs without a resource pack, and custom mobs from templates with skills, casts and phases."
+---
+
+Two modules that work together and apart. **Models** put a Blockbench model on any living entity,
+drawn from block, item and head displays so no resource pack is needed. **Mobs** turn a template into
+a living entity with a name, equipment, attributes, skills, fight phases and reactions, and can wear one
+of those models.
+
+| Module | Entry point | What it is for |
+|---|---|---|
+| Models | `Models.of(plugin)` | `.bbmodel` files worn by entities, animated by state. |
+| Mobs | `Mobs.of(plugin)` | Templates spawned anywhere, with skills, casts and phases. |
+| Mob store | `Mobs.store()` | The shared template store other plugins spawn from. |
+
+Models need **PacketEvents**. A mob is a real entity, but what it draws (telegraphs, reactions, a model) is
+displays and needs PacketEvents like any other. Neither module has a command: every editor below is
+opened from code.
+
+## Models
+
+Drop a Blockbench file in the plugin's folder and attach it by name:
+
+```text
+plugins/<YourPlugin>/models/stone_golem.bbmodel
+plugins/<YourPlugin>/models/stone_golem.animation.json   (optional)
+```
+
+The model name is the file name in lower case. The folder is checked at most once a second, so saving in
+Blockbench is the reload. A Bedrock or GeckoLib `<name>.animation.json` (or `<name>.json`) beside it
+adds animations.
+
+```java
+PluginModels models = Models.of(this);
+
+ModelOptions options = ModelOptions.DEFAULT
+        .withScale(1.3)
+        .withState(ModelState.ATTACK, "animation.golem.smash");
+
+ModelInstance golem = models.attach(zombie, "stone_golem", options);
+if (golem != null) {
+    golem.onEvent(event -> {
+        if (event.equals("impact")) shockwave(zombie.getLocation());
+    });
+}
+```
+
+### What is read
+
+Groups become bones with their pivots and rotations, and every cube becomes one display. Rotation,
+position and scale keyframes are read with linear, step, Catmull-Rom and Bézier interpolation; timeline,
+sound and particle keyframes arrive as events through `onEvent`. Blockbench 4 and 5 projects both read.
+Meshes, locators and Molang are reported once in `problems(name)` and left out.
+
+### How a cube is drawn without a resource pack
+
+First match wins:
+
+1. **A name suffix.** `body@stone` or `@minecraft:gold_block` is that block, `@diamond_sword` that
+   item. `@mainhand`, `@offhand` and `@helmet` show what the carrier holds or wears in that slot.
+   `@head` forces the texture onto a player head, `@hide` draws nothing. A group's suffix applies to every
+   cube in it that has none of its own.
+2. **Its texture.** A cube whose texels all match one block is that block. A cube with a design becomes a
+   textured player head made through Exylia Skins, shown as its main block until the head is ready.
+3. **No texture.** Light grey concrete.
+
+### Options
+
+| `ModelOptions` | What it does | Default |
+|---|---|---|
+| `scale` | Size, up to `16`. | `1` |
+| `states` | State → animation name, overriding the automatic match. | none |
+| `lookAt` | The head follows the carrier's view. | `true` |
+| `heads` | Textured cubes become player heads; off, they stay their main block. | `true` |
+| `viewRange` | Blocks, up to `128`. | `48` |
+| `hitboxes` | A model more than a quarter bigger than its carrier gets hitboxes of its own. | `true` |
+| `nametag` | The carrier's name is drawn above the model rather than at the carrier's own height. | `true` |
+| `tweaks` | Offset, hidden or re-materialled bones, speeds and hitbox. | none |
+
+### Animations by state
+
+The model plays `idle`, `walk` and `run` by itself from the carrier's speed, and `attack`, `hurt`,
+`death`, `spawn` and casts as they happen. An animation is matched to a state by, in order: the
+`states` option; its exact name or the part after the last dot (`animation.golem.walk`); a name that
+holds the state as a word (`golem_walk_cycle`). A cast `cast:<skill>` looks for `<skill>`,
+`cast_<skill>`, `<skill>_cast`, `cast` and then `attack`; `run` with nothing found plays `walk`.
+Fight phases pick `<state>_p2` over `<state>` when the mob is in phase 2.
+
+| `ModelInstance` | What it does |
+|---|---|
+| `play(name)` | Plays on top of the base, moving only the bones the animation keys. |
+| `play(name, strikeInMillis)` | Fits the animation so its `release` (or `impact`) timeline key lands in that time, between a quarter and four times its pace. |
+| `stop()` | Lets go of the action under way. |
+| `phase(n)` | Moves it to a fight phase. |
+| `resize(scale)` | Grows or shrinks over half a second. |
+| `glow(rgb)` / `flash(rgb, millis)` | Outline, until told otherwise or for a moment. |
+| `die(apart)` / `die(apart, x, y, z)` | Plays the death, then shrinks away or comes apart, thrown that way. |
+| `comeApart()` | Breaks into its own cubes, which bounce off floors and walls, rest and melt. |
+| `remove()` | Off every client now. |
+
+Legs are found by their bone names (`leg`, `thigh`, `knee`, `foot`, `paw`, `hoof`…). Their feet stay on
+the ground: planted while walking, the body tilting a little on slopes.
+
+### Tweaks and their editor
+
+`ModelTweaks` keeps what a server owner adjusts without opening Blockbench: an offset, bones hidden or
+drawn in another material, a speed per state, and a hitbox size.
+
+```java
+models.tweakEditor("stone_golem", options)
+        .title("Stone golem")
+        .onSave(saved -> store(saved))
+        .open(player);
+```
+
+The editor lists the changed bones and has buttons for size and place, speeds, hitbox, and a preview
+that stands the model in front of the player and cycles its animations.
+
+## Custom mobs
+
+```java
+PluginMobs mobs = Mobs.of(this);
+
+MobTemplate golem = MobTemplate.of("stone_golem", EntityType.IRON_GOLEM)
+        .withName("{primary}&lSTONE GOLEM &8[{success}%health%&8/{info}%max_health%&8]")
+        .withAttributes(Map.of("max_health", 220.0, "attack_damage", 9.0))
+        .withFlags(Set.of(MobFlag.AGGRESSIVE, MobFlag.NO_VANILLA_DROPS, MobFlag.BOSS_BAR))
+        .withSkills(List.of(MobSkills.preset("slam").skill(), MobSkills.preset("judgement").skill()))
+        .withFight(MobFight.NONE
+                .withGlobalCooldown(Duration.ofMillis(1500))
+                .withPhases(List.of(new MobPhase(0.5, "enrage", "{error}☠", 1.25, 1.3, 1, 1.15, "#ff3b3b"))))
+        .withModel(MobModel.of("stone_golem").withScale(1.3).withDeath(MobModel.Death.ANIMATION_APART))
+        .withExp(120);
+
+mobs.register(golem);
+mobs.spawn(golem, spot);                       // any thread; a CompletableFuture<LivingEntity>
+mobs.onDeath(death -> { /* pay death.killer() */ });
+```
+
+`%health%` and `%max_health%` in the name are redrawn on every hit and heal. `register` again with the
+same id replaces the template, so reloading is registering again.
+
+### The template
+
+| Part | What it holds |
+|---|---|
+| `type`, `name` | The entity type, and its name in Exylia text. |
+| `equipment` | Armour, offhand and main hand. |
+| `attributes` | `max_health`, `attack_damage`, `movement_speed`, `armor`, `armor_toughness`, `knockback_resistance`, `follow_range`, `attack_knockback`, `scale`. |
+| `flags` | `GLOWING`, `BABY`, `SILENT`, `FIRE_IMMUNE`, `NO_VANILLA_DROPS`, `NO_VANILLA_EXP`, `NO_ITEM_PICKUP`, `NO_SUN_BURN`, `AGGRESSIVE`, `WANDERS`, `NO_INTERACT`, `PASSIVE`, `BOSS_BAR`. |
+| `effects` | Potion effects, `SPEED\|1\|infinite`. |
+| `skills` | What it does, below. |
+| `exp` | Experience it drops. |
+| `rewards`, `money` | Stored for the plugin; the library never pays them. |
+| `behaviour` | Hits mode, lifetime and how far it roams. |
+| `look` | Variant, body, glow, aura and reactions. |
+| `fight` | Global cooldown, rotation groups and phases. |
+| `model` | A model it wears, and how it dies. |
+
+The library does not store templates. A plugin keeps them where it likes; `MobCodec` turns each part
+into a JSON string for a database column and back, leaving defaults out and skipping a bad piece with a
+report instead of failing the whole template.
+
+### Hits mode
+
+`MobBehaviour` with `hits` above zero makes health stop mattering: only a player's melee counts, one hit
+per player per `hitCooldown`, and the last hit breaks it (`MobDeath.Cause.BROKEN`). It is the piñata,
+the crate that has to be beaten open. `lifetime` removes the mob after a while (`Cause.EXPIRED`), and
+`roam` leashes it to where it spawned: past that many blocks it walks back, and eight further it is teleported back.
+
+### Skills
+
+A skill is a trigger, a type and its numbers:
+
+| Trigger | When |
+|---|---|
+| `SPAWN`, `DEATH` | As it appears, as it dies. |
+| `INTERVAL` | On its cooldown, through its rotation group. |
+| `ATTACK`, `DAMAGED` | As it hits, as it is hit. |
+| `LOW_HEALTH` | Below `threshold` of its health. |
+| `PHASE` | As its fight enters a phase. |
+
+| Type | What it does |
+|---|---|
+| `LEAP`, `JUMP`, `DASH` | Jumps at the target, straight up, or charges through whoever is in the way. |
+| `PULL`, `PUSH` | Yanks the target in, throws everyone in range away. |
+| `AREA_DAMAGE`, `LIGHTNING`, `IGNITE` | Damage in a radius, a harmless flash plus damage, fire. |
+| `PROJECTILE`, `BARRAGE`, `CHAIN` | A fireball, skull, arrow or snowball; strikes scattered over a disc; a hit that jumps between players. |
+| `ZONE`, `SHIELD`, `HEAL` | A damaging area, a share of every hit blocked, health restored. |
+| `POTION`, `SPEED`, `SIZE`, `BABY` | An effect on the target or the area; a speed boost; a random size; a baby for a while. |
+| `SUMMON`, `TELEPORT` | Tops its minions up from another template; blinks behind the target or somewhere nearby. |
+| `EFFECT`, `COMMAND` | Sequence lines played at the mob; a console command. |
+
+### Casts
+
+A `cast` turns a skill into a move a player can read and dodge: a wind-up that roots the mob and shows a
+[ground telegraph](/docs/exylialib/displays-and-npcs#vfx-telegraphs-and-indicators), an impact, and a
+short recovery.
+
+| Cast field | What it does |
+|---|---|
+| `name`, `style`, `tint` | Its name (and model animation), how its wind-up and impact look, their colour. |
+| `aim` | `AUTO`, `TARGET`, `NEAREST`, `FARTHEST`, `RANDOM`, `ALL`, `CONE`, `LINE`, `SELF`, `GROUND`. |
+| `windup`, `spread` | Seconds of wind-up (ten at most); the cone's degrees or the line's width. |
+| `when` | Health share, target range, players nearby and phase it needs. |
+| `group` | Its rotation group: one `INTERVAL` skill per group period, picked by `chance`. |
+| `then` | Another skill of the same mob that follows it, four in a row at most. |
+
+### The skill library
+
+`MobSkills.library()` holds ready presets, each a staged cast with its style: `slam`, `meteor`, `blades`,
+`charge`, `chain`, `bubble`, `portal`, `miasma`, `nova`, `blink`, `renew`, `enrage`, `rain`, `pounce`,
+`hook`, `volley`, `cleave`, `fissure`, `vortex`, `dread`, `eruption`, `smite`, `judgement`, `supernova`,
+`tempest`, `starfall` and `prism`. `MobSkills.preset(id).skill()` is the skill; a plugin's editor uses the
+list as its menu. `mobs.preview(player, skill)` casts one with a glass stand-in that only that player
+sees, and nothing lands.
+
+`mobs.theme(MobTheme)` sets the colours every skill draws with — telegraph, danger, heal, shield,
+arcane, fire, frost, poison, shock and crit — palette tokens by default.
+
+### Phases
+
+`MobFight` holds a global cooldown between moves, the period of each rotation group, and phases. A
+`MobPhase` starts **below** a share of health and plays its `style` (`enrage` when empty, `none` for
+nothing), adds a `suffix` to the name, and multiplies speed, damage, damage taken (`resist`) and size,
+with an optional glow. A model switches to its `_p2` animations with it.
+
+### Looks and reactions
+
+`MobLook` sets the variant, body, glow and aura, and four reactions, each `AUTO` unless set:
+
+| Reaction | Ids | AUTO |
+|---|---|---|
+| spawn | `rise`, `portal`, `drop`, `bolt` | `drop` in hits mode, else `rise` |
+| hurt | `spark`, `pop` | `pop` in hits mode, else `spark` |
+| death | `ragdoll`, `shatter`, `pinata` | `pinata` in hits mode, `ragdoll` for a humanoid, else `shatter` |
+| low health | `wounded`, `frantic` | `frantic` in hits mode, else `wounded` |
+
+`numbers` shows floating damage numbers. `none` turns a reaction off. `mobs.visuals(MobVisuals)` sets
+the server's ceiling: indicator range, casts drawn at once, reactions on or off, and camera shake.
+
+### A model on a mob
+
+`MobModel.of("stone_golem")` puts a model on every mob of the template, with its scale, state overrides,
+tweaks and a death:
+
+| `Death` | What happens |
+|---|---|
+| `AUTO` | Its death animation, then shrinks away; with none, it comes apart. |
+| `ANIMATION` | The death animation, then shrinks away. |
+| `APART` | Comes apart into its cubes at once, thrown away from the killer. |
+| `ANIMATION_APART` | The death animation, then comes apart. |
+| `VANILLA` | The model goes, and the template's own death reaction plays on the vanilla body. |
+
+Model cubes count against `max-model-parts` in [`displays.yml`](/docs/exylialib/displays-and-npcs#the-ceiling-on-what-displays-may-cost).
+
+### Random templates
+
+`MobTemplate.random(id, random)` rolls a ranked mob to show what a template can be: an **elite**, a
+**champion** or, rarely, a **boss**, each with health, damage, armour, a moveset from the library, phases
+and, from champion up, combos that chain two moves. The same seed gives the same mob. It never uses hits
+mode, rewards or a model.
+
+### Hits, deaths and the editors
+
+| `PluginMobs` | What it does |
+|---|---|
+| `onHit(handler)` / `offHit` | Every counted hit: hits left in hits mode, health left otherwise, and the damage. |
+| `onDeath(handler)` / `offDeath` | Who killed it, the damage ledger, the top damager, the players' share, and the cause: `KILLED`, `BROKEN` or `EXPIRED`. |
+| `isMob(entity)` / `templateOf(entity)` / `count(id)` / `live()` | Which entities are yours. |
+| `skillsEditor`, `attributesEditor`, `flagsEditor`, `behaviourEditor`, `lookEditor`, `fightEditor` | In-game editors for each part, returning what the player saved. |
+
+Remove handlers in `onDisable`, or a plugin turned off and on again is told twice.
+
+### The shared store
+
+ExyliaMobs keeps its templates in its own database and offers them through `MobStore`, so another plugin
+can spawn them without depending on it:
+
+```java
+Mobs.store().ifPresent(store -> {
+    MobTemplate template = store.mobs().template("pinata_classic");
+    if (template != null) store.mobs().spawn(template, spot);
+});
+```
+
+`stored()` reads every template with its payouts, `save(template, payouts)` writes one, and
+`edit(player, id, back)` opens the store's own editor. The store goes away when its plugin disables.

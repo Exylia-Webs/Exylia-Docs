@@ -20,16 +20,20 @@ Repository<PlayerStats> stats = Databases.of(this).repository(PlayerStats.class)
 ```
 
 La tabla se crea al primer uso, y un componente nuevo se convierte en una columna nueva.
+`repository(...)` vuelve al instante: el pool se abre y la tabla se crea en segundo plano, y lo que
+llames antes de que termine espera a eso en vez de competir con ello. Un record que no se puede guardar
+(sin `@Table`, dos `@Id`, un tipo que nada sabe codificar) falla ahí mismo, en `onEnable`, nombrando el
+componente.
 
 ## Anotaciones
 
 | Anotación | Qué hace |
 |---|---|
 | `@Table("nombre")` | La tabla en la que vive este record. |
-| `@Id(length = …)` | La clave primaria. |
+| `@Id(length = …)` | La clave primaria. `@Id(generated = true)` deja que la base de datos reparta una clave `long`. |
 | `@Column` | Un componente guardado. `@Column("otro_nombre")` cuando el nombre de columna difiere. |
 | `@Column(length = Column.UNBOUNDED)` | Texto sin límite — `TEXT` en H2, `LONGTEXT` en MySQL. |
-| `@Indexed` / `@Index(…)` | Índices, incluidos compuestos y descendentes. |
+| `@Indexed` / `@Index(…)` | Índices, incluidos compuestos, únicos y descendentes. |
 
 ## Leer y escribir
 
@@ -37,17 +41,29 @@ Todo devuelve un `CompletableFuture` y nada bloquea el servidor:
 
 ```java
 stats.find(uuid);                    // Optional<PlayerStats>
+stats.findFresh(uuid);               // lo mismo, leído saltándose toda caché
 stats.findAll();
 stats.exists(uuid);
 stats.count();
 
 stats.save(record);                  // insert o update
-stats.saveAll(records);
-stats.update(record);
-stats.insert(record);                // claves generadas
-stats.insertReturning(record);
+stats.saveAll(records);              // un viaje, ~8x más rápido que un bucle en MySQL
+stats.update(record);                // una fila de clave generada, por su clave
+stats.insert(record);                // clave generada, responde la clave
+stats.insertReturning(record);       // clave generada, responde el record con ella
 stats.delete(uuid);
 ```
+
+`save` se completa cuando la fila es durable. No hay intervalo de volcado en el que perder datos: espera
+al future antes de decirle a un jugador que su compra funcionó.
+
+**Las escrituras a la misma fila llegan en el orden en que se hicieron.** `save`, `saveAll`, `update`,
+`updateIf` y `delete` sobre una clave esperan a la escritura anterior a esa clave, así que un save
+posterior nunca se ve adelantado por uno anterior. Las escrituras a filas distintas siguen corriendo en
+paralelo.
+
+Una operación fallida se imprime en consola a nombre del plugin dueño del repositorio, aunque nadie haya
+puesto un manejador de errores. Un manejador que sí pongas recibe el fallo primero.
 
 ### Consultas
 
@@ -64,10 +80,94 @@ stats.where("arenaId", "nodebuff")
 | `orderBy` / `orderByDescending` | Ordenar. |
 | `limit(filas)` / `skip(filas)` | Paginar. |
 | `find()` / `findFirst()` | Ejecutarla. |
-| `count()` / `delete()` | Contar o borrar lo que coincida. |
+| `count()` | Contar lo que coincida. |
+| `sum(columna)` | Sumar una columna numérica sobre lo que coincida, en la base de datos. `BigDecimal`, `0` sin filas. |
+| `delete()` | Borrar lo que coincida sin leerlo. Responde cuántas filas se fueron. |
+
+```java
+balances.where("currency", "coins").sum("amount");   // monedas en circulación, una consulta
+```
+
+`sum` ignora el orden, el límite y el salto, y lanza en el sitio de la llamada para una columna que no
+es numérica.
 
 La ordenación ocurre en la base de datos, y por eso un leaderboard guarda sus valores derivados en vez
 de calcularlos al leer: una base de datos no puede ordenar por algo que solo Java sabe deducir.
+
+## Contadores y reclamaciones que escriben varios servidores
+
+Un `find`, un cambio en memoria y un `save` pierden la escritura del primero de dos servidores. Estas
+dos hacen la cuenta y la comprobación dentro de la base de datos:
+
+```java
+// una kill más, desde cualquier servidor; crea la fila la primera vez
+kills.increment(new PlayerKills(uuid, 1), "kills");
+
+// reclamado solo si sigue sin reclamar: exactamente un llamante recibe true
+votes.updateIf(vote.withClaimed(true), "claimed", false).thenAccept(won -> {
+    if (won) pay(player);
+});
+```
+
+| Llamada | Qué hace |
+|---|---|
+| `increment(row, columna)` | Suma el valor de la fila en una columna `int`/`long` al guardado. Sin fila, guarda `row` tal cual. Las demás columnas de una fila existente no se tocan. No sirve con claves generadas. |
+| `updateIf(row, columna, esperado)` | Escribe la fila entera solo mientras `columna` siga valiendo `esperado` (`null` para ninguno), y responde si lo hizo. Nunca crea una fila. |
+
+Compara algo exacto en `updateIf`: un número, un texto acotado, un booleano, un UUID. Un decimal en coma
+flotante o una columna de texto sin límite pueden no compararse nunca como iguales.
+
+## Bloqueos entre servidores
+
+`RowLocks` reserva una clave para un único servidor a la vez, y un crash no puede dejarla tomada:
+
+```java
+RowLocks locks = RowLocks.of(Databases.of(this), "auctions");
+
+locks.hold(auction.id(), () -> auctions.findFresh(auction.id()).thenCompose(this::bid))
+     .thenAccept(done -> { if (done.isEmpty()) busy(player); });
+```
+
+- `hold(clave, trabajo)` toma el bloqueo, ejecuta el trabajo y lo devuelve acabe como acabe. Responde lo
+  que respondió el trabajo, o **vacío sin ejecutarlo** cuando otro servidor tuvo la clave en todos los
+  intentos o no se pudo llegar a la base de datos.
+- Un bloqueo es un **arrendamiento** (lease): una fila en `exylia_row_locks` con quién lo tiene, hasta
+  cuándo y una versión, compartida por todos los plugins de ese datasource y con clave
+  `namespace:clave`. Un dueño que se cayó deja que su lease caduque y el siguiente lo toma.
+- Por defecto: 12 intentos separados 150 ms (`attempts(n, espera)`) y un lease de 30 segundos
+  (`lease(duración)`). Mantén el lease muy por encima de lo que más tarde el trabajo más la deriva de
+  reloj entre servidores.
+- Los holds de la misma clave en un servidor hacen cola entre sí antes de llegar a la base de datos, así
+  que un doble clic nunca gasta un reintento contra sí mismo.
+- El trabajo corre en un hilo de base de datos. Pasa por [el scheduler](/docs/exylialib/tareas) antes
+  de tocar el juego.
+- `forget(clave)` borra la fila del bloqueo — solo desde dentro del último hold sobre algo que ya no
+  existirá.
+
+<Callout type="warning" title="Lee con findFresh dentro de un hold">
+`find` puede responder desde la caché de este servidor, y la escritura de otro servidor llega a esa caché
+solo cuando llega su mensaje de invalidación — quizá después de que este servidor tomara el bloqueo que
+el escritor acaba de soltar. `findFresh` va a la base de datos y reemplaza la copia en caché por lo que
+leyó.
+</Callout>
+
+### Holds que duran minutos
+
+Para una ventana que un jugador tiene abierta, usa `holdRenewing` en vez de un lease largo. El lease
+sigue siendo corto y se renueva cada tercio mientras el trabajo está pendiente, así que el bloqueo de un
+servidor caído queda libre un lease corto después:
+
+```java
+locks.lease(Duration.ofSeconds(60)).holdRenewing(vault.id(), lease -> {
+    CompletableFuture<Void> closed = openWindow(player, vault);
+    lease.lost().thenRun(() -> saveAndClose(player, vault));   // tomado por otro, o inalcanzable
+    return closed;
+});
+```
+
+`lease.lost()` se completa cuando una renovación encuentra el bloqueo tomado por otro, o la base de datos
+no respondió a una renovación antes de que el lease caducara. El trabajo **no** se interrumpe: escucha
+`lost()` y termina por sí mismo. `lease.renew()` lo alarga ahora mismo y responde si sigue siendo suyo.
 
 ## Motores
 
@@ -77,20 +177,35 @@ Cada plugin recibe su `plugins/<Plugin>/database.yml`:
 database:
   type: h2
   settings:
-    max-pool-size: 0
+    pool-size: 0
   h2:
     file: database/h2
     auto-server: false
+    backups:
+      enabled: true
+      interval: 6h
+      keep: 5
   mysql:
     host: localhost
     port: 3306
     database: minecraft
     username: root
     password: ""
+  # mariadb y postgresql usan las mismas claves (postgresql usa el puerto 5432)
+  mongodb:
+    host: localhost
+    port: 27017
+    database: minecraft
+    username: ""
+    password: ""
+    connection-string: ""   # una URI mongodb:// completa gana sobre todo lo de arriba
+  redis:
+    enabled: false
 ```
 
 `h2`, `mysql`, `mariadb`, `postgresql`, `mongodb`. Solo se lee el bloque que coincide con `type`; un
-valor no reconocido cae a `h2` y lo dice.
+valor no reconocido cae a `h2` y lo dice como error, porque nada de lo que guarde ese plugin llega
+entonces a un servidor de base de datos.
 
 El `auto-server` de H2 conviene conocerlo: un archivo de H2 pertenece a una JVM, y el segundo proceso
 que lo abre recibe *"The file is locked"*. Activarlo hace que el primer servidor sirva el archivo a los
@@ -98,7 +213,7 @@ demás por TCP — que es lo que permite compartirlo entre dos plugins de una m�
 un visor de base de datos. Para cualquier cosa que no esté en una máquina, monta una base de datos de
 verdad.
 
-<Callout type="tip" title="Deja max-pool-size en 0">
+<Callout type="tip" title="Deja pool-size en 0">
 Cero deja decidir al motor, que es lo correcto casi siempre: una base de datos embebida quiere un
 puñado de conexiones y una en red se dimensiona por los núcleos de la máquina. Súbelo solo si la consola
 reporta timeouts de conexión — un pool más grande contra una base de datos que ya es el cuello de
@@ -107,6 +222,63 @@ botella la hace más lenta.
 
 Los plugins cuyos ajustes resueltos coinciden **comparten un pool**. Dos plugins apuntando al mismo
 MySQL abren un cliente, no dos.
+
+Un plugin configurado para un servidor de base de datos que todavía tiene su viejo `h2.mv.db` en disco
+lo dice una vez al arrancar: nada lee ese archivo, así que lo que tenga no está en la base de datos nueva
+hasta que lo importes.
+
+## Cuando la base de datos no responde
+
+- **Una línea, no un stack trace.** Un fallo de conexión (timeout del pool, enlace caído, socket
+  rechazado) se imprime como una línea de consola diciendo que la base de datos no responde. Los fallos
+  siguientes de la misma caída se retienen y se cuentan en el siguiente aviso, como mucho uno cada 30
+  segundos.
+- **Se cura sola.** Una base de datos inalcanzable al arrancar se reintenta — la conexión y la tabla —
+  como mucho una vez cada 30 segundos. Las llamadas de en medio fallan rápido con el último fallo. Un
+  servidor que arranca antes que su MariaDB vuelve solo, sin recargar.
+- **Una tabla borrada con el servidor en marcha se vuelve a crear** en la primera sentencia que la
+  echa en falta, y esa sentencia se ejecuta una vez más.
+- **Las tablas se preparan de una en una.** Una actualización de un plugin que añade columnas a varias
+  tablas las altera por turnos, así que H2 ya no agota el tiempo en su bloqueo de esquema.
+
+## H2: copias de seguridad y reparación automática
+
+El archivo embebido se copia en línea, sin parar nada, en `backups/` a su lado
+(`database/backups/h2-<hora UTC>.zip`): una vez al arrancar y luego cada `interval`, guardando las
+`keep` más nuevas. Cada copia relee antes la base de datos entera; una base de datos dañada nunca se
+copia encima de una copia buena.
+
+Antes de abrir el archivo, ExyliaLib lee cada fila de cada tabla con una conexión de solo lectura. Un
+crash en mitad de una escritura (falta de memoria, un proceso matado) puede dejar rota la parte más nueva
+del archivo, y H2 solo lo nota en la primera lectura de una página rota. Cuando la comprobación
+encuentra daño:
+
+<Steps>
+<Step title="El archivo dañado se conserva">
+Una copia va a `database/corrupted/<hora UTC>/`. Nunca se borra.
+</Step>
+<Step title="Deshacer la última escritura a medias">
+Sobre una copia se descarta el bloque más nuevo (hasta tres), así que H2 vuelve a la última versión
+completa, que se carga en un archivo nuevo.
+</Step>
+<Step title="Si no, la copia de seguridad más nueva">
+Si deshacer falla o pierde filas, se prueba la copia legible más nueva y gana la que tenga más filas.
+</Step>
+<Step title="Si no, nada">
+El archivo se queda donde está y los datos de ese plugin siguen fuera de línea, con un error que nombra
+la copia dañada y la carpeta de copias. Nunca se crea una base de datos vacía en su lugar, para que un
+plugin no siembre filas nuevas encima de las perdidas.
+</Step>
+</Steps>
+
+Cada reparación se registra como error indicando el camino tomado y, tabla por tabla, qué se perdió.
+
+**Con el servidor en marcha**, un archivo que H2 cerró o pasó a solo lectura (disco lleno, sin permiso
+de escritura, una escritura fallida) se reporta una vez — `DATABASE READ ONLY` o `DATABASE DAMAGED` con
+las causas habituales — y las repeticiones se resumen como mucho una vez por minuto en vez de un error
+por consulta. Libera el disco o arregla los permisos y reinicia; la comprobación de arriba repara un
+archivo dañado en el siguiente arranque. Un archivo o carpeta de base de datos en el que el usuario del
+servidor no puede escribir se reporta al arrancar con su ruta.
 
 ## Tipos que la librería no puede conocer
 
@@ -123,7 +295,7 @@ public static void registerCodecs() {
 }
 ```
 
-`Location`, `ItemStack`, `ItemStack[]` y los enums ya se conocen.
+`UUID`, `Location`, `ItemStack`, `ItemStack[]` y los enums ya se conocen.
 
 ## Una columna que creció
 
@@ -134,7 +306,8 @@ a leer.
 
 Una columna **de texto** más estrecha de lo que declara el record se ensancha en el sitio en el
 arranque que lo detecta, y el cambio se nombra en el resumen de esquema. Sus datos y su nombre no se
-tocan, y una columna `NOT NULL` sigue siendo `NOT NULL`.
+tocan, y una columna `NOT NULL` sigue siendo `NOT NULL`. En MySQL, una longitud mayor de la que cabe en
+un `VARCHAR` se convierte en `LONGTEXT`.
 
 Nunca va en el otro sentido: una columna guardada más ancha de lo que declara el record se deja tal
 cual, porque puede ser la vista de otro plugin sobre la misma tabla y estrecharla trunca filas. Las
@@ -147,16 +320,85 @@ columna.
 ```text
 /exylialib export <plugin>
 /exylialib import <plugin> <archivo> [force]
+/exylialib wipe <plugin> <tabla|*> [código]
 ```
 
 La base de datos entera de un plugin a un archivo y de vuelta: de H2 a MySQL, o a otro servidor. Los
 plugins también pueden exponerlo ellos mismos — ExyliaEvents envuelve las mismas llamadas en
 `/eventsadmin export`.
 
+`wipe` vacía las tablas de un plugin en dos pasos: la primera ejecución no borra nada y devuelve un
+código, la segunda con ese código lo hace, y solo después de haber escrito un export. Necesita
+`exylialib.admin.wipe`; export e import necesitan `exylialib.admin`.
+
 ## Redis
 
-Opcional, y apagado por defecto. Configurado, hace que una base de datos se vea igual desde cada
-servidor: un cambio en uno es visible en los otros al momento, en vez de tras expirar una caché.
+Opcional, y apagado por defecto. Actívalo en una red de servidores que comparten una base de datos: una
+fila escrita en un servidor es visible en los demás al momento, en vez de tras expirar una caché.
+
+```yaml
+database:
+  redis:
+    enabled: true
+    host: 10.0.0.6
+    port: 6379
+    password: ""
+    server-id: lobby-1   # distinto en cada servidor
+    key-prefix: exylia   # cámbialo solo si dos redes comparten un Redis
+```
+
+Las demás claves (`database`, `pool-size`, `ttl-seconds`, `local-seconds`, `local-entries`) rara vez
+hay que tocarlas. Redis nunca es imprescindible: si deja de responder, todo sigue funcionando contra la
+base de datos, la consola lo dice, y se reintenta cada 30 segundos hasta que una línea dice que vuelve a
+responder.
+
+Un plugin que guarda una tabla entera en sus propios mapas oye las escrituras de otros servidores con
+`onRemoteChange` y vuelve a leer la fila que cambió. Sus propias escrituras nunca se reportan, y sin Redis
+no se reporta nada:
+
+```java
+Databases.of(this).onRemoteChange(Clan.class, change -> {
+    if (change.wholeTable()) { reloadClans(); return; }
+    clans.find(change.id()).thenAccept(row -> tasks.run(() ->
+            row.ifPresentOrElse(this::remember, () -> forget(change.id()))));
+});
+```
+
+### Claves sueltas y streams
+
+Para datos que otro programa lee por nombre — un proxy que comprueba una clave al entrar, un productor
+en otra plataforma que añade a un stream — `RedisKeys` habla con el Redis que el plugin ya configuró:
+
+```java
+RedisKeys keys = RedisKeys.of(this);
+tasks.runAsync(() -> {
+    if (keys.available()) {
+        keys.set(keys.prefix() + ":punish:ban:" + uuid, json, expiresAtMillis);
+    }
+});
+```
+
+| Llamada | Qué hace |
+|---|---|
+| `get`, `set(clave, valor, expiraEnMillis)`, `delete` | Claves sueltas. `0` guarda la clave hasta borrarla. |
+| `setIfAbsent(clave, valor, ttlMillis)` | Escribe solo si no existe: un bloqueo corto entre servidores. |
+| `streamAdd`, `streamGroup`, `streamRead` | `XADD` con longitud máxima, `XGROUP CREATE … MKSTREAM`, `XREADGROUP` sin bloquear. |
+| `streamPending`, `streamClaim`, `streamAck` | `XPENDING`, `XCLAIM`, `XACK`. |
+
+Cada llamada es un viaje de red y bloquea, así que va en un hilo asíncrono. Todas lanzan cuando Redis
+está apagado o inalcanzable: pregunta antes `available()`, y construye las claves desde `prefix()` para
+que todos los servidores coincidan. Las filas siguen yendo en un repositorio; esto es un cable, no
+almacenamiento.
+
+## Hilos
+
+El trabajo de base de datos corre en el pool asíncrono del propio servidor — sin executor propio — y
+como mucho se le entregan 32 tareas a la vez, así que una ráfaga de consultas contra una base de datos
+lenta hace cola en vez de disparar el número de hilos del servidor. Los codecs también corren en ese
+hilo.
+
+Un save lanzado desde tu `onDisable` sigue funcionando: el datasource se suelta después de tu cierre, no
+antes.
 
 <Callout type="warning" title="Hilos">
 Un future se completa en un hilo del pool. Todo lo que hagas con la respuesta que toque a un jugador o

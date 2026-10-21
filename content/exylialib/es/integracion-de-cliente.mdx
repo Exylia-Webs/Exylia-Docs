@@ -1,0 +1,169 @@
+---
+title: "Integración de cliente"
+description: "Waypoints, cooldowns y temporizadores en el HUD, equipos, rallies, canales de chat y atajos de teclado en Lunar, Feather y el mod de cliente de SurvivalCore — sin ramificar por cliente."
+---
+
+Un plugin dice qué debería ver el jugador; el cliente que pueda dibujarlo, lo dibuja. Un jugador en
+vanilla, o en un cliente sin esa función, cuesta una búsqueda en un mapa y no recibe nada — nunca un
+error.
+
+```java
+PluginClients clients = Clients.of(this);
+
+clients.waypoints().show(player, Waypoint.at("koth", arena.centre()).colour("#8a51c4"));
+clients.cooldowns().show(player, Cooldown.seconds("pearl", 16).icon(Cooldown.Icon.item("ENDER_PEARL")));
+clients.timers().show(players, Timer.countdown("koth", Component.text("Castillo"), remaining));
+
+clients.clear(player);   // quita lo que dibujó este plugin, y nada más
+```
+
+## Qué cliente dibuja qué
+
+| Función | Lunar (Apollo) | Feather | Mod SurvivalCore |
+|---|:-:|:-:|:-:|
+| Waypoints | sí | sí | sí, con iconos |
+| Cooldowns junto a la barra rápida | sí | — | sí |
+| Marcadores de compañeros | sí | sí | sí, con panel de equipo |
+| Temporizadores, haces, bordes de zona, barras de HUD | — | — | sí |
+| Rallies | como waypoint | como waypoint | sí |
+| Canales de chat, atajos de teclado | — | — | sí |
+
+Las integraciones se detectan al arrancar y otra vez cuando Apollo, la API de servidor de Feather o
+SurvivalCore se activan después de la librería. `Clients.isSupported()` dice si cargó alguna;
+`Clients.brandOf(player)` responde `VANILLA`, `LUNAR`, `FEATHER` o `SURVIVALCORE`, para un mensaje de
+entrada o una estadística — nunca lo necesitas para decidir qué enviar.
+
+## Pide `of(this)`
+
+Lo que un plugin envía mediante `Clients.of(this)` queda a nombre de ese plugin:
+
+- Dos plugins pueden mostrar un waypoint llamado `spawn` sin borrarse el uno al otro.
+- `clients.clear(player)` quita los waypoints, cooldowns, temporizadores, rallies, haces, bordes y barras
+  de este plugin. `Clients.clear(player)` borra todo lo que envió cualquier plugin.
+- Desactivar el plugin quita todo lo que dibujó.
+
+Los grupos estáticos (`Clients.waypoints()`, `Clients.cooldowns()`, …) comparten un mismo cajón sin
+dueño. Son para algo puntual.
+
+Lunar tiene un único waypoint por nombre y jugador, así que dos plugins que muestran `spawn` comparten
+de verdad un marcador allí. Aun así la librería garantiza que ninguno puede borrar el del otro: quitar
+uno que está mostrando otro plugin no quita nada de la pantalla, y quitar el que está en pantalla pasa
+el hueco a quien siga queriendo ese nombre. Con nombres distintos la cuestión no existe.
+
+## Waypoints y cooldowns
+
+| Constructor | Notas |
+|---|---|
+| `Waypoint.at(nombre, location)` | Después `.colour("#hex")` / `.colour(Waypoint.Colour.rainbow())`, `.lasting(duración)`, `.icon(Waypoint.Icon.FLAG)`. |
+| `.locked()`, `.startHidden()` | Solo Lunar; en los demás se ignoran en vez de rechazarse. |
+| `Cooldown.seconds(nombre, s)` / `Cooldown.of(nombre, duración)` | Solo se dibuja — si la acción está en cooldown es asunto de tu plugin. `.icon(Icon.item(material))`. |
+
+`ItemCooldowns` ya envía aquí sus cooldowns, con el item como icono, así que un cooldown de perla se ve
+en el HUD de los jugadores de Lunar y SurvivalCore sin código extra. Un cooldown enviado antes de
+reconocer al cliente se guarda y se envía con el tiempo que le quede en cuanto se reconoce.
+
+## Qué vuelve tras una reconexión
+
+Los clientes lo olvidan todo cuando un jugador se reconecta, y Feather olvida los waypoints al cambiar
+de mundo. La librería recuerda lo que envió y lo vuelve a poner mientras el jugador sigue conectado — un
+temporizador tal como marca ahora, nunca un rally que ya terminó. No se guarda nada para un jugador que se
+fue: la fila que dice que un jugador tiene una casa está en tu tabla, y es la única copia que sigue
+siendo cierta.
+
+Así que el plugin guarda la verdad y la librería pone el momento:
+
+```java
+clients.waypoints().restoreWith(player -> homes.waypointsOf(player));
+```
+
+Un cliente modificado se anuncia un momento **después** de entrar, así que lo enviado desde
+`PlayerJoinEvent` sale cuando el jugador aún parece vanilla y se pierde. Esto se ejecuta cuando eso ya
+se ha asentado. Una función por plugin, llamada en el hilo del propio jugador: lee memoria, no la base de
+datos.
+
+## Equipos
+
+`markers()` dibuja una vez un conjunto de compañeros. Una partida que dura usa un equipo, que recuerda
+quién está en él:
+
+```java
+PluginTeams teams = Clients.teams(this);
+
+ClientTeam red = teams.create(redPlayers);
+red.style(Component.text("Rojo"), NamedTextColor.RED, NamedTextColor.GOLD);
+red.add(latecomer);        // vuelve a dibujar los marcadores de todos
+teams.leave(deadPlayer);   // sin saber qué equipo lo tenía
+red.delete();              // limpia los marcadores de todos los miembros
+```
+
+- **Un equipo por jugador, en todo el servidor.** Unirse a un segundo abandona el primero.
+  `teams.of(player)` responde entre plugins.
+- Los miembros se guardan como ids: uno que se desconectó se descarta la próxima vez que se lee el
+  equipo.
+- Los equipos mueren con el plugin que los creó.
+
+Los **equipos con estilo** se muestran en SurvivalCore como una lista en el HUD con el rango, el color y
+la vida de cada miembro; los clientes que solo dibujan marcadores usan los colores. Un equipo puede
+contener varios grupos que luchan juntos, como un clan y sus aliados — cada espectador ve a su propio
+grupo con el color del equipo y a los demás como aliados:
+
+```java
+red.describe(member.getUniqueId(), clanId, ClientTeam.Rank.OFFICER);   // LEADER, OFFICER, MEMBER, RECRUIT
+red.nameGroup(clanId, Component.text(clanName));                       // cada clan ve su propio nombre
+red.refresh();                                                         // el estilo se aplica en el siguiente dibujado
+```
+
+Estar en un equipo en SurvivalCore también activa los **pings**: un ping llega al equipo de quien lo
+hace, como mucho uno cada 250 ms por jugador.
+
+## Elementos: temporizadores, rallies, haces, bordes, barras
+
+Todo aquí se identifica por nombre: mostrar uno cuyo nombre ya está en pantalla lo reemplaza, y
+`remove(player, nombre)` lo quita.
+
+| Elemento | Constructor |
+|---|---|
+| `Timer` | `Timer.countdown(nombre, etiqueta, restante)` / `Timer.stopwatch(nombre, etiqueta, transcurrido)`, `.paused(true)`, `.colour(…)`. El cliente cuenta solo: vuelve a enviarlo solo al pausarlo, reanudarlo o reiniciarlo. |
+| `Rally` | `Rally.at(nombre, location, etiqueta, quien)` — rojo, dos minutos por defecto; `.colour(…)`, `.lasting(…)`. Los demás clientes reciben un waypoint con el icono de rally que dura lo mismo. |
+| `Beam` | `Beam.at(nombre, base, color)`, `.pulse(true)`. Solo decoración; nada lo sustituye en otros clientes. |
+| `ZoneBorder` | `new ZoneBorder(nombre, world, box, color)` — paredes translúcidas que cualquiera puede atravesar. Mantén tu propio contorno para los demás clientes. |
+| `ProgressBar` | `new ProgressBar(nombre, etiqueta, progreso, color)`, `progreso` de 0 a 1; vuelve a mostrarla para moverla. Mantén una boss bar para los demás clientes. |
+
+```java
+clients.rallies().show(clanMembers, Rally.at("rally", target, Component.text("Empujad aquí"), caller.name()));
+clients.bars().show(players, new ProgressBar("capture", Component.text("Capturando"), 0.4f, NamedTextColor.AQUA));
+```
+
+## Canales de chat y atajos de teclado
+
+Los jugadores de SurvivalCore tienen un panel de chat y una pantalla de controles a los que un plugin
+puede añadir cosas:
+
+```java
+clients.chat().channels(player, List.of(
+        new ChatChannel("clan", Component.text("Clan"), NamedTextColor.GREEN)));
+clients.chat().onMessage((sender, channel, text) ->
+        clients.chat().post(clanOf(sender).online(), channel, sender, rankBadge(sender), Component.text(text)));
+
+clients.keybinds().register(new Keybind("rally", Component.text("Llamar a un rally"), "key.keyboard.r"));
+clients.keybinds().onPress((player, key) -> callRally(player));
+```
+
+- Los canales de un plugin conviven en el panel con los de los demás. Un mensaje escrito en uno se
+  entrega al plugin dueño, que decide quién lo lee y lo vuelve a publicar; los lectores sin panel se
+  saltan. Los mensajes tienen un tope de 256 caracteres y uno cada 250 ms por jugador.
+- Un atajo se ofrece a todo jugador cuyo cliente tenga pantalla de controles, ahora y cada vez que entre
+  uno. `null` como tecla por defecto lo deja sin asignar hasta que el jugador elija. Las pulsaciones se
+  limitan a una cada 50 ms por jugador.
+- Ambos manejadores corren en el hilo en el que llegó el mensaje del cliente: pasa por
+  [el scheduler](/docs/exylialib/tareas) antes de tocar el juego.
+
+## Bedrock
+
+`Clients.isBedrock(player)` distingue a un jugador de Geyser/Floodgate — ver
+[Jugadores · Jugadores de Bedrock](/docs/exylialib/jugadores#jugadores-de-bedrock).
+
+<Callout type="note" title="No son los nametags">
+Los colores de nametag, el brillo y la colisión los ve cada jugador, vanilla incluido, y viven en otro
+módulo a propósito: este no hace nada para un cliente sin modificar.
+</Callout>

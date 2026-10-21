@@ -1,37 +1,195 @@
 ---
-title: "Rewards, loot and economy"
-description: "What a player earned, what comes out of a chest, and what a balance is worth."
+title: "Rewards"
+description: "What a player earned: items, commands, money, experience and effects, with odds, conditions and a queue for whoever is not there."
 ---
 
-## Rewards
-
-A reward list is items, commands and money with odds and conditions, edited in-game and stored exactly
-as ExyliaCommons stored it.
+A reward list is items, commands, money, experience, messages and potion effects with odds and
+conditions, edited in-game and stored exactly as ExyliaCommons stored it.
 
 ```java
 PluginRewards rewards = Rewards.of(this);
 
-rewards.give(player, config.winnerRewards(), context);
+rewards.give(player, config.winnerRewards());
 ```
+
+Money pays through the [economy](/docs/exylialib/economy), and loot tables and crates live on
+[Crates and loot](/docs/exylialib/crates-and-loot).
+
+## Types
+
+| Type | Payload |
+|---|---|
+| `COMMAND` | `command`, run by the console, with or without a leading `/`. `%player_name%` is the player. |
+| `ITEM` | `itemSnapshot`: a material, a head string or `bytes:`. |
+| `MESSAGE` | `message`, in Exylia text notation. |
+| `ECONOMY` | `value` as text, plus an optional `currency`; blank is the default currency. |
+| `EXPERIENCE` | `value`, in points. |
+| `POTION` | `value`, one effect per line: `SPEED\|2\|15`. |
+
+An item reward is stored **whole**: the name, lore, enchantments and attributes it was given are what
+the player receives. A head reward stored as `basehead-…` or `playerhead-…` is handed over as a plain
+`PLAYER_HEAD`; store it as `bytes:` to keep the texture.
+
+## In a config file
+
+```java
+List<RewardEntry> list = Rewards.read(section, "rewards",
+        (where, problem) -> getLogger().warning(where + ": " + problem));
+```
+
+The keys are the stored field names, so a file and a database column say the same thing:
+
+```yaml
+rewards:
+  - type: ITEM
+    itemSnapshot: DIAMOND
+    minAmount: 4
+    maxAmount: 12
+    chance: 25.0
+    permission: event.vip
+  - type: ECONOMY
+    value: "500"
+    currency: gems
+  - type: COMMAND
+    command: "crate key give %player_name% 1"
+    deliveryMessage: "{success}You won a key!"
+    priority: 5
+  - "broadcast %player_name% won"      # a bare string is a command
+```
+
+| Key | Meaning |
+|---|---|
+| `name` | What the reward is called in menus and messages. |
+| `itemAmount` | A fixed stack size. |
+| `minAmount` / `maxAmount` | A random amount, both ends included; wins over `itemAmount`. For money and experience it is the amount paid. |
+| `chance` | Percent, `0`–`100`: does this one happen. `100` never rolls. |
+| `weight` | Which one happens, for `roll` and `pick`. Default `1`; `0` or less is never picked. |
+| `permission` | Needed to receive it. |
+| `condition` | `%player_level% >= 10`. Operators `>=`, `<=`, `>`, `<`, `==`, `!=`, or `true`/`false`. `==` and `!=` compare text, case-insensitively. |
+| `deliveryMessage` | Sent when it lands. |
+| `priority` | Higher is given first; equal priorities keep file order. |
+| `icon` | What a menu draws it as. |
+
+A row that cannot be read is reported and skipped; the rest still load.
+
+<Callout type="warning" title="An unreadable condition gives the reward">
+A condition nobody can parse is reported once and treated as passing. It said who should be
+*excluded*, and a typo excludes nobody. A menu does the opposite: an unreadable condition there hides
+the slot.
+</Callout>
+
+## Editing on screen
+
+```java
+rewards.editor(zone.rewards())
+        .title("{primary}&lREWARDS")
+        .onSave(edited -> manager.save(zone, edited))
+        .onCancel(() -> setupMenu.open(player))
+        .open(player);
+```
+
+Pagination, add, edit, delete, copy, paste, save and cancel. A reward copied in one plugin pastes into
+any other reward editor.
+
+| Asked | What happens |
+|---|---|
+| **What does it give?** | The type comes first, because it decides which fields the form has: a command is never asked for a stack size. |
+| An item | The icon picker, then a form filled from the item: its own name and the stack size put in. Editing it later does not ask for the item again. |
+| Several items | One window takes any number of items and adds one item reward per stack. |
+| Several commands | One command per line, one reward per command. |
+| Money | The amount and a currency picker. |
+| Experience | The least and most points. |
+| A potion | The effect list opens on submit, including for a new reward with no effects yet. |
+| Edit all | Chance, weight, permission, condition and message applied to every row; blank keeps each row's own. |
+
+A list drawn by weight (a crate, `roll`, `pick`) uses the weighted editor:
+
+```java
+rewards.weightedEditor(crate.rewards(), reward -> List.of(
+        " {letters_black}▎ {letters}Rarity {letters_black}» " + tiers.of(reward).display()));
+```
+
+Each row shows its real share of all drops counting weight, **shift + left** and **shift + right**
+raise and lower the weight in place, and a button sorts by weight. The extra lines are optional and
+asked again on every redraw.
+
+## Giving
 
 | Call | What it does |
 |---|---|
-| `give(player, rewards, context)` | Hand over a whole list. |
-| `give(player, reward)` | One entry. |
-| `roll(player, rewards, context)` | Give what the odds picked. |
-| `pick(rewards)` | Pick without giving — for a preview. |
-| `giveLater(uuid, owed)` | Queue for somebody who is offline. |
-| `claim(player, callback)` | Deliver whatever they were owed. |
-| `editor(rewards)` | The in-game list editor. |
-| `overflow(policy)` | What happens when the inventory is full. |
-| `pending(store)` | Where owed rewards are kept. |
-| `claimOnJoin(then)` | Drain the queue on every join, without writing a listener. |
+| `give(player, rewards)` | Every reward, each checked and rolled on its own. On the player's thread. |
+| `give(player, reward)` | One. |
+| `giveOnPlayerThread(player, rewards, then)` | The same from any thread, moved onto the player's. |
+| `giveItem(player, stack)` | One `ItemStack` under the overflow policy. |
+| `roll(player, rewards)` | Exactly one, picked by weight; it still faces its own `chance`. |
+| `pick(rewards)` | Pick by weight without giving: a preview. |
+| `giveDropping(player, rewards, spot)` | Gives everything, but items are thrown out at the spot, one entity per stack. Money, commands and the rest still reach the player. No overflow, nothing goes into an inventory. |
+| `scatter(spot, rewards)` | For nobody: items and experience orbs come out at the spot. Returns what needs a person (commands, money, rewards with a permission or condition), unrolled, for the caller to give. |
+| `deliver(uuid, rewards)` | Here or not: online on this server it is given on their thread; otherwise kept with `giveLater`. A player who leaves mid-delivery is queued. |
+| `deliver(uuid, rewards, spot)` | Items drop at the spot when the player is online, within 32 blocks and on the calling thread; otherwise `deliver(uuid, rewards)`. |
+| `deliver(uuid, stack)` / `deliver(uuid, template, amount)` | An item, here or not. `amount` is split into stacks of the item's max size. |
+| `giveLater(uuid, rewards)` | Keep them for somebody who is not here. |
 
-### Offline is not a lost prize
+Each reward is asked, in order, **permission**, then **condition**, then the **roll**. One that fails
+costs nothing else on the list.
 
-`giveLater` writes into a `PendingRewards` store and `claim` empties it on the player's next join. The
-queue is cleared **before** delivery rather than after, so a failure mid-delivery cannot duplicate a
-reward next time.
+```java
+List<RewardEntry> share = Rewards.scaled(pot, 0.25);   // a quarter of the money and experience
+```
+
+`Rewards.scaled` multiplies money (two decimals) and experience (whole points), rounding down, and
+drops what comes to nothing. Items and the rest are kept as they are. Boosters go through
+[`Modifiers.rewards`](/docs/exylialib/economy#modifiers) instead.
+
+### Decided now, handed over later
+
+For anything that shows a prize before handing it over, so what was animated is what arrives:
+
+```java
+List<RewardEntry> pool = crate.rewards().stream().filter(r -> rewards.eligible(player, r)).toList();
+RewardEntry won = rewards.settle(rewards.pick(pool));   // null when its chance missed
+// ... the animation shows `won` ...
+rewards.deliver(player.getUniqueId(), List.of(won));
+```
+
+`eligible` asks the permission and the condition, on the player's thread. `settle` rolls the chance and
+amount now and answers a reward with chance 100, the amount pinned and no permission or condition, so
+the later `give` or `deliver` asks nothing again.
+
+### Outcomes
+
+`RewardDelivery` holds one `RewardResult` per reward: `given()`, `skipped()`, `failed()`, `isClean()`,
+`failures()`.
+
+| Outcome | Means | Counts as |
+|---|---|---|
+| `GIVEN` | They got it. | given |
+| `NOT_ROLLED` | The dice said no. | skipped |
+| `NO_PERMISSION` | Missing permission. | skipped |
+| `CONDITION_FAILED` | The condition did not hold. | skipped |
+| `NO_ROOM` | No room, under `FAIL`. | failure |
+| `QUEUED` | Kept for their return. | — |
+| `FAILED` | Something is broken. | failure |
+
+A broken reward is reported to the console once per problem, not once per player. A command whose
+plugin throws, or that the console refuses, is one warning naming the command, without a stack trace.
+
+## Full inventories
+
+```java
+rewards.overflow(OverflowPolicy.QUEUE);
+```
+
+| Policy | Does |
+|---|---|
+| `DROP` | Drops what does not fit at the player's feet. **Default.** |
+| `QUEUE` | Keeps the leftover for later. Needs a pending store; if the store refuses it, it is dropped and said in the console. |
+| `FAIL` | Gives up and reports `NO_ROOM`. |
+
+What is queued is what was left over: four of six received means two owed, at a fixed amount and
+chance 100. Permission and condition are kept and checked again when it is handed over.
+
+## Pending rewards
 
 Three lines is the whole queue, table and join listener included:
 
@@ -44,93 +202,66 @@ rewards = Rewards.of(this)
 
 `PendingRewards.database(plugin)` writes to `exylia_pending_rewards` **in your own plugin's database**
 — whatever `plugins/<Plugin>/database.yml` says, H2 in a file by default. ExyliaLib has no database of
-its own and never opens one. Two plugins pointed at the same database share the table and are told
-apart by the column naming them. One player is capped at 200 waiting batches per plugin, past which
-the write is refused and said once in the console: a queue is where a bug writes in a loop.
+its own. Two plugins on the same database share the table, told apart by a column naming them. One
+player is capped at **200** waiting batches per plugin; past that the write is refused and said once in
+the console.
 
-Keep implementing `PendingRewards` yourself when the rows already exist somewhere — ExyliaCapture and
-ExyliaEvents each keep their own table, and neither had to migrate for this.
+| Call | What it does |
+|---|---|
+| `claimOnJoin()` / `claimOnJoin(then)` | Hands over what is owed on every join. `then` runs only when something was owed. Registered once however often it is called. |
+| `claim(player, then)` | The same by hand. The store is read off the main thread, delivery comes back on the player's. |
+| `claim(player, batchId, then)` | One batch, leaving the rest. |
+| `pending.count(uuid)` | How many batches are waiting, for a "3 rewards to claim" line. Off the main thread. |
+
+The store lets go of rewards **before** delivery, so a failure cannot duplicate one. If the player dies,
+quits or changes server while the read is in flight, the rewards are kept for them again rather than
+lost.
+
+### For staff
+
+`/exylialib pendingrewards [player]` (permission `exylialib.pendingrewards`, op by default) lists who
+is owed rewards across every plugin, each batch they are owed, and gives one now or cancels it.
+Cancelling asks twice. From the console it prints a summary.
+
+### Your own store
+
+Keep implementing `PendingRewards` when the rows already exist somewhere — ExyliaCapture and
+ExyliaEvents each keep their own table.
+
+```java
+rewards.pending(new PendingRewards() {
+    public void keep(UUID player, List<RewardEntry> owed) {
+        tasks.runAsync(() -> repository.save(new PendingReward(player, owed)));
+    }
+    public List<RewardEntry> claim(UUID player) {
+        return repository.takeAllFor(player);
+    }
+});
+```
+
+Answer `browsable()`, `owed()`, `peek(uuid)` and `take(uuid, batch)` too, and the staff screen can list
+and act on it; without them it shows the store as one it cannot look into.
 
 <Callout type="warning" title="`keep` runs on the thread that owed the reward">
-Writing to a database inline there is a stall on the main thread. The store above schedules the write
-itself; a hand-written one must call `Tasks.of(plugin).runAsync(...)` and return. `claim` is the
-opposite — it is already off the main thread, so read directly.
+Writing to a database inline there is a stall on the main thread: schedule it and return. `claim` is
+the opposite — it is already off the main thread, so read directly, and never return the same rewards
+twice.
 </Callout>
 
-### Overflow
-
-`OverflowPolicy` decides what a full inventory means: drop at the player's feet, queue it, or refuse.
-Choosing per plugin is the point — a mob drop can fall on the floor, a crate prize should wait. `QUEUE`
-needs a `pending` store; without one it drops instead and says so, because asking to queue is asking
-not to lose it.
-
-## Loot
-
-What comes out of a chest, a spawner or a broken block:
+## Building in code
 
 ```java
-List<LootEntry> table = Loot.parseAll(section.getStringList("loot"));
-
-List<ItemStack> filled = Loot.roll(table);      // a chest's worth
-ItemStack single = Loot.pick(table);            // one draw
+RewardEntry coins = RewardEntry.economy("500")
+        .name("{primary}&lSTARTER BONUS")
+        .chance(50.0)
+        .permission("event.vip")
+        .build();
 ```
 
-| Field | What it does |
-|---|---|
-| Item | The stack, with its own name, enchantments and lore. |
-| `weight` | How likely this entry is relative to the others. |
-| `minAmount` / `maxAmount` | The stack size range rolled per pick. |
-| `tier` | A label, so an entry can belong to a rarity band. |
+Factories: `command`, `message`, `item`, `economy`, `experience`, `potion`, `of(type)`. `RewardEntry`
+is immutable: `toBuilder()` edits and keeps the id, `copy()` duplicates with a new one. Amounts are set
+with `fixedAmount(n)` or `amountBetween(min, max)`.
 
-Weights are relative, not percentages: an entry weighted `10` beside one weighted `5` is drawn twice as
-often, and the numbers do not have to add up to anything.
-
-`Loot.editor(plugin, entries)` is the in-game editor for one.
-
-## Economy
-
-One economy choice for the whole server, over Vault, PlayerPoints or a currency you write:
-
-```java
-Economy.balance(uuid);
-Economy.has(uuid, amount);
-
-Economy.charge(uuid, amount);                  // true when it went through
-Economy.pay(uuid, amount);
-
-EconomyResponse taken = Economy.withdraw(uuid, amount);
-TransferResult moved  = Economy.transfer(from, to, amount);
-```
-
-`charge` and `pay` answer with a boolean for the common case; `withdraw` and `deposit` hand back an
-`EconomyResponse` when you need to know *why* it failed. Nothing throws — a charge that could not be
-made is a result you branch on, not an exception to catch around a menu click.
-
-Several currencies are supported: `Economy.of("points")` scopes every call to one, and
-`Economy.currencies()` lists what is registered.
-
-A server with no economy plugin gets a provider that says so, so the failure is *"no economy
-installed"* rather than a `NoClassDefFoundError` in the middle of a purchase.
-
-## Formats
-
-The other half of money: what a player reads, and what a player types.
-
-```java
-Formats.money(1234567);          // "1.23M", or whatever the owner configured
-Formats.compact(1234567);        // the same shortening, without a currency
-Formats.percent(0.42);
-Formats.percentOf(3, 12);
-Formats.date(epochMillis);
-Formats.relative(epochMillis);   // "3 minutes ago"
-
-Amounts.parse("10M");            // what a player typed, back to a number
-```
-
-Reading `10M` from chat is the same parser the [`amount` input](/docs/exylialib/input-and-editors)
-uses, so a menu, a command and a chat prompt all accept the same shorthand.
-
-<Callout type="note" title="Locale is pinned deliberately">
-Decimal formats use a fixed locale rather than the host's. A server in Spain would otherwise write
-`1,50`, and that value breaks every scoreboard, comparison and config that reads it back.
-</Callout>
+`Rewards.snapshot(stack)` stores an item as `bytes:` byte-identical to ExyliaCommons, and
+`RewardCodec.encode`/`decode` is the database column: fields equal to their default are left out, and
+an empty list is stored as `NULL`.

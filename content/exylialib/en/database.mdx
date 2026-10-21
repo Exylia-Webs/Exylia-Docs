@@ -19,17 +19,20 @@ public record PlayerStats(
 Repository<PlayerStats> stats = Databases.of(this).repository(PlayerStats.class);
 ```
 
-The table is created on first use, and a new component becomes a new column.
+The table is created on first use, and a new component becomes a new column. `repository(...)` returns
+at once: the pool opens and the table is created in the background, and anything you call before that
+finishes waits for it instead of racing it. A record that cannot be stored (no `@Table`, two `@Id`s, a
+type nothing can encode) fails right there, in `onEnable`, naming the component.
 
 ## Annotations
 
 | Annotation | What it does |
 |---|---|
 | `@Table("name")` | The table this record lives in. |
-| `@Id(length = …)` | The primary key. |
+| `@Id(length = …)` | The primary key. `@Id(generated = true)` lets the database hand out a `long` key. |
 | `@Column` | A stored component. `@Column("other_name")` when the column name differs. |
 | `@Column(length = Column.UNBOUNDED)` | Text with no length limit — `TEXT` on H2, `LONGTEXT` on MySQL. |
-| `@Indexed` / `@Index(…)` | Indexes, including composite and descending ones. |
+| `@Indexed` / `@Index(…)` | Indexes, including composite, unique and descending ones. |
 
 ## Reading and writing
 
@@ -37,17 +40,28 @@ Everything returns a `CompletableFuture` and nothing blocks the server:
 
 ```java
 stats.find(uuid);                    // Optional<PlayerStats>
+stats.findFresh(uuid);               // the same, read past every cache
 stats.findAll();
 stats.exists(uuid);
 stats.count();
 
 stats.save(record);                  // insert or update
-stats.saveAll(records);
-stats.update(record);
-stats.insert(record);                // generated keys
-stats.insertReturning(record);
+stats.saveAll(records);              // one round trip, ~8x faster than a loop on MySQL
+stats.update(record);                // a generated-key row, by its key
+stats.insert(record);                // generated key, answers the key
+stats.insertReturning(record);       // generated key, answers the record carrying it
 stats.delete(uuid);
 ```
+
+`save` completes when the row is durable. There is no flush interval to lose data in: wait for the
+future before telling a player a purchase worked.
+
+**Writes to the same row land in the order they were made.** `save`, `saveAll`, `update`, `updateIf`
+and `delete` on one key wait for the previous write to that key, so a later save is never overtaken by
+an earlier one. Writes to different rows still run in parallel.
+
+A failed operation is printed to the console against the plugin that owns the repository, even when
+nobody attached an error handler. A handler you do attach still gets the failure first.
 
 ### Queries
 
@@ -64,10 +78,90 @@ stats.where("arenaId", "nodebuff")
 | `orderBy` / `orderByDescending` | Sort. |
 | `limit(rows)` / `skip(rows)` | Page. |
 | `find()` / `findFirst()` | Run it. |
-| `count()` / `delete()` | Count or delete what matches. |
+| `count()` | Count what matches. |
+| `sum(column)` | Add up a numeric column over what matches, in the database. `BigDecimal`, `0` for no rows. |
+| `delete()` | Delete what matches without reading it. Answers how many rows went. |
+
+```java
+balances.where("currency", "coins").sum("amount");   // coins in circulation, one query
+```
+
+`sum` ignores order, limit and skip, and throws at the call site for a column that is not numeric.
 
 Sorting happens in the database, which is why a leaderboard stores its derived values rather than
 computing them on read: a database cannot sort by something only Java knows how to work out.
+
+## Counters and claims several servers write
+
+A `find`, a change in memory and a `save` lose whichever of two servers writes first. These two do the
+arithmetic and the check inside the database:
+
+```java
+// one more kill, from any server; creates the row the first time
+kills.increment(new PlayerKills(uuid, 1), "kills");
+
+// claimed only if still unclaimed: exactly one caller is answered true
+votes.updateIf(vote.withClaimed(true), "claimed", false).thenAccept(won -> {
+    if (won) pay(player);
+});
+```
+
+| Call | What it does |
+|---|---|
+| `increment(row, column)` | Adds the row's value of an `int`/`long` column to the stored one. With no row, stores `row` as it is. Other columns of an existing row are untouched. Not for generated keys. |
+| `updateIf(row, column, expected)` | Writes the whole row only while `column` still holds `expected` (`null` for none), and answers whether it did. Never creates a row. |
+
+Compare something exact in `updateIf`: a number, a bounded string, a boolean, a UUID. A floating-point
+value or an unbounded text column may never compare equal.
+
+## Locks across servers
+
+`RowLocks` holds a key for one server at a time, and a crash cannot leave it held:
+
+```java
+RowLocks locks = RowLocks.of(Databases.of(this), "auctions");
+
+locks.hold(auction.id(), () -> auctions.findFresh(auction.id()).thenCompose(this::bid))
+     .thenAccept(done -> { if (done.isEmpty()) busy(player); });
+```
+
+- `hold(key, work)` takes the lock, runs the work and gives the lock back however the work ends. It
+  answers what the work answered, or **empty without running it** when another server held the key for
+  every attempt or the database could not be reached.
+- A lock is a **lease**: one row in `exylia_row_locks` with the holder, an expiry and a version, shared
+  by every plugin on that datasource and keyed `namespace:key`. A holder that crashed lets its lease run
+  out and the next caller takes it over.
+- Defaults: 12 attempts 150 ms apart (`attempts(n, retry)`) and a 30 second lease (`lease(duration)`).
+  Keep the lease well above the longest the work takes plus the clock drift between servers.
+- Holds for the same key on one server queue behind each other before reaching the database, so a
+  double click never spends a retry on itself.
+- The work runs on a database thread. Hop through [the scheduler](/docs/exylialib/tasks) before touching
+  the game.
+- `forget(key)` deletes the lock row — only from inside the last hold on something gone for good.
+
+<Callout type="warning" title="Read with findFresh inside a hold">
+`find` may answer from this server's cache, and another server's write reaches that cache only when its
+invalidation message arrives — possibly after this server took the lock the writer just gave back.
+`findFresh` goes to the database and replaces the cached copy with what it read.
+</Callout>
+
+### Holds that last minutes
+
+For a window a player keeps open, use `holdRenewing` instead of a long lease. The lease stays short and
+is renewed every third of it while the work is pending, so a crashed server's lock is free one short
+lease later:
+
+```java
+locks.lease(Duration.ofSeconds(60)).holdRenewing(vault.id(), lease -> {
+    CompletableFuture<Void> closed = openWindow(player, vault);
+    lease.lost().thenRun(() -> saveAndClose(player, vault));   // taken over, or unreachable
+    return closed;
+});
+```
+
+`lease.lost()` completes when a renewal finds the lock taken over, or the database has not answered a
+renewal before the lease would run out. The work is **not** interrupted: it listens to `lost()` and
+ends itself. `lease.renew()` extends it right now and answers whether it is still held.
 
 ## Engines
 
@@ -77,27 +171,42 @@ Every plugin gets `plugins/<Plugin>/database.yml`:
 database:
   type: h2
   settings:
-    max-pool-size: 0
+    pool-size: 0
   h2:
     file: database/h2
     auto-server: false
+    backups:
+      enabled: true
+      interval: 6h
+      keep: 5
   mysql:
     host: localhost
     port: 3306
     database: minecraft
     username: root
     password: ""
+  # mariadb and postgresql take the same keys (postgresql defaults to port 5432)
+  mongodb:
+    host: localhost
+    port: 27017
+    database: minecraft
+    username: ""
+    password: ""
+    connection-string: ""   # a full mongodb:// URI wins over everything above
+  redis:
+    enabled: false
 ```
 
 `h2`, `mysql`, `mariadb`, `postgresql`, `mongodb`. Only the block matching `type` is read; an
-unrecognised value falls back to `h2` and says so.
+unrecognised value falls back to `h2` and says so as an error, because nothing that plugin stores then
+reaches a database server.
 
 H2's `auto-server` is worth knowing about: an H2 file belongs to one JVM, and the second process to
 open it is refused with *"The file is locked"*. Turning it on makes the first server serve the file to
 the others over TCP — which is what lets two plugins on one machine, or a server plus a database
 viewer, share it. For anything not on one machine, run a real database instead.
 
-<Callout type="tip" title="Leave max-pool-size at 0">
+<Callout type="tip" title="Leave pool-size at 0">
 Zero lets the engine decide, which is right almost always: an embedded database wants a handful of
 connections and a networked one is sized from the machine's cores. Raise it only if the console
 reports connection timeouts — a bigger pool against a database that is already the bottleneck makes
@@ -106,6 +215,59 @@ things slower.
 
 Plugins whose resolved settings match **share one pool**. Two plugins pointed at the same MySQL open
 one client, not two.
+
+A plugin configured for a database server that still has its old `h2.mv.db` on disk says so once at
+startup: nothing reads that file, so whatever it holds is not in the new database until you import it.
+
+## When the database is not answering
+
+- **One line, not a stack trace.** A connection failure (pool timeout, dropped link, refused socket) is
+  printed as one console line saying the database is not answering. Later failures of the same outage
+  are held back and counted in the next notice, at most one every 30 seconds.
+- **It heals itself.** A database unreachable at startup is retried — the connection and the table —
+  at most once every 30 seconds. Calls in between fail fast with the last failure. A server that starts
+  before its MariaDB does comes back on its own, without a reload.
+- **A table dropped under a running server is created again** on the first statement that finds it
+  missing, and that statement runs once more.
+- **Tables are prepared one at a time.** A plugin update that adds columns to several tables alters them
+  in turn, so H2 no longer times out on its schema lock.
+
+## H2: backups and automatic repair
+
+The embedded file is backed up online, without stopping anything, into `backups/` next to it
+(`database/backups/h2-<UTC time>.zip`): once at startup and then every `interval`, keeping the newest
+`keep`. Each backup first reads the whole database back; a damaged database is never backed up over a
+good backup.
+
+Before the file is opened, ExyliaLib reads every row of every table on a read-only connection. A crash in
+the middle of a write (out of memory, a killed process) can leave the newest part of the file torn, and
+H2 only notices on the first read of a torn page. When the check finds damage:
+
+<Steps>
+<Step title="The damaged file is kept">
+A copy goes to `database/corrupted/<UTC time>/`. It is never deleted.
+</Step>
+<Step title="Roll back the last unfinished write">
+The newest chunk is dropped (up to three) on a copy, so H2 falls back to the last complete version,
+which is loaded into a fresh file.
+</Step>
+<Step title="Otherwise, the newest backup">
+If the rollback fails or lost rows, the newest readable backup is tried and the one with more rows wins.
+</Step>
+<Step title="Otherwise, nothing">
+The file stays where it is and that plugin's data stays offline, with an error naming the damaged copy
+and the backups folder. An empty database is never created in its place, so a plugin cannot seed new
+rows over the lost ones.
+</Step>
+</Steps>
+
+Every repair is logged as an error naming the path taken and, table by table, what was lost.
+
+**While the server runs**, a file H2 closed or turned read-only (disk full, no write permission, a
+failed write) is reported once — `DATABASE READ ONLY` or `DATABASE DAMAGED` with the usual causes —
+and the repeats are summed up at most once a minute instead of one error per query. Free the disk or fix
+the permissions and restart; the check above repairs a damaged file on the next start. A database file or
+folder the server user cannot write is reported at startup with its path.
 
 ## Types the library cannot know
 
@@ -122,7 +284,7 @@ public static void registerCodecs() {
 }
 ```
 
-`Location`, `ItemStack`, `ItemStack[]` and enums are already known.
+`UUID`, `Location`, `ItemStack`, `ItemStack[]` and enums are already known.
 
 ## A column that grew
 
@@ -132,7 +294,7 @@ and the first long value is refused, or truncated into something that no longer 
 
 A **text** column narrower than the record declares is widened in place on the start that finds it,
 and the change is named in the schema summary. Its data and its name are untouched, and a `NOT NULL`
-column stays `NOT NULL`.
+column stays `NOT NULL`. On MySQL, a length past what a `VARCHAR` can hold becomes `LONGTEXT`.
 
 It never goes the other way: a column stored wider than the record declares is left exactly as it is,
 because it may be another plugin's view of the same table and narrowing truncates rows. Numeric
@@ -144,15 +306,82 @@ left as it was rather than kept from starting, with a warning naming the table a
 ```text
 /exylialib export <plugin>
 /exylialib import <plugin> <file> [force]
+/exylialib wipe <plugin> <table|*> [code]
 ```
 
 One plugin's whole database out to a file and back: H2 to MySQL, or onto another server. Plugins can
 also expose it themselves — ExyliaEvents wraps the same calls in `/eventsadmin export`.
 
+`wipe` empties a plugin's tables in two steps: the first run deletes nothing and hands back a code, the
+second run with that code does it, and only after an export has been written. It needs
+`exylialib.admin.wipe`; export and import need `exylialib.admin`.
+
 ## Redis
 
-Optional, and off by default. When configured, it makes one database look the same from every server:
-a change on one is visible on the others immediately, rather than after a cache expiry.
+Optional, and off by default. Turn it on for a network of servers sharing one database: a row written
+on one server is then visible on the others immediately, rather than after a cache expiry.
+
+```yaml
+database:
+  redis:
+    enabled: true
+    host: 10.0.0.6
+    port: 6379
+    password: ""
+    server-id: lobby-1   # different on every server
+    key-prefix: exylia   # change only if two networks share one Redis
+```
+
+The other keys (`database`, `pool-size`, `ttl-seconds`, `local-seconds`, `local-entries`) rarely need
+touching. Redis is never load-bearing: if it stops answering, everything keeps working straight against
+the database, the console says so, and it is tried again every 30 seconds until a line says it is
+answering again.
+
+A plugin that keeps a whole table in its own maps hears other servers' writes with
+`onRemoteChange` and reads the changed row again. Its own writes are never reported, and without Redis
+nothing is:
+
+```java
+Databases.of(this).onRemoteChange(Clan.class, change -> {
+    if (change.wholeTable()) { reloadClans(); return; }
+    clans.find(change.id()).thenAccept(row -> tasks.run(() ->
+            row.ifPresentOrElse(this::remember, () -> forget(change.id()))));
+});
+```
+
+### Plain keys and streams
+
+For data another program reads by name — a proxy checking a key at login, a producer on another
+platform appending to a stream — `RedisKeys` talks to the Redis the plugin already configured:
+
+```java
+RedisKeys keys = RedisKeys.of(this);
+tasks.runAsync(() -> {
+    if (keys.available()) {
+        keys.set(keys.prefix() + ":punish:ban:" + uuid, json, expiresAtMillis);
+    }
+});
+```
+
+| Call | What it does |
+|---|---|
+| `get`, `set(key, value, expireAtMillis)`, `delete` | Plain keys. `0` keeps a key until deleted. |
+| `setIfAbsent(key, value, ttlMillis)` | Writes only when absent: a short lock across servers. |
+| `streamAdd`, `streamGroup`, `streamRead` | `XADD` with a max length, `XGROUP CREATE … MKSTREAM`, `XREADGROUP` without blocking. |
+| `streamPending`, `streamClaim`, `streamAck` | `XPENDING`, `XCLAIM`, `XACK`. |
+
+Every call is a network round trip and blocks, so it belongs on an async thread. Each throws when Redis
+is off or unreachable: ask `available()` first, and build keys from `prefix()` so every server agrees.
+Rows still belong in a repository; this is a wire, not storage.
+
+## Threads
+
+Database work runs on the server's own async pool — no executor of its own — and at most 32 tasks are
+handed to it at a time, so a burst of lookups against a slow database queues instead of growing the
+server's thread count. Codecs run on that thread too.
+
+A save issued from your `onDisable` still works: the datasource is released after your teardown, not
+before.
 
 <Callout type="warning" title="Threads">
 A future completes on a pool thread. Anything you do with the answer that touches a player or the

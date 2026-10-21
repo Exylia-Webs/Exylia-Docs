@@ -186,3 +186,88 @@ Una cadena que no nombra nada, o un `bytes:` que no se puede decodificar, se dib
 nada. Una fila ilegible sigue siendo una fila que alguien tiene que ver y borrar, y el papel se lee como
 "esto no se pudo leer" donde un bloque de piedra se lee como la configuración de alguien.
 </Callout>
+
+### Guardar un item que *es* el premio
+
+`Source.whole(stack).raw()` es la misma lectura sin tirar nada: nombre, lore, encantamientos y
+atributos. Úsalo cuando el item guardado se le devuelve a un jugador — una recompensa, un slot de kit,
+el stock de una tienda — y `Source.of` cuando solo se dibuja. Cuesta longitud: un nombre con degradado
+se serializa como JSON de componentes, así que la columna necesita sitio.
+
+## Items dentro de items
+
+`Containers` lee shulkers y bundles igual, desde el propio item, así que es seguro en cualquier hilo.
+
+```java
+if (Containers.isContainer(stack)) rows = Containers.contentsOf(stack);
+ItemStack inner = Containers.resolve(kitItems, "6.13");
+if (Containers.isBlocked(stack, settings.blockedMaterials())) refuse();
+ItemStack repacked = Containers.withContents(box, remaining);
+```
+
+| Llamada | Responde |
+|---|---|
+| `isContainer(item)` | Un bundle o una shulker. |
+| `contentsOf(item)` | Lo que hay dentro, con sus posiciones, `null` para un slot vacío. |
+| `isFilled(item)`, `count(contents)` | Si hay algo dentro, y cuántos stacks no vacíos tiene una lista de contenido. |
+| `resolve(items, "6.13")` | La posición 6 de la lista, y luego la 13 de lo que había dentro. `parentOf`, `child` y `depth` recorren la ruta. |
+| `isBlocked(stack, names)` | Si el stack, o algo que lleve a cualquier profundidad, está en una lista de materiales. Una caja no sirve para saltarse una lista de bloqueo. |
+| `withContents(item, contents)` | Una copia con otro contenido: una shulker toma los primeros 27 slot a slot, un bundle los no vacíos en orden. Cualquier otra cosa vuelve sin cambios. |
+
+## Items como palabras
+
+`ItemTexts` convierte un item en texto para mensajes y logs:
+
+| Llamada | Responde |
+|---|---|
+| `describe(stack)` | El nombre visible como texto plano, o el material en palabras: `Diamond sword`. |
+| `enchantments(stack)` | Sus encantamientos, incluidos los guardados de un libro. `enchantmentName(e)` nombra uno. |
+| `summary(stack)` | Una línea de auditoría: `1x "Loot" Shulker Box{3x Diamond}`. También para una plantilla y cantidad, o una lista. |
+
+Un nombre visible son palabras de un jugador: insértalo en un mensaje con `Values.putText`, nunca como
+texto interpretado.
+
+## En qué estante va un item
+
+```java
+ItemGroup group = ItemGroup.of(Material.DIAMOND_PICKAXE);   // TOOLS
+```
+
+`ItemGroup.of(material)` responde `BLOCKS`, `TOOLS`, `ARMOUR`, `FOOD`, `REDSTONE`, `ENCHANTED_BOOKS`,
+`POTIONS` o `MISC`, así las pestañas de categoría de un mercado y el filtro de una lista de precios
+coinciden. `id()` es como se escribe en config (`enchanted-books`) e `ItemGroup.byId` lo vuelve a leer,
+`armor` incluido. Un plugin que quiera otra respuesta para un material pone sus propias excepciones
+delante.
+
+## Loadouts
+
+Un kit, un loadout de arena o el equipo de una clase es una lista plana de 41 posiciones, en el orden
+en que un jugador lee un inventario:
+
+| Posiciones | Parte |
+|---|---|
+| `0`–`3` | Casco, peto, pantalones, botas. |
+| `4` | Mano secundaria. |
+| `5`–`31` | Los 27 slots de almacenamiento. |
+| `32`–`40` | Los 9 slots de la barra rápida. |
+
+```java
+List<ItemStack> kit = Loadout.capture(player);           // lo que lleva puesto y encima, recortado
+
+Editors.of(this).loadout(kit)                            // un editor con forma de inventario
+        .title("{primary}&lEDIT KIT")
+        .onSave(items -> kits.save(id, items))
+        .open(player);
+
+List<String> diff = Loadout.differences(layout, kit.toArray(ItemStack[]::new));
+boolean fair = Loadout.isRearrangement(layout, kitItems);
+```
+
+`Loadout.partOf(index)` nombra una posición, y `Loadout.at(items, index)` lee una (pasado el final es
+`null`, no un error). Un loadout termina en su último item.
+
+`differences` compara la distribución que hizo un jugador con el kit del que salió: las posiciones y
+cómo se reparten los stacks no cuentan, solo cuántos hay de cada item. Cada línea es `+n item` si sobra
+o `-n item` si falta; vacío significa que es una redistribución legítima. Los items se comparan tal como
+los guarda un inventario, y se ignora el aspecto — nombres, lore, tinte, trims, patrones de estandarte,
+modelos — porque nada de eso da ventaja.

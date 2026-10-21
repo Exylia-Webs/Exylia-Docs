@@ -1,10 +1,10 @@
 ---
-title: "Sidebars, holograms and nametags"
+title: "Sidebars, holograms, nametags and borders"
 description: "Everything drawn on a player's screen, sent as packets and declared in configuration."
 ---
 
-Four modules with one thing in common: none of them creates real server state. No scoreboard team, no
-armour stand, no entity to leak.
+Modules with one thing in common: none of them creates real server state. No scoreboard team, no
+armour stand, no entity to leak, no change to the world's own border.
 
 ## Sidebars
 
@@ -32,16 +32,25 @@ scoreboard:
 | `enabled` | Show it at all — a section can stay written but off. |
 | `title` | A list. Several entries animate: each refresh shows the next. |
 | `lines` | Top first. At most 15; extra lines are dropped. |
-| `update.interval` | **Ticks** between refreshes. 20 ticks is one second. |
+| `update.interval` | **Ticks** between refreshes (20 by default). Also reads `1s`. |
 | `update.smart` | Send only the lines that changed instead of the whole board. |
 
-`Scoreboards.show` returns a `Board`: `refresh()`, `updateData(map)`, `hide()`. Boards **stack per
+`Scoreboards.show` returns a `Board`: `refresh()`, `updateData(map)`, `stop()`, `stopped()`.
+`Scoreboards.hide(player)`, `get(player)` and `has(player)` work from outside. Boards **stack per
 player** — showing one pauses the previous, and closing it brings the previous back. That is what lets
 an event's sidebar cover a hub's without either plugin knowing about the other.
 
 <Callout type="tip" title="A line that expands">
 A placeholder returning text with line breaks becomes several lines. It is how one `%objectives%`
 value can draw three rows without the file knowing how many there will be.
+</Callout>
+
+<Callout type="note" title="Other sidebars on the server">
+A visible board takes the sidebar slot back every three seconds, and at once after a teleport, a world
+change, a respawn or a join, so another plugin claiming it does not leave the player without ours.
+When **TAB** is installed it is asked to stand down instead: the first board shown to a player turns
+TAB's sidebar off for that player, and the last one taken down — or the player leaving — turns it back
+on. Only a player whose TAB sidebar was visible is touched.
 </Callout>
 
 ## Holograms
@@ -53,19 +62,22 @@ Holograms.show(this, "trophy", location, config.trophy());
 | Key | What it does |
 |---|---|
 | `enabled` | Show it at all. |
-| `kind` | `TEXT`, `ITEM` or `BLOCK`. |
-| `lines` | The text, for `TEXT`. |
+| `type` | `TEXT`, `ITEM` or `BLOCK`. |
+| `lines` | The text, for `TEXT`. A line can start with tags that style it alone. |
 | `item` / `block` | What floats, for the other two. |
-| `offset-x/y/z` | Where it sits relative to the location given. |
+| `per-player` | Every viewer gets their own copy, so placeholders can differ per player. |
 | `view-distance` | Past this, nothing is sent. |
-| `refresh` | How often the text is re-rendered. |
+| `offset-x/y/z` | Where it sits relative to the location given. |
+| `properties` | How it is drawn: billboard, scale, background and the rest. |
+| `config.update-interval` | **Ticks** between re-renders of the text. |
+| `click`, `pages`, `page-interval` | What clicking it runs, and further pages each viewer turns through. |
 
-They are display-entity packets: per-player when the text differs per viewer, shared when it does not.
-Nothing exists server-side, so a hologram cannot be pushed by a piston, killed by a mob, or left behind
-when the plugin crashes.
+They are display-entity packets. Nothing exists server-side, so a hologram cannot be pushed by a
+piston, killed by a mob, or left behind when the plugin crashes.
 
 `Holograms.get(plugin, id)`, `all(plugin)`, `remove(plugin, id)` and `removeAll(plugin)` manage them by
-id. `isSupported()` answers honestly when PacketEvents is absent.
+id. `isSupported()` answers honestly when PacketEvents is absent. Line tags, clicks and pages are in
+[Holograms](/docs/exylialib/holograms).
 
 ## Nametags
 
@@ -82,27 +94,64 @@ The whole point is **per viewer, not per player**: the same player can be red to
 another, which is what a team game needs and what a scoreboard team cannot do without fighting every
 other plugin for the same team name.
 
-Name colour, glow colour and collision travel together as a style. Vanilla clients are included — this
-is not a client mod feature.
+`NametagStyle.of(colour)` sets the name colour; `withGlow()` outlines the player through walls,
+`withCollision()` lets them be pushed, and `showingInvisible()` draws them faintly while invisible. Vanilla clients are
+included — this is not a client mod feature.
 
 Without PacketEvents, `Nametags.isSupported()` is `false` and every call does nothing rather than
 throwing.
 
-## Client waypoints and cooldowns
+## World borders only some players see
 
-For players on Lunar (through Apollo) or Feather:
+A border per arena, per match or per zone, in the same world, each with its own edge and clock:
 
 ```java
-Clients.of(this).waypoints().show(player,
-        Waypoint.at("koth", location).colour("#ff5555"));
-
-Clients.of(this).waypoints().remove(player, "koth");
-Clients.of(this).waypoints().clear(player);
+VirtualBorder zone = Packets.of(this).worldBorders().create(arena.center(), 200);
+match.players().forEach(zone::show);
+zone.size(20, Duration.ofMinutes(2));
 ```
 
-The waypoint is keyed by **name**, and the name is the key — two waypoints called `spawn` are one
-waypoint. Keying them per plugin is what stops a lobby plugin's marker and an event's marker from
-deleting each other.
+| On a `VirtualBorder` | What it does |
+|---|---|
+| `show(viewer)` / `hide(viewer)` | Replaces the border they see, or gives them the world's own back. |
+| `size(size)` / `size(size, over)` | Resizes it; a timed resize is one packet and each client animates it. |
+| `center(x, z)` | Moves it. |
+| `warning(blocks, seconds)` | When the screen turns red. Vanilla's 5 blocks or 15 seconds by default. |
+| `damage(perBlock, buffer)` | Damage outside it. Vanilla's 0.2 per block past 5 by default; zero hurts nobody. |
+| `contains(location)`, `size()`, `viewers()` | Reads, mid-resize included. |
+| `remove()` | Hides it from everyone. |
 
-Client cooldowns and teammate markers work the same way. A player whose client supports none of it
-simply receives nothing; the caller never branches on which client somebody is using.
+`worldBorders().seenBy(player)` returns the border a player sees, or `null` while they see the world's.
+
+The world's own border packets are dropped on their way to a viewer who sees a virtual one in that
+world, so a `/worldborder` elsewhere cannot overwrite it, and a respawn or world change resends the
+right one. The server hurts viewers outside it the way vanilla does, every ten ticks with the
+`OUTSIDE_BORDER` damage type — a modified client, a pearl or a vehicle does not ask the client first.
+
+<Callout type="warning" title="Limits">
+One border per player, across every plugin. Square only. The server's collision, block placement and
+portals still follow the world's own border. Without PacketEvents a border can be created and shaped
+but shows to nobody and hurts nobody.
+</Callout>
+
+## Client waypoints and cooldowns
+
+For players on Lunar (through Apollo), Feather or SurvivalCore:
+
+```java
+PluginClients clients = Clients.of(this);
+
+clients.waypoints().show(player, Waypoint.at("koth", location).colour("#ff5555"));
+clients.waypoints().remove(player, "koth");
+clients.clear(player);   // only what this plugin drew
+```
+
+What a plugin sends through `Clients.of(this)` is keyed by that plugin, so a lobby's `spawn` marker
+and an event's `spawn` marker do not delete each other, `clear(player)` takes down only this plugin's,
+and disabling the plugin removes them. On Lunar a waypoint name is still one slot per player, so two
+plugins showing `spawn` there share one marker.
+
+Client cooldowns, HUD timers, teammate markers, rallies, beams, zone borders and HUD bars work the same
+way. A player whose client supports none of it simply receives nothing; the caller never branches on
+which client somebody is using. The whole surface is in
+[Client integration](/docs/exylialib/client-integration).

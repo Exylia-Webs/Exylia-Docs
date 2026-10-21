@@ -22,6 +22,11 @@ actions:
 
 ## Namespaces
 
+`Actions.of(plugin, "practice")` nombra el namespace; `Actions.of(plugin)` lo deriva del nombre del
+plugin, en minúsculas y sin lo que quede fuera de `a-z 0-9 _ . -` (`MyPlugin` responde a `myplugin:`).
+Nómbralo explícitamente para todo lo que escribe el dueño de un servidor, así renombrar el jar nunca le
+rompe sus archivos.
+
 El YAML público escribe siempre el id completo. Un plugin puede compilar su id local, pero
 `Actions.compile` sin plugin lo rechaza — eso evita el fallo antiguo en el que un id a secas funcionaba
 hasta que un segundo plugin registraba el mismo y ambos quedaban ambiguos.
@@ -53,6 +58,23 @@ args.string(0);      // Ranked Boxing
 args.decimal(1);     // -0.5
 args.bool(2, false); // true
 ```
+
+## Acciones que dependen de la fila
+
+El botón de una fila de un menú suele llevar el id de esa fila, o nada para una fila sobre la que quien
+mira no puede actuar. `template` compila una cadena que todavía tiene placeholders:
+
+```java
+// "practice:party_kick %member_id%", o "none" cuando quien mira no es el líder
+ActionTemplate kick = actions.template(config.getString("kick-action"));
+
+kick.resolve(viewer, Map.of("member_id", member.id())).execute(context);
+```
+
+Una plantilla sin placeholders se compila una vez, al cargar, así que un error de tipeo en una acción
+estática se avisa cuando carga el menú y no cuando alguien lo pulsa. Los valores pasados a `resolve`
+ganan sobre un placeholder registrado con el mismo nombre, así que el botón de una fila significa esa
+fila. `resolveOrNoop` convierte un id que ya no existe en un botón muerto en vez de un error.
 
 ## Contexto
 
@@ -86,8 +108,13 @@ en vez de convertirse en un segundo framework de eventos.
 | Registro | Corre en |
 |---|---|
 | `registerSync(id, handler)` | El hilo del jugador. |
+| `registerSync(id, permission, handler)` | Lo mismo, solo para jugadores con `permission`. |
 | `registerAsync(id, handler)` | Un hilo del pool. |
 | `register(id, handler)` | Lo decide el handler. |
+
+La forma con permiso es el chequeo detrás de un botón que un menú ya oculta: sin el permiso el handler
+no corre y la acción responde `SUCCESS`, así que el resto de la secuencia sigue como si el botón fuera
+decorativo, en vez de mostrar un fallo por algo que el jugador nunca vio.
 
 Cuando un paso asíncrono termina, la secuencia se reanuda en el hilo dueño del jugador — así que un paso
 que lee la base de datos y otro que abre un menú pueden estar juntos en una lista.
@@ -105,8 +132,8 @@ O construidas, cuando una config lleva retrasos:
 
 ```java
 ActionSequence sequence = actions.sequence()
-        .step("practice:freeze", 0)
-        .step("practice:start", 60)      // ticks de espera antes de este paso
+        .then("practice:freeze")
+        .then("practice:start", 60)      // ticks de espera antes de este paso
         .build();
 ```
 

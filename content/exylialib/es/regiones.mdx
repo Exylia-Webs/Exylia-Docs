@@ -1,0 +1,341 @@
+---
+title: "Regiones"
+description: "Áreas del mundo con reglas: formas, políticas, eventos de entrada y salida, aplicación, el selector y los contornos."
+---
+
+Una región es un área del mundo con reglas asociadas. Cada plugin registra las suyas, y cualquier
+plugin puede preguntar qué hay en una ubicación.
+
+```java
+PluginRegions regions = Regions.of(this);
+
+// Tras cargar de tu base de datos, entrega el conjunto entero de una vez.
+regions.replaceAll(rows.stream()
+        .map(row -> regions.region(row.id(),
+                new WorldIdentity(row.worldId(), row.worldName()),
+                Cuboid.blocks(row.minX(), row.minY(), row.minZ(), row.maxX(), row.maxY(), row.maxZ()),
+                row.priority(),
+                PolicySet.of(CommonRegionPolicies.PVP, row.pvp())))
+        .toList());
+
+// Pregunta, desde cualquier hilo.
+boolean pvp = Regions.resolve(player.getLocation(), CommonRegionPolicies.PVP).value();
+```
+
+| Concepto | Qué es |
+|---|---|
+| `RegionSnapshot` | Una región tal y como está ahora: id, dueño, mundo, forma, prioridad y políticas. Inmutable. |
+| `PolicySet` | Lo que declara una región. No declarar una clave no es lo mismo que declarar su valor por defecto. |
+| `RegionData` / `RegionCodec` | La misma región como valores que una base de datos puede guardar. El módulo nunca toca una base de datos. |
+
+## Formas
+
+```java
+Cuboid.blocks(0, 64, 0, 15, 79, 15);    // una arena: esquinas de bloque inclusivas, 16 bloques por lado
+Cuboid.block(100, 70, 100);              // un bloque
+new UnboundedYRectangle(0, 0, 64, 64);   // un claim, de la roca madre al cielo
+new Sphere(0, 64, 0, 16);
+new HorizontalCylinder(0, 0, 100);       // redonda, sin suelo ni techo
+new Cylinder(0, 0, 12, 40, 80);          // redonda, entre y 40 y 80
+Polygon.prism(vertices, 60, 90);         // cualquier contorno, entre dos alturas
+Polygon.columns(vertices);               // cualquier contorno, toda la altura
+```
+
+Un `Polygon` es un polígono de bloques: una columna pertenece a él cuando el centro de la columna está
+dentro del contorno o sobre él, por eso `Polygon.Vertex.block(x, z)` pone el vértice en el centro de un
+bloque. El contorno puede cruzarse a sí mismo (regla par-impar), así que una selección a mano alzada se
+guarda tal cual se dibujó. Hasta 1024 vértices.
+
+Las formas nunca se mutan. Una zona que se encoge es un snapshot nuevo pasado a `replace`.
+
+## Prioridad y políticas
+
+`Regions.at(...)` devuelve las regiones de un punto de mayor a menor prioridad. Resolver una política
+recorre ese orden y se queda con **la primera región que la declara**; una región que no dice nada de
+una clave se salta, y si nadie la declara vale el valor por defecto de la clave.
+
+```text
+world_rules   prioridad 0    pvp: true
+claim         prioridad 10   build: false
+mine          prioridad 20   pvp: false
+```
+
+De pie en las tres: `pvp` es `false` (la mina), `build` es `false` (el claim, que la mina no tapa),
+`interact` es `true` (nadie lo declaró).
+
+`PolicyResolution` lleva el valor y la región que lo dio (`source()`, `null` para el valor por
+defecto). Las políticas son claves abiertas, tipadas y con namespace, así que un plugin puede añadir las
+suyas con `PolicyKey.of(id, tipo, defecto)`.
+
+### Las políticas comunes
+
+`CommonRegionPolicies`, en el namespace `exylia`:
+
+| Clave | Tipo | Por defecto |
+|---|---|---|
+| `pvp`, `build`, `break`, `interact` | boolean | `true` |
+| `entry`, `exit`, `item_drop`, `item_pickup`, `fall_damage` | boolean | `true` |
+| `player_build_only`, `allowed_blocks_only`, `breakable_blocks_only` | boolean | `false` |
+| `temporary_blocks`, `re_give_blocks`, `region_members_only` | boolean | `false` |
+| `temporary_blocks_seconds` | entero | `0` (nunca se quitan) |
+| `allowed_blocks`, `breakable_blocks` | `MaterialSet` | vacío |
+
+## Consultas
+
+```java
+Regions.at(location);                 // las regiones de todos los plugins aquí
+Regions.at(worldId, x, y, z);         // sin construir un Location
+Regions.resolve(location, key);       // una política, sobre las regiones de todos
+Regions.get(id);
+
+regions.at(location);                 // solo las de este plugin
+regions.resolve(location, key);       // solo la respuesta de este plugin
+```
+
+Globales por defecto, porque un claim tiene que ver la arena en la que está. Las consultas son seguras
+desde cualquier hilo: el índice es inmutable y se sustituye en una sola asignación, así que una consulta
+nunca ve una región a medio escribir. Va indexado por UUID de mundo, así que un mundo descargado y vuelto
+a cargar conserva sus regiones.
+
+`Boxes` pasa un snapshot a términos de Bukkit: `min` / `max` (esquinas de bloque inclusivas), `world`,
+`contains(region, location)`, `volume`, `loaded` (todos los chunks de la caja cargados, comprobado sin
+cargar ninguno) y `playersInside`.
+
+## Registrar
+
+```java
+regions.register(snapshot);    // falla si el id ya existe
+regions.replace(snapshot);     // falla si no existe
+regions.unregister("arena");
+regions.replaceAll(all);       // el conjunto entero de este plugin, de forma atómica
+```
+
+`replaceAll` es lo que llama una recarga: sustituye solo las regiones del plugin que llama y deja las
+de los demás. Un plugin solo puede tocar las regiones que son suyas, y al desactivarse libera sus
+regiones, selecciones, contornos y su aplicación de políticas.
+
+## Entrar y salir
+
+```java
+@EventHandler
+public void onRegionChange(PlayerRegionChangeEvent event) {
+    if (!event.involves(regions)) return;
+    for (RegionSnapshot left : event.exited(regions)) { ... }
+    for (RegionSnapshot entered : event.entered(regions)) { ... }
+}
+```
+
+Un evento por cambio, después de confirmarse, en el hilo dueño del jugador. No es cancelable. **Pasa
+tu propio `PluginRegions`**: `exited()` y `entered()` sin filtrar llevan las regiones de todos los
+plugins, y actuar sobre ellas es como un juego elimina a alguien por salir de una región que no es suya.
+
+| Causa | Cuándo |
+|---|---|
+| `MOVE` | pasó a otro bloque |
+| `TELEPORT` | llegó a otro sitio, portales y reapariciones incluidos |
+| `WORLD_CHANGE` | cambió de mundo |
+| `SYNC` | un sondeo lo encontró donde ningún evento lo dijo (teletransportes de Folia, movimientos por paquete, vehículos) |
+| `REGISTER`, `REPLACE`, `UNREGISTER`, `RELEASE` | una región cambió bajo un jugador quieto |
+
+Cada jugador seguido se sondea cuatro veces por segundo, así que lo que los eventos no cuentan se
+corrige en menos de un cuarto de segundo. Entrar al servidor dentro de una región **no** dispara una
+entrada, y salir del servidor no dispara una salida; consulta `regions.at(...)` al entrar si lo
+necesitas.
+
+## Aplicar las políticas
+
+Declarar una política no impide nada por sí solo. Un plugin que quiere que se apliquen las comunes lo
+pide una vez:
+
+```java
+regions.enforce();   // a todos salvo a los jugadores en creativo
+
+// o elige a quién atan las reglas, región por región
+regions.enforce((player, region) -> sessions.contains(player.getUniqueId()));
+```
+
+Es opcional y por dueño: solo se juzgan las regiones de este plugin, y la región de otro plugin, tenga
+la prioridad que tenga, ni las aplica ni las relaja. La audiencia se consulta por región, se ejecuta
+dentro del evento (un hilo de región en Folia) y tiene que ser barata.
+
+| Política | Impide |
+|---|---|
+| `break` | romper un bloque, llenar un cubo desde uno |
+| `build` | colocar un bloque (las dos mitades de una puerta o cama), vaciar un cubo |
+| `breakable_blocks_only` + `breakable_blocks` | si está activa, solo se pueden romper los materiales de la lista |
+| `allowed_blocks_only` + `allowed_blocks` | si está activa, solo se pueden colocar los de la lista; un cubo cuenta como su ítem |
+| `player_build_only` | romper un bloque que no colocó ningún jugador |
+| `interact` | usar bloques, placas de presión y tierra de cultivo, clic derecho a entidades que no son jugadores |
+| `pvp` | un jugador hiriendo a otro, directamente o con flechas, TNT, cristales, pociones dañinas o mascotas; se comprueba en la víctima y en el atacante |
+| `fall_damage`, `item_drop`, `item_pickup` | lo que dice el nombre, en la posición del jugador |
+
+Se impide en `HIGH`, así que tu propio listener en `HIGHEST` puede revertirlo. `entry`, `exit` y
+`region_members_only` **no** se aplican, ni las explosiones. `stopEnforcing()` lo termina.
+
+### Quién colocó un bloque
+
+En las regiones que declaran `player_build_only` o `temporary_blocks`, la librería anota qué bloques
+puso un jugador (bloques colocados, fluidos vertidos, bloques que se formaron de ellos, bloques que
+cayeron y aterrizaron). Un plugin que no usa `enforce` consulta el registro él mismo:
+
+```java
+if (regions.resolve(location, CommonRegionPolicies.PLAYER_BUILD_ONLY).value()
+        && !regions.placedByPlayer(event.getBlock())) {
+    event.setCancelled(true);
+}
+```
+
+### Bloques temporales
+
+Se aplica siempre, con o sin `enforce`: un bloque colocado en una región que declara `temporary_blocks`
+desaparece tras `temporary_blocks_seconds`, y vuelve al jugador que lo puso si la región declara también
+`re_give_blocks`.
+
+```java
+PolicySet.of(CommonRegionPolicies.TEMPORARY_BLOCKS, true)
+        .with(CommonRegionPolicies.TEMPORARY_BLOCKS_SECONDS, 10)
+        .with(CommonRegionPolicies.RE_GIVE_BLOCKS, true)
+```
+
+## El editor de políticas
+
+Una pantalla para editar los flags de una región: entra un `PolicySet` y sale el `PolicySet` editado.
+
+```java
+regions.policyEditor(arena.policies())
+        .title("{primary}&lARENA FLAGS")
+        .keys(CommonRegionPolicies.PVP, CommonRegionPolicies.BUILD, CommonRegionPolicies.BREAK)
+        .defaults(ArenaDefaults.POLICIES)
+        .locked(CommonRegionPolicies.PVP, "The game switches this by itself")
+        .onSave(edited -> arenas.save(arena.withPolicies(edited)))
+        .onCancel(() -> ArenaMenu.open(player))
+        .open(player);
+```
+
+- Las filas booleanas rotan **Default → Allow → Deny**. Clic derecho devuelve cualquier fila no
+  bloqueada a Default.
+- Las filas `MaterialSet` abren un editor de lista con el selector de materiales; las enteras piden un
+  número.
+- Sin `keys(...)` muestra todas las políticas comunes booleanas; hasta 28 filas. Tus propias claves
+  necesitan `describe(key, icon, name, description)`.
+- No se escribe nada hasta guardar. Cerrar, salir o que el plugin se desactive acaban en `onCancel`.
+
+## Limpiar una región
+
+```java
+regions.get("arena").ifPresent(regions::clearEntities);
+int removed = regions.clearEntities(arena, entity -> entity instanceof Monster);
+```
+
+Por defecto quita lo que deja una ronda: ítems tirados, orbes de experiencia, proyectiles, vagonetas,
+cristales del End y cohetes. Soportes de armadura, marcos, cuadros y mobs se quedan; los jugadores nunca
+se quitan. Lee el mundo, así que ejecútalo en el hilo de la región.
+
+## Seleccionar
+
+```java
+regions.beginSelection(player).result()
+        .thenAccept(result -> save(result.shape()));
+```
+
+Eso le da al jugador un hacha de oro en la mano principal, dibuja la forma mientras la elige y responde
+solo cuando confirma. La herramienta se retira acabe como acabe la selección. Una selección por jugador
+en todo el servidor.
+
+| Gesto | Caja | Polígono | Mano alzada | Círculo / esfera |
+|---|---|---|---|---|
+| Clic izquierdo | primera esquina | añade un punto | baja / sube el lápiz | centro |
+| Clic derecho | segunda esquina | quita el último punto | quita el último punto | un bloque del borde |
+| Shift + clic izquierdo | confirmar | confirmar (3+ puntos) | confirmar (3+ puntos) | confirmar |
+| Shift + clic derecho | siguiente forma ofrecida | | | |
+
+Con el lápiz bajado, el bloque al que mira el jugador se convierte en un punto cada dos bloques; el
+lápiz se levanta solo a los 256 puntos.
+
+```java
+SelectionOptions mine = SelectionOptions.builder()
+        .modes(SelectionMode.CUBOID, SelectionMode.CIRCLE, SelectionMode.SPHERE)
+        .build();
+
+SelectionOptions claim = SelectionOptions.builder(SelectionHeight.FULL)  // azada de oro, toda la altura
+        .virtualSelector(true)
+        .build();
+```
+
+| Modo | `result.shape()` |
+|---|---|
+| `CUBOID` | `Cuboid`, o `UnboundedYRectangle` a altura completa |
+| `POLYGON`, `FREEHAND` | `Polygon`, entre las alturas clicadas o toda la altura |
+| `CIRCLE` | `Cylinder`, o `HorizontalCylinder` a altura completa |
+| `SPHERE` | `Sphere`; no se permite a altura completa |
+
+Un plugin que solo guarda cajas sigue leyendo `result.cuboid()`: para otras formas es la caja que las
+envuelve.
+
+**Altura completa** (`SelectionHeight.FULL`) es para claims: el contorno se dibuja a la altura del
+jugador con un poste en cada esquina, y los mensajes cuentan columnas en vez de bloques.
+
+**Selector virtual** pone la herramienta solo en el cliente, dibujada sobre la ranura por paquetes. No
+se puede tirar, guardar ni copiar, y tirarla cancela la selección. Necesita PacketEvents: sin él
+`beginSelection` lanza `UnsupportedOperationException`.
+
+### Opciones
+
+| Builder | Por defecto |
+|---|---|
+| `selectorMaterial` | `GOLDEN_AXE` (`GOLDEN_HOE` con `builder(FULL)`) |
+| `giveSelector` | `true` |
+| `requireConfirmation` | `true` (los contornos siempre la esperan) |
+| `feedback` | `true`: coordenadas, tamaño y una barra de acción fija |
+| `previewLines()` / `previewParticle(nombre)` | líneas; `previewParticle(null)` no dibuja nada |
+| `modes` | `CUBOID` |
+| `selectorName`, `selectorLore` | `{primary}&lREGION SELECTOR` y el lore de gestos |
+| `cancelInteractions`, `requireSameWorld` | `true` |
+
+`session.confirm()` acepta desde un botón tuyo; `cancelSelection(player)` la termina. Los mensajes son
+de la librería, en su `messages.yml` bajo `selection` (placeholders `%x%`, `%y%`, `%z%`, `%blocks%`,
+`%points%`, `%radius%`, `%mode%`, `%selector%`).
+
+## Contornos
+
+```java
+regions.visualize(player, "arena");
+
+VisualizationOptions zone = VisualizationOptions.builder()
+        .lineColor(0xA33B53)
+        .untilClosed()
+        .build();
+handles.add(regions.visualize(player, "zone", zone));
+```
+
+Los contornos, también los de una selección en curso, son **líneas reales**: barras finas y brillantes
+hechas de displays que solo ve quien mira, visibles a través de paredes y movidas solo cuando cambia la
+forma. `particleName("WAX_ON")` dibuja partículas en su lugar, y un servidor sin PacketEvents pasa a
+partículas (`END_ROD`) por sí solo. Las formas sin techo se dibujan a la altura de quien mira.
+
+| Ajuste | Por defecto |
+|---|---|
+| `lineColor` | el `primary` de la paleta |
+| `durationTicks` | 200; `untilClosed()` dura hasta cerrar el handle, que quien mira se vaya, la región desaparezca o el plugin se desactive |
+| `periodTicks` | 10 |
+| `viewDistance` | 48 bloques, medidos al borde más cercano de la región |
+
+La región se vuelve a consultar en cada frame, así que reemplazar una zona que se encoge actualiza todos
+los contornos abiertos.
+
+## Guardar regiones
+
+```java
+RegionData data = RegionCodec.encode(snapshot, myPolicyKeys);
+RegionSnapshot back = RegionCodec.decode(data, myPolicyKeys);
+```
+
+Decodificar una política que no pasaste **falla** en vez de perderse. La única excepción es un nombre de
+material dentro de una lista que ya no existe, que se salta y se registra en consola.
+
+## WorldGuard
+
+Para las regiones del propio WorldGuard está `WorldGuardRegions` (`isIn(player, "spawn")`,
+`at(location)`, `ids(world)`), sin dependencia en compilación: en un servidor sin WorldGuard nadie está
+dentro de ninguna región. Los flags que registra la librería están en
+[Displays y NPCs](/docs/exylialib/displays-y-npcs#flags-de-región).

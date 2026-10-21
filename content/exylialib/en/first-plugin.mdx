@@ -7,6 +7,51 @@ badge: "guide"
 Everything below is real API. It is the shortest path from an empty plugin to one that stores
 something, shows a menu and can be reloaded.
 
+## The build
+
+ExyliaLib is on the server already, so you compile against it and never ship it:
+
+```groovy title="build.gradle"
+repositories {
+    maven { url 'https://repo.papermc.io/repository/maven-public/' }
+    maven { url 'https://jitpack.io' }
+}
+
+dependencies {
+    compileOnly 'io.papermc.paper:paper-api:1.21.4-R0.1-SNAPSHOT'
+    compileOnly 'com.github.DiGround-s.ExyliaLib:ExyliaLib:v1.321.2'
+}
+```
+
+```yaml title="plugin.yml"
+name: MyPlugin
+main: com.example.myplugin.MyPlugin
+version: 1.0.0
+api-version: '1.21'
+depend: [ ExyliaLib ]
+```
+
+The version is the ExyliaLib release tag, `v` included; use the one the server runs or an older one.
+Java 21. The plugin's name is also its action namespace below: `MyPlugin` answers to `myplugin:`.
+
+## The handles
+
+Each module is reached through a small per-plugin handle, created once in `onEnable`:
+
+```java
+private ConfigFile<Settings> settings;
+private PluginMenus menus;
+private TaskScheduler tasks;
+private Reloads reloads;
+
+@Override
+public void onEnable() {
+    menus = Menus.of(this);
+    tasks = Tasks.of(this);
+    // ...the steps below
+}
+```
+
 ## The configuration
 
 A YAML file is a Java record. The record is the source of truth; the file is generated from it.
@@ -44,7 +89,8 @@ public record Kit(
         @Id(length = 64) String id,
         @Column(length = 36) String owner,
         @Column(length = 128) String name,
-        @Column(length = Column.UNBOUNDED) ItemStack[] contents) {
+        @Column(length = 64) String icon,
+        @Column ItemStack[] contents) {
 }
 ```
 
@@ -66,7 +112,6 @@ The menu is a file, not code:
 ```yaml title="menus/kits.yml"
 title: '{primary}&lKITS {muted}%current_page%/%total_pages%'
 size: 54
-animation: center_out
 
 pagination:
   slots: '10-16,19-25,28-34'
@@ -87,11 +132,14 @@ filler:
     hide_tooltip: true
 ```
 
-Loaded once, opened cheaply:
+Loaded once — `load` compiles and registers it — and opened cheaply:
 
 ```java
-menus.load("kits", YamlConfiguration.loadConfiguration(
-        new File(getDataFolder(), "menus/kits.yml")));
+private void loadMenus() {
+    menus.unload();
+    menus.load("kits", YamlConfiguration.loadConfiguration(
+            new File(getDataFolder(), "menus/kits.yml")));
+}
 
 menus.open(player, "kits");
 ```
@@ -133,12 +181,13 @@ Declare the steps once and `/myplugin reload` becomes one call that reports whic
 than dying halfway:
 
 ```java
-Reloads.of(this)
-        .step("configs", () -> { settings.reload(); menus.reload(); })
+reloads = Reloads.of(this)
+        .step("config", () -> settings.reload())
+        .stepAlsoOnLibraryReload("menus", this::loadMenus)   // also when the library's colours change
         .step("kits", () -> kitManager.load());
 
-// And when the library's own colours change:
-Reloads.onLibraryReload(this, () -> menus.reload());
+// In the reload command:
+reloads.run(sender);   // [MyPlugin] Reloaded 3 steps in 12ms
 ```
 
 ## What you did not have to write

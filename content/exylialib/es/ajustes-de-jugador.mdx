@@ -1,0 +1,129 @@
+---
+title: "Ajustes de jugador"
+description: "Las preferencias que registra cada plugin de Exylia, los canales de anuncios que los jugadores pueden silenciar y la única pantalla /settings que los muestra todos."
+---
+
+Cada plugin registra las preferencias de sus jugadores en un mismo sitio, y la librería las dibuja todas
+en una pantalla. Un jugador desactiva las peticiones de intercambio y silencia los mensajes de muerte
+en el mismo menú, sea cual sea el plugin dueño de cada una.
+
+```java
+@Override
+public void onEnable() {
+    Settings.category(this, "requests", "ENDER_PEARL", "Peticiones", "Cómo te contactan otros jugadores.");
+    Settings.register(this, Setting.toggle("trade-requests", true)
+            .category("requests")
+            .icon("EMERALD")
+            .name("Peticiones de intercambio")
+            .description("Si los jugadores pueden pedirte", "un {highlight}intercambio{letters}.")
+            .build());
+
+    deaths = Broadcasts.channel(this, "death-messages", "SKELETON_SKULL", "Mensajes de muerte",
+            "Mensajes sobre jugadores que mueren", "en cualquier parte del servidor.");
+}
+
+// en cualquier sitio, cualquier hilo
+if (!Settings.enabled(target, this, "trade-requests")) { refuse(); return; }
+Broadcasts.send(deaths, Text.from(this, messages.death()).with("player", victim.getName()));
+```
+
+## Tipos
+
+| Builder | Guarda | Un clic |
+|---|---|---|
+| `Setting.toggle(key, default)` | `true` / `false` | lo invierte |
+| `Setting.choice(key, default, options...)` | el id de una opción; `.label(id, texto)` la nombra en pantalla | izquierdo avanza, derecho retrocede, dando la vuelta |
+| `Setting.number(key, default, min, max, step)` | un número entre `min` y `max` | izquierdo `+step`, derecho `-step` |
+
+Opcionales en todos los builders: `category`, `icon` (cualquier cosa que acepte el `material` de un
+menú), `name`, `description`, `permission`, `perServer()`, `available(check, reason)` y `store(Store)`.
+
+- **`permission`** — un jugador sin él ve el ajuste bloqueado y lee su valor por defecto.
+- **`available`** — se pregunta cada vez que se dibuja la pantalla; un ajuste cuya función está apagada
+  se muestra desactivado con el motivo en vez de ofrecerse.
+- **`perServer()`** — cada servidor de una red guarda su propio valor en vez de uno compartido.
+- **`store`** — el valor vive en una columna que tu plugin ya tiene. `get`/`set` corren en el hilo de
+  quien llama y leen memoria; `loaded` dice si ya se puede confiar en un clic.
+
+## Leer y escribir
+
+| Llamada | Responde |
+|---|---|
+| `Settings.enabled(player, plugin, key)` | un interruptor; `true` para una clave nunca registrada |
+| `Settings.value(player, plugin, key)` | el valor como texto; `null` para una clave nunca registrada |
+| `Settings.number(player, plugin, key)` | un ajuste numérico |
+| `Settings.set(player, plugin, key, value)` | `false` si la clave no existe o el valor no es uno de los suyos |
+| `Settings.set(uuid, plugin, key, value)` | lo mismo para un jugador que puede estar desconectado |
+| `Settings.toggle` / `Settings.step(…, direction)` | un clic; `false` mientras los valores del jugador no se han leído |
+| `Settings.isLoaded(player, plugin)` | si ya volvió la lectura al entrar |
+
+**Leer es memoria.** Los valores de un jugador se leen de forma asíncrona al entrar, y cada pregunta se
+responde desde memoria en cualquier hilo. Hasta que vuelve la lectura la respuesta es el valor por
+defecto, así que nada espera nunca a la base de datos.
+
+**Las escrituras llegan en orden.** Dos clics rápidos llegan a la base de datos en el orden en que se
+hicieron, y un valor puesto mientras la lectura de entrada está en curso gana a la fila que esta lee.
+
+Solo se guardan los valores distintos del de por
+defecto: volver a ponerlo borra su fila, así que un valor por defecto cambiado en una versión posterior
+llega a todos los que nunca lo tocaron.
+
+Los valores viven en `exylia_player_settings`, en la **base de datos propia del plugin que registra**.
+Un ajuste vale para toda la red salvo que sea `perServer()`. Con Redis activo, un cambio en un servidor
+hace que los demás vuelvan a leer a ese jugador.
+
+## Anuncios
+
+`Broadcasts.channel(plugin, key, icon, name, description...)` registra un interruptor que empieza
+activado, en la categoría reservada `announcements`. `Broadcasts.send(channel, text)` lo envía a cada
+jugador conectado que lo tenga activo, y a la consola. Un canal cuya función puede apagarse usa la
+sobrecarga con un check `available`, y se muestra desactivado mientras está apagada.
+
+## La pantalla
+
+La raíz tiene dos tarjetas, **Ajustes** y **Anuncios**. Ajustes lleva a los plugins que registraron
+alguno, luego a las categorías de un plugin, luego a los ajustes de una categoría; Anuncios lleva a los
+plugins con canales, luego a sus canales. Un paso con una sola opción se salta. Los estados se dibujan en
+vivo, así que un clic o un cambio desde otro servidor se ve sin reabrir.
+
+Las pantallas son del servidor para reestilizarlas. Son archivos de menú en la carpeta de idioma de la
+librería:
+
+```
+plugins/ExyliaLib/lang/<código>/menus/settings/
+├── settings.yml        # la raíz
+├── settings_hub.yml    # las categorías de un plugin
+├── settings_page.yml   # los ajustes de una categoría
+└── settings_list.yml   # una lista paginada
+```
+
+Se escriben en el primer arranque y se leen en cada arranque y en `/exylialib reload`. Una
+actualización solo añade las claves que le faltan a un archivo; un valor por defecto cambiado espera en
+`/exylialib updates`, y nunca se sobrescribe un valor del dueño. Los archivos de hub y de página dejan
+`pagination.slots` a la librería, que centra las tarjetas en su fila. Un archivo que no se puede parsear
+se reporta y se muestra el inglés empaquetado hasta que se arregle. Las palabras de las filas — nombres,
+estados, indicaciones de clic — están en `lang/<código>/phrases.yml`.
+
+## El comando
+
+La librería no añade ningún comando de jugador salvo que el servidor lo pida. En
+`plugins/ExyliaLib/config.yml`:
+
+```yaml
+settings:
+  command:
+    enabled: false
+    name: settings
+    aliases: [preferences, options]
+```
+
+`enabled: true` lo registra, con el permiso `exylialib.settings` (por defecto true). Se lee al arrancar,
+así que un cambio necesita reiniciar. Un plugin con su propio comando de ajustes abre la misma pantalla
+con `Settings.open(player)` o `Settings.openAnnouncements(player)`, y puede no registrarlo cuando
+`Settings.commandEnabled()` es `true`.
+
+## Ciclo de vida
+
+Registra desde `onEnable`. Registrar una clave otra vez la reemplaza, así que una recarga puede volver a
+registrarlo todo con texto nuevo. Todo lo que registró un plugin se olvida un tick después de que se
+desactive, después de su propio `onDisable`, así que todavía puede anunciar su apagado.

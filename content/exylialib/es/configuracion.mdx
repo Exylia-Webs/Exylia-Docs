@@ -50,13 +50,44 @@ y en qué rango — `Segundos que un jugador sigue marcado tras recibir un golpe
 | `reload()` | Relee el archivo. Devuelve los problemas; lista vacía significa limpio. |
 | `onReload(consumer)` | Se ejecuta tras cada recarga correcta. |
 | `save()` | Escribe la instantánea actual en disco. |
-| `update(operador)` | Cambiar y persistir en un paso. |
+| `update(operador)` | Cambiar y persistir en un paso, en el hilo de quien llama. |
+| `updateAsync(operador)` | Lo mismo, con la escritura fuera del hilo de quien llama. |
+| `set(clave, valor)` | Escribe un valor por su clave con puntos y recarga, para que se compruebe como cualquier cosa que escriba el dueño. `null` borra la clave. Devuelve los problemas encontrados. |
 | `issues()` | Problemas de la última carga. |
 | `schema()` | Una descripción de solo lectura del tipo del record. |
 
 ```java
 settings.update(actual -> actual.withHost("10.0.0.5"));
+config.set("forced-flags.pvp", "DENY");          // para un editor en el juego que solo conoce la clave
 ```
+
+`updateAsync` es para un archivo que un editor en el juego guarda en cada clic. `get()` ve los valores
+nuevos antes de que vuelva; solo la escritura espera. Las escrituras de un archivo van de una en una, y una
+ráfaga de cambios hechos antes de que empiece la escritura se escribe una vez, con los últimos valores.
+`save`, `update`, `set` y `reload` escriben primero un cambio pendiente, y lo que quede pendiente se escribe
+cuando el plugin se desactiva.
+
+## Duraciones
+
+```java
+public record Settings(
+        Duration lasts,                         // la forma para todo lo nuevo
+        @Time int timeoutSeconds,               // un número que ya existía
+        @Time(Time.Unit.TICKS) long interval) { }
+```
+
+```yaml
+lasts: 1m30s
+timeout-seconds: 5m     # 300, para el record
+interval: 1s            # 20, porque esta clave se escribe en ticks
+```
+
+El dueño puede escribir `30s`, `1m30s`, `500ms`, `40t`, `2h`, `2d`, `1w`, `1mo` o `2.5h`. **Un número
+suelto nunca cambia de significado**: `@Time` declara la unidad en la que siempre se escribió la clave, que
+es a la vez lo que significa un número sin unidad y la unidad que recibe el record (`SECONDS` salvo que se
+diga otra; `MILLIS`, `TICKS`, `MINUTES`, `HOURS`, `DAYS`). Un `Duration` no necesita anotación, lee un número
+suelto como segundos y se vuelve a escribir como `1m30s`; un número anotado se vuelve a escribir como número.
+Prefiere `Duration` para todo lo nuevo.
 
 ## Versiones y migraciones
 
@@ -95,10 +126,83 @@ silencio lo que el dueño del servidor hubiera escrito ahí. Renombra en el reco
 commit.
 </Callout>
 
+### Mover claves a otro archivo
+
+`Configs.moveTo` es una migración que saca claves de este archivo y las lleva a otro archivo del mismo
+plugin — normalmente texto que deja `config.yml` por un `messages.yml` traducido:
+
+```java
+Configs.define(this, "config", Settings.class)
+        .version(3)
+        .migration(2, Configs.moveTo(this, "messages", Map.of(
+                "combat.action-bar", "combat.action-bar")))
+        .load();
+```
+
+Los valores del dueño llegan a las rutas nuevas cargue primero el archivo que cargue; una sección se mueve
+con todo lo que tiene debajo. Un valor aún en su defecto en inglés no se lleva, así que un archivo traducido
+conserva su traducción.
+
 `transform` es la herramienta correcta cuando lo que cambió es el *significado* de un valor y no su
 sitio — un token renombrado, un número que estaba en ticks y ahora va en segundos. Reescribe lo que hay
 en vez de reemplazarlo con el valor por defecto, así que las palabras y los colores del dueño
 sobreviven.
+
+## Idiomas
+
+Un archivo declarado `translated()` vive en la carpeta de idioma del plugin en vez de en su raíz:
+
+```java
+Configs.define(this, "config", Settings.class)                 // tiene un String language, por defecto "default"
+        .version(4).migration(3, Languages.ADOPT_EXISTING).load();
+Configs.define(this, "messages", Messages.class).translated().load();
+Languages.refresh(this, MyPlugin.class, "menus");
+File main = Languages.file(this, "menus/main.yml");
+```
+
+| Llamada | Qué hace |
+|---|---|
+| `translated()` | El archivo es `lang/<código>/<nombre>.yml` para el idioma del plugin, y lo sigue al recargar. El record guarda los defectos en inglés; un `lang/<código>/<nombre>.yml` empaquetado en el jar reemplaza las líneas que traduce. |
+| `Languages.code(plugin)` | El idioma del plugin: su propia clave `language`, o la de ExyliaLib si es `default`, o `en`. |
+| `Languages.use(plugin, código)` | Fija el idioma desde código, para un plugin que guarda sus ajustes en otro sitio, como una base de datos. Gana sobre `config.yml`; `null` o `default` vuelven a él. Recarga después los archivos del plugin. |
+| `Languages.refresh(plugin, anchor, recurso)` | Instala y actualiza un archivo o carpeta traducido que edita el dueño, como hace `BundledFiles.refresh`. |
+| `Languages.replace(plugin, anchor, recurso)` | Reescribe una carpeta traducida desde el jar en cada arranque, descartando ediciones — para pantallas de administración que son del plugin. |
+| `Languages.file(plugin, recurso)` / `path(…)` | Dónde vive en disco un archivo traducido. |
+| `Languages.ADOPT_EXISTING` | La migración de la versión que introduce `language`: un servidor que ya usaba el plugin recibe `language: custom`, y su `messages.yml` y `menus/` se mueven a `lang/custom/`. |
+
+Los archivos empaquetados van bajo `lang/<código>/` en el jar. El inglés es la base sobre la que se pone
+cualquier otro idioma, así que una línea aún sin traducir llega igual, en inglés. `config.yml` tiene que
+cargarse antes que los archivos que lo siguen.
+
+## Valores por defecto cambiados
+
+Cada config recuerda los defectos que su dueño revisó por última vez, en `.defaults/configs/`, y los compara
+en cada carga. Una **clave nueva** se añade. Un **defecto cambiado o eliminado** en una clave que sigue en su
+valor revisado se deja en paz y se lista en
+[`/exylialib updates`](/docs/exylialib/config-de-la-libreria#valores-por-defecto-cambiados), donde el dueño lo
+aplica o lo conserva. Un valor que cambió el dueño nunca se lista. El plugin no tiene que hacer nada.
+
+## Archivos empaquetados
+
+Los archivos que un plugin trae para que los edite el dueño, en vez de generarlos desde un record — menús,
+catálogos de efectos o items — siguen las mismas reglas:
+
+```java
+BundledFiles.refresh(this, MyPlugin.class, "menus");        // una carpeta
+BundledFiles.refresh(this, MyPlugin.class, "effects.yml");  // un archivo
+```
+
+Llámalo antes de leer los archivos, al activar y al recargar.
+
+- Un **archivo que falta** se escribe, cada vez que falta.
+- Una **clave nueva** se añade al archivo del dueño, con sus comentarios.
+- Un **defecto cambiado o eliminado** en una clave aún en su valor revisado espera en `/exylialib updates`.
+- Lo que el dueño cambió o borró nunca se toca. Los defectos revisados viven en `.defaults/files/`.
+- Un archivo cuya estructura cambió demasiado para fusionarse lo declara con un `menu-version` (o
+  `defaults-version`) más alto en su raíz. Un archivo sin tocar se reemplaza al momento; uno editado espera
+  como un solo cambio, y aplicarlo guarda el archivo viejo como `<nombre>.v<versión antigua>`.
+- Un archivo en disco que no se puede leer se deja intacto y se informa. Un archivo que no es YAML solo se
+  escribe cuando falta.
 
 ## Bloques que nombra el dueño
 

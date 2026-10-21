@@ -1,0 +1,335 @@
+---
+title: "Regions"
+description: "Areas of the world with rules attached: shapes, policies, enter and exit events, enforcement, the selector and outlines."
+---
+
+A region is an area of the world with rules attached. Every plugin registers its own, and any plugin
+can ask what is at a location.
+
+```java
+PluginRegions regions = Regions.of(this);
+
+// After loading from your database, hand over the whole set at once.
+regions.replaceAll(rows.stream()
+        .map(row -> regions.region(row.id(),
+                new WorldIdentity(row.worldId(), row.worldName()),
+                Cuboid.blocks(row.minX(), row.minY(), row.minZ(), row.maxX(), row.maxY(), row.maxZ()),
+                row.priority(),
+                PolicySet.of(CommonRegionPolicies.PVP, row.pvp())))
+        .toList());
+
+// Ask, from any thread.
+boolean pvp = Regions.resolve(player.getLocation(), CommonRegionPolicies.PVP).value();
+```
+
+| Concept | What it is |
+|---|---|
+| `RegionSnapshot` | One region as it is now: id, owner, world, shape, priority and policies. Immutable. |
+| `PolicySet` | What a region declares. Not declaring a key is different from declaring its default. |
+| `RegionData` / `RegionCodec` | The same region as values a database can store. The module never touches a database itself. |
+
+## Shapes
+
+```java
+Cuboid.blocks(0, 64, 0, 15, 79, 15);    // an arena: inclusive block corners, so 16 blocks a side
+Cuboid.block(100, 70, 100);              // one block
+new UnboundedYRectangle(0, 0, 64, 64);   // a claim, bedrock to sky
+new Sphere(0, 64, 0, 16);
+new HorizontalCylinder(0, 0, 100);       // round, no floor or ceiling
+new Cylinder(0, 0, 12, 40, 80);          // round, between y 40 and 80
+Polygon.prism(vertices, 60, 90);         // any outline, between two heights
+Polygon.columns(vertices);               // any outline, every y
+```
+
+A `Polygon` is a polygon of blocks: a column belongs to it when the centre of the column is inside the
+outline or on it, which is why `Polygon.Vertex.block(x, z)` puts a vertex in the middle of a block. The
+outline may cross itself (even-odd rule), so a freehand selection is stored exactly as drawn. Up to
+1024 vertices.
+
+Shapes are never mutated. A zone that shrinks is a new snapshot passed to `replace`.
+
+## Priority and policies
+
+`Regions.at(...)` returns the regions at a point highest priority first. Resolving a policy walks that
+order and takes **the first region that declares it**; a region that is silent on a key is skipped,
+and nobody declaring it means the key's own default.
+
+```text
+world_rules   priority 0    pvp: true
+claim         priority 10   build: false
+mine          priority 20   pvp: false
+```
+
+Standing in all three: `pvp` is `false` (the mine), `build` is `false` (the claim, which the mine does
+not mask), `interact` is `true` (nobody declared it).
+
+`PolicyResolution` carries the value and the region that supplied it (`source()`, `null` for the
+default). Policies are open, typed, namespaced keys, so a plugin can add its own with
+`PolicyKey.of(id, type, default)`.
+
+### The common policies
+
+`CommonRegionPolicies`, under the `exylia` namespace:
+
+| Key | Type | Default |
+|---|---|---|
+| `pvp`, `build`, `break`, `interact` | boolean | `true` |
+| `entry`, `exit`, `item_drop`, `item_pickup`, `fall_damage` | boolean | `true` |
+| `player_build_only`, `allowed_blocks_only`, `breakable_blocks_only` | boolean | `false` |
+| `temporary_blocks`, `re_give_blocks`, `region_members_only` | boolean | `false` |
+| `temporary_blocks_seconds` | integer | `0` (never removed) |
+| `allowed_blocks`, `breakable_blocks` | `MaterialSet` | empty |
+
+## Queries
+
+```java
+Regions.at(location);                 // every plugin's regions here
+Regions.at(worldId, x, y, z);         // without building a Location
+Regions.resolve(location, key);       // one policy, over everybody's regions
+Regions.get(id);
+
+regions.at(location);                 // only this plugin's
+regions.resolve(location, key);       // only this plugin's answer
+```
+
+Global by default, because a claim has to see the arena it is inside. Queries are safe from any thread:
+the index is immutable and swapped in one assignment, so a lookup never sees a half-written region. It
+is keyed by world UUID, so a world unloaded and loaded again keeps its regions.
+
+`Boxes` turns a snapshot into Bukkit terms: `min` / `max` (inclusive block corners), `world`,
+`contains(region, location)`, `volume`, `loaded` (every chunk of the box loaded, checked without
+loading any) and `playersInside`.
+
+## Registering
+
+```java
+regions.register(snapshot);    // fails if the id already exists
+regions.replace(snapshot);     // fails if it does not
+regions.unregister("arena");
+regions.replaceAll(all);       // this plugin's whole set, atomically
+```
+
+`replaceAll` is what a reload calls: it replaces only the calling plugin's regions and leaves every
+other plugin's alone. A plugin can only touch regions it owns, and disabling it releases its regions,
+selections, outlines and enforcement.
+
+## Entering and leaving
+
+```java
+@EventHandler
+public void onRegionChange(PlayerRegionChangeEvent event) {
+    if (!event.involves(regions)) return;
+    for (RegionSnapshot left : event.exited(regions)) { ... }
+    for (RegionSnapshot entered : event.entered(regions)) { ... }
+}
+```
+
+One event per change, after it is committed, on the thread that owns the player. It is not
+cancellable. **Pass your own `PluginRegions`**: the unfiltered `exited()` and `entered()` carry every
+plugin's regions, and acting on them is how a game eliminates somebody for leaving a region it does not
+own.
+
+| Cause | When |
+|---|---|
+| `MOVE` | crossed into another block |
+| `TELEPORT` | arrived somewhere else, portals and respawns included |
+| `WORLD_CHANGE` | changed world |
+| `SYNC` | a poll found them somewhere no event reported (Folia teleports, packet moves, vehicles) |
+| `REGISTER`, `REPLACE`, `UNREGISTER`, `RELEASE` | a region changed under a player standing still |
+
+Every tracked player is polled four times a second, so anything the events miss is corrected within a
+quarter of a second. Joining inside a region does **not** fire an enter, and quitting does not fire an
+exit; check `regions.at(...)` on join if you need to.
+
+## Enforcing the policies
+
+Declaring a policy refuses nothing by itself. A plugin that wants the common ones applied asks once:
+
+```java
+regions.enforce();   // everyone except players in creative mode
+
+// or choose who the rules hold, per region
+regions.enforce((player, region) -> sessions.contains(player.getUniqueId()));
+```
+
+It is opt-in and owner-scoped: only this plugin's regions are judged, and another plugin's region,
+whatever its priority, neither enforces nor relaxes them. The audience is asked per region, runs inside
+the event (a region thread on Folia), and must be cheap.
+
+| Policy | Refuses |
+|---|---|
+| `break` | breaking a block, filling a bucket from one |
+| `build` | placing a block (both halves of a door or bed), emptying a bucket |
+| `breakable_blocks_only` + `breakable_blocks` | when on, only the listed materials can be broken |
+| `allowed_blocks_only` + `allowed_blocks` | when on, only the listed materials can be placed; a bucket counts as its item |
+| `player_build_only` | breaking a block no player placed |
+| `interact` | using clicked blocks, pressure plates and farmland, right-clicking entities that are not players |
+| `pvp` | a player hurting a player directly, or through arrows, TNT, crystals, harmful potions or tamed pets; checked at both the victim and the attacker |
+| `fall_damage`, `item_drop`, `item_pickup` | what the name says, at the player's position |
+
+Refusals happen at `HIGH`, so your own listener at `HIGHEST` can overrule one. `entry`, `exit` and
+`region_members_only` are **not** enforced, nor are explosions. `stopEnforcing()` ends it.
+
+### Who placed a block
+
+In regions that declare `player_build_only` or `temporary_blocks`, the library records which blocks a
+player put there (placed blocks, poured fluids, blocks that formed from them, blocks that fell and
+landed). A plugin that does not use `enforce` asks the record itself:
+
+```java
+if (regions.resolve(location, CommonRegionPolicies.PLAYER_BUILD_ONLY).value()
+        && !regions.placedByPlayer(event.getBlock())) {
+    event.setCancelled(true);
+}
+```
+
+### Temporary blocks
+
+Always applied, with or without `enforce`: a block placed in a region declaring `temporary_blocks`
+disappears after `temporary_blocks_seconds`, and goes back to the player who placed it when the region
+also declares `re_give_blocks`.
+
+```java
+PolicySet.of(CommonRegionPolicies.TEMPORARY_BLOCKS, true)
+        .with(CommonRegionPolicies.TEMPORARY_BLOCKS_SECONDS, 10)
+        .with(CommonRegionPolicies.RE_GIVE_BLOCKS, true)
+```
+
+## The policy editor
+
+One screen for editing a region's flags, a `PolicySet` in and the edited `PolicySet` out:
+
+```java
+regions.policyEditor(arena.policies())
+        .title("{primary}&lARENA FLAGS")
+        .keys(CommonRegionPolicies.PVP, CommonRegionPolicies.BUILD, CommonRegionPolicies.BREAK)
+        .defaults(ArenaDefaults.POLICIES)
+        .locked(CommonRegionPolicies.PVP, "The game switches this by itself")
+        .onSave(edited -> arenas.save(arena.withPolicies(edited)))
+        .onCancel(() -> ArenaMenu.open(player))
+        .open(player);
+```
+
+- Boolean rows cycle **Default → Allow → Deny**. A right click puts any unlocked row back to Default.
+- `MaterialSet` rows open a list editor with the material picker; integer rows ask for a number.
+- Without `keys(...)` it shows every boolean common policy; up to 28 rows. Your own keys need
+  `describe(key, icon, name, description)`.
+- Nothing is written until save. Closing, leaving or the plugin disabling all end in `onCancel`.
+
+## Clearing a region
+
+```java
+regions.get("arena").ifPresent(regions::clearEntities);
+int removed = regions.clearEntities(arena, entity -> entity instanceof Monster);
+```
+
+By default it removes what a round leaves behind: dropped items, experience orbs, projectiles,
+minecarts, end crystals and fireworks. Armour stands, frames, paintings and mobs stay; players are never
+removed. It reads the world, so run it on the region's thread.
+
+## Selecting
+
+```java
+regions.beginSelection(player).result()
+        .thenAccept(result -> save(result.shape()));
+```
+
+That hands the player a golden axe in their main hand, draws the shape as they pick it, and answers
+only after they confirm. The tool is taken back however the selection ends. One selection per player
+across the whole server.
+
+| Gesture | Box | Polygon | Freehand | Circle / sphere |
+|---|---|---|---|---|
+| Left click | first corner | adds a point | pen down / up | centre |
+| Right click | second corner | removes the last point | removes the last point | a block on the edge |
+| Shift + left click | confirm | confirm (3+ points) | confirm (3+ points) | confirm |
+| Shift + right click | next shape on offer | | | |
+
+With the freehand pen down, the block the player looks at becomes a point every two blocks; the pen
+lifts itself at 256 points.
+
+```java
+SelectionOptions mine = SelectionOptions.builder()
+        .modes(SelectionMode.CUBOID, SelectionMode.CIRCLE, SelectionMode.SPHERE)
+        .build();
+
+SelectionOptions claim = SelectionOptions.builder(SelectionHeight.FULL)  // golden hoe, every y
+        .virtualSelector(true)
+        .build();
+```
+
+| Mode | `result.shape()` |
+|---|---|
+| `CUBOID` | `Cuboid`, or `UnboundedYRectangle` at full height |
+| `POLYGON`, `FREEHAND` | `Polygon`, between the clicked heights or every y at full height |
+| `CIRCLE` | `Cylinder`, or `HorizontalCylinder` at full height |
+| `SPHERE` | `Sphere`; not allowed at full height |
+
+A plugin that only stores boxes keeps reading `result.cuboid()`: for other shapes it is the box around
+them.
+
+**Full height** (`SelectionHeight.FULL`) is for claims: the outline is drawn at the player's height
+with a post at each corner, and the feedback counts columns instead of blocks.
+
+**Virtual selector** puts the tool on the client only, drawn over the held slot by packets. Nothing can
+be dropped, stored or copied out of it, and throwing it away cancels the selection. Needs PacketEvents:
+without it `beginSelection` throws `UnsupportedOperationException`.
+
+### Options
+
+| Builder | Default |
+|---|---|
+| `selectorMaterial` | `GOLDEN_AXE` (`GOLDEN_HOE` with `builder(FULL)`) |
+| `giveSelector` | `true` |
+| `requireConfirmation` | `true` (outlines always wait for it) |
+| `feedback` | `true`: coordinates, size and a standing action bar |
+| `previewLines()` / `previewParticle(name)` | lines; `previewParticle(null)` draws nothing |
+| `modes` | `CUBOID` |
+| `selectorName`, `selectorLore` | `{primary}&lREGION SELECTOR` and the gesture lore |
+| `cancelInteractions`, `requireSameWorld` | `true` |
+
+`session.confirm()` accepts from a button of your own; `cancelSelection(player)` ends it. The
+feedback lines are the library's own, in its `messages.yml` under `selection` (placeholders `%x%`,
+`%y%`, `%z%`, `%blocks%`, `%points%`, `%radius%`, `%mode%`, `%selector%`).
+
+## Outlines
+
+```java
+regions.visualize(player, "arena");
+
+VisualizationOptions zone = VisualizationOptions.builder()
+        .lineColor(0xA33B53)
+        .untilClosed()
+        .build();
+handles.add(regions.visualize(player, "zone", zone));
+```
+
+Outlines, live selections included, are **real lines**: thin glowing display bars sent only to the
+viewer, visible through walls, moved only when the shape changes. `particleName("WAX_ON")` draws
+particles instead, and a server without PacketEvents falls back to particles (`END_ROD`) by itself.
+Shapes with no ceiling are drawn at the viewer's height.
+
+| Setting | Default |
+|---|---|
+| `lineColor` | the palette's `primary` |
+| `durationTicks` | 200; `untilClosed()` lasts until the handle is closed, the viewer leaves, the region goes or the plugin disables |
+| `periodTicks` | 10 |
+| `viewDistance` | 48 blocks, measured to the region's nearest edge |
+
+The region is looked up again every frame, so replacing a shrinking zone updates every open outline.
+
+## Storing regions
+
+```java
+RegionData data = RegionCodec.encode(snapshot, myPolicyKeys);
+RegionSnapshot back = RegionCodec.decode(data, myPolicyKeys);
+```
+
+Decoding a policy you did not pass in **fails** instead of being dropped. The one exception is a
+material name inside a block list that no longer exists, which is skipped and logged.
+
+## WorldGuard
+
+For WorldGuard's own regions there is `WorldGuardRegions` (`isIn(player, "spawn")`, `at(location)`,
+`ids(world)`), with no compile-time dependency: on a server without WorldGuard nothing is inside any
+region. The flags the library registers are on [Displays and NPCs](/docs/exylialib/displays-and-npcs#region-flags).

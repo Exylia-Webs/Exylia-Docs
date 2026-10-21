@@ -1,0 +1,199 @@
+---
+title: "Crates and loot"
+description: "What comes out of a chest, a spawner or a broken block, Fortune for a plugin's own drops, and a key crate any plugin opens over its own catalogue."
+---
+
+## Loot tables
+
+A loot table is a `List<LootEntry>` the caller owns: read from a config, from a column with
+`LootCodec`, or built in code. There is no registry and nothing to release.
+
+```java
+List<LootEntry> table = Loot.parseAll(section.getStringList("loot"));
+
+List<ItemStack> filled = Loot.roll(table);      // a chest's worth
+ItemStack single = Loot.pick(table);            // one draw
+```
+
+### Two readings of one weight
+
+| Call | The weight means | For |
+|---|---|---|
+| `Loot.roll(table)` | A **percentage**: every line rolls on its own. | A chest, a spawner. |
+| `Loot.pick(table)` | A **share** of the total: exactly one line comes up. | A refill, one item per slot. |
+
+| Call | Returns |
+|---|---|
+| `roll(table)` | Items, shuffled. Never empty for a non-empty table: one line is forced, picked evenly, not by weight. |
+| `roll(table, false)` | The same, but nothing is a valid answer — a spawner tick that produced nothing. |
+| `rollEntries(table[, forceOne])` | The lines that came up, in written order, for tables with command or money lines. |
+| `pickEntry(table)` | One line by weight; `null` when every weight is zero. |
+| `itemOf(entry)` / `amountOf(entry)` | The item at a fresh stack size, or just the amount (never below one). |
+
+Everything here is computation and safe from any thread; putting the items into a chest belongs on the
+thread that owns the block.
+
+### A line
+
+| Part | What it is |
+|---|---|
+| `type` | `ITEM`, `COMMAND` or `ECONOMY`. A stored line with no type is an item. |
+| `itemSnapshot` | A material, a head string or `bytes:`. An inserted item keeps its name, lore and components. |
+| `command` | The console command of a `COMMAND` line. |
+| `currency` | What an `ECONOMY` line pays in; blank is the default currency. |
+| `minAmount` / `maxAmount` | Stack size, both ends included. For money, the amount paid, in whole units. |
+| `weight` | See above. Defaults to `50.0`. |
+| `tier` | A label such as `RARE`. The library never reads it. |
+
+`Loot.roll` hands back items only. A table that pays money is read with `rollEntries`, and paying is
+the caller's: `Loot.amountOf(entry)` in `entry.currency()`.
+
+### In a config file
+
+```
+MATERIAL MIN MAX WEIGHT [TIER]
+DIAMOND_SWORD 1 1 5 RARE
+SPLASH:HEALING 1 2 20
+GOLDEN_APPLE 1 2 15
+```
+
+The material also takes `POTION:`, `SPLASH:`, `LINGERING:` and `TIPPED:` followed by a potion type,
+old and new names alike (`SPEED` and `SWIFTNESS`). A line that cannot be read is skipped, never fatal;
+pass a reporter as the second argument of `parseAll` to hear about it.
+
+### Editing on screen
+
+```java
+Loot.editor(this, template.entries())                                   // items and commands
+        .title("{primary}&lLOOT TABLE")
+        .onSave(entries -> manager.save(template, entries))
+        .open(player);
+
+Loot.editor(this, entries, EnumSet.allOf(LootType.class));              // money lines too
+```
+
+Add offers **an item**, **a command**, **money** (least and most, with a currency picker, only when the
+table accepts `ECONOMY`), and **everything in a chest**: the admin left-clicks a container and every
+item in it becomes a line at weight `100`, amount 1 to its stack size. Editing a line edits its
+numbers; the item is one more field and is only asked for when changed. A table copied in one editor
+pastes into any other.
+
+## Weighted, Fortune and fractional multipliers
+
+Small helpers for a plugin's own drops, outside the server's loot tables.
+
+```java
+Material block = Weighted.pick(blocks, BlockEntry::weight).material();
+```
+
+`Weighted.pick(list, weight)` rolls one entry by weight. Zero or negative weights never come up; a list
+with no positive weight is treated as evenly weighted, so it still picks something.
+
+```java
+int level = Fortune.level(tool);
+int amount = Fortune.apply(Fortune.Mode.VANILLA, 1, level, 0);   // 1 to 4 at Fortune III
+double chance = Fortune.chance(0.5, level, 0.2);                  // 0.5% raised to 0.8%
+ItemStack held = Fortune.limit(tool, 2, false);                   // at most Fortune II, no Silk Touch
+```
+
+| `Fortune.Mode` | Effect |
+|---|---|
+| `OFF` | None. |
+| `VANILLA` | The ore formula, about x2.2 on average at Fortune III. |
+| `LINEAR` | `amount × (1 + level × perLevel)`, the fraction rolled. |
+| `CHANCE` | Amounts stay; each line's chance rises instead. |
+
+`Fortune.factor(mode, level, perLevel)` is the multiplier for something not counted in items, such as
+money. `Fortune.limit` caps a tool for working out drops in a place that allows less.
+
+`Multipliers.scale(3, 1.2)` is 3 or 4, 3.6 on average: the fraction is rolled, so small amounts gain
+what the multiplier says instead of never gaining. `Multipliers.scale(items, factor)` does it to a list
+of stacks.
+
+## Crates
+
+A key crate a plugin gets by handing over its catalogue: one key in, one random reward out. The roll,
+the keys, the reels, the payout, the blocks that open it and the player rows are shared; what a reward
+is stays with the plugin. ExyliaKillEffect, ExyliaHitEffect, ExyliaArrows and ExyliaEmotes run on it.
+
+```java
+crates = Crates.of(this).start(new CrateCatalogue<Trim>() {
+            public Collection<Trim> all() { return registry.all(); }
+            public String id(Trim trim) { return trim.id(); }
+            public String tier(Trim trim) { return trim.tier(); }
+            public String name(Trim trim) { return trim.displayName(); }
+            public String icon(Trim trim) { return trim.icon(); }
+            public String description(Trim trim) { return trim.description(); }
+            public ItemStack token(Trim trim, Player viewer) { return null; }      // no token item
+            public boolean ownsOtherwise(Player player, Trim trim) { return player.hasPermission(trim.permission()); }
+        },
+        () -> config.get().crate(),
+        () -> messages.get().crate(),
+        bound -> config.update(c -> c.withCrate(c.crate().withBlocks(bound))),
+        menus, actions, "crate", "crate_open");
+```
+
+The library ships no menu or message file. It reads the plugin's two menus by the ids passed to
+`start`, and its settings and messages from sections the plugin nests in its own files:
+
+```yaml
+crate:
+  enabled: true
+  start-keys: 0            # given once, when the player's row is created
+  duplicate-refund: 1      # keys back when a reel lands on something already owned
+  reward: UNLOCK           # UNLOCK, ITEM or BOTH
+  blocks: []               # server,world,x,y,z,yaw,pitch — written by bindBlock
+  max-at-once: 4           # capped at 7
+  spin-frames: 34
+  stagger-seconds: 2.0     # gap between one reel landing and the next
+  key-item:
+    material: TRIPWIRE_HOOK
+    name: '{primary}&lCRATE KEY'
+    glow: true
+  tiers:
+    common:    { name: Common,    color: '{muted}',     chance: 60.0, priority: 1 }
+    legendary: { name: Legendary, color: '{highlight}', chance: 3.0,  priority: 4 }
+```
+
+Messages: `won`, `duplicate`, `no-keys`, `busy`, `empty`, `disabled`, `keys-received`,
+`rewards-claimed`. A blank line is not sent.
+
+| Mode | Does |
+|---|---|
+| `UNLOCK` | Writes the reward to the player's row. |
+| `ITEM` | Hands over the catalogue's token and unlocks nothing, so it is never a duplicate. |
+| `BOTH` | Unlocks, and hands the token over only when it was new. |
+
+A catalogue whose `token` answers `null` treats `ITEM` and `BOTH` as `UNLOCK`: a key never buys
+nothing.
+
+The menus get two actions in the `PluginActions` namespace passed to `start`: `<namespace>:crate` opens
+the question of how many, and `<namespace>:crate_open <amount>` spends that many keys and opens the
+reels. Reel rows carry `%reward_id%`, `%reward_name%`, `%reward_material%`, `%reward_description%`,
+`%reward_tier%`, `%reward_tier_id%`, `%reward_tier_color%` and `%refund%`; anywhere, `%keys%`,
+`%unlocked_count%` and `%catalogue_count%`.
+
+| Call | What it does |
+|---|---|
+| `open(player)`, `spin(player, amount)` | The question, or the reels. |
+| `keys(uuid)`, `owns(uuid, id)`, `unlocked(uuid)` | From memory, for players here. |
+| `fetchKeys`, `addKeys`, `setKeys`, `unlock`, `lock`, `clearUnlocks` | For players here or not; futures. |
+| `keyItem(viewer)`, `isKey(item)`, `giveKeyItems(player, n)` | Key items that can be traded. They are inert: never placed, eaten or thrown. |
+| `bindBlock`, `unbindBlock`, `boundBlocks`, `clearBlocks` | Blocks that open it; saved through the `start` callback. |
+| `tierIds()`, `count(tier)`, `odds(tier)` | The rarities and the odds an opening honours. |
+| `importing(...)`, `legacyKeys(key, value)` | Seed a row from a plugin's old table once; accept old key items. |
+| `onChange(uuid -> …)`, `rebuild()`, `stop()` | Redraw your menus; rebuild bound blocks on reload. |
+
+The roll picks a rarity by weight among those holding anything, then a reward inside it, evenly. Keys
+are spent before the first frame and never go below zero; one spin at a time per player. Each reel pays
+as it lands; closing the window changes nothing, and quitting pays every reel still falling at once.
+Rewards go through the plugin's `PluginRewards`, which `start` sets to queue into
+`PendingRewards.database(plugin)` and claim on join.
+
+Rows live in `exylia_crate_players` in the plugin's own database: `keys` and the unlocked ids,
+comma-separated.
+
+<Callout type="note" title="Buying instead of unboxing">
+A cosmetic that can also be bought outright grants through the same crate with
+[`CosmeticPurchases`](/docs/exylialib/cosmetics#buying-a-cosmetic).
+</Callout>

@@ -1,22 +1,27 @@
 ---
 title: "Displays y NPCs"
-description: "Objetos sólidos y cuerpos con forma de jugador, enviados por paquetes y animados por el cliente."
+description: "Objetos sólidos, efectos con línea de tiempo y cuerpos con forma de jugador, enviados por paquetes y animados por el cliente."
 ---
 
-Tres módulos con la misma forma: ninguno crea una entidad real, los tres se dibujan directo al cliente
-y los tres son dueños de la vida de lo que muestran.
+Ninguno de estos crea una entidad real. Todo se dibuja directo al cliente, y cada módulo es dueño de la
+vida de lo que muestra.
 
 | Módulo | Punto de entrada | Qué dibuja |
 |---|---|---|
 | Displays | `Displays.of(plugin)` | Displays de objeto, bloque, cabeza y texto que se mueven, giran y caen. |
-| NPCs | `Npcs.of(plugin)` | Cuerpos con forma de jugador: un cadáver, una estatua, un doble. |
-| Ragdolls | `Ragdolls.of(plugin)` | Un cuerpo cortado en sus seis partes, lanzado, abierto o llevado. |
+| Vfx | `Vfx.at(location)` | Una línea de tiempo de displays, rayos, sonidos, partículas y sacudidas, con avisos en el suelo y números flotantes. |
+| NPCs | `Npcs.of(plugin)` | Cuerpos con forma de jugador: un cadáver, una estatua, un doble, o un NPC colocado al que la gente hace clic. |
+| Ragdolls | `Ragdolls.of(plugin)` | Un cuerpo cortado en sus partes y coreografiado. Ver [Ragdolls](/docs/exylialib/ragdolls). |
 
-Los tres necesitan **PacketEvents**. Sin él el módulo lo dice una vez y no dibuja nada.
+Los [hologramas](/docs/exylialib/hologramas) y los [modelos que llevan los mobs](/docs/exylialib/mobs-y-modelos)
+se construyen sobre los mismos displays y tienen su propia página.
 
-<Callout type="note" title="Casi nadie toca estas APIs">
-A los tres se llega desde una línea de [secuencia](/docs/exylialib/secuencias), que es como los usa
-cada plugin cosmético del ecosistema. La API es para lo que la configuración no puede describir.
+Todos necesitan **PacketEvents**. Sin él el módulo lo dice una vez y no dibuja nada.
+
+<Callout type="note" title="Casi nadie toca la API">
+A los displays, los NPCs y los ragdolls se llega desde una línea de [secuencia](/docs/exylialib/secuencias),
+que es como los usa cada plugin cosmético del ecosistema. La API es para lo que la configuración no puede
+describir.
 </Callout>
 
 ## Por qué anima el cliente
@@ -45,69 +50,109 @@ effects:
   - '[CIRCLE] CRYING_OBSIDIAN;as:block;radius:0.3;points:20;size:0.1;size_to:1.4;to:0,0.2,0;life:0.5;light:15'
   # Un objeto lanzado hacia arriba, volteando, que vuelve a caer.
   - '[DISPLAY] TRIDENT;from:0,0.5,0;to:0,4,0;gravity:14;spin:3;axis:z;life:1.4;size:1.5'
+  # Una línea de texto que va con quien la lanzó, sobre un panel oscuro.
+  - '[DISPLAY] {primary}&lCRÍTICO;as:text;rise:0.6;life:1.2;ease:back_out;follow:true;background:#000000;background_alpha:96'
 ```
+
+`as:` dice qué es la primera palabra de la línea:
+
+| `as:` | La primera palabra es |
+|---|---|
+| `item` | Un material, o `{item:nombre}` para un objeto que el plugin entrega al reproducirla. La de por defecto en `[DISPLAY]`. |
+| `block` | Un material o un estado de bloque completo: `oak_stairs[facing=north]`. |
+| `head` | Una textura, `{victim}` o `{killer}`. |
+| `text` | Una línea de texto; los `%placeholders%` se rellenan en cada reproducción. |
 
 ### Cómo se mueve
 
 | Parámetro | Qué hace | Por defecto |
 |---|---|---|
-| `life:` | Segundos que existe. | `1` |
+| `life:` | Segundos que existe; `1500ms` también vale. | `1` |
 | `from:x,y,z` | Dónde empieza, relativo a su punto. | `0,0,0` |
 | `to:x,y,z` | Dónde termina. | `0,0,0` |
 | `rise:` | Atajo de `to:0,n,0`. | |
 | `gravity:` | Bloques por segundo al cuadrado, **sumados** a la línea. | `0`; lo vanilla ronda `32` |
-| `ease:` | `in`, `out`, `in_out`. | lineal |
+| `ease:` | La curva, abajo. Un nombre desconocido es lineal. | `linear` |
 | `spin:` | Vueltas en toda su vida; `x,y,z` voltea en tres ejes. | `0` |
-| `axis:` | Sobre qué eje gira un `spin` de un solo número. | `y` |
-| `orbit:` | Vueltas que cada punto da alrededor del ancla. | `0` |
+| `axis:` | Alrededor de qué eje gira un spin de un solo número. | `y` |
+| `orbit:` | Vueltas que da cada punto alrededor del ancla. | `0` |
 | `vary:` | Cuánto difieren de tamaño las piezas, como fracción. | `0` |
 | `size:` | Un número, o `x,y,z` para una placa, un pilar o una hoja. | `1` |
-| `size_to:` | El tamaño con el que acaba. | igual que `size` |
+| `size_to:` | El tamaño con el que acaba. | el de `size` |
 | `tilt:` `roll:` `turn:` | Una rotación fija, en grados. | `0` |
 | `face_out:` | Cada punto mira hacia fuera del centro. | `false` |
 | `pull:` | Cuánto viaja cada punto hacia el centro; negativo lo lanza hacia fuera. | `0` |
-| `glow:` | Color de contorno: un nombre, `#rrggbb` o un token `{paleta}`. | ninguno |
-| `light:` | Nivel de luz fijo, de `0` a `15`. | la luz del sitio |
-| `model:` | Custom model data. | ninguno |
-| `billboard:` | `FIXED`, `VERTICAL`, `HORIZONTAL`, `CENTER`. | `FIXED`, `CENTER` en texto |
-| `hold:` | Contexto del display de objeto: `0` el modelo, `5` cabeza, `7` tirado, `8` marco. | `0` |
+| `follow:` | `true` lo sienta sobre quien lanzó la secuencia, así va donde vaya; `victim` sobre la víctima. | se queda quieto |
+| `glow:` | Color del contorno: un nombre, `#rrggbb` o un token `{palette}`. | ninguno |
+| `light:` | Nivel de luz fijo, de `0` a `15`. | la luz de donde está |
+| `model:` | Custom model data, para objetos y cabezas. | ninguno |
+| `billboard:` | `FIXED`, `VERTICAL`, `HORIZONTAL`, `CENTER`. | `FIXED`, `CENTER` para texto |
+| `hold:` | Contexto del item display, de `0` a `8`: `0` el modelo, `5` cabeza, `7` tirado, `8` marco. | `0` |
 
 `orbit:` es el movimiento que una línea recta no puede expresar y el que separa una forma que aparece
-de una forma que está viva. `vary:0.4` da a las piezas tamaños que difieren hasta en dos quintos — es
-un hash de la posición de cada punto, no un número al azar, así que sale igual cada vez. `spin:0.5,2,1`
-voltea en tres ejes, porque nada lanzado en el mundo gira sobre exactamente uno.
+de una forma que está viva. `vary:0.4` da a las piezas tamaños que difieren hasta dos quintos — un hash
+de la posición de cada punto, no un número aleatorio, así que es igual en cada reproducción.
+`spin:0.5,2,1` voltea en tres ejes, porque nada que se lanza en el mundo gira sobre uno solo.
+
+### Curvas
+
+`linear`, `in`, `out` e `in_out` son las curvas simples. `back` se pasa y vuelve, `anticipate` retrocede
+antes de salir, `elastic` rebota como un muelle, `bounce` aterriza y bota, `snap` salta directo al final,
+`smooth` pasa por cada pose sin esquinas y `hold` se queda quieto hasta el final. Las familias `sine`,
+`quad`, `cubic`, `quart`, `quint`, `expo`, `circ`, `back`, `elastic` y `bounce` aceptan `_in`, `_out` o
+`_in_out`: `back_out`, `quart_in_out`. También se lee `easeOutQuart`.
+
+### Líneas de texto
+
+| Parámetro | Qué hace | Por defecto |
+|---|---|---|
+| `background:` | Color del panel, o `none`. | sin panel |
+| `background_alpha:` | El alfa del panel, de `0` a `255`. | `64` |
+| `opacity:` | Opacidad del texto, de `0` a `255`. | opaco |
+| `see_through:` | Se ve a través de las paredes. | `true` |
+| `text_shadow:` | Sombra como la del chat. | `false` |
+| `align:` | `left`, `center` o `right`. | `center` |
+| `line_width:` | Ancho de ajuste, en píxeles. | `200` |
+| `view_range:` | Un múltiplo de la distancia de entidades del cliente. Cualquier tipo de línea. | `1` |
+| `cull:` | Caja de culling, `cull:4` o `cull:4,3`, para una pieza ancha que desaparece en el borde de la pantalla. Cualquier tipo de línea. | la del cliente |
+
+<Callout type="note" title="Los text displays no dibujan panel">
+Un text display no tiene fondo salvo que se ponga uno. Antes de la 1.311 conservaba el panel gris del
+cliente; un efecto que dependía de él ahora quiere `background:#000000;background_alpha:64`.
+</Callout>
 
 ### Hacer que un movimiento aterrice
 
 <Steps>
   <Step title="ease:in para un golpe">
-    Retiene el movimiento y lo gasta tarde: carga y golpe, con los mismos dos números.
+    Retiene el movimiento y lo gasta tarde: una preparación y un impacto, con los mismos dos números.
+    `back_out` es lo contrario: llega pronto, se pasa y se asienta.
   </Step>
   <Step title="gravity: solo para escombros">
-    Se suma a la línea en vez de reemplazarla, así que `from:0,9,0;to:0,1,0;gravity:40` baja ocho
-    bloques **y luego** cae doce más, atravesando el suelo. La mitad de `gravity` por el cuadrado de
-    `life` es cuánto cae: un segundo en el aire quiere un `5`, no un `50`.
+    Se suma a la línea en vez de sustituirla, así que `from:0,9,0;to:0,1,0;gravity:40` baja ocho
+    bloques **y luego** cae doce más, atravesando el suelo. La mitad de `gravity` por la vida al
+    cuadrado es lo que cae: un segundo en el aire pide unos `5`.
   </Step>
-  <Step title="size: para dar peso">
-    `size:3,0.15,3` es un bloque aplastado en placa. Crecida desde nada es una onda de choque;
-    estirada al revés es un pilar o una hoja.
+  <Step title="size: para el peso">
+    `size:3,0.15,3` es un bloque aplastado en placa. Creciendo desde nada es una onda expansiva;
+    estirado al revés es un pilar o una hoja.
   </Step>
   <Step title="size_to: para la llegada">
-    Un poco más grande al impactar, o más pequeño en la carga. Es la diferencia entre un objeto que
-    llega y un objeto que se coloca.
+    Unos puntos más grande al impactar, o más pequeño en una preparación. Es la diferencia entre un
+    objeto que llega y un objeto que se coloca.
   </Step>
 </Steps>
 
 <Callout type="warning" title="Una hoja se apunta con roll:, no con tilt:">
-El modelo de un objeto es una placa plana en su propio plano XY, mirando al sur, con la punta de una
-espada arriba y a la derecha. `roll:135` la deja punta abajo, `roll:315` punta arriba y `roll:225`
-tumbada de punta sobre su cara. El giro va al revés que la regla de la mano derecha, así que a una
-hoja que sale horizontal hay que sumarle o restarle 90. `face_out:` y `turn:` se aplican **después**
-de `roll:` y `tilt:`, que es el orden que necesita un anillo. Un display de bloque es un cubo y no
+Un modelo de objeto es una placa plana en su propio plano XY, mirando al sur, con la punta de una
+espada arriba a la derecha. `roll:135` la pone con la punta abajo, `roll:315` con la punta arriba,
+`roll:225` de punta según su cara. El giro va al revés que la regla de la mano derecha, así que una
+hoja que sale horizontal pide sumar o restar 90. `face_out:` y `turn:` se aplican **después** de
+`roll:` y `tilt:`, que es el orden que necesita un anillo. Un display de bloque es un cubo y no
 necesita nada de esto.
 </Callout>
 
-Vale la pena poner `light:15` en casi todos los efectos: un display iluminado por el mundo es negro de
+`light:15` merece la pena en casi cualquier efecto: un display iluminado por el mundo es negro de
 noche, y un efecto que desaparece al anochecer es un efecto que los jugadores reportan como roto.
 
 ## La API de displays
@@ -123,56 +168,174 @@ DisplayMotion thrown = DisplayMotion.builder()
         .life(1200)
         .from(0, 7, 0).to(0, 0, 0)
         .spin(Rotation.Axis.Z, 3)
+        .ease(DisplayMotion.Easing.BACK_OUT)
         .build();
 
 displays.show(blade, thrown, where, observers);
 ```
 
-| Método | Qué hace |
+| `PluginDisplays` | Qué hace |
 |---|---|
-| `show(model, motion, at, viewers)` | Muestra un display; se quita solo al terminar el movimiento. Devuelve un `DisplayHandle`, o `null` si nadie puede verlo o falta PacketEvents. |
-| `removeAll()` | Todo lo que este plugin tenga en pantalla. |
-| `active()` | Cuántos tiene en pantalla. |
-| `isSupported()` | Si se pueden mostrar displays en este servidor. |
+| `show(model, motion, at, viewers)` | Muestra un display a una lista fija; se quita solo al acabar el movimiento. Devuelve un `DisplayHandle`, o `null` si nadie puede verlo o falta PacketEvents. |
+| `show(model, motion, at, radius)` | Un público **seguido**: quién está en rango se vuelve a leer cada medio segundo, y a quien se acerca se le manda a medio vuelo. |
+| `show(model, motion, at, radius, who)` | Seguido, con un filtro. |
+| `rideOn(model, motion, entity, viewers)` | Sentado sobre una entidad; el cliente lo lleva. |
+| `removeAll()` / `active()` / `isSupported()` | Todo lo que muestra este plugin, cuántos, si se puede. |
+
+`DisplayModel` es `item`, `block`, `text(component)` o `text(player -> component)` para una línea distinta
+por espectador, y luego `glow`, `light`, `billboard`, `held`, y para texto `background`, `opacity`,
+`seeThrough`, `textShadow`, `align` y `lineWidth`. `shadow(radius, strength)` da a cualquier display una
+sombra en el suelo, y solo existe en la API.
+
+### Movimientos
+
+| `DisplayMotion` | Qué es |
+|---|---|
+| `builder()` | `life`, `from`, `to`, `scale`, `rotation`, `spin`, `gravity`, `ease`, y `easePosition`, `easeRotation`, `easeScale` para una curva cada uno; `turnTo(rotation)` gira hacia una pose mientras avanza. |
+| `chain(a, b, c…)` | Movimientos seguidos, cada uno con su curva: subir, quedarse, caer. |
+| `between(from, to, millis, easing)` | Un deslizamiento entre dos keyframes, por el camino corto. |
+| `spline(keyframes, life)` | Una curva suave que pasa por cada keyframe. |
+| `of(keyframes, life)` / `still(life)` | Poses exactas, o ninguna. |
+| `looping(cycle, accel, maxSpeed)` | Se repite, opcionalmente acelerando en cada ciclo. |
+
+### Cambiar un display mientras se reproduce
+
+Cada llamada sobre un `DisplayHandle` es segura desde cualquier hilo.
+
+| `DisplayHandle` | Qué hace |
+|---|---|
+| `showing(item)`, `text(…)`, `glow(rgb)`, `light(level)`, `restyle(model)` | Cambia cómo se ve; el movimiento sigue intacto. |
+| `pose()` | Dónde está en pantalla ahora. |
+| `then(motion)` | Reproduce un movimiento nuevo desde ahí. |
+| `moveTo(keyframe, millis, easing)` | Se desliza a una pose, conservando la vida más larga que le quedara. |
+| `speedUp(factor)` | Reproduce el resto más rápido. |
+| `settle(millis)` | Vuelve suavemente a donde empezó y se va. |
+| `remove()` / `isShowing()` | Vida. |
+
+```java
+DisplayHandle reel = displays.show(DisplayModel.item(icon),
+        DisplayMotion.builder().life(10_000).spin(Rotation.Axis.Z, 40).build(), at, 24);
+
+reel.showing(nextIcon);       // cambia el objeto, el giro sigue
+reel.speedUp(2.0);            // el rodillo frena porque se le dice que acabe antes
+```
+
+## Vfx, avisos en el suelo e indicadores
+
+Un `Vfx` es un efecto escrito como línea de tiempo: qué pasa en qué milisegundo, reproducido como una
+unidad y cancelado como una unidad. Es como se construye en código el golpe de un jefe, la apertura de
+una caja o un sorteo.
+
+```java
+Vfx slam = Vfx.at(centre).track(48);
+Telegraphs.circle(slam, 0, centre, 5, 900, 0xFF9500);       // se llena en 0,9 s: el margen para esquivar
+
+DisplayMotion rubble = DisplayMotion.chain(
+        DisplayMotion.builder().life(150).to(0, 0.6, 0).ease(DisplayMotion.Easing.OUT).build(),
+        DisplayMotion.builder().life(300).from(0, 0.6, 0).to(0, -0.2, 0).ease(DisplayMotion.Easing.BOUNCE_OUT).build());
+
+slam.sound(900, Sound.ENTITY_GENERIC_EXPLODE, 0.8f, 0.6f)
+    .display(900, DisplayModel.block(Material.DEEPSLATE.createBlockData()).light(15), rubble, centre)
+    .shake(900, 10, 2, 50);
+
+VfxRun run = slam.play(plugin);
+run.cancel();                 // el lanzador murió preparando el golpe
+```
+
+| `Vfx` | Qué hace |
+|---|---|
+| `at(location)` | Empieza uno. |
+| `viewers(players)` / `nearby(radius)` / `track(radius)` | Quién lo ve: una lista, todos los que estén en rango al construirlo, o todos los que estén en rango mientras se reproduce. |
+| `lod(true)` | Menos detalle; se activa solo a partir de quince espectadores. |
+| `display(at, model, motion)` / `ride(at, model, motion, entity)` | Un display. |
+| `beam(at, from, to, model, thickness, life)` | Un rayo entre dos puntos. |
+| `sound`, `particle`, `firework` | Lo que dicen; el cohete es un paquete, no una entidad. |
+| `lines(at, sequence, target)` | Reproduce una secuencia compilada. |
+| `shake(at, radius, times, every)` | Sacude la cámara de los jugadores en rango. |
+| `call(at, runnable)` | Ejecuta código en ese momento. |
+| `play(plugin)` | Lo reproduce y devuelve un `VfxRun`: `cancel()`, `speedUp(factor)`, `isDone()`, `viewers()`. |
+
+El efecto entero cuenta contra `max-per-effect`; lo que se pasa se descarta y se cuenta en `dropped()`.
+
+**Los avisos en el suelo** muestran dónde va a caer algo. Son placas de cristal tumbadas en el suelo,
+iluminadas, y su relleno hace de temporizador:
+
+| `Telegraphs` | Forma |
+|---|---|
+| `circle(vfx, at, centre, radius, fillMillis, rgb)` | Un disco que se llena hacia fuera. |
+| `ring(…)` | Un anillo que se cierra hacia dentro. |
+| `cone(vfx, at, apex, yaw, radius, degrees, fillMillis, rgb)` | Un cono, para un tajo. |
+| `line(vfx, at, from, to, width, fillMillis, rgb)` | Una franja, para una embestida o una grieta. |
+| `cross(vfx, at, centre, length, fillMillis, rgb)` | Una cruz. |
+
+**Los indicadores flotantes** son los números que saltan de algo golpeado:
+
+```java
+Indicators numbers = Indicators.of(plugin).range(32);
+numbers.damage(entity, finalDamage, critical);
+numbers.heal(player, 4);
+numbers.text(entity, Text.component("{warning}Bloqueado"));
+```
+
+Los golpes del mismo tipo en menos de 0,3 s se juntan en un solo número sumado, como mucho flotan cuatro
+sobre una entidad, y el rango por defecto es de 24 bloques. El daño se dibuja en `{error}`, un crítico en
+`{warning}` con un ✦, y una curación en `{success}` como `+4 ❤`. Se llaman desde el hilo de la propia
+entidad.
 
 ## NPCs
+
+### Desde una secuencia
 
 ```yaml
 effects:
   # La víctima, boca abajo, con lo que llevaba al morir, durante cuatro segundos.
   - '[NPC] {victim};pose:lying;life:4;equip:true'
-  # De pie, girado hacia quien lo hizo, con contorno.
+  # De pie, girada hacia quien lo hizo, con contorno.
   - '[NPC] {victim};pose:standing;life:3;glow:{error};face:true'
 ```
 
 | Parámetro | Qué hace | Por defecto |
 |---|---|---|
-| `pose:` | `lying`, `standing`, `crawling`, `sneaking` o `spinning`. | `lying` |
+| `pose:` | `lying`, `standing`, `crawling`, `sneaking` o `spinning`. Una pose desconocida queda de pie. | `lying` |
 | `life:` | Segundos que se queda, de `0.2` a `120`. | `5` |
-| `equip:` | Lleva la armadura y el arma con las que murió. | `true` |
-| `glow:` | Color de contorno. | ninguno |
+| `equip:` | Lleva la armadura y el arma que tiene puestas. | `true` |
+| `glow:` | Color del contorno. | ninguno |
 | `y:` | Altura sobre el ancla. | `0` |
-| `face:` | Se gira hacia quien disparó la secuencia. | `true` |
-| `from:x,y,z` / `to:x,y,z` | Dónde aparece y dónde acaba. | `0,0,0` |
-| `over:` | Segundos que dura el movimiento. | `0.7` |
+| `face:` | Se gira hacia quien lanzó la secuencia. | `true` |
+| `from:x,y,z` / `to:x,y,z` | Dónde aparece y dónde termina. | `0,0,0` |
+| `over:` | Segundos que tarda el movimiento. | `0.7` |
+| `move_after:` | Segundos antes de que empiece el movimiento o el respingo. | `0` |
 | `ease:` | `out`, `in`, `in_out` o `linear`. | `out` |
 | `gravity:` | Bloques por segundo al cuadrado, sumados a la línea. | `0` |
 | `turn:` | Grados que gira sobre sí mismo durante el movimiento. | `0` |
-| `pose_to:` / `after:` | Una segunda pose, y cuánto tarda en llegar. | ninguna / `0.4` |
-| `hurt:` | Parpadea en rojo al aparecer. | `false` |
-| `spin:` | Grados por segundo que sigue girando, durante toda su vida. | `0` |
-| `bob:` / `bob_every:` | Bloques que sube y baja en bucle, y cuánto dura una subida y bajada. | `0` / `1.6` |
+| `pose_to:` / `after:` | Una segunda pose, y cuánto antes de ella. | ninguna / `0.4` |
+| `hurt:` | Da un respingo en rojo al aparecer. | `false` |
+| `spin:` | Grados por segundo que sigue girando, toda su vida. | `0` |
+| `bob:` / `bob_every:` | Bloques que sube y baja en bucle, y cuánto tarda una subida y bajada. | `0` / `1.6` |
 | `swing:` | Segundos entre golpes de brazo. | `0` |
-| `scale:` | Cómo de grande se dibuja, siendo `1` el tamaño de un jugador. | `1` |
-| `hold:` / `offhand:` | Un material puesto en cada mano. | el suyo |
+| `scale:` | A qué tamaño se dibuja, `1` tamaño jugador. | `1` |
+| `hold:` / `offhand:` | Un material en cada mano. | lo suyo |
 | `pitch:` | Inclinación de la cabeza en grados, negativo hacia arriba. | `0` |
 
-`spin:` es el que se usa cuando un cuerpo no debe asentarse: `turn:` es un giro repartido en el
-movimiento y luego se acaba; `spin:` no para nunca. Un cuerpo atrapado en un vórtice es `spin:220`,
+`spin:` es el que hay que usar cuando un cuerpo no debe asentarse: `turn:` es un giro repartido en el
+movimiento y luego terminado, `spin:` no para nunca. Un cuerpo atrapado en un vórtice es `spin:220`,
 uno colgando en la luz es `bob:0.3;spin:40`, y uno que sigue golpeando a lo que lo mató es
-`swing:0.5;hold:NETHERITE_SWORD`. `scale:` es el atributo de escala del propio cliente, así que crece
-el modelo entero — `0.4` es un muñeco y `2.5` es algo para lo que la sala se queda pequeña; necesita
-un cliente 1.20.5, y uno más viejo ve un cuerpo de tamaño normal.
+`swing:0.5;hold:NETHERITE_SWORD`. `scale:` es el atributo de escala del propio cliente (de `0.0625` a
+`16`), así que crece el modelo entero; necesita un cliente 1.20.5, y uno más viejo ve un cuerpo de
+tamaño jugador.
+
+Un cuerpo se lee mejor con más o menos **la mitad de la gravedad vanilla**. `pose:lying` es la pose en la
+que se dibuja a un jugador durmiendo, que es la única forma de poner un cuerpo en el suelo sin un modelo
+propio.
+
+<Callout type="note" title="Por qué un NPC no acepta un nombre de jugador">
+`{victim}` y `{killer}` leen la textura de la conexión que el servidor ya tiene — sin consulta, sin
+espera, sin fallo a medias. Un nombre sería una petición a Mojang, y un efecto no puede esperarla, así
+que la línea lo rechaza. Una textura en base64 se acepta, pero no lleva firma, y un cliente moderno
+dibuja una textura sin firmar como la skin por defecto.
+</Callout>
+
+### Desde código
 
 ```java
 PluginNpcs npcs = Npcs.of(this);
@@ -186,16 +349,11 @@ NpcHandle body = npcs.show(NpcModel.of(victim)
 body.lookAt(killer.getLocation());
 ```
 
-Un cuerpo se lee mejor a **la mitad de la gravedad vanilla**: uno real pesa más de lo que el ojo
-espera y va más lento de lo que dice el número. `pose:lying` es la pose de un jugador durmiendo, que
-es la única forma de dejar un cuerpo en el suelo sin un modelo propio; `pose:standing` con `face:true`
-es otro efecto completamente distinto: alguien que se ha parado y te está mirando.
-
-<Callout type="note" title="Por qué un NPC no acepta un nombre de jugador">
-`NpcModel.of(player)` lee la textura de la conexión que este servidor ya tiene: sin consulta, sin
-espera, sin fallar a medias. Un nombre sería una petición a Mojang, y un efecto no puede esperarla.
-Una textura en base64 escrita en el archivo sí vale, y se resuelve al leer el archivo.
-</Callout>
+`NpcModel` es `of(player)`, `of(name, texture, signature)` u `of(name)` para la skin por defecto, y luego
+`pose`, `glow`, `wearing`, `holding`, `offHand` y `scale`. Un `NpcMotion` pasado a `show` describe el
+mismo movimiento que la línea. El `NpcHandle` puede `look`, `lookAt`, `pose`, `moveTo` (un salto corto se
+desliza, uno largo salta), `teleportTo`, `using(true)` para levantar un arco o un escudo, `equip`,
+`swing`, `hurt` y `remove`.
 
 <Callout type="warning" title="Un NPC siempre tiene identidad propia">
 Se anuncia bajo un UUID propio, nunca el del portador: una segunda entrada bajo el id de un jugador
@@ -203,149 +361,162 @@ real le quita su propia skin de su propio cuerpo hasta que se reconecte. Tambié
 listar**, así que nunca aparece en el tab junto a jugadores reales.
 </Callout>
 
-## Ragdolls
+### NPCs colocados
 
-Un cuerpo que se deshace. El jugador se corta en sus seis partes — cabeza, torso, dos brazos, dos
-piernas —, cada una con los colores de su propia skin, y esas partes se mueven como una sola
-coreografía: lanzadas, abiertas, girando, aplastadas, deletreadas en letras o llevadas enteras.
-
-```yaml
-effects:
-  # Reventado. Las piezas salen hacia fuera, caen, rebotan y se quedan.
-  - '[RAGDOLL] {victim};intact:0.3;life:2.6;speed:4.2;up:6.4;spin:2.2;detail:2;light:15'
-  # Levantado, abierto y llevado hacia arriba. No queda nada en el suelo.
-  - '[RAGDOLL] {victim};pose:vortex;rise:3.0;open:0.7;turns:1.8;life:3.0;detail:2;glow:{highlight}'
-```
-
-La cabeza acepta `{victim}`, `{killer}` o una textura en base64, igual que `[NPC]`. Si lo que murió no
-era un jugador, la línea lo dice una vez y no dibuja nada.
-
-### Las poses
-
-| Pose | Qué pasa | También se escribe |
-|---|---|---|
-| `burst` | Reventado: las piezas salen hacia fuera, caen, rebotan y se quedan. La de por defecto. | |
-| `spread` | Se levanta del suelo y se abre, brazos y piernas en cruz, girando despacio — y luego se suelta. | `starfish`, `open` |
-| `knocked` | Abierto como `spread` y golpeado varias veces desde distintos lados. | `knock`, `batted`, `hit` |
-| `vortex` | Llevado: las piezas suben en espiral hacia dentro y desaparecen arriba. No queda nada. | `taken`, `ascend`, `spiral` |
-| `balloon` | La cabeza se hincha demasiado, se tambalea y revienta. El cuerpo espera debajo. | `bighead`, `swell`, `pop` |
-| `helicopter` | Los brazos se ponen planos sobre la cabeza como un rotor, el cuerpo gira al revés y se va hacia delante. | `chopper`, `rotor` |
-| `plane` | Brazos como alas, morro arriba, inclinándose mientras sube. Con subida negativa es un picado. | `fly`, `glide`, `jet` |
-| `flatten` | Clavado contra el suelo y dejado plano: una mancha con forma de jugador, no un montón de bloques. | `pancake`, `squash`, `flat` |
-| `melt` | Se hunde. Las piezas pierden su altura donde están y se van. Ni lanzamiento ni rebote. | `sink`, `dissolve` |
-| `sign` | Las piezas se colocan formando letras y aguantan ahí; luego se sueltan y caen. | `letters`, `spell`, `word` |
-| `thrown` | Enviado a algún sitio de una pieza, dando vueltas. Sin gravedad no vuelve. | `launched`, `ejected`, `carried` |
-
-### Sus parámetros
-
-| Parámetro | Qué hace | Por defecto |
-|---|---|---|
-| `pose:` | Cuál de las once de arriba. | `burst` |
-| `life:` | Segundos que duran las piezas. | `2.2` |
-| `intact:` | Segundos que el cuerpo aguanta entero antes de que le pase nada. | `0.3` |
-| `detail:` | Celdas en que se corta cada parte por eje, de `1` a `4`. `1` es un color por miembro. | `1` |
-| `size:` | Cómo de grande es; `1` es tamaño jugador. | `1` |
-| `light:` | Nivel de luz, de `0` a `15`. | la del mundo |
-| `glow:` | Color del contorno — un nombre, `#rrggbb` o un token `{palette}`. | ninguno |
-| `fade:` | Se encoge al final en vez de desaparecer. | `false` |
-| `settle:` | Deja de girar al aterrizar. | `true` |
-| `y:` | Altura sobre el ancla. | `0` |
-| `face:` | Se gira hacia quien lanzó la secuencia. | `true` |
-| `speed:` `up:` | Con qué velocidad salen las piezas, hacia fuera y hacia arriba. | `3.2` / `6.5` |
-| `spread:` | Cuánto se diferencian las piezas entre sí, de `0` a `1`. | `0.45` |
-| `gravity:` `bounce:` | Bloques por segundo al cuadrado, y la velocidad que conservan al caer. | `26` / `0.32` |
-| `spin:` | Vueltas por segundo. | `1.8` |
-| `rise:` `open:` | A qué altura cuelga un cuerpo sostenido, y cuánto abre brazos y piernas. | `1.1` / `0.55` |
-| `lift:` `hang:` `turns:` | Segundos que tarda en subir, segundos que cuelga y vueltas que da mientras cuelga. | `0.45` / `0.9` / `0.35` |
-| `hits:` `every:` `force:` | Para `knocked`: cuántos golpes, segundos entre ellos y cuántos bloques lo empuja cada uno. | `3` / `0.32` / `0.85` |
-| `swell:` | Para `balloon`: cuántas veces su tamaño alcanza la cabeza. | `3` |
-| `squash:` | Para `flatten`: qué queda de la altura de una pieza. | `0.14` |
-| `sign:` `letters:` | Para `sign`: qué deletrea el cuerpo, y cuánto mide una letra en bloques. | `EZ` / `2.4` |
-| `dir:` | Hacia dónde se lanza o vuela, en grados. `0` es este, `90` es sur. | la orientación del ancla |
+Un NPC colocado se queda donde se pone hasta que se quita: un tendero, alguien que da misiones, un guía
+del lobby. Se dibuja para cada jugador en rango y se quita cuando se alejan.
 
 ```java
-PluginRagdolls ragdolls = Ragdolls.of(this);
+PlacedNpc guide = npcs.place("guide", NpcSpec.builder()
+        .skin(NpcSkin.player("Notch"))
+        .look(NpcLook.EACH_VIEWER)
+        .lookRange(10)
+        .equip(EquipmentSlot.HAND, new ItemStack(Material.COMPASS))
+        .animations(animations)                  // leídas de la config, abajo
+        .build(), location);
 
-ragdolls.show(RagdollModel.of(victim).detail(2).light(15),
-        RagdollMotion.builder().pose(RagdollPose.VORTEX).rise(3.0).build(),
-        victim.getLocation(), observers);
+guide.visibleIf(player -> player.hasPermission("lobby.guide"));
+guide.onClick((player, click) -> menus.open(player, "guide"));
 ```
 
-<Callout type="tip" title="`detail` es el único parámetro caro de aquí">
-Cada parte se dibuja como una rejilla de `detail` × `detail`, así que seis partes cuestan
-`6 × detail²` displays: `detail:1` son seis, `detail:2` son veinticuatro y `detail:4` son noventa y
-seis. Dos ya se lee como un cuerpo a cualquier distancia desde la que alguien lo mire de verdad;
-cuatro es para un cuerpo que se queda quieto delante de la cámara.
-</Callout>
+| `NpcSpec` | Qué hace | Por defecto |
+|---|---|---|
+| `skin` | `NpcSkin.none()`, `player(name)`, `texture(value, signature)`, o `mirror()`: cada espectador ve su propia skin. | ninguna |
+| `pose` | `STANDING`, `SNEAKING`, `LYING`… | `STANDING` |
+| `scale` | De `0.0625` a `16`. | `1` |
+| `glow` | Contorno, dibujado en el más cercano de los dieciséis colores de equipo. | ninguno |
+| `equip(slot, item)` | Lo que lleva puesto y en las manos. | nada |
+| `look` | `FIXED` mira hacia donde apunta su ubicación; `NEAREST` gira una cabeza hacia el jugador más cercano; `EACH_VIEWER` se gira hacia cada jugador en su propia pantalla. | `FIXED` |
+| `lookRange` | Cuánto tiene que acercarse un jugador para que lo mire. | `8` |
+| `viewDistance` | Bloques; más allá no se dibuja. | `48` |
+| `sitting` | Se sienta en un asiento invisible, con las caderas en la ubicación. | `false` |
+| `animations` | Animaciones de clic, de espera y de saludo. | ninguna |
 
-<Callout type="note" title="Una pose es coreografía, no física">
-Todas se resuelven de antemano y se le entregan al cliente como poses, así que lo que las separa es
-lo que el archivo quería decir, nunca lo que el servidor podía permitirse. Aquí no se simula nada, y
-no se tickea nada.
-</Callout>
+- **Rango.** Quién lo ve se calcula fuera del hilo principal cuatro veces por segundo. `visibleIf` se
+  comprueba en cada pasada y solo debe leer memoria.
+- **Skins.** `player(name)` lee la skin de un jugador conectado de su conexión, y si no se la pide a
+  Mojang fuera del hilo principal, una vez por arranque. El NPC lleva la skin por defecto hasta que llega
+  y entonces se redibuja. Una `texture` sin su firma se dibuja como la skin por defecto.
+- **La cabeza.** Sin nadie en rango, una cabeza girada vuelve a su sitio en más o menos un segundo.
+- **Sin nombre ni entrada en el tab.** El nametag siempre está oculto y la colisión desactivada. Una vez
+  dibujado sale de la lista de jugadores, así que los comandos dejan de autocompletarlo.
+- **Clics.** Solo puede hacerle clic un jugador que lo tenga dibujado, y un segundo clic en menos de
+  200 ms se descarta. `onClick` se ejecuta en el hilo de ese jugador con un `Click`.
+
+`PlacedNpc` también tiene `moveTo`, `update(spec)`, `swing`, `hurt`, `play(animation)`,
+`perform(performance)`, `isViewing`, `viewerCount` y `remove`; `npcs.placed(id)`, `allPlaced()` y
+`unplace(id)` los encuentran.
+
+### Animaciones
+
+`NpcAnimations` es una sección de configuración, así que los dueños del servidor las ponen por NPC:
+
+```yaml
+animations:
+  left-click: 'flinch'
+  right-click: 'wave'
+  idle: 'nod'
+  idle-every: 20s
+  greet: 'wave'
+  greet-range: 4.0
+  greet-cooldown: 30s
+  perform-range: 24.0
+```
+
+| Clave | Cuándo se reproduce | Por defecto |
+|---|---|---|
+| `left-click` / `right-click` | Al hacer clic, para todos los que lo ven, antes del manejador del clic. | ninguna |
+| `idle` / `idle-every` | Con un temporizador, solo mientras alguien lo ve. `0` nunca. | ninguna / `20s` |
+| `greet` | Para un jugador que se acerca, y **solo lo ve ese jugador**. | ninguna |
+| `greet-range` / `greet-cooldown` | Cuánto acercarse, y cuánto hasta saludar otra vez al mismo jugador. | `4` / `30s` |
+| `perform-range` | Cuánto tiene que acercarse un jugador para que se le muestre una actuación. | `24` |
+
+Un valor es un preset — `wave`, `wave-offhand`, `nod`, `bow`, `flinch`, `punch`, `cheer` — o movimientos
+separados por comas, con esperas entre ellos: `swing, 250ms, offhand, 1s, crouch, 500ms, stand`. Los
+movimientos son `swing`, `offhand`, `hurt`, `crouch` y `stand`; una animación que se agachó siempre acaba
+de pie. Son paquetes vanilla y no necesitan resource pack.
+
+### Actuaciones de ragdoll
+
+Un valor con `:` es una **actuación**: el NPC se oculta y un [ragdoll](/docs/exylialib/ragdolls) con su
+skin baila en su lugar, y luego el NPC vuelve. Conserva su hitbox todo el rato, así que se le puede seguir
+haciendo clic.
+
+| Valor | Qué se reproduce |
+|---|---|
+| `anim:wave` | `plugins/<TuPlugin>/animations/wave.json`. |
+| `emote:<id>` | Un emote que el plugin resuelve con `npcs.emotes(id -> …)`. |
+| `follow:1;keys:…` | Opciones de `[RAGDOLL]` que acaban en `keys:`. |
+
+Las opciones no escritas son `intact:0;follow:1;breathe:1`. Se reproduce una actuación a la vez; un bucle
+para a los ocho segundos salvo que se diga otra cosa. Una actuación se salta mientras el NPC está sentado,
+cuando no hay nadie dentro de `perform-range` o cuando su emote no existe. Mover o cambiar el NPC la
+termina.
+
+### Clics como configuración: `Interactions`
+
+Los NPCs colocados y los hologramas entregan un clic como un `Click` — `LEFT`, `RIGHT`, `SHIFT_LEFT` o
+`SHIFT_RIGHT`. `Interactions` convierte una lista de líneas de configuración en lo que hace ese clic:
+
+```java
+Interaction onGuide = Interactions.compile(this, config.guideClick(), "npc guide");
+guide.onClick((player, click) -> onGuide.run(player, click, Map.of("npc", "guide")));
+```
+
+```yaml
+guide-click:
+  - 'right:[SOUND] UI_BUTTON_CLICK;0.6;1.4'
+  - 'right:menu open guide'
+  - 'shift_left:console: warp %player_name% spawn'
+  - 'left:[MESSAGE] {error}Oye, que duele.'
+```
+
+Una línea puede empezar con un filtro — `left:`, `right:`, `shift_left:`, `shift_right:`, `shift:`,
+`any:`, o varios como `left,right:` — y sin filtro vale para cualquier clic. Luego `[DELAY] 1s`,
+`[SERVER] nombre`, `[TELEPORT] world;x;y;z`, `[ACTION] ns:id`, cualquier otro `[TOKEN]` reproducido como
+línea de secuencia para quien hizo clic, o un comando: suelto o `player:` como el jugador, `console:`,
+`player-proxy:` o `console-proxy:`. Los `%placeholders%` se resuelven para quien hizo clic, primero desde
+el mapa `data`. Un paso rechazado corta las líneas que vienen detrás. `Interactions.token(plugin, name,
+token)` añade un token propio del plugin.
+
+## Ragdolls
+
+Un cuerpo cortado en sus seis partes y movido como coreografía: lanzado, abierto, deletreado en letras,
+bailado fotograma a fotograma o importado de Blockbench y Emotecraft. Tienen su propia página:
+[Ragdolls](/docs/exylialib/ragdolls).
 
 ### Skins reales: `ragdoll-skin-quality`
 
-Un ragdoll lleva la skin real del jugador sin configurar nada: ni clave ni cuenta. La cabeza es la cara
-real del jugador, y el resto del cuerpo se corta en piezas, y cada una se convierte en textura con
-[Exylia Skins](https://skins.exylia.net), un servicio gratuito con una caché compartida por todos los
-servidores. Una pieza que cualquier servidor ya hizo llega al momento; una nueva espera su turno y se
-dibuja con bloques del color más parecido hasta que llega. Lo único que se configura es lo fino que se
-corta el cuerpo, en el `plugins/ExyliaLib/config.yml` de la propia ExyliaLib:
+Los ragdolls llevan la skin real del jugador a través de Exylia Skins, sin clave ni cuenta. El ajuste y
+cómo funciona están en la página de [Ragdolls](/docs/exylialib/ragdolls#skins-reales-ragdoll-skin-quality).
 
-```yaml title="plugins/ExyliaLib/config.yml"
-ragdoll-skin-quality: normal
-```
-
-| Calidad | Piezas por skin | Cómo se ve |
-|---|---|---|
-| `high` | 18 | Cubos de 4 píxeles; un cuerpo que se rompe sale en 19 piezas. |
-| `normal` (por defecto) | 10 | Cada píxel de la skin, exacto; 11 piezas más grandes. |
-| `low` | 5 | Una cabeza por parte; se pierde un tercio de las filas. |
-
-- **Se hace una vez, para todos.** Una pieza se nombra por el hash de sus píxeles y se sube una sola
-  vez, para todos los servidores, use la calidad que use cada uno. Cada plugin que muestra cuerpos
-  guarda además las piezas que recibió en su propia base de datos (su `database.yml`, tabla
-  `exylia_ragdoll_skins`), así que al reiniciar no pide nada.
-- **Se prepara al entrar.** Una skin se prepara cuando entra su dueño. Una skin cambiada en mitad de
-  la sesión (por ejemplo con `/skin` de SkinsRestorer) se vuelve a preparar la siguiente vez que se lee.
-- **Modo offline.** Un jugador sin skin lleva la skin por defecto que el juego da a su UUID (Steve,
-  Alex y las demás skins por defecto, anchas o finas). Las skins de SkinsRestorer se leen del perfil
-  del jugador, también en modo offline.
-- **Nunca se espera.** Una pieza cuya textura aún no ha llegado se dibuja con bloques hasta que llega.
-- **Se aplica en caliente.** `/exylialib reload` lee la calidad, y un cambio vuelve a preparar las
-  skins de todos los conectados.
-
-<Callout type="note" title="Si venías de una clave de MineSkin">
-Las versiones anteriores necesitaban una `mineskin-key`. Ya no se usa: la librería la quita sola del
-`config.yml` la próxima vez que arranca.
-</Callout>
-
-## Lo que garantizan los tres
+## Lo que garantizan
 
 | | |
 |---|---|
 | **Nada que el servidor cargue** | No son entidades: ni se tickean, ni se guardan, ni están en ningún chunk, ni tienen hitbox. Dos jugadores juntos pueden ver cosas distintas. |
-| **Nada se puede quedar atrás** | Nada más los limpiaría, así que el módulo es dueño de su vida: se van al acabar el movimiento o la vida, al desactivar el plugin o al parar el servidor. No hay un cuarto caso. |
+| **Nada se puede quedar atrás** | Nada más los limpiaría, así que el módulo es dueño de su vida: se van al acabar el movimiento o la vida, al desactivar el plugin o al parar el servidor. |
 | **Un temporizador, no uno por objeto** | Todos los displays del servidor se mueven desde un único driver asíncrono. |
 | **El giro se trocea por ti** | El cliente gira por el arco más corto, así que los giros se parten en sextos de vuelta; `spin:3` sale bien sin que nadie lo sepa. |
-| **Trabajo con techo** | Un archivo que pide doscientas vueltas se limita a cuarenta y ocho poses en vez de mandar doscientos paquetes. |
+| **Trabajo con techo** | Un movimiento corto se limita a cuarenta y ocho poses, y uno largo a una pose por tick hasta 256, en vez de mandar lo que pida el archivo. |
 | **PacketEvents o nada** | No hay respaldo que valga la pena fingir. |
 
 ## El techo de lo que pueden costar los displays
 
-`plugins/ExyliaLib/displays.yml` tiene dos números para todo el servidor, porque lo que se le puede
+`plugins/ExyliaLib/displays.yml` tiene tres números para todo el servidor, porque lo que se le puede
 mandar a un cliente es un hecho del servidor y no del plugin que lo mandó.
 
-```yaml
+```yaml title="plugins/ExyliaLib/displays.yml"
 max-viewer-displays: 20000
 max-per-effect: 128
+max-model-parts: 30000
 ```
 
 | Clave | Qué limita |
 |---|---|
 | `max-viewer-displays` | Pares display-**espectador** a la vez: un display que ven treinta jugadores cuenta como treinta. Los efectos que se pasarían se descartan antes de construir sus paquetes, así que una arena llena pierde la cola de un efecto y no su tick rate. La consola lo dice como mucho una vez por minuto. `0` quita el techo. |
-| `max-per-effect` | Cuántos displays puede dibujar una sola forma — un `points:900` escrito a mano se caza al cargar y no en el cable. |
+| `max-per-effect` | Cuántos displays puede dibujar una sola forma o un `Vfx` — un `points:900` escrito a mano se caza al cargar y no en el cable. |
+| `max-model-parts` | Cubos de [modelo](/docs/exylialib/mobs-y-modelos) por espectadores. Pasados tres cuartos, los modelos se dibujan con menos detalle; no se rechaza nada. `0` quita el techo. |
 
 El presupuesto cuenta espectadores porque es el número que llega a la red: doscientos displays en una
 esquina vacía no son nada, y esos mismos doscientos con treinta jugadores alrededor son seis mil
@@ -363,7 +534,7 @@ ningún plugin dependa de WorldGuard:
 | `hit-effects` | Que suenen efectos de golpe por un impacto dado dentro de la región. |
 | `arrows-effects` | Los efectos de lanzamiento, estela e impacto de flechas dentro de la región. |
 
-Se registran desde el `onLoad` de la propia librería, porque WorldGuard cierra su registro en cuanto
-arranca. En un servidor sin WorldGuard cada flag permite, y una flag no registrada, un mundo que no
-existe o un registro que se negó responden igual: una puerta que no se puede preguntar nunca quita
-nada.
+Se registran desde el `onLoad` de la propia librería, porque WorldGuard bloquea su registro en el
+instante en que se activa. En un servidor sin WorldGuard toda flag permite, y una flag sin registrar,
+un mundo que falta o un registro rechazado responden igual: una puerta a la que no se puede preguntar
+nunca retiene nada.

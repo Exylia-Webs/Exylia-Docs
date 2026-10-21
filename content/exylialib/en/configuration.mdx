@@ -49,13 +49,43 @@ unit and in what range — `Seconds a player stays tagged after being hit`, not 
 | `reload()` | Re-reads the file. Returns the problems found; an empty list means clean. |
 | `onReload(consumer)` | Runs after each successful reload. |
 | `save()` | Writes the current snapshot to disk. |
-| `update(operator)` | Change and persist in one step. |
+| `update(operator)` | Change and persist in one step, on the caller's thread. |
+| `updateAsync(operator)` | The same, with the write off the caller's thread. |
+| `set(key, value)` | Writes one value by its dotted key, then reloads so it is checked like anything the owner typed. `null` removes the key. Returns the problems found. |
 | `issues()` | Problems from the last load. |
 | `schema()` | A read-only description of the record type. |
 
 ```java
 settings.update(current -> current.withHost("10.0.0.5"));
+config.set("forced-flags.pvp", "DENY");          // for an in-game editor that knows only the key
 ```
+
+`updateAsync` is for a file an in-game editor saves on every click. The new values are visible to `get()`
+before it returns; only the write waits. Writes of one file run one at a time, and a burst of changes made
+before the write starts is written once, with the latest values. `save`, `update`, `set` and `reload`
+write a pending change first, and whatever is pending is written when the plugin disables.
+
+## Lengths of time
+
+```java
+public record Settings(
+        Duration lasts,                         // the shape for anything new
+        @Time int timeoutSeconds,               // a number that was already there
+        @Time(Time.Unit.TICKS) long interval) { }
+```
+
+```yaml
+lasts: 1m30s
+timeout-seconds: 5m     # 300, as far as the record is concerned
+interval: 1s            # 20, because this key is written in ticks
+```
+
+The owner may write `30s`, `1m30s`, `500ms`, `40t`, `2h`, `2d`, `1w`, `1mo` or `2.5h`. **A bare number
+never changes meaning**: `@Time` declares the unit the key has always been written in, which is both what
+a unitless number means and the unit the record is handed (`SECONDS` unless said otherwise; `MILLIS`,
+`TICKS`, `MINUTES`, `HOURS`, `DAYS`). A `Duration` needs no annotation, reads a bare number as seconds, and
+is written back as `1m30s`; an annotated number is written back as a number. Prefer `Duration` for anything
+new.
 
 ## Versions and migrations
 
@@ -92,9 +122,80 @@ exactly why reshaping a section without a migration silently throws away whateve
 written there. Rename in the record and migrate in the same commit.
 </Callout>
 
+### Moving keys to another file
+
+`Configs.moveTo` is a migration that carries keys out of this file and into another file of the same
+plugin — usually text leaving `config.yml` for a translated `messages.yml`:
+
+```java
+Configs.define(this, "config", Settings.class)
+        .version(3)
+        .migration(2, Configs.moveTo(this, "messages", Map.of(
+                "combat.action-bar", "combat.action-bar")))
+        .load();
+```
+
+The owner's values arrive at the new paths whichever file loads first; a section moves with everything
+under it. A value still at its English default is not carried, so a translated file keeps its translation.
+
 `transform` is the right tool when a value's *meaning* changed rather than its place — a token that
 was renamed, a number that was in ticks and is now in seconds. It rewrites what is there instead of
 replacing it with the shipped default, so an owner's wording and colours survive.
+
+## Languages
+
+A file declared `translated()` lives in the plugin's language folder rather than at its root:
+
+```java
+Configs.define(this, "config", Settings.class)                 // has a String language, default "default"
+        .version(4).migration(3, Languages.ADOPT_EXISTING).load();
+Configs.define(this, "messages", Messages.class).translated().load();
+Languages.refresh(this, MyPlugin.class, "menus");
+File main = Languages.file(this, "menus/main.yml");
+```
+
+| Call | What it does |
+|---|---|
+| `translated()` | The file is `lang/<code>/<name>.yml` for the plugin's language, and follows it on reload. The record holds the English defaults; a `lang/<code>/<name>.yml` packaged in the jar replaces the lines it translates. |
+| `Languages.code(plugin)` | The plugin's language: its own `language` key, or ExyliaLib's when that is `default`, or `en`. |
+| `Languages.use(plugin, code)` | Sets the language from code, for a plugin that keeps its settings elsewhere, such as a database. Wins over `config.yml`; `null` or `default` goes back to it. Reload the plugin's files afterwards. |
+| `Languages.refresh(plugin, anchor, resource)` | Installs and updates a translated file or folder the owner edits, as `BundledFiles.refresh` does. |
+| `Languages.replace(plugin, anchor, resource)` | Rewrites a translated folder from the jar on every start, dropping edits — for admin screens the plugin owns. |
+| `Languages.file(plugin, resource)` / `path(…)` | Where a translated file lives on disk. |
+| `Languages.ADOPT_EXISTING` | The migration for the version that introduces `language`: a server that already ran the plugin gets `language: custom`, and its existing `messages.yml` and `menus/` move into `lang/custom/`. |
+
+Packaged files go under `lang/<code>/` in the jar. English is the base every other language is laid over,
+so a line not translated yet still arrives, in English. `config.yml` must be loaded before the files that
+follow it.
+
+## Default changes
+
+Every config remembers the defaults its owner last reviewed, in `.defaults/configs/`, and compares them on
+each load. A **new key** is added. A **changed or removed default** on a key still at its reviewed value is
+left alone and listed in [`/exylialib updates`](/docs/exylialib/library-config#changed-defaults), where the
+owner applies or keeps it. A value the owner changed is never listed. Nothing for the plugin to do.
+
+## Bundled files
+
+Files a plugin ships for the owner to edit, rather than generates from a record — menus, catalogues of
+effects or items — follow the same rules:
+
+```java
+BundledFiles.refresh(this, MyPlugin.class, "menus");        // a directory
+BundledFiles.refresh(this, MyPlugin.class, "effects.yml");  // one file
+```
+
+Call it before reading the files, on enable and on reload.
+
+- A **missing file** is written, every time it is missing.
+- A **new key** is added to the owner's file, comments included.
+- A **changed or removed default** on a key still at its reviewed value waits in `/exylialib updates`.
+- Anything the owner changed or deleted is never touched. Reviewed defaults live in `.defaults/files/`.
+- A file whose layout changed too much to merge declares it with a higher `menu-version` (or
+  `defaults-version`) at its root. An untouched file is replaced at once; an edited one waits as a single
+  change, and applying it keeps the old file as `<name>.v<old version>`.
+- A file on disk that does not parse is left untouched and reported. A file that is not YAML is only
+  written when missing.
 
 ## Blocks the owner names
 

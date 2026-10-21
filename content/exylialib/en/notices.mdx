@@ -1,0 +1,112 @@
+---
+title: "Notices and toasts"
+description: "Advancement toasts for anything worth noticing, and messages left for a player who may not be online to read them."
+---
+
+Two ways to tell a player something without a plain line of chat: a **toast** pops in the corner now,
+a **notice** waits for them if they are away.
+
+## Toasts
+
+The advancement popup in the top-right corner:
+
+```java
+Toasts.send(player, Material.EMERALD, "{success}Sold {highlight}x16 Diamond", Toasts.Frame.GOAL);
+Toasts.send(player, crateKeyItem, "{primary}&lKEY RECEIVED", Toasts.Frame.TASK);
+```
+
+| | |
+|---|---|
+| Icon | A `Material` (air is drawn as paper) or an `ItemStack`, so custom models and heads show. |
+| Frame | `TASK` (square, silent), `GOAL` (rounded), `CHALLENGE` (spiked, with the challenge fanfare). `Frame.of(name)` reads one ignoring case, `TASK` when unknown. |
+| Title | Exylia formatting — palette tokens, `&` codes, gradients — filled per player. About 25 characters fit on a line; the client wraps the rest onto a second. |
+
+In a sequence it is one line, with `who:` as an optional last segment like `[TITLE]`:
+
+```yaml
+- '[TOAST] NETHER_STAR;CHALLENGE;{highlight}&lLEGENDARY DROP;who:both'
+```
+
+The toast is a fake advancement that exists on one client for one packet: it never shows in the
+advancements screen, the server grants nothing, nothing is saved and nothing is announced in chat.
+Safe from any thread.
+
+<Callout type="note" title="Without PacketEvents">
+The title is shown the way ExyliaLib's `config.yml` says, and the plugin never has to check which:
+
+```yaml
+toasts:
+  # What a toast becomes without PacketEvents: action-bar, title, chat or none.
+  fallback: action-bar
+```
+
+`title` shows it as a subtitle under an empty title.
+</Callout>
+
+## Notices
+
+Messages left for a player — mail for words, not items. A sale, an expired auction, a clan invite:
+whatever a plugin wants a player to read, whether or not they are online.
+
+```java
+notices = Notices.of(this)
+        .summary("sold", (player, sold) -> List.of(Text.from(this,
+                "%prefix% {letters}While you were away {highlight}%count% {letters}items sold for {success}%total%")
+                .with("%count%", sold.size())
+                .with("%total%", Formats.money(sold.stream().mapToDouble(n -> n.number("price")).sum()))))
+        .click("sold", "/market claim")
+        .live("sold", (player, notice) ->
+                Toasts.send(player, Material.EMERALD, "{success}Item sold", Toasts.Frame.GOAL));
+
+// any thread
+notices.send(seller, "sold", "%prefix% {letters}Sold {highlight}%item% {letters}for {success}%price%",
+        Map.of("item", "Diamond x16", "price", 4500));
+```
+
+| Method | What it does |
+|---|---|
+| `Notices.of(plugin)` | The plugin's notices; the same instance on every call. |
+| `send(uuid, category, message)` | Leaves a message. |
+| `send(uuid, category, message, values)` | The same with `%key%` values, kept apart so a summary can add them up. |
+| `summary(category, summary)` | Collapses a category's waiting notices into a few lines on join. |
+| `click(category, command)` | Every join line of the category runs the command when clicked. |
+| `channel(category, channel)` | A player who muted that channel in `/settings` is not shown the category, live or on join. |
+| `live(category, hook)` | Runs on the player's thread after each notice of the category shown **live** — a sound, a toast, a title. Not run for the join summary, where ten toasts at once would be noise. |
+| `footer(uuid -> lines)` | Lines after the join summary, or alone — "you have 3 items to claim". |
+
+A `Notice` gives a summary or a hook its `category()`, `message()`, `values()`, `sentAt()`,
+`text(plugin)` (the message filled), `fill(text)` (another template, same values) and `number(key)`.
+
+### Where a notice goes
+
+| The player is | What happens |
+|---|---|
+| Online on this server | Shown at once, as its own message. |
+| Online on another server sharing the database | Written, then announced over Redis; their server shows it. Without Redis it waits for their next join. |
+| Offline | Stored in the plugin's database (`exylia_notices`) and shown on their next join, three seconds in so it is not buried under join messages. |
+
+### The join summary
+
+Waiting notices are grouped by category, oldest first. A category with a `summary` shows whatever lines
+it returns. One without shows a lone notice as itself, and two or more as a list:
+
+```
+EXYLIA • While you were away (7)
+ ▎ Sold Diamond x16 for $4,500
+ ▎ ...                          (five at most)
+ ▎ and 2 more
+```
+
+A summary that throws is reported and the category is listed instead. Each notice is shown **exactly
+once**: it is taken by deleting its row, so two servers racing for one player never both show it.
+
+### Limits
+
+- 500 waiting notices per player and plugin; past that a new one is refused and the console says so.
+- A notice nobody read is deleted after `notices.keep-days` (30 by default, at least 1) in
+  ExyliaLib's `config.yml`.
+- A category is 1 to 64 characters.
+- Messages are stored raw and rendered by the server that shows them, with its palette and prefix.
+
+Every method is safe from any thread; the database is only touched asynchronously. Everything stops
+with the plugin.

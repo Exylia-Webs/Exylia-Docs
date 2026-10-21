@@ -58,6 +58,13 @@ tasks.runTimer(0L, 20L, handle -> {
 tasks.runAtEntity(player, () -> give(player, kit), () -> queueForLater(player));
 ```
 
+An entity timer stops on its own once its entity is gone. A **player** counts as gone only when they
+disconnect, so a per-player timer keeps running through death and respawn — on Paper exactly as on
+Folia.
+
+`tasks.cancelAll()` cancels everything the plugin scheduled, and `tasks.activeTasks()` says how many
+are still running.
+
 ## Asking where you are
 
 ```java
@@ -71,7 +78,7 @@ act(player);
 | Call | Answers |
 |---|---|
 | `isGlobalThread()` | Whether this is the global thread. |
-| `isOwnedBy(entity)` | Whether this thread may touch that entity. |
+| `isOwnedBy(entity)` / `isOwnedBy(location)` | Whether this thread may touch that entity or location. |
 
 Coming back from a database query is the usual reason to ask: the future completes on a pool thread,
 and everything you want to do with the answer belongs to the player.
@@ -79,6 +86,18 @@ and everything you want to do with the answer belongs to the player.
 ```java
 kits.find(id).thenAccept(found ->
         tasks.runAtEntity(player, () -> found.ifPresent(kit -> give(player, kit))));
+```
+
+Answers typed into an [input](/docs/exylialib/input-and-editors) arrive on whichever thread the
+transport used. `answered` brings both outcomes back to the player's thread, and reopens the previous
+screen only when the player cancelled — not on a timeout, a disconnect or a newer request:
+
+```java
+PluginInputs inputs = Inputs.of(this);
+
+inputs.answered(player, inputs.text(player, "Name the home").open(),
+        name -> homes.create(player, name),   // on the player's thread
+        () -> homesMenu.open(player));        // only when they cancelled; may be null
 ```
 
 ## Ticks
@@ -90,3 +109,7 @@ everywhere a Bukkit API would, so a number copied from an old config still means
 
 A plugin's tasks are cancelled when it disables. Menus are closed first, so a button cannot answer one
 last click into a dying classloader.
+
+Scheduling from a plugin that is already disabled — which the server's own scheduler answers by
+throwing — runs a one-shot task (`runAsync` included) inline, on the thread that asked, so a save or a
+cleanup issued from `onDisable` still happens. A timer is dropped and its handle comes back cancelled.

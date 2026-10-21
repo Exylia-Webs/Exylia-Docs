@@ -1,7 +1,9 @@
 ---
-title: "Cosmetic rules"
-description: "One question every cosmetic plugin asks, and one answer every mode plugin gives."
+title: "Cosmetics"
+description: "One question every cosmetic plugin asks, buying a cosmetic with any currency, and places that show cosmetics off on their own."
 ---
+
+## Cosmetic rules
 
 A server accumulates cosmetic plugins — armour skins, armour trims, kill effects, hit effects, arrow
 trails — and every one of them draws whatever the player happens to be wearing or doing. That is right
@@ -12,27 +14,119 @@ is a participant.
 ```java
 // A plugin that lends a player somebody else's body says so once:
 Cosmetics.rule(this, player -> !staffMode.isActive(player.getUniqueId()));
+Cosmetics.refresh(player);              // after the player's answer changed
 
 // And every cosmetic plugin asks the same question:
 if (!Cosmetics.shows(player)) return null;
+Cosmetics.onChange(this, player -> redraw(player));
 ```
 
 | Method | What it does |
 |---|---|
 | `Cosmetics.rule(plugin, rule)` | Registers this plugin's rule, replacing its previous one. |
-| `Cosmetics.clear(plugin)` | Drops it. |
+| `Cosmetics.clear(plugin)` | Drops its rule and its listener. |
 | `Cosmetics.shows(wearer)` | Whether this player's cosmetics should be drawn at all. |
+| `Cosmetics.refresh(wearer)` | Announces that a player's answer changed. Called by the plugin whose rule changed. |
+| `Cosmetics.onChange(plugin, changed)` | Tells a cosmetic plugin to re-read that one player. |
 
 `CosmeticRule` is a functional interface: `boolean shows(Player wearer)`.
 
-## Why it is a rule and not an integration
-
-Without it the fix is pairwise: every cosmetic plugin learns the name of every mode plugin, and each
-new plugin on either side is another integration nobody remembers to write. One rule from the mode and
-one question from the cosmetic covers a plugin written later on both sides.
+A cosmetic plugin usually decides what to draw on an event — a piece equipped, a join — and draws from
+a cache after that. Without `refresh` and `onChange`, somebody who goes on duty a tick later keeps their
+skin for the whole session.
 
 | | |
 |---|---|
-| **Every rule has to agree** | Combined with AND, like a chat rule: cosmetics are shown only while no plugin objects. |
+| **Every rule has to agree** | Combined with AND: cosmetics are shown only while no plugin objects. A rule that throws counts as no objection. |
 | **One rule per plugin** | Registering again replaces it, and a plugin's rule is dropped when it is disabled. |
-| **It hides nothing by itself** | Nothing here reaches into a cosmetic plugin's packets. Each one asks `shows` where it decides what to draw and skips its own work; a cosmetic plugin that never asks is unaffected. |
+| **It hides nothing by itself** | Each cosmetic plugin asks `shows` where it decides what to draw; one that never asks is unaffected. |
+
+## Buying a cosmetic
+
+Confirm, charge, grant, and refund if the grant fails, in any currency.
+
+```java
+Map<String, Price> tierPrices = Price.parseAll(config.get("shop.tier-prices"));
+
+Price.resolve(Price.parse(entry.price()).orElse(null), entry.tier(), tierPrices).ifPresent(price ->
+        CosmeticPurchases.confirmAndPurchase(this, player, entry.id(), entry.name(), price, crates)
+                .thenAccept(result -> {
+                    if (result.bought()) tasks.runAtEntity(player, () -> menu.open(player));
+                }));
+```
+
+A price is written as a number or with a currency, per cosmetic or per tier:
+
+```yaml
+price: 500                              # the default currency
+price: {amount: 500, currency: gems}    # a named one
+
+shop:
+  tier-prices:
+    common: 500
+    legendary: {amount: 50, currency: gems}
+```
+
+`Price.parse` reads `2.5k` too. Zero, a negative or text that is not a number is no price at all, so a
+typo makes a cosmetic unpurchasable rather than free. `Price.resolve` takes the entry's own price, then
+its tier's.
+
+| Call | What it does |
+|---|---|
+| `confirmAndPurchase(plugin, player, id, name, price, crates)` | Asks first, then buys a [crate](/docs/exylialib/crates-and-loot#crates) reward: owned is `crates.owns`, granting is `crates.unlock`. |
+| `confirmAndPurchase(..., price, owned, grant)` | The same for any ownership check and grant. |
+| `purchase(...)` | Without the confirmation. |
+
+The order is already owned, one purchase per player at a time, the charge, then the grant. A grant that
+answers `false` or fails gives the money back; a refund that is refused too is logged as severe with
+what to give back.
+
+| `Result` | Charged? |
+|---|---|
+| `SUCCESS` | Yes, and granted. `bought()` is true only here. |
+| `ALREADY_OWNED`, `INSUFFICIENT_FUNDS`, `UNAVAILABLE`, `BUSY`, `CANCELLED` | No. |
+| `FAILED` | Charged, grant failed, refunded (or the failed refund logged). |
+
+Every outcome is told to the player from ExyliaLib's `messages.yml`, under `purchase`: `confirm`,
+`confirm-button`, `success`, `insufficient-funds`, `unavailable`, `busy`, `already-owned`, `failed` and
+`refund-failed`, with `%item%`, `%price%` and, for funds, `%balance%`. Callable from any thread; the
+answer completes on whichever thread finished, so hop back before touching a menu.
+
+## Showcases
+
+Places that show a plugin's cosmetics off on their own, one after another, while somebody is there to
+watch.
+
+```java
+showcases = Showcases.of(this)
+        .visibleTo(player -> players.seesOthers(player))
+        .start(() -> config.get().showcase(),
+                placed -> config.update(c -> c.withShowcase(c.showcase().withLocations(placed))),
+                this::playOne);
+
+private @Nullable ShowcaseTurn playOne(ShowcaseStage stage) {
+    Effect effect = stage.pick(registry.all(), Effect::id);
+    if (effect == null) return null;
+    SequenceRun run = sequences.play(effect.sequence(), stage.audience());
+    return ShowcaseTurn.of(effect.sequence().durationMillis(), run::cancel);
+}
+```
+
+```yaml
+showcase:
+  locations: []        # server,world,x,y,z,yaw,pitch — written by the add command
+  pause-seconds: 3.0   # rest between one turn ending and the next
+  radius: 24.0         # how close a player must be for it to play and to see it
+  only: []             # the ids it picks from; empty picks from all
+```
+
+Admin commands stay in the plugin and call `add(location)`, `removeNear(location)` (within 5 blocks;
+`null` when none), `clear()` and `all()`. `rebuild()` on reload.
+
+- A turn starts only when the last one and its rest are over, and only while somebody allowed to watch
+  is within the radius.
+- `stage.pick` never repeats the last one while there is another, and only picks what `only` names.
+- `stage.someone()` and `stage.someoneBut(other)` cast the watchers as bodies; `stage.audience()` is
+  them as a sequence target.
+- A turn is cancelled when the next starts, when its place is removed and when the plugin is disabled.
+  A place in a world not loaded yet starts when that world loads.

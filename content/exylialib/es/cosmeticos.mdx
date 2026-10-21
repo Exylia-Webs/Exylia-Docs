@@ -1,7 +1,9 @@
 ---
-title: "Reglas de cosméticos"
-description: "Una pregunta que hace cada plugin cosmético y una respuesta que da cada plugin de modo."
+title: "Cosméticos"
+description: "Una pregunta que hace cada plugin cosmético, comprar un cosmético con cualquier moneda, y lugares que exhiben cosméticos por su cuenta."
 ---
+
+## Reglas de cosméticos
 
 Un servidor va acumulando plugins cosméticos — skins de armadura, trims, efectos de muerte, de golpe,
 estelas de flecha — y todos dibujan lo que el jugador lleve o haga. Eso está bien casi siempre y mal en
@@ -11,27 +13,120 @@ esa armadura con la skin de su vestidor le dice a todo el que mire que un modera
 ```java
 // Un plugin que le presta a alguien otro cuerpo lo dice una vez:
 Cosmetics.rule(this, player -> !staffMode.isActive(player.getUniqueId()));
+Cosmetics.refresh(player);              // después de que cambie la respuesta del jugador
 
 // Y cada plugin cosmético hace la misma pregunta:
 if (!Cosmetics.shows(player)) return null;
+Cosmetics.onChange(this, player -> redraw(player));
 ```
 
 | Método | Qué hace |
 |---|---|
-| `Cosmetics.rule(plugin, rule)` | Registra la regla de este plugin, reemplazando la anterior. |
-| `Cosmetics.clear(plugin)` | La quita. |
-| `Cosmetics.shows(wearer)` | Si los cosméticos de ese jugador deben dibujarse. |
+| `Cosmetics.rule(plugin, rule)` | Registra la regla de este plugin, sustituyendo la anterior. |
+| `Cosmetics.clear(plugin)` | Quita su regla y su listener. |
+| `Cosmetics.shows(wearer)` | Si los cosméticos de este jugador deben dibujarse. |
+| `Cosmetics.refresh(wearer)` | Anuncia que la respuesta de un jugador cambió. La llama el plugin cuya regla cambió. |
+| `Cosmetics.onChange(plugin, changed)` | Avisa a un plugin cosmético para que vuelva a leer a ese jugador. |
 
 `CosmeticRule` es una interfaz funcional: `boolean shows(Player wearer)`.
 
-## Por qué es una regla y no una integración
-
-Sin esto el arreglo es de dos en dos: cada plugin cosmético aprende el nombre de cada plugin de modo, y
-cada plugin nuevo de cualquiera de los dos lados es otra integración que nadie se acuerda de escribir.
-Una regla del modo y una pregunta del cosmético cubren a un plugin escrito después por los dos lados.
+Un plugin cosmético suele decidir qué dibujar ante un evento — una pieza equipada, una entrada — y a
+partir de ahí dibuja desde una caché. Sin `refresh` y `onChange`, alguien que entra de servicio un tick
+después conserva su skin toda la sesión.
 
 | | |
 |---|---|
-| **Todas las reglas tienen que estar de acuerdo** | Se combinan con AND, como una regla de chat: los cosméticos se dibujan solo mientras ningún plugin se oponga. |
-| **Una regla por plugin** | Registrarla otra vez la reemplaza, y la regla de un plugin se cae al desactivarlo. |
-| **No esconde nada por sí sola** | Nada de aquí toca los paquetes de un plugin cosmético. Cada uno pregunta `shows` donde decide qué dibujar y se salta su propio trabajo; un cosmético que nunca pregunta no se ve afectado. |
+| **Todas las reglas tienen que estar de acuerdo** | Se combinan con AND: los cosméticos se muestran mientras ningún plugin se oponga. Una regla que lanza error cuenta como que no se opone. |
+| **Una regla por plugin** | Registrarla otra vez la sustituye, y la regla de un plugin se quita cuando se desactiva. |
+| **No oculta nada por sí sola** | Cada plugin cosmético pregunta `shows` donde decide qué dibujar; uno que nunca pregunta no se ve afectado. |
+
+## Comprar un cosmético
+
+Confirmar, cobrar, entregar y devolver el dinero si la entrega falla, en cualquier moneda.
+
+```java
+Map<String, Price> tierPrices = Price.parseAll(config.get("shop.tier-prices"));
+
+Price.resolve(Price.parse(entry.price()).orElse(null), entry.tier(), tierPrices).ifPresent(price ->
+        CosmeticPurchases.confirmAndPurchase(this, player, entry.id(), entry.name(), price, crates)
+                .thenAccept(result -> {
+                    if (result.bought()) tasks.runAtEntity(player, () -> menu.open(player));
+                }));
+```
+
+Un precio se escribe como número o con moneda, por cosmético o por rareza:
+
+```yaml
+price: 500                              # la moneda por defecto
+price: {amount: 500, currency: gems}    # una con nombre
+
+shop:
+  tier-prices:
+    common: 500
+    legendary: {amount: 50, currency: gems}
+```
+
+`Price.parse` también lee `2.5k`. Cero, un negativo o un texto que no es número no es ningún precio, así
+que una errata deja un cosmético sin poder comprarse en vez de gratis. `Price.resolve` toma el precio
+propio de la entrada y, si no, el de su rareza.
+
+| Llamada | Qué hace |
+|---|---|
+| `confirmAndPurchase(plugin, player, id, name, price, crates)` | Pregunta primero y luego compra una recompensa de [caja](/docs/exylialib/cajas-y-loot#cajas): tenerla es `crates.owns`, entregarla es `crates.unlock`. |
+| `confirmAndPurchase(..., price, owned, grant)` | Lo mismo para cualquier comprobación de propiedad y entrega. |
+| `purchase(...)` | Sin la confirmación. |
+
+El orden es: ya la tiene, una compra por jugador a la vez, el cobro y la entrega. Una entrega que
+responde `false` o falla devuelve el dinero; si la devolución también se rechaza se registra como severa
+con lo que hay que devolver.
+
+| `Result` | ¿Cobrado? |
+|---|---|
+| `SUCCESS` | Sí, y entregado. `bought()` solo es cierto aquí. |
+| `ALREADY_OWNED`, `INSUFFICIENT_FUNDS`, `UNAVAILABLE`, `BUSY`, `CANCELLED` | No. |
+| `FAILED` | Cobrado, la entrega falló, devuelto (o el fallo de la devolución registrado). |
+
+Cada resultado se le dice al jugador desde el `messages.yml` de ExyliaLib, bajo `purchase`: `confirm`,
+`confirm-button`, `success`, `insufficient-funds`, `unavailable`, `busy`, `already-owned`, `failed` y
+`refund-failed`, con `%item%`, `%price%` y, para fondos, `%balance%`. Se puede llamar desde cualquier
+hilo; la respuesta se completa en el hilo que terminó, así que vuelve al correcto antes de tocar un
+menú.
+
+## Escaparates
+
+Lugares que exhiben los cosméticos de un plugin por su cuenta, uno tras otro, mientras haya alguien
+mirando.
+
+```java
+showcases = Showcases.of(this)
+        .visibleTo(player -> players.seesOthers(player))
+        .start(() -> config.get().showcase(),
+                placed -> config.update(c -> c.withShowcase(c.showcase().withLocations(placed))),
+                this::playOne);
+
+private @Nullable ShowcaseTurn playOne(ShowcaseStage stage) {
+    Effect effect = stage.pick(registry.all(), Effect::id);
+    if (effect == null) return null;
+    SequenceRun run = sequences.play(effect.sequence(), stage.audience());
+    return ShowcaseTurn.of(effect.sequence().durationMillis(), run::cancel);
+}
+```
+
+```yaml
+showcase:
+  locations: []        # server,world,x,y,z,yaw,pitch — lo escribe el comando de añadir
+  pause-seconds: 3.0   # descanso entre un turno y el siguiente
+  radius: 24.0         # a qué distancia tiene que estar un jugador para que se reproduzca y lo vea
+  only: []             # los ids entre los que elige; vacío elige entre todos
+```
+
+Los comandos de admin se quedan en el plugin y llaman a `add(location)`, `removeNear(location)` (a 5
+bloques; `null` si no hay ninguno), `clear()` y `all()`. `rebuild()` al recargar.
+
+- Un turno empieza solo cuando el anterior y su descanso han terminado, y solo mientras alguien que
+  puede verlo esté dentro del radio.
+- `stage.pick` nunca repite el último mientras haya otro, y solo elige lo que nombra `only`.
+- `stage.someone()` y `stage.someoneBut(other)` usan a los espectadores como cuerpos; `stage.audience()`
+  son ellos como objetivo de secuencia.
+- Un turno se cancela cuando empieza el siguiente, cuando se quita su lugar y cuando el plugin se
+  desactiva. Un lugar en un mundo aún no cargado empieza cuando ese mundo carga.

@@ -1,0 +1,133 @@
+---
+title: "Editor web"
+description: "Editar los archivos de cada plugin de Exylia desde el navegador con /exylialib editor, y qué registra un plugin para pantallas más ricas."
+---
+
+`/exylialib editor` sube lo que se puede editar en este servidor y responde con un enlace. El admin edita en
+el navegador, y un segundo comando, tecleado en el juego, trae el resultado. El servidor nunca abre un puerto
+y nada le llega salvo que alguien con permiso lo pida.
+
+## Para dueños de servidor
+
+<Steps>
+  <Step title="Abre una sesión">
+    `/exylialib editor` cubre todos los plugins que puedes editar; `/exylialib editor ExyliaFFA` solo ese. El
+    chat responde con un botón que abre el editor, un botón para aplicar y otro para confiar en un navegador.
+  </Step>
+  <Step title="Edita y guarda en el navegador">
+    Se listan los ajustes, los mensajes del idioma activo, los menús y cualquier otro archivo YAML de cada
+    plugin de Exylia, con los comentarios de cada clave como ayuda. Guardar en el navegador todavía no cambia
+    nada en el servidor.
+  </Step>
+  <Step title="Aplica en el juego">
+    Pulsa el botón de aplicar del chat (ejecuta `/exylialib editor apply <código>`). El cambio se lee, se
+    comprueba, se escribe, y el plugin se recarga. Lo que merece una segunda mirada se lista primero y solo se
+    aplica con el botón de aplicar igualmente (`/exylialib editor apply <código> confirm`).
+  </Step>
+</Steps>
+
+Los tres comandos necesitan `exylialib.editor` (de `op` por defecto). Un plugin puede restringir un archivo
+con un permiso propio; un archivo que no puedes editar queda fuera de la sesión y se rechaza al aplicar.
+
+### Qué se ofrece
+
+Los archivos de cada plugin de Exylia activo, encontrados sin que el plugin haga nada:
+
+- **Ajustes** — cada archivo de config que declaró el plugin.
+- **Mensajes** — los archivos del idioma activo bajo `lang/<código>/` (y `lang/custom/`).
+- **Menús** — comprobados con el propio compilador de menús del plugin antes de escribirse; un menú que no
+  compilaría se rechaza.
+- **Archivos** — cualquier otro `.yml` que el plugin instaló en su carpeta.
+
+Fuera quedan: los menús de administración que el plugin reescribe en cada arranque, las carpetas de otros
+idiomas, las carpetas llamadas `data`, `players`, `playerdata`, `logs`, `backups`, `cache`, `storage`,
+`database`, `exports` o `schematics`, las carpetas ocultas, los archivos de más de 1 MB, los que no se pueden
+leer y los que el plugin nunca instaló. Los plugins también pueden registrar pantallas más ricas — un editor
+de hologramas con vista previa, minas o kits guardados en una base de datos — que sustituyen al formulario
+simple para esos archivos.
+
+### Qué necesita `confirm`
+
+- Un cambio bajo una ruta que el plugin marcó como sensible, como los comandos al hacer clic de un holograma.
+- Cualquier línea cambiada que ejecute un comando de consola (`console:`, `[CONSOLE]`, `op:`…).
+- Borrar una entrada guardada, como una mina o un kit.
+- Un archivo que cambió en el servidor después de que el navegador lo cargara.
+
+Un valor del tipo equivocado se rechaza igual que en el archivo YAML, y el resto del cambio se aplica.
+
+### Seguridad
+
+- **El enlace no es la llave.** Solo lleva un código público. El secreto que lee un cambio de vuelta se queda
+  en la memoria del servidor, así que un enlace filtrado deja mirar y proponer, nunca aplicar.
+- **Un navegador es dueño de la sesión.** El primero que abre el enlace edita; otro navegador, o el mismo
+  enlace desde otra dirección, es de solo lectura y muestra un reto corto.
+  `/exylialib editor trust <código> <reto>` en el juego lo convierte en editor.
+- **La confianza es por servidor.** Un navegador de confianza lo sigue siendo en las siguientes sesiones de
+  este servidor. El servidor se reconoce por `plugins/ExyliaLib/editor-key.txt`, una clave generada una vez y
+  nunca mostrada a un navegador. **Borra ese archivo para retirar la confianza a todos los navegadores.**
+- **Las sesiones duran poco.** Una sesión dura 24 horas, hay como mucho 32 abiertas a la vez, y un reinicio
+  las olvida todas.
+- **No se sube nada de los jugadores** salvo el nombre del admin que abrió la sesión.
+
+```yaml title="plugins/ExyliaLib/config.yml"
+web-editor:
+  enabled: true                   # false: /exylialib editor se niega
+  url: https://utils.exylia.net   # solo cámbialo para usar tu propia copia
+```
+
+## Para desarrolladores de plugins
+
+Un plugin no necesita código para que sus archivos sean editables. Registra un sujeto cuando el
+descubrimiento no puede saber lo que necesitas: una pantalla más rica, un permiso más estrecho, rutas
+sensibles, un comprobador, o entradas guardadas fuera de un archivo de config.
+
+```java
+WebEditor.of(this)
+        .subject("holograms", hologramsFile, "displays/hologram")
+        .title("Holograms")
+        .permission("exyliadisplays.holograms")
+        .sensitive("holograms.*.click")
+        .onApplied(this::reloadHolograms);
+```
+
+| Llamada | Qué registra |
+|---|---|
+| `subject(id, configFile[, kind])` | Un `ConfigFile`. El formulario sale del record: los comentarios son la ayuda, un enum es un desplegable, una clave `@Time` un campo de duración. Un `kind` nombra una pantalla más rica que trae el editor. |
+| `yaml(id, ruta[, kind])` | Un archivo YAML que el plugin compila por su cuenta, sin record detrás. El formulario se deduce de su contenido. Dale un `check`. |
+| `entries(id, tipoRecord, store[, kind])` | Entradas que el plugin guarda por su cuenta — minas, kits, arenas — creadas, editadas y borradas desde el navegador a través de un `EntryStore`. |
+| `exclude(patrones…)` | Saca archivos del descubrimiento: rutas relativas a la carpeta de datos, `*` y `**`. |
+| `discover(false)` | Apaga el descubrimiento para este plugin. |
+| `remove(id)` | Olvida un sujeto mientras el plugin sigue en marcha. |
+
+Todo sujeto acepta `title`, `permission`, `sensitive(rutas…)` (rutas con puntos, `*` para cualquier clave,
+comparadas como prefijo) y `onApplied(runnable)`. Un sujeto YAML acepta además `check(yaml -> problemas)`:
+cualquier línea que devuelva rechaza el cambio entero.
+
+```java
+WebEditor.of(this).yaml("tags", "cosmetics/tags", "chatcosmetics/catalog")
+        .check(yaml -> catalog.problems(yaml))
+        .onApplied(catalog::reload);
+```
+
+Un `EntryStore<R>` responde `entries()` desde memoria y escribe con futuros:
+
+```java
+public final class MineStore implements EntryStore<MineEdit> {
+    public Map<String, MineEdit> entries() { return manager.asEdits(); }
+    public List<String> check(String id, MineEdit mine, boolean created) { return manager.problems(id, mine); }
+    public CompletableFuture<Void> save(String id, MineEdit mine, boolean created) { return manager.save(id, mine); }
+    public CompletableFuture<Void> delete(String id) { return manager.delete(id); }
+}
+```
+
+Cada entrada pasa por el binder de config antes de que la vea el almacén, y un problema en una sola entrada
+rechaza el sujeto entero, así que el almacén nunca recibe medio cambio. Todo borrado necesita `confirm`.
+
+`WebEditor.open(sender, plugin)` abre una sesión desde el comando propio de un plugin, y
+`WebEditor.available(plugin)` dice si abriría algo. Los registros se olvidan cuando el plugin se desactiva.
+
+<Callout type="note" title="Hilos">
+Registrar es seguro desde cualquier hilo. Aplicar escribe el archivo y ejecuta `onApplied` en el hilo
+global; los métodos de `EntryStore` también se llaman ahí, así que pasa el trabajo de base de datos a otro
+hilo y completa el futuro cuando termine.
+</Callout>

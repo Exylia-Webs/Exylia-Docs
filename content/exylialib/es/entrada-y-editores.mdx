@@ -1,9 +1,9 @@
 ---
 title: "Entrada, editores y asistentes"
-description: "Pedirle algo a un jugador, editar una lista de cosas, y guiar a alguien por una configuración."
+description: "Pedirle algo a un jugador, editar una lista de cosas, ajustar fino con la rueda del ratón y guiar a alguien por una configuración."
 ---
 
-Tres módulos que resuelven la misma forma de problema: sacarle información a un jugador sin escribir un
+Módulos que resuelven la misma forma de problema: sacarle información a un jugador sin escribir un
 listener de yunque, uno de chat y un mapa de estado para cada caso.
 
 ## Pedir una cosa
@@ -21,7 +21,7 @@ inputs.integer(player, "¿Cuántos slots?")
           }));
 ```
 
-Trece tipos de petición, cada uno un builder:
+Quince tipos de petición, cada uno un builder:
 
 | Llamada | Produce | Para |
 |---|---|---|
@@ -37,6 +37,8 @@ Trece tipos de petición, cada uno un builder:
 | `choice` | `T` | Una de unas pocas opciones |
 | `search` | `T` | Una de muchísimas opciones |
 | `icon` | `String` | Con qué se dibuja algo |
+| `item` | `ItemStack` | El item en sí, cantidad incluida |
+| `slot` | `Integer` | Una posición de un layout, elegida en una rejilla |
 | `form` | `FormValues` | Varias cosas en una ventana |
 
 Todas comparten los mismos modificadores, así que se leen igual sea lo que sea que se pida:
@@ -48,27 +50,83 @@ No en el transporte. Eso es lo que evita que el plegado de mayúsculas funcione 
 diálogo.
 </Callout>
 
+Algunos tipos añaden los suyos:
+
+| Tipo | Añade |
+|---|---|
+| `text` | `minLength`, `maxLength`, `lines(n)` para una caja más alta, `hint(texto)`, `sensitive()` para un secreto como la URL de un webhook — nunca se repite, y en el chat se toma antes de que lo lea cualquier otro plugin de chat |
+| `integer`, `decimal` | `range(min, max)`, `min`, `max` |
+| `choice` | `label(fn)`, `key(fn)`, `icon(fn)`, `description(fn)` — una línea corta por opción, el lore en un menú y el tooltip en un diálogo. Un `defaultValue` se dibuja marcado. |
+| `search` | lo mismo, más `source(Pages)` y `pageSize` para un catálogo que se pide de página en página |
+
+Casi todas las respuestas terminan reabriendo un menú, en el hilo del jugador. `answered` hace el salto:
+
+```java
+inputs.answered(player, inputs.text(player, "Nombra la casa").open(),
+        name -> homes.create(player, name),   // en el hilo del jugador
+        () -> homesMenu.open(player));         // solo si canceló
+```
+
 ### Cómo se pregunta
 
 Cinco transportes, probados en orden. Gana el primero que pueda representar la petición:
 
 | Orden | Transporte | Se elige cuando |
 |---|---|---|
-| 1 | `DIALOG` | Los diálogos están activos, PacketEvents está cargado y el cliente es 1.21.6 o superior. |
-| 2 | `BEDROCK` | El jugador está en Bedrock y Floodgate está instalado. |
+| 1 | `DIALOG` | `prefer-dialogs` está activo y el cliente es 1.21.6 o superior. |
+| 2 | `BEDROCK` | El jugador está en Bedrock y los formularios de Floodgate están disponibles. |
 | 3 | `ANVIL_SEARCH` | La petición es una búsqueda. |
 | 4 | `MENU` | Un inventario de botones puede expresarla — elección, confirmación, interruptor. |
 | 5 | `CHAT` | Siempre. |
 
-El chat es el respaldo universal: cualquier jugador de Java puede responder por chat aunque no haya
-ninguna integración de paquetes ni de puente. Ni PacketEvents ni Floodgate son obligatorios, y los
-transportes se descubren por reflexión, así que uno que falte simplemente no se ofrece.
+El chat es el respaldo universal: cualquier jugador de Java puede responder por chat. Floodgate es
+opcional y se usa por reflexión, así que sin él el transporte de Bedrock simplemente no se ofrece.
+
+A un jugador de Bedrock se le reconoce por su UUID, nunca por su nombre: se pregunta a Floodgate cuando
+está instalado (solo él conoce una cuenta vinculada), si no responde la forma del UUID de Floodgate, y
+se pregunta a la API de Geyser cuando Geyser corre sin Floodgate. Ya no existe el ajuste
+`bedrock-prefix`; la clave vieja se quita de `config.yml` en el siguiente arranque. Los plugins leen la
+misma respuesta con `Clients.isBedrock`.
+
+`plugins/ExyliaLib/input.yml` guarda los tres ajustes que comparten todos los plugins:
+
+```yaml
+timeout-seconds: 60     # o escrito: 1m
+cancel-word: cancel     # lo que se escribe en el chat para dejar de ser preguntado
+prefer-dialogs: true    # apagado manda todo al chat y a menús
+```
+
+### Formularios
+
+Un `form` pregunta varias cosas en una ventana. Sus campos salen de `FormField`: `text`, `integer`,
+`decimal`, `flag`, `duration` y `choice`, cada uno `optional()` o `required()`.
+
+```java
+FormField.choice(MODE, "Modo", List.of(
+        new FormField.Option("times", "A horas fijas"),
+        new FormField.Option("timer", "Cada cierto tiempo")))
+```
+
+Un campo de elección es un botón que recorre sus etiquetas en un diálogo, así que nadie escribe un id
+de memoria; el chat y Bedrock aceptan la clave escrita, y una equivocada se responde con la lista. La
+respuesta es siempre una de las claves.
+
+**Lo que envía el jugador es la respuesta.** El valor por defecto de un campo es solo donde empieza su
+caja, así que una caja que el jugador vacía se guarda vacía, nunca vuelve a su valor anterior:
+
+| Enviado | Campo opcional | Campo obligatorio |
+|---|---|---|
+| un valor | el valor | el valor |
+| vacío | ausente: `has` es `false`, `getOr` da el respaldo, `getText` da `""` | se rechaza con "This field is required.", las demás respuestas se conservan |
+
+Los campos de interruptor y de elección siempre envían un valor.
 
 ### Elegir un icono, y el catálogo de cabezas
 
-`icon` pregunta con qué se dibuja algo, y ofrece tres formas de responder: el objeto en la mano, una
-búsqueda sobre los materiales del propio servidor y **`BROWSE`** — el catálogo de cabezas decorativas,
-unas ochenta y seis mil, buscadas una página cada vez y sin descargar nada.
+`icon` pregunta con qué se dibuja algo, y responde con un valor `material` que puede usar un archivo de
+menú. Ofrece cuatro formas: una búsqueda sobre los materiales del servidor, una ventana de **insertar**
+de un slot (metes el item; vuelve enseguida), una cabeza pegada, y **`BROWSE`** — el catálogo de cabezas
+decorativas, unas ochenta y seis mil, buscadas una página cada vez y sin descargar nada.
 
 ```java
 Heads.browse(inputs, player, "{warning}Browse a head")
@@ -77,8 +135,37 @@ Heads.browse(inputs, player, "{warning}Browse a head")
 
 `browse` devuelve el `SearchInput<Head>` en vez de abrirlo, así que el timeout, la validación o el
 tamaño de página siguen siendo de quien llama. Un `Head` lleva `id()`, `name()`, `texture()`,
-`category()`, `icon()` — el valor `urlhead-<textura>` que guarda una config — e `item()`. La consulta
-se compara contra nombres, ids y etiquetas, así que `cat` encuentra los gatos y `flag` las banderas.
+`category()`, `icon()` — el valor `urlhead-<textura>` que guarda una config — e `item()`.
+
+### Pedir un item, o muchos
+
+Un icono no tiene sitio para una cantidad: nueve diamantes y un diamante son ambos `DIAMOND`. Cuando el
+stack importa — la entrada de una receta, un precio — pide el item:
+
+```java
+inputs.item(player, "{primary}&lQUÉ SE GASTA")
+      .open(stack -> recipe.setInput(stack));
+
+inputs.item(player, "{primary}&lPON LOS ITEMS")
+      .many().thenAccept(stacks -> catalogue.addAll(stacks));
+```
+
+`item` es una ventana de un slot; un slot vacío termina como `CANCELLED`. `many()` abre cinco filas
+libres para meter una selección entera con shift-clic, y responde las copias en orden de slot, vacío si
+la ventana se cerró sin nada. Cada item vuelve al jugador en cualquier final — confirmar, cerrar,
+desconectarse, desactivarse el plugin.
+
+### Elegir una posición
+
+```java
+inputs.slot(admin, "Elige una posición", 45)
+      .taken(usedPositions)
+      .describe(names::get)
+      .open(position -> save(product.withPosition(position)));
+```
+
+Un botón por posición, las libres en el color de éxito y las ocupadas en el de error, en vez de
+"escribe la posición (0-44)".
 
 ### Un desenlace, exactamente una vez
 
@@ -94,12 +181,16 @@ motor.
 | Llamada | Edita |
 |---|---|
 | `Rewards.of(plugin).editor(rewards)` | Recompensas |
+| `Rewards.of(plugin).weightedEditor(rewards)` | Recompensas sorteadas por peso, con la probabilidad real de cada fila |
 | `Loot.editor(plugin, entries)` | Tablas de loot |
 | `NamedCommands.editor(plugin, commands)` | Comandos de consola con nombre |
 | `Effects.editor(plugin, effects)` | Efectos de poción |
 | `Sequences.of(plugin).editor(effects)` | Efectos con probabilidades, condiciones y audiencia |
+| `Schedules.of(plugin).editor(schedules, target)` | Horarios |
 | `Editors.of(plugin).items(items)` | Items reales — kits, stock de tienda |
+| `Editors.of(plugin).loadout(items)` | Un equipamiento entero, en una rejilla con forma de inventario |
 | `Editors.of(plugin).locations(places)` | Puntos de spawn, esquinas de arena |
+| `Regions.of(plugin).policyEditor(policies)` | Los flags, listas de bloques y números de una región |
 | `Editors.of(plugin).list(descriptor, tipo, entries)` | La que solo tiene tu plugin |
 
 Cada lista tiene paginación, añadir, editar, borrar, copiar, pegar, guardar y cancelar:
@@ -108,50 +199,160 @@ Cada lista tiene paginación, añadir, editar, borrar, copiar, pegar, guardar y 
 |---|---|
 | Clic izquierdo en una fila | Editarla |
 | Clic derecho en una fila | Borrarla |
-| Shift + izquierdo | Copiarla |
-| `ADD` | Crear una fila y configurarla |
+| Shift + izquierdo, o Q | Copiarla |
+| Shift + izquierdo / derecho, en una lista por peso | Subir o bajar su peso ahí mismo; copiar es solo Q |
+| `ADD` | Crear una fila y configurarla — o varias a la vez, donde el tipo lo ofrece |
+| `EDIT ALL` | Un formulario cuyas respuestas caen en todas las filas, donde el tipo lo ofrece |
 | `PASTE` | Añadir lo que haya en el portapapeles |
 | `COPY ALL` | Poner la lista entera en el portapapeles |
 | `SAVE` / `CANCEL` | Quedarse con todo, o con nada |
 
+**Añadir en bloque.** En los editores de recompensas y de loot, `ADD` también ofrece *varios items* —
+una ventana de cinco filas para soltar una selección entera, una fila por stack — y *varios comandos*,
+uno por línea de una caja de texto alta. Una tabla de loot además puede importar todos los items de un
+contenedor que el admin pulse. El editor de comandos con nombre lee un comando por línea: una línea abre
+su formulario, varias se convierten en varias filas.
+
+**Editar todo.** En los editores de recompensas y de loot cada campo empieza vacío y un campo vacío no
+cambia nada, así que se puede poner un peso a toda la tabla sin tocar lo demás; un campo de texto
+escrito como `-` se quita de todas las filas.
+
 <Callout type="tip" title="No se escribe nada hasta guardar">
 La lista que entregas se copia, y cada cambio va a la copia — así que cancelar sale gratis y una fila a
-medias no puede escaparse al estado del plugin.
+medias no puede escaparse al estado del plugin. Cerrar la ventana, salir del servidor y desactivarse el
+plugin cuentan como cancelar. El callback de guardar o cancelar corre en el tick siguiente, así que el
+menú que reabre es uno real y no una ventana que el servidor ya no sigue.
 </Callout>
 
 Una fila sin terminar — una entrada de comando sin comando — se dibuja **con una marca** en vez de
 ocultarse. Un editor es donde se termina una fila a medio configurar, y una que desapareciera se
 llevaría su sitio en la lista con ella.
 
+### Editar una fila
+
+Un diálogo con todos los campos ya rellenados (`EditorForm`). Las cajas de texto ahí son opcionales:
+vaciar una la guarda vacía, que es como se quita una línea de lore, un permiso o una condición. Un campo
+que no significa nada vacío, como un id, lo dice con `required()`.
+
+```java
+EditorForm.of(plugin, viewer, "{primary}&lEDITAR ENTRADA")
+        .text(ID, "Id", entry.id()).required()
+        .currency(CURRENCY, "Moneda", entry.currency())
+        .ask(values -> entry.withCurrency(EditorForm.currencyOf(values, CURRENCY)));
+```
+
+`choice(key, label, current, options)` es un campo de elección que empieza en la opción actual.
+`currency(key, label, current)` ofrece las monedas del servidor, la de por defecto primero, y
+`currencyOf` la lee como un id, o `null` para la de por defecto — los editores de recompensas y de loot
+eligen así la moneda de una línea de dinero.
+
+### Selectores
+
+Lo que nadie sabe escribir de memoria se elige de una lista con búsqueda, nunca se teclea:
+
+```java
+Editors.of(this).pick().particle(player).thenAccept(name -> name.ifPresent(entry::setParticle));
+```
+
+| Método | Responde con |
+|---|---|
+| `particle`, `sound`, `enchantment` | el nombre |
+| `potionEffect` | el nombre del efecto; cada uno dibujado como una botella de su color vanilla |
+| `material` | el nombre del material; cada uno dibujado como sí mismo |
+| `colour` | un nombre de color vanilla, o un `#rrggbb` que tecleó quien elige |
+
+Las listas se leen de los registros del servidor, así que también se ofrece lo que añada un data pack.
+
+Los efectos guardados como texto tienen su propia pantalla en vez de una caja `NAME|LEVEL|SECONDS`:
+`Effects.edit(plugin, viewer, title, lines)` abre el editor de efectos de poción sobre esas líneas y
+devuelve las líneas guardadas, y `Sequences.of(plugin).editLines(...)` hace lo mismo con líneas de
+secuencia.
+
+### El formulario de horarios
+
+El formulario de una fila del editor de horarios muestra un modo a la vez — horas fijas, o un
+temporizador que se repite — con una casilla por día de la semana en vez de nombres de días que
+escribir. Cambiar el modo y enviar reabre el formulario en el otro modo con todo lo escrito conservado.
+Los límites de jugadores, el cooldown y las condiciones van en un segundo formulario, que solo se abre
+cuando se marca su casilla.
+
+## Ajuste fino: el tuner
+
+La rueda del ratón empuja un valor mientras el jugador mira el resultado: un holograma movido una
+centésima de bloque, un NPC girado cinco grados, un display escalado un punto. Una sesión por jugador,
+mostrada en dos barras de jefe.
+
+```java
+Tuner.of(plugin, "spawn")
+        .key("hologram:spawn")                      // un jugador a la vez por sujeto
+        .axis(TunerAxis.blocks("Y", () -> work.y(), y -> work.y(y)))
+        .axis(TunerAxis.degrees("Yaw", () -> work.yaw(), yaw -> work.yaw(yaw)))
+        .axis(TunerAxis.of("Scale", () -> work.scale(), s -> work.scale(s))
+                .steps(0.05, 0.1, 0.25, 0.5).range(0.1, 10).unit("x"))
+        .onChange(session -> preview(work))         // redibujar, no guardar
+        .onEnd((session, end) -> { if (end.kept()) save(work); else preview(original); })
+        .start(player);                             // vacío si otro tiene la clave
+```
+
+| Tecla | Hace |
+|---|---|
+| Rueda arriba / abajo | Valor actual + / − un paso |
+| Agacharse + rueda | Paso más grande / más pequeño |
+| F (cambiar de mano) | Siguiente eje; agacharse + F el anterior |
+| Clic izquierdo | Guardar y terminar |
+| Agacharse + clic izquierdo, o clic derecho | Ajustar: centro del bloque, 15° más cercanos, o el `snap` del eje |
+
+| Eje | Pasos | Ajuste |
+|---|---|---|
+| `TunerAxis.of` | 0.01, 0.05, **0.1**, 0.5, 1 | ninguno |
+| `TunerAxis.blocks` | los mismos | centro del bloque |
+| `TunerAxis.degrees` | 1, **5**, 15, 45 | 15° más cercanos, dentro de -180..180 |
+| `TunerAxis.relative` | pasos de bloque | ninguno; entrega cada delta |
+
+Cada eje acepta `.steps(...)`, `.step(index)`, `.unit(...)`, `.range(min, max)` y `.snap(op)`. Las dos
+barras son `hud(...)` y `hints(...)`, con `%subject%`, `%axis%`, `%value%`, `%step%`, `%index%` y
+`%count%`; pasa texto traducido, los valores por defecto están en inglés. Mientras corre una sesión se
+rechaza colocar, romper, usar, golpear y tirar items.
+
+No hay tecla de cancelar — ofrécela como comando o botón de chat que llame a `session.cancel()`.
+`onEnd` corre una vez con cómo terminó. `end.kept()` es `false` solo para `CANCELLED` y `ABORTED` (el
+sujeto ya no existe); `SAVED` (un clic), `REPLACED`, `QUIT`, `DEATH`, `MOVED_AWAY` (otro mundo, o un
+teletransporte de más de 32 bloques) y `DISABLED` conservan el valor.
+
 ## Guiar a alguien por una configuración
 
-Un asistente son varias preguntas con ramas, una revisión desde la que se puede volver atrás, y nada
+Un asistente son varias preguntas con ramas, un resumen desde el que se puede volver atrás, y nada
 aplicado hasta que confirman.
 
 ```java
 static final WizardKey<String> ID    = WizardKey.text("id");
 static final WizardKey<Long>   SLOTS = WizardKey.integer("slots");
 
-Wizards.of(this)
-       .define("create-arena", builder -> builder
-               .ask(ID, "Id de la arena")
-               .ask(SLOTS, "¿Cuántos jugadores?")
-               .review()
-               .apply(values -> create(values.get(ID), values.get(SLOTS))))
-       .start(player);
+Wizard arena = Wizards.of(this).define("arena")
+        .title("{primary}&lNUEVA ARENA")
+        .ask(ID,    step -> step.id("Escribe el id de la arena"))
+        .ask(SLOTS, step -> step.integer("Slots").range(2L, 64L))
+        .summary()
+        .onFinish(values -> create(values.get(ID), values.get(SLOTS)))
+        .build();
+
+wizards.start(player, arena, () -> openMenu(player));   // a dónde vuelve un cancelar
 ```
 
-Los atajos de un solo paso son lo que usan de verdad casi todas las pantallas de setup:
+Configurar una sola cosa nombra la cosa y no el gesto:
 
 ```java
-wizards.askRegion(player, "Zona de captura", "Selecciona el área con el selector", accepted, abandoned);
-wizards.askLocation(player, "Punto de spawn", "Ponte donde aparecen los jugadores", accepted, null);
-wizards.askItem(player, "Icono", "Sostén el item", accepted, null);
+wizards.setup(player, () -> ArenaSetupMenu.open(player))
+       .spawn("LOBBY SPAWN", arena.id(), where -> save(arena.withLobby(where)));
 ```
 
-`askRegion` es el selector de bloques compartido: el mismo objeto, la misma vista previa y las mismas
-dos esquinas con las que selecciona cada plugin de Exylia — que es por lo que ninguno depende de
-WorldEdit para eso.
+`spawn` (ponte ahí y haz clic agachado, para que la respuesta lleve orientación), `block` (púlsalo) y
+`area` (el selector compartido). Los atajos de un paso `askStand`, `askPoint`, `askRegion` y `askItem`
+reciben el jugador, un título, un texto opcional, el callback de aceptado y uno de abandonado.
+
+`askRegion` y `area` son el selector de bloques compartido: el mismo objeto, la misma vista previa y
+las mismas dos esquinas con las que selecciona cada plugin de Exylia — que es por lo que ninguno depende
+de WorldEdit para eso.
 
 <Callout type="note" title="Abandonar es un desenlace de primera clase">
 Cada flujo acepta un callback `abandoned`. Un jugador que se sale deja la configuración anterior

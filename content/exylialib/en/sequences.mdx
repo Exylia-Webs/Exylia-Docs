@@ -1,6 +1,6 @@
 ---
 title: "Sequences"
-description: "Choreographed effects written in configuration: every token, every shape, and the parameters that move a display."
+description: "Choreographed effects written in configuration: every token, every shape, camera shots, and the parameters that move a display."
 ---
 
 A sequence is choreography written as a list of strings — a ring of flame, a sound, a pause, an
@@ -44,29 +44,53 @@ Every line is a token in brackets, then a head, then parameters separated by `;`
 
 | Token | Arguments |
 |---|---|
-| `[DELAY] 0.15` | Seconds to wait before the next line. |
-| `[PARTICLE] FLAME` | `count:` `offset:x,y,z` `speed:` `y:` `color:` `size:` `block:` |
+| `[DELAY] 0.15` | Seconds to wait before the next line, or written out: `1m30s`. |
+| `[PARTICLE] FLAME` | `count:` `offset:x,y,z` `speed:` `y:` `color:` `fade:` `size:` `block:` — `fade:` is the colour a `DUST_COLOR_TRANSITION` fades to (white when absent). |
 | `[SOUND] NAME;volume;pitch` | Also `volume:` `pitch:`. A resource pack's own key works. |
 | `[LIGHTNING]` | `volume:` `pitch:` — flash, sparks and thunder. No strike, no fire, no damage. |
 | `[EXPLOSION]` | `count:` `y:` |
-| `[FIREWORK]` | `color:` `fade:` `type:` `trail:` `flicker:` `power:` |
+| `[FIREWORK]` | `color:` `fade:` `type:` `trail:` `flicker:` `power:` — with PacketEvents it is a packet burst only the sequence's observers see; without it, a real rocket that deals no damage. |
 | `[BLOCK_BREAK] STONE` | `count:` `offset:` `y:` |
-| `[POTION] speed;100;1` | Also `duration:` `amplifier:` |
-| `[TITLE] title;subtitle;in;stay;out` | Times in **seconds**. |
-| `[ACTION_BAR] text` | |
-| `[MESSAGE] text` | A chat line. `<center>` works like anywhere else. |
+| `[POTION] speed;100;1` | Also `duration:` `amplifier:` `particles:` `icon:` `ambient:`. The duration is **ticks** (100 by default), or written out: `5s`. |
+| `[TITLE] title;subtitle;in;stay;out` | Times in **seconds** (`0.5`, `3.5`, `1` by default), or written out. `who:` as a last segment. |
+| `[ACTION_BAR] text` | `who:` as a last segment. |
+| `[MESSAGE] text` | A chat line. `<center>` works like anywhere else. `who:` as a last segment. |
+| `[TOAST] icon;frame;text` | An advancement toast — an item, `TASK`, `GOAL` or `CHALLENGE`, then the text. `who:` as a last segment. See [Notices and toasts](/docs/exylialib/notices). |
 | `[COMMAND] give {player} …` | `{player}` `{world}` `{x}` `{y}` `{z}` |
+| `[LID] open` / `[LID] close` | Swings the lid of the chest, ender chest or shulker box at the anchor, for the observers only. `y:` shifts the block. |
+| `[SHAKE] radius:10;times:2;every:0.08` | Tilts the camera of observers within `radius` blocks (10), the way taking a hit does — no damage, no sound. `times:` (1) tilts, `every:` (0.1 s) apart. |
+| `[CAMERA] keys:0 close \| 2 yaw=~360` | Shows the player their own animation from outside — see [Camera shots](#camera-shots). |
 | `[DISPLAY] NETHERITE_SWORD` | One display entity — see [Displays and NPCs](/docs/exylialib/displays-and-npcs). |
 | `[NPC] {victim}` | A body where it happened — same page. |
-| `[RAGDOLL] {victim}` | That body coming apart, in eleven poses — same page. |
+| `[RAGDOLL] {victim}` | That body coming apart into its pieces — same page. |
+
+`[FIREWORK]`, `[EXPLOSION]`, `[LIGHTNING]`, `[SHAKE]` and `[CAMERA]` name nothing positionally, so
+their first segment is read as a parameter: `[FIREWORK] color:red;fade:orange` is red.
+
+#### Who reads a text line
+
+`[TITLE]`, `[ACTION_BAR]`, `[MESSAGE]` and `[TOAST]` take `who:` as the **last** `;` segment, so a
+semicolon inside the text stays text:
+
+| `who:` | Shown to |
+|---|---|
+| `source` (default) | Whoever set the sequence off. |
+| `target` | Whoever it happened to, when that is a player. |
+| `both` | Both of them. |
+| `nearby` | The sequence's own observers: its radius and visibility rule. |
+| `all` | Every player online. |
+
+```yaml
+- '[TITLE] {primary}JACKPOT;%reward%;0.2;3;0.5;who:nearby'
+```
 
 ### Shapes
 
-Twenty-five, and every one of them can be drawn with particles or with displays:
+Twenty-six, and every one of them can be drawn with particles or with displays:
 
 `CIRCLE` `SPHERE` `DOME` `CUBE` `LINE` `RIBBON` `SCATTER` `BEAM` `SPIRAL` `DOUBLE_HELIX` `TORNADO`
 `STAR` `CAGE` `DISC` `VORTEX` `WAVE` `CROSS` `GALAXY` `TORUS` `BURST` `PYRAMID` `RING_PULSE` `WINGS`
-`ARCH` `CLAW`
+`ARCH` `CLAW` `PIXELS`
 
 | Shape | Its own parameters |
 |---|---|
@@ -93,14 +117,26 @@ Twenty-five, and every one of them can be drawn with particles or with displays:
 | `LINE` | `length` `dir` `climb` `points` |
 | `RIBBON` | `radius` `points` `waves` `amplitude` |
 | `SCATTER` | `radius` `height` `points` `seed` `floor` |
+| `PIXELS` | `art` `word` `pixel` `pick` `depth` |
 
 `CUBE` says `width` and `LINE` says `climb` rather than `size` and `rise`, because on a display line
 those two words already mean the model's own scale and where it ends up.
 
+`PIXELS` draws a picture — `heart` `heart_big` `broken_heart` `star` `crown` `skull` `bolt` `note`
+`cloud` `trophy` `ufo` `moon` `guillotine` `blade` `grave` `portal` `eye` `clock` `rift` `flag` — or
+a `word` in a five-row block font, one piece per cell. `pick:` chooses which characters a line draws,
+so a heart with a shine is two lines over one picture.
+
 Every shape also takes `y:` `scale:` `color:` `size:` `count:` `ticks:` `interval:` `rotate:`
 `face:`. `ticks:1` draws the whole shape in one frame; anything higher draws it over time, which is
-what makes a spiral look drawn rather than dropped. `SCATTER` takes a `seed`, so its unplanned points
-are the same unplanned points every time.
+what makes a spiral look drawn rather than dropped. `face:true` turns the shape with whoever set it
+off. `SCATTER` takes a `seed`, so its unplanned points are the same unplanned points every time.
+
+<Callout type="note" title="A shape is capped at compile time">
+One shape draws at most `max-per-effect` points (128 by default, in
+`plugins/ExyliaLib/displays.yml`). A ring written with `points:900` is cut there and the console says
+so when the file is read, not as lag later.
+</Callout>
 
 <Callout type="tip" title="color: takes a palette token">
 `color:{primary}` follows `colors.yml` like everything else a player reads. `#rrggbb` and `R,G,B`
@@ -125,7 +161,7 @@ Any shape line becomes a shape of **display entities** by saying what it is made
 
 The geometry, the animation, the rotation and who sees it are unchanged, because a shape never knew
 what it was being drawn with. The movement parameters — `life`, `from`, `to`, `ease`, `gravity`,
-`spin`, `orbit`, `pull`, `size_to`, `roll`, `glow`, `light` and the rest — are in
+`spin`, `orbit`, `pull`, `size_to`, `roll`, `glow`, `light`, `follow` and the rest — are in
 [Displays and NPCs](/docs/exylialib/displays-and-npcs).
 
 ### Repeating a line on a beat
@@ -137,7 +173,17 @@ what it was being drawn with. The movement parameters — `life`, `from`, `to`, 
 ```
 
 Five rings a tenth of a second apart, each twelve degrees further round — instead of five copies of a
-line with four delays threaded between them.
+line with four delays threaded between them. `every:` is 0.15 s when left out.
+
+A repeated line also takes `accel:` and `max_speed:`: the gap is divided by `accel:` after every
+beat and stops shortening at `max_speed:` times the original speed. That is how a sound keeps up with
+a body that winds up.
+
+#### One tempo per play
+
+A `[RAGDOLL]` line with `tempo:1-1.6` makes the whole play quicker or slower by a number rolled
+**once** when the run starts. Every repeated line's gap is divided by that same tempo, so the sounds
+keeping a dance's beat stay on it however the dance came out. `SequenceRun.tempo()` reads it back.
 
 ### Custom shapes
 
@@ -158,12 +204,61 @@ A shape says **where**, never **what**. Colour, animation, rotation, scaling, `a
 all come for free, which is why a new shape is a loop returning vectors rather than another copy of
 the drawing code. It is called once, at compile time.
 
+## Camera shots
+
+A body that waves or dances is drawn for everybody around the player and for nobody inside it: the
+one player it was made for is looking out of its eyes. `[CAMERA]` shows them the animation from
+outside.
+
+```yaml
+effects:
+  - '[CAMERA] keys:0 close | 2.4 yaw=~360 ease=in_out | 0.4 behind ease=out'
+  - '[SOUND] ENTITY_PLAYER_LEVELUP;0.7;1.4'
+```
+
+`keys:` comes last because its value is full of spaces and bars. Frames are separated by `|`; each
+starts with the seconds it takes to reach it and lists only what changes.
+
+| Channel | What it moves |
+|---|---|
+| `distance=` | How far the camera sits from the subject, in blocks (0.6–24). |
+| `yaw=` | Where it sits around them: `0` behind their back, `90` off their left shoulder, `180` facing them. |
+| `pitch=` | How far above the horizon it sits; positive looks down (±85). |
+| `height=` | What it aims at, in blocks above their feet. |
+| `ease=` | How the frame is reached: `in_out` (default), `in`, `out`, `linear`, `back`, `anticipate`, `elastic`, `bounce`, `snap`, `smooth`, `hold`. |
+
+`~90` adds to where the channel already is, so `yaw=~360` is one more turn around them. A bare word
+is a whole frame: `behind`, `front`, `side`, `over`, `low`, `close`, `wide`, `top`. `smooth` runs a
+curve through the neighbouring frames instead of stopping at each. The camera always looks at the
+subject; nothing in a shot says where it points.
+
+| Parameter | |
+|---|---|
+| `who:` | Whose eyes it takes: `source` (default), `target` or `both`. **Never the audience** — a line that took the eyes of everyone near a kill could not be written safely. |
+| `loop:true` | Plays the path again as it ends — for a body dancing on a loop. The path has to come back to where it started. |
+
+The whole path is solved when the shot starts, from where the subject stands and which way they
+face, and walls pull the camera in rather than letting it render the inside of a block. While it
+plays the player is frozen and drawn as a spectator; both are undone at the end. A shot is at most
+60 seconds and ends with the run that started it, or when the player leaves, dies or changes world.
+It is not protection: the player can still be hit, so a plugin that films somebody in the open
+cancels the run on damage. It needs PacketEvents.
+
+In code, `Cameras.of(this).play(player, CameraShot.parse(text, problem -> …))` plays the same shot
+outside a sequence.
+
+<Callout type="note" title="A self effect faces where the player looks">
+Played with `SequenceTarget.of(player)`, a body drawn on the player faces the way they were looking,
+so the body and the camera filming it agree.
+</Callout>
+
 ## Playing one
 
 ```java
 SequenceRun run = sequences.play(sequence, SequenceTarget.at(location)
         .by(killer)
         .on(victim)
+        .within(20)
         .visibleTo((observer, source) -> settings.seesEffects(observer)));
 
 run.cancel();
@@ -174,11 +269,35 @@ run.cancel();
 | `at(location)` / `of(player)` | The anchor. |
 | `by(player)` | Who caused it — what `{killer}`, `face:` and `[COMMAND]` read. |
 | `on(entity)` | Who it happened to — what `{victim}` reads. |
+| `within(blocks)` | How far it can be seen. 32 by default. |
 | `onlyTo(player)` | One viewer, which is how a preview is shown. |
 | `visibleTo(predicate)` | Who may perceive it, asked once per frame. |
+| `values(values)` / `item(name, stack)` | What this play fills in — see below. |
 
-`durationMillis()` says how long a sequence lasts without playing it, animation included — which is
-how a preview knows when to hand the player back.
+`durationMillis()` says how long a sequence lasts without playing it, animation included.
+`isEndless()` is true for a sequence with a looping body or camera: it plays until its run is
+cancelled.
+
+### Values known only when it plays
+
+What a crate rolled is not known when the file is read, so the target carries it:
+
+```java
+sequences.play(reveal, SequenceTarget.at(crate.getLocation())
+        .by(opener)
+        .values(Values.of("reward", reward.displayName()).put("tier_color", "{highlight}"))
+        .item("reward", reward.icon()));
+```
+
+```yaml
+- '[TITLE] {primary}&lYOU WON;%reward%;0.2;3;0.5'
+- '[DISPLAY] {item:reward};from:0,0.5,0;to:0,1.6,0;life:3;ease:back_out;glow:%tier_color%'
+- '[FIREWORK] color:%tier_color%;fade:#ffffff;type:star'
+```
+
+`%name%` is filled in the text of `[TITLE]`, `[ACTION_BAR]`, `[MESSAGE]` and `as:text` lines, and in
+`color:`, `fade:` and `glow:`. `{item:name}` as the head of an item line shows the stack the play
+supplied; without it the line draws nothing. Everything else is still compiled once.
 
 ## Effects that may or may not play
 
@@ -231,6 +350,13 @@ The gating sits behind the `WHEN IT PLAYS` button, and both halves are saved or 
 token the library does not recognise is still drawn, still editable as text, and comes back exactly as
 it was written.
 
+Loose lines with no gating — a mob skill's impact lines — open the same lines screen on their own:
+
+```java
+sequences.editLines(player, "{primary}&lIMPACT LINES", skill.effect())
+         .thenAccept(edited -> edited.ifPresent(lines -> save(skill.withEffect(lines))));
+```
+
 ## Contracts
 
 | | |
@@ -240,7 +366,8 @@ it was written.
 | **It never reaches the event** | A kill effect cannot cancel a death. |
 | **Folia-correct** | It runs on the thread that owns the location, through `Tasks`. |
 | **Instant sequences schedule nothing** | No delays and no animation means it plays inline, in the calling tick. |
-| **Cancellable** | `play` returns a `SequenceRun`. |
+| **Cancellable** | `play` returns a `SequenceRun`; `cancel()` stops what has not run yet, camera shots included. |
+| **A run lets go when it is done** | Once its last frame has run it is dropped, with its bodies and displays. |
 | **Nothing survives its plugin** | Disabling a plugin cancels its runs before the scheduler is released. |
 
 <Callout type="note" title="A sound this server does not have is reported">
@@ -252,9 +379,33 @@ because a resource pack's own sound is legitimately not in the registry.
 ## Previews
 
 ```java
-Previews.of(this).show(player, sequence, () -> menu.open(player));
+PluginPreviews previews = Previews.of(this).using(() -> config.get().preview());
+
+if (previews.available()) {
+    previews.show(player, sequence, () -> menu.open(player));
+}
 ```
 
-Lifts one player to an empty patch of sky, plays the sequence for them alone and puts them back
-exactly where they were — the callback runs however it ends. The stage's height, separation, distance
-and safety net are a `PreviewSettings` section a plugin can nest in its own config.
+Moves the player to a stage the server owner built, plays the sequence in front of them where only
+they can see it, and puts them back exactly where they were — the callback runs however it ends. Until
+a stage is set there is no preview: `available()` is `false` and `show` returns `null` without moving
+anyone. An endless sequence is shown for six seconds, a few cycles of it, rather than forever.
+
+`PreviewSettings` nests in the plugin's own config:
+
+```yaml
+preview:
+  location: ''        # server,world,x,y,z,yaw,pitch — empty means no previews
+  distance: 5.0       # how far in front of the player the effect plays
+  settle-ticks: 4     # wait after the teleport, so the client has the position
+  linger-ticks: 20    # how long to hold the stage after the effect ends
+  max-ticks: 600      # the safety net
+```
+
+Each plugin gives its admins a `setpreviewlocation` command to fill `location`. Only the position is
+used: a preview always faces **north**, so every effect is seen from the side it was drawn for —
+build the room around that and leave the north side open. The player is held by flight, made
+invulnerable and hidden from everyone else for the duration; their game mode is never changed.
+
+`sequences.preview(sequence, player)` is the lighter form: it plays for that player alone, where they
+stand, without a stage.

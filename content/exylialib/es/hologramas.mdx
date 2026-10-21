@@ -1,0 +1,266 @@
+---
+title: "Hologramas"
+description: "Hologramas por paquetes declarados en configuración: líneas con estilo, movimiento, páginas por jugador, botones y clics."
+---
+
+Un holograma es una pila de display entities enviadas por paquetes. En el servidor no existe nada, así
+que un pistón no puede empujarlo, un mob no puede matarlo y un crash no puede dejarlo atrás. Cada plugin
+declara sus hologramas en su propia configuración; ExyliaLib no tiene archivo ni comando de hologramas.
+
+```java
+Hologram trophy = Holograms.show(this, "trophy", location, config.trophy());
+```
+
+Los hologramas necesitan **PacketEvents**. Sin él `Holograms.isSupported()` es `false`, se avisa una vez
+en consola, y cada llamada sigue funcionando pero no dibuja nada. Una sección con `enabled: false` hace lo
+mismo.
+
+## Mostrar uno
+
+| Método | Qué hace |
+|---|---|
+| `show(plugin, id, location, config)` | Lo muestra. Reusar un id sustituye al anterior, así que volver a llamarlo tras un reload es seguro. La ubicación es antes del desplazamiento configurado. |
+| `show(plugin, id, location, config, data)` | Igual, con un `Map<String, Object>` que leen los placeholders. |
+| `show(plugin, id, location, config, visibleIf)` | Igual, con un `Predicate<Player>` que se aplica desde el primer frame. |
+| `get(plugin, id)` / `all(plugin)` | Encontrarlos. |
+| `remove(plugin, id)` / `removeAll(plugin)` | Quitarlos. Los de un plugin desactivado se quitan solos. |
+| `isSupported()` | Si aquí se pueden dibujar hologramas. |
+
+Cada método es seguro desde cualquier hilo. Los placeholders de las líneas se resuelven fuera del hilo
+principal, así que sus resolvers deben ser seguros en async. Una línea sin placeholders nunca programa un
+refresco.
+
+## La configuración
+
+```yaml
+spawn-hologram:
+  enabled: true
+  type: TEXT
+  lines:
+    - '<head:Notch><spin:45>'
+    - '<size:2><shine:highlight,speed=15,pause=1,width=4>{primary}&lBIENVENIDO'
+    - '<gap:0.1><flow>{secondary}Temporada II · ya abierta'
+    - '<if:"%player_level% >= 10">{success}Cumples los requisitos'
+    - '<button:join>{letters}Clic para entrar'
+  per-player: true
+  view-distance: 32
+  offset-y: 2
+  properties:
+    billboard: CENTER
+    distance-scale:
+      enabled: true
+      start: 8
+      end: 32
+      max: 2.5
+  config:
+    update-interval: 20
+  click:
+    commands:
+      - '[PAGE] next'
+    sound: 'UI_BUTTON_CLICK;0.6;1.4'
+    buttons:
+      join:
+        - 'arena join'
+  pages:
+    - lines:
+        - '{primary}&lNORMAS'
+        - '{letters}Nada de griefing.'
+      click:
+        - '[PAGE] previous'
+  page-interval: 10s
+```
+
+| Clave | Qué hace | Por defecto |
+|---|---|---|
+| `enabled` | Mostrarlo o no. Una sección nunca escrita no muestra nada. | `false` |
+| `type` | `TEXT`, `ITEM` o `BLOCK`. | `TEXT` |
+| `lines` | El texto, de arriba abajo, para `TEXT`. Es la página 1. | ninguno |
+| `item` / `block` | El material que flota, para los otros dos. | ninguno |
+| `per-player` | Un render por espectador, para que los placeholders cambien por jugador. Cuesta un juego de paquetes por espectador. | `false` |
+| `view-distance` | Bloques; más allá no se envía nada. | `48` |
+| `offset-x/y/z` | Desplazamiento desde la ubicación que da el plugin. | `0` |
+| `config.update-interval` | Ticks entre re-renders; también vale `1s` o `500ms`. | `20` |
+| `config.auto-update` | Re-renderizar a ese intervalo. | `true` |
+| `pages` | Más páginas, cada una con sus `lines` y su `click`. | ninguna |
+| `page-interval` | Pasa a cada espectador a la siguiente página solo; vale `5s`, `1m`. `0` lo apaga. | `0` |
+
+`persistent`, `config.spawn-on-chunk-load` y `config.remove-on-chunk-unload` se siguen leyendo, para que
+los archivos viejos carguen, pero no hacen nada.
+
+### `properties`
+
+| Clave | Qué hace | Por defecto |
+|---|---|---|
+| `billboard` | `CENTER`, `VERTICAL`, `HORIZONTAL` o `FIXED`. | `CENTER` |
+| `alignment` | `CENTER`, `LEFT` o `RIGHT`. | `CENTER` |
+| `scale-x/y/z` | Tamaño en cada eje. | `1` |
+| `shadow` | Sombra del texto. | `true` |
+| `see-through` | Se ve a través de los bloques. | `false` |
+| `line-width` | Ancho de ajuste, en píxeles. | `200` |
+| `line-spacing` | Bloques entre líneas. | `0.25` |
+| `text-opacity` | De `0` a `255`. | `255` |
+| `default-background` | Usar el panel gris del propio cliente. | `false` |
+| `background-color` | `#AARRGGBB`. | `#00000000` |
+| `brightness` | De `0` a `15`; `-1` usa la luz de donde está. | `-1` |
+| `glowing` | Contorno. | `false` |
+| `distance-scale` | Tamaño según la distancia, abajo. | apagado |
+
+### Tamaño según la distancia
+
+`properties.distance-scale` agranda el holograma a medida que el espectador se aleja, para que siga
+leyéndose desde la otra punta del spawn. Vale `min` hasta `start` bloques, crece de forma uniforme y se
+queda en `max` desde `end`, calculado por espectador en pasos de `0.1`.
+
+| Clave | Por defecto |
+|---|---|
+| `enabled` | `false` |
+| `start` / `end` | `8` / `32` |
+| `min` / `max` | `1` / `2.5`, cada uno limitado a `0.1`–`10` |
+
+Una línea puede llevar su propia curva con `<autoscale>` (la del holograma) o `<autoscale:start,end,max>`.
+
+## Etiquetas de línea
+
+Una línea puede empezar con etiquetas que le dan estilo solo a ella. Solo se leen etiquetas conocidas al
+principio de la línea; la primera desconocida corta la lectura y se queda en el texto, así que
+`<gradient:...>` sigue llegando al parser de texto. Un valor que contiene `>` va entre comillas:
+`<if:"%kills% > 10">`. Las duraciones aceptan un número de segundos, `s` o `ms`.
+
+### Aspecto y disposición
+
+| Etiqueta | Qué hace |
+|---|---|
+| `<size:n>` | Escala, de `0.1` a `10`. Un modelo a tamaño 1 mide medio bloque. |
+| `<opacity:n>` | Opacidad del texto, de `0` a `255`. |
+| `<background:#AARRGGBB>` | El panel de esta línea. |
+| `<shadow>` / `<shadow:false>` | Sombra del texto. |
+| `<gap:n>` | Bloques extra encima de la línea, de `-5` a `5`. |
+| `<align:left\|center\|right>` | Alineación. |
+| `<width:px>` | Ancho de ajuste, de `1` a `10000`. |
+| `<billboard:fixed\|center\|vertical\|horizontal>` | Cómo mira al espectador. |
+| `<seethrough>` | Se ve a través de los bloques. |
+| `<brightness:n>` | De `-1` a `15`. |
+
+### Modelos
+
+| Etiqueta | Qué hace |
+|---|---|
+| `<item:DIAMOND>` | La línea es un objeto. |
+| `<block:BEACON>` | La línea es un bloque, dibujado `FIXED` salvo que la línea ponga otro billboard. |
+| `<head:...>` | Una cabeza de jugador: un nombre, un UUID, una textura base64 o una URL de `textures.minecraft.net`. |
+| `<glow>` / `<glow:#RRGGBB>` | Contorno en una línea de modelo; sin valor usa el color del equipo. |
+
+### Movimiento y texto
+
+El cliente anima el movimiento entre keyframes enviados cada medio segundo, así que los periodos empiezan
+en dos segundos.
+
+| Etiqueta | Qué hace | Sin valor |
+|---|---|---|
+| `<spin:grados>` | Grados por segundo, hasta `±300`. | `90` |
+| `<sway:grados,period=s>` | Se balancea de lado a lado, en líneas de objeto y bloque. | `15`, periodo `4` |
+| `<bob:bloques,period=s>` | Sube y baja. | `0.08`, periodo `3` |
+| `<pulse:frac,period=s>` | Respira de tamaño. | `0.06`, periodo `2` |
+| `<typewriter:letras>` | Se escribe sola la primera vez que un espectador la ve. | `24` por segundo |
+| `<scramble:letras>` | Glifos al azar se asientan en el texto la primera vez que un espectador la ve. | `20` por segundo |
+| `<shine:color,speed=,pause=,width=>` | Un brillo que barre el texto. | `letters`, velocidad `10`, pausa `2.5`, ancho `3` |
+| `<flow:letras>` | Los colores de la línea fluyen por ella; negativo va al revés. | `4` |
+| `<rainbow:letras>` | Arcoíris, fluyendo. | `6` |
+| `<frames:s>` | Alterna textos separados por `\|\|`: `<frames:2>Primero\|\|Segundo`. | `2` |
+| `<marquee:letras,speed=>` | Desplaza un texto largo por una ventana. | `24` letras, velocidad `6` |
+| `<fade:s>` | Se desvanece y vuelve, una vez cada esos segundos. | `3` |
+| `<blink:s>` | Parpadea. | `1` |
+
+Las líneas con brillo o flujo se redibujan como mucho diez veces por segundo.
+
+### Quién la ve
+
+| Etiqueta | Qué hace |
+|---|---|
+| `<range:bloques>` | El rango de visión propio de esta línea. |
+| `<perm:nodo>` / `<perm:!nodo>` | Solo espectadores con, o sin, el permiso. |
+| `<if:"expr">` | Una condición calculada por espectador. |
+
+## Clics y botones
+
+`click` hace que se le pueda hacer clic al holograma. Sin comandos no se puede, salvo que el código ponga
+`onClick`.
+
+| Clave | Qué hace | Por defecto |
+|---|---|---|
+| `commands` | Lo que se ejecuta al hacer clic. | ninguno |
+| `width` | Ancho de la hitbox en bloques; su alto cubre las líneas. | `1.5` |
+| `cooldown` | Antes de que cuente el siguiente clic del mismo jugador. | `500ms` |
+| `hover-scale` | Cuánto crece mientras se apunta; `1` lo apaga. | `1.08` |
+| `style` | `BUTTON` dibuja un panel detrás y detrás de las líneas de botón; `NONE` no dibuja nada. | `BUTTON` |
+| `color` / `hover-color` | Color del panel en reposo y apuntado: un nombre de la paleta o `#RRGGBB`. | `{primary}` / `{secondary}` |
+| `sound` | Un valor de `[SOUND]` que suena al hacer clic. | ninguno |
+| `buttons` | Listas de comandos con nombre para las líneas `<button:nombre>`. | ninguno |
+| `range` | Hasta dónde llegan apuntar y hacer clic, hasta `32`. | `8` |
+
+Una línea de comando se ejecuta como el jugador, o desde la consola con `console:`. Puede empezar con un
+filtro — `left:`, `right:`, `shift_left:`, `shift_right:` o `shift:` — y acepta los tokens de efecto
+(`[MESSAGE]`, `[SOUND]`, `[TITLE]`, `[SERVER]`, `[TELEPORT] world;x;y;z`, `[ACTION] ns:id`, `[DELAY] 1s`, …).
+
+Una línea `<button:join>` ejecuta `click.buttons.join` cuando se le hace clic a esa línea, y tiene su
+propio fondo que se ilumina al apuntarlo. Lo apuntado crece según `hover-scale` y se hunde un instante al
+pulsarlo.
+
+<Callout type="warning" title="Con la mano vacía se llega a tres bloques">
+El cliente solo envía un clic derecho con la mano vacía dentro del alcance vanilla, así que un `range`
+mayor funciona para clics izquierdos y para clics con un objeto en la mano.
+</Callout>
+
+### Páginas
+
+Cada espectador ve una página a la vez, guardada por jugador. `lines` es la página 1 y ejecuta
+`click.commands`; cada entrada de `pages` ejecuta su propio `click` mientras el espectador está en ella.
+
+| `[PAGE]` | Va a |
+|---|---|
+| `[PAGE]` o `[PAGE] next` | La siguiente página, dando la vuelta. |
+| `[PAGE] previous` (`prev`, `back`) | La anterior, dando la vuelta. |
+| `[PAGE] first` / `[PAGE] last` | Los extremos. |
+| `[PAGE] 2` | Una página, contando desde 1. |
+
+`page-interval` pasa las páginas solo, y su temporizador se reinicia en cada cambio.
+
+## El handle `Hologram`
+
+| Método | Qué hace |
+|---|---|
+| `moveTo(location)` | Lo mueve. |
+| `attachTo(entity)` | Va montado en una entidad, que el cliente mueve con él; `null` lo suelta. Las líneas mantienen su pila, y el rango se mide desde la entidad. |
+| `lines(list)` / `pages(list)` | Sustituye el texto (en un holograma con páginas, `lines` sustituye la página 1). |
+| `page(player)` / `page(player, n)` / `nextPage` / `previousPage` / `pageCount()` | Páginas por espectador, contando desde 0. |
+| `refresh()` / `updateData(map)` | Re-renderiza, opcionalmente con datos nuevos. |
+| `onClick(player -> …)` / `onClick((player, click) -> …)` | Clics desde código; el cooldown se aplica. `Click` dice qué botón y si iba agachado. |
+| `visibleIf(predicate)` | Quién lo ve, además de la distancia de visión. |
+| `isViewing(player)` / `viewerCount()` | Quién lo está mirando. |
+| `remove()` / `removed()` | Vida. |
+
+## `HologramLine`: líneas como datos
+
+Un editor que deja al staff dar estilo a las líneas las lee y escribe con `HologramLine` en vez de parsear
+las etiquetas a mano.
+
+```java
+HologramLine line = HologramLine.parse("<size:2><spin>&6Campeón");
+
+String edited = line.toBuilder()
+        .size(1.5)
+        .spin(null)          // null quita una etiqueta
+        .glow("#8a51c4")
+        .build()
+        .raw();              // etiquetas en un orden fijo, y luego el texto
+```
+
+`of(text)` crea una línea simple, `builder()` una vacía; cada etiqueta es un campo que admite null, y
+`null` significa no escrita. `item`, `block` y `head` se borran entre sí. `isModel()` y `hasTags()`
+responden lo que dicen. Los valores por defecto sin valor son constantes: `DEFAULT_SPIN`, `DEFAULT_BOB`,
+`DEFAULT_TYPEWRITER` y el resto.
+
+<Callout type="tip" title="La paleta llega a los hologramas">
+Recargar los colores de ExyliaLib vuelve a renderizar todos los hologramas, y los ajustes `small-text` y
+`text-shadow` de la librería también se les aplican.
+</Callout>

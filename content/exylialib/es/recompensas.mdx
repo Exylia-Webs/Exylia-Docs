@@ -1,39 +1,198 @@
 ---
-title: "Recompensas, loot y economía"
-description: "Lo que un jugador ganó, lo que sale de un cofre, y cuánto vale un saldo."
+title: "Recompensas"
+description: "Lo que un jugador ganó: items, comandos, dinero, experiencia y efectos, con probabilidades, condiciones y una cola para quien no está."
 ---
 
-## Recompensas
-
-Una lista de recompensas son items, comandos y dinero con probabilidades y condiciones, editable en el
-juego y guardada exactamente como la guardaba ExyliaCommons.
+Una lista de recompensas son items, comandos, dinero, experiencia, mensajes y efectos de poción con
+probabilidades y condiciones, editable en el juego y guardada exactamente como la guardaba
+ExyliaCommons.
 
 ```java
 PluginRewards rewards = Rewards.of(this);
 
-rewards.give(player, config.winnerRewards(), context);
+rewards.give(player, config.winnerRewards());
 ```
+
+El dinero se paga a través de la [economía](/docs/exylialib/economia), y las tablas de loot y las cajas
+están en [Cajas y loot](/docs/exylialib/cajas-y-loot).
+
+## Tipos
+
+| Tipo | Contenido |
+|---|---|
+| `COMMAND` | `command`, ejecutado por la consola, con o sin `/` delante. `%player_name%` es el jugador. |
+| `ITEM` | `itemSnapshot`: un material, un texto de cabeza o `bytes:`. |
+| `MESSAGE` | `message`, en notación de texto Exylia. |
+| `ECONOMY` | `value` como texto, más un `currency` opcional; vacío es la moneda por defecto. |
+| `EXPERIENCE` | `value`, en puntos. |
+| `POTION` | `value`, un efecto por línea: `SPEED\|2\|15`. |
+
+Una recompensa de item se guarda **entera**: el nombre, el lore, los encantamientos y los atributos que
+se le dieron son lo que recibe el jugador. Una cabeza guardada como `basehead-…` o `playerhead-…` se
+entrega como un `PLAYER_HEAD` liso; guárdala como `bytes:` para conservar la textura.
+
+## En un archivo de config
+
+```java
+List<RewardEntry> list = Rewards.read(section, "rewards",
+        (where, problem) -> getLogger().warning(where + ": " + problem));
+```
+
+Las claves son los nombres de campo guardados, así que un archivo y una columna de base de datos dicen
+lo mismo:
+
+```yaml
+rewards:
+  - type: ITEM
+    itemSnapshot: DIAMOND
+    minAmount: 4
+    maxAmount: 12
+    chance: 25.0
+    permission: event.vip
+  - type: ECONOMY
+    value: "500"
+    currency: gems
+  - type: COMMAND
+    command: "crate key give %player_name% 1"
+    deliveryMessage: "{success}¡Ganaste una llave!"
+    priority: 5
+  - "broadcast %player_name% won"      # un texto suelto es un comando
+```
+
+| Clave | Significado |
+|---|---|
+| `name` | Cómo se llama la recompensa en menús y mensajes. |
+| `itemAmount` | Un tamaño de stack fijo. |
+| `minAmount` / `maxAmount` | Una cantidad aleatoria, ambos extremos incluidos; gana sobre `itemAmount`. En dinero y experiencia es lo que se paga. |
+| `chance` | Porcentaje, `0`–`100`: si esta ocurre. `100` nunca tira. |
+| `weight` | Cuál ocurre, para `roll` y `pick`. Por defecto `1`; `0` o menos nunca sale. |
+| `permission` | Necesario para recibirla. |
+| `condition` | `%player_level% >= 10`. Operadores `>=`, `<=`, `>`, `<`, `==`, `!=`, o `true`/`false`. `==` y `!=` comparan texto sin distinguir mayúsculas. |
+| `deliveryMessage` | Se envía cuando llega. |
+| `priority` | Mayor se entrega antes; a igual prioridad se respeta el orden del archivo. |
+| `icon` | Cómo la dibuja un menú. |
+
+Una fila que no se puede leer se reporta y se salta; el resto carga igual.
+
+<Callout type="warning" title="Una condición ilegible entrega la recompensa">
+Una condición que nadie puede leer se reporta una vez y se da por cumplida. Decía a quién *excluir*, y
+una errata no excluye a nadie. Un menú hace lo contrario: ahí una condición ilegible oculta el slot.
+</Callout>
+
+## Editar en pantalla
+
+```java
+rewards.editor(zone.rewards())
+        .title("{primary}&lREWARDS")
+        .onSave(edited -> manager.save(zone, edited))
+        .onCancel(() -> setupMenu.open(player))
+        .open(player);
+```
+
+Paginación, añadir, editar, borrar, copiar, pegar, guardar y cancelar. Una recompensa copiada en un
+plugin se pega en el editor de recompensas de cualquier otro.
+
+| Pregunta | Qué pasa |
+|---|---|
+| **¿Qué da?** | El tipo va primero, porque decide qué campos tiene el formulario: a un comando nunca se le pide tamaño de stack. |
+| Un item | El selector de icono, luego un formulario rellenado desde el item: su propio nombre y el tamaño de stack que se puso. Editarlo después no vuelve a pedir el item. |
+| Varios items | Una ventana acepta cualquier cantidad de items y añade una recompensa por stack. |
+| Varios comandos | Un comando por línea, una recompensa por comando. |
+| Dinero | La cantidad y un selector de moneda. |
+| Experiencia | Los puntos mínimos y máximos. |
+| Una poción | La lista de efectos se abre al enviar, también en una recompensa nueva sin efectos todavía. |
+| Editar todas | Probabilidad, peso, permiso, condición y mensaje aplicados a todas las filas; vacío conserva el de cada una. |
+
+Una lista que se sortea por peso (una caja, `roll`, `pick`) usa el editor con pesos:
+
+```java
+rewards.weightedEditor(crate.rewards(), reward -> List.of(
+        " {letters_black}▎ {letters}Rarity {letters_black}» " + tiers.of(reward).display()));
+```
+
+Cada fila muestra su parte real de todos los drops contando el peso, **shift + izquierdo** y
+**shift + derecho** suben y bajan el peso ahí mismo, y un botón ordena por peso. Las líneas extra son
+opcionales y se vuelven a pedir en cada redibujado.
+
+## Entregar
 
 | Llamada | Qué hace |
 |---|---|
-| `give(player, rewards, context)` | Entregar una lista entera. |
-| `give(player, reward)` | Una entrada. |
-| `roll(player, rewards, context)` | Dar lo que salió por probabilidad. |
-| `pick(rewards)` | Elegir sin dar — para una vista previa. |
-| `giveLater(uuid, owed)` | Encolar para alguien desconectado. |
-| `claim(player, callback)` | Entregar lo que se le debía. |
-| `editor(rewards)` | El editor de lista en el juego. |
-| `overflow(policy)` | Qué pasa cuando el inventario está lleno. |
-| `claimOnJoin(then)` | Vacía la cola en cada entrada, sin escribir un listener. |
-| `pending(store)` | Dónde se guardan las recompensas pendientes. |
+| `give(player, rewards)` | Todas, cada una comprobada y tirada por su cuenta. En el hilo del jugador. |
+| `give(player, reward)` | Una. |
+| `giveOnPlayerThread(player, rewards, then)` | Lo mismo desde cualquier hilo, movido al del jugador. |
+| `giveItem(player, stack)` | Un `ItemStack` bajo la política de desborde. |
+| `roll(player, rewards)` | Exactamente una, elegida por peso; aun así se enfrenta a su propio `chance`. |
+| `pick(rewards)` | Elegir por peso sin entregar: una vista previa. |
+| `giveDropping(player, rewards, spot)` | Lo entrega todo, pero los items salen lanzados en el sitio, una entidad por stack. Dinero, comandos y el resto siguen llegando al jugador. Sin desborde: nada entra en un inventario. |
+| `scatter(spot, rewards)` | Para nadie: items y orbes de experiencia salen en el sitio. Devuelve lo que necesita una persona (comandos, dinero, recompensas con permiso o condición), sin tirar, para que lo entregue quien llama. |
+| `deliver(uuid, rewards)` | Esté o no: conectado en este servidor se entrega en su hilo; si no, se guarda con `giveLater`. Si se va a mitad de la entrega, queda en cola. |
+| `deliver(uuid, rewards, spot)` | Los items caen en el sitio cuando el jugador está conectado, a menos de 32 bloques y en el hilo que llama; si no, `deliver(uuid, rewards)`. |
+| `deliver(uuid, stack)` / `deliver(uuid, template, amount)` | Un item, esté o no. `amount` se reparte en stacks del máximo del item. |
+| `giveLater(uuid, rewards)` | Guardarlas para alguien que no está. |
 
-### Desconectado no es premio perdido
+Cada recompensa pregunta, en orden, **permiso**, luego **condición**, luego la **tirada**. Una que falla
+no le cuesta nada más de la lista.
 
-`giveLater` escribe en un `PendingRewards` y `claim` lo vacía en la siguiente conexión del jugador. La
-cola se limpia **antes** de entregar y no después, así que un fallo a mitad de entrega no puede
-duplicar una recompensa la próxima vez.
+```java
+List<RewardEntry> share = Rewards.scaled(pot, 0.25);   // un cuarto del dinero y la experiencia
+```
 
-Tres líneas son la cola entera, tabla y listener de entrada incluidos:
+`Rewards.scaled` multiplica el dinero (dos decimales) y la experiencia (puntos enteros), redondeando
+hacia abajo, y quita lo que queda en nada. Los items y el resto quedan igual. Los potenciadores van por
+[`Modifiers.rewards`](/docs/exylialib/economia#modificadores).
+
+### Decidida ahora, entregada después
+
+Para todo lo que enseña un premio antes de entregarlo, de modo que lo animado es lo que llega:
+
+```java
+List<RewardEntry> pool = crate.rewards().stream().filter(r -> rewards.eligible(player, r)).toList();
+RewardEntry won = rewards.settle(rewards.pick(pool));   // null cuando falló su probabilidad
+// ... la animación muestra `won` ...
+rewards.deliver(player.getUniqueId(), List.of(won));
+```
+
+`eligible` pregunta el permiso y la condición, en el hilo del jugador. `settle` tira la probabilidad y la
+cantidad ya y devuelve una recompensa con probabilidad 100, la cantidad fijada y sin permiso ni
+condición, así que el `give` o `deliver` posterior no vuelve a preguntar nada.
+
+### Resultados
+
+`RewardDelivery` guarda un `RewardResult` por recompensa: `given()`, `skipped()`, `failed()`,
+`isClean()`, `failures()`.
+
+| Resultado | Significa | Cuenta como |
+|---|---|---|
+| `GIVEN` | Lo recibió. | entregada |
+| `NOT_ROLLED` | Los dados dijeron que no. | saltada |
+| `NO_PERMISSION` | Falta el permiso. | saltada |
+| `CONDITION_FAILED` | La condición no se cumplió. | saltada |
+| `NO_ROOM` | Sin sitio, con `FAIL`. | fallo |
+| `QUEUED` | Guardada para su vuelta. | — |
+| `FAILED` | Algo está roto. | fallo |
+
+Una recompensa rota se reporta en consola una vez por problema, no una por jugador. Un comando cuyo
+plugin lanza un error, o que la consola rechaza, es un único aviso que nombra el comando, sin traza.
+
+## Inventarios llenos
+
+```java
+rewards.overflow(OverflowPolicy.QUEUE);
+```
+
+| Política | Hace |
+|---|---|
+| `DROP` | Tira a sus pies lo que no cabe. **Por defecto.** |
+| `QUEUE` | Guarda lo que sobra para luego. Necesita un almacén de pendientes; si el almacén lo rechaza, se tira y se dice en consola. |
+| `FAIL` | Se rinde y reporta `NO_ROOM`. |
+
+Lo que se encola es lo que sobró: si recibió cuatro de seis, se le deben dos, con cantidad fija y
+probabilidad 100. El permiso y la condición se conservan y se vuelven a comprobar al entregarla.
+
+## Recompensas pendientes
+
+Tres líneas son toda la cola, tabla y listener de entrada incluidos:
 
 ```java
 rewards = Rewards.of(this)
@@ -42,97 +201,68 @@ rewards = Rewards.of(this)
         .claimOnJoin((player, delivery) -> messages.claimed(player, delivery.given()));
 ```
 
-`PendingRewards.database(plugin)` escribe en `exylia_pending_rewards` **en la base de datos de tu
-propio plugin** — la que diga `plugins/<Plugin>/database.yml`, H2 en un archivo por defecto. ExyliaLib
-no tiene base de datos propia y nunca abre una. Dos plugins apuntando a la misma base comparten tabla
-y se distinguen por la columna que los nombra. Un jugador tiene tope de 200 lotes pendientes por
-plugin; pasado eso la escritura se rechaza y se dice una vez en consola: una cola es donde un bug
-escribe en bucle.
+`PendingRewards.database(plugin)` escribe en `exylia_pending_rewards` **en la base de datos de tu propio
+plugin** — lo que diga `plugins/<Plugin>/database.yml`, H2 en un archivo por defecto. ExyliaLib no
+tiene base de datos propia. Dos plugins sobre la misma base comparten la tabla, distinguidos por una
+columna con su nombre. Un jugador tiene un tope de **200** lotes pendientes por plugin; pasado eso la
+escritura se rechaza y se dice una vez en consola.
 
-Sigue implementando `PendingRewards` a mano cuando las filas ya existen en otro sitio — ExyliaCapture
-y ExyliaEvents tienen cada uno su tabla, y ninguno tuvo que migrar por esto.
+| Llamada | Qué hace |
+|---|---|
+| `claimOnJoin()` / `claimOnJoin(then)` | Entrega lo pendiente en cada entrada. `then` solo se llama si se debía algo. Se registra una vez aunque se llame varias. |
+| `claim(player, then)` | Lo mismo a mano. El almacén se lee fuera del hilo principal y la entrega vuelve al del jugador. |
+| `claim(player, batchId, then)` | Un lote, dejando el resto. |
+| `pending.count(uuid)` | Cuántos lotes esperan, para una línea de "tienes 3 recompensas". Fuera del hilo principal. |
+
+El almacén suelta las recompensas **antes** de la entrega, así un fallo no puede duplicar una. Si el
+jugador muere, sale o cambia de servidor mientras la lectura está en vuelo, se le vuelven a deber en vez
+de perderse.
+
+### Para el staff
+
+`/exylialib pendingrewards [jugador]` (permiso `exylialib.pendingrewards`, op por defecto) lista quién
+tiene recompensas pendientes en todos los plugins, cada lote que se le debe, y permite darlo ya o
+cancelarlo. Cancelar pide confirmación dos veces. Desde la consola imprime un resumen.
+
+### Tu propio almacén
+
+Sigue implementando `PendingRewards` cuando las filas ya existen en otro sitio — ExyliaCapture y
+ExyliaEvents tienen cada uno su tabla.
+
+```java
+rewards.pending(new PendingRewards() {
+    public void keep(UUID player, List<RewardEntry> owed) {
+        tasks.runAsync(() -> repository.save(new PendingReward(player, owed)));
+    }
+    public List<RewardEntry> claim(UUID player) {
+        return repository.takeAllFor(player);
+    }
+});
+```
+
+Responde también `browsable()`, `owed()`, `peek(uuid)` y `take(uuid, batch)` y la pantalla del staff
+podrá listarlo y actuar sobre él; sin ellos lo muestra como un almacén en el que no puede mirar.
 
 <Callout type="warning" title="`keep` corre en el hilo que debía la recompensa">
-Escribir en la base de datos ahí mismo es un parón en el hilo principal. El store de arriba programa
-la escritura él solo; uno escrito a mano tiene que llamar a `Tasks.of(plugin).runAsync(...)` y volver.
-`claim` es lo contrario — ya está fuera del hilo principal, así que lee directo.
+Escribir en la base de datos ahí en línea es un parón del hilo principal: prográmalo y vuelve. `claim`
+es lo contrario — ya está fuera del hilo principal, así que lee directamente, y nunca devuelvas las
+mismas recompensas dos veces.
 </Callout>
 
-### Desbordamiento
-
-`OverflowPolicy` decide qué significa un inventario lleno: soltar a los pies, encolarlo o rechazar.
-Elegirlo por plugin es la gracia — un drop de mob puede caer al suelo, un premio de caja debería
-esperar. `QUEUE` necesita un `pending`; sin él suelta y lo dice, porque pedir encolar es pedir no
-perderlo.
-
-## Loot
-
-Lo que sale de un cofre, un generador o un bloque roto:
+## Construir en código
 
 ```java
-List<LootEntry> table = Loot.parseAll(section.getStringList("loot"));
-
-List<ItemStack> filled = Loot.roll(table);      // lo que llena un cofre
-ItemStack single = Loot.pick(table);            // una tirada
+RewardEntry coins = RewardEntry.economy("500")
+        .name("{primary}&lSTARTER BONUS")
+        .chance(50.0)
+        .permission("event.vip")
+        .build();
 ```
 
-| Campo | Qué hace |
-|---|---|
-| Objeto | El ítem, con su nombre, encantamientos y lore. |
-| `weight` | Cuán probable es esta entrada respecto a las demás. |
-| `minAmount` / `maxAmount` | El rango de cantidad que se sortea. |
-| `tier` | Una etiqueta, para que una entrada pertenezca a una banda de rareza. |
+Fábricas: `command`, `message`, `item`, `economy`, `experience`, `potion`, `of(type)`. `RewardEntry` es
+inmutable: `toBuilder()` edita y conserva el id, `copy()` duplica con uno nuevo. Las cantidades se fijan
+con `fixedAmount(n)` o `amountBetween(min, max)`.
 
-Los pesos son relativos, no porcentajes: una entrada con peso `10` junto a otra con `5` sale el doble de
-veces, y los números no tienen que sumar nada.
-
-`Loot.editor(plugin, entries)` es el editor en el juego para una.
-
-## Economía
-
-Una sola elección de economía para todo el servidor, sobre Vault, PlayerPoints o una moneda que
-escribas:
-
-```java
-Economy.balance(uuid);
-Economy.has(uuid, amount);
-
-Economy.charge(uuid, amount);                  // true si salió adelante
-Economy.pay(uuid, amount);
-
-EconomyResponse taken = Economy.withdraw(uuid, amount);
-TransferResult moved  = Economy.transfer(from, to, amount);
-```
-
-`charge` y `pay` responden con un booleano para el caso habitual; `withdraw` y `deposit` devuelven un
-`EconomyResponse` cuando necesitas saber *por qué* falló. Nada lanza — un cobro que no se pudo hacer es
-un resultado sobre el que ramificar, no una excepción que cazar alrededor de un clic de menú.
-
-Se soportan varias monedas: `Economy.of("points")` acota cada llamada a una, y `Economy.currencies()`
-lista las registradas.
-
-Un servidor sin plugin de economía recibe un proveedor que lo dice, así que el fallo es *"no hay
-economía instalada"* y no un `NoClassDefFoundError` a mitad de una compra.
-
-## Formatos
-
-La otra mitad del dinero: lo que lee un jugador, y lo que teclea un jugador.
-
-```java
-Formats.money(1234567);          // "1.23M", o lo que haya configurado el dueño
-Formats.compact(1234567);        // el mismo acortado, sin moneda
-Formats.percent(0.42);
-Formats.percentOf(3, 12);
-Formats.date(epochMillis);
-Formats.relative(epochMillis);   // "hace 3 minutos"
-
-Amounts.parse("10M");            // lo que tecleó un jugador, de vuelta a número
-```
-
-Leer `10M` del chat usa el mismo parser que la [entrada `amount`](/docs/exylialib/entrada-y-editores),
-así que un menú, un comando y una petición por chat aceptan la misma abreviatura.
-
-<Callout type="note" title="El locale está fijado a propósito">
-Los formatos decimales usan un locale fijo y no el de la máquina. Un servidor en España escribiría
-`1,50`, y ese valor rompe cada scoreboard, comparación y config que lo lea de vuelta.
-</Callout>
+`Rewards.snapshot(stack)` guarda un item como `bytes:` idéntico byte a byte a ExyliaCommons, y
+`RewardCodec.encode`/`decode` es la columna de la base de datos: los campos iguales a su valor por
+defecto se omiten, y una lista vacía se guarda como `NULL`.

@@ -1,24 +1,30 @@
 ---
 title: "Effects and sequences"
-description: "Titles, action bars, boss bars, sounds, particles and fireworks — declared by the owner, played by the plugin."
+description: "Titles, action bars, boss bars, sounds, particles, fireworks and potion effects — declared by the owner, played by the plugin."
 ---
 
 The plugin says *what happened*. The server owner decides what that looks like.
 
 ```java
-Effects.play(config.onWin(), player);
+PluginEffects effects = Effects.of(this);   // once, usually a field
+effects.play(config.onWin(), player);
 ```
+
+`Effects.of(plugin)` stamps the owner on every display, so it ticks on that plugin's scheduler and
+stops when that plugin disables. The static `Effects.play(...)` still works and works the owner out
+when it can; when several plugins own effects and the caller cannot be identified, it asks for
+`Effects.of(plugin)` instead of guessing.
 
 ## EffectConfig
 
 Six optional sections that nest inside your own config record like any other. An unwritten section
-does nothing.
+does nothing, and a section with nothing in it is not written to the file.
 
-| Section | Fields |
+| Section | Keys |
 |---|---|
-| `title` | `text`, `subtitle`, `fadeIn`, `stay`, `fadeOut`, `countdown`, `timeStyle` |
-| `action-bar` | `text`, `duration`, `countdown`, `timeStyle` |
-| `boss-bar` | `text`, `colour`, `overlay`, `countdown`, `countUp`, `progress`, `timeStyle` |
+| `title` | `text`, `subtitle`, `fade-in`, `stay`, `fade-out`, `time-style` |
+| `action-bar` | `text`, `duration`, `time-style` |
+| `boss-bar` | `text`, `colour`, `overlay`, `count-up`, `progress`, `time-style` |
 | `sound` | `name`, `volume`, `pitch`, `category` |
 | `particle` | `name`, `count`, `spread`, `speed` |
 | `firework` | `colours`, `fades`, `shape`, `flicker`, `trail` |
@@ -26,20 +32,61 @@ does nothing.
 ```yaml
 combat-actionbar:
   action-bar:
-    text: "{primary}⚔ {error}Combat {muted}%time%s"
+    text: "{primary}⚔ {error}Combat {muted}%time_precise%"
     duration: 0
-    countdown: 0
     time-style: tenths
 ```
 
-Times are **seconds with decimals** — `countdown: 3.3` is 3.3 real seconds. `%time%` belongs to the
-effect, never to the global placeholder registry: two countdowns on screen must not show the same
-number. `time-style` is a `TimeFormats` style name — `auto`, `tenths`, `clock`.
+Times are **seconds with decimals**, and every time key also reads a duration written out:
+`stay: 1m30s` is `stay: 90`. Titles default to no fade in (`fade-in: 0`, `stay: 3`, `fade-out: 1`): a
+title reacting to something that just happened has to be on screen when it happens. Boss bars default
+to `PURPLE` and `PROGRESS`; `progress` (0.0–1.0) is the fill when the bar is not counting.
 
 <Callout type="warning" title="A duration of zero means stay">
-It does not mean expire immediately. A bar whose countdown is driven by the plugin — a combat tag
-writing its own remaining time — wants `duration: 0` so it lives until something stops it.
+It does not mean expire immediately. `stay: 0` or `duration: 0` keeps the title or bar up until
+something stops it — what a combat tag driving its own remaining time wants.
 </Callout>
+
+## The countdown belongs to the caller
+
+**How long a timer runs is not a config key.** A countdown is always the same number something else is
+already counting — the match, the warmup, the combat tag — so a key that could set it to anything else
+could only ever disagree with what is happening. The seconds come from the code, the look from the
+file:
+
+```java
+effects.play(config.onCountdown(), player, matchSeconds);   // a whole block, counting
+Effects.title(text).countdown(matchSeconds).show(player);   // or one display
+```
+
+`%time%` and `%time_precise%` belong to the effect, never to the global placeholder registry: two
+countdowns on screen must not show the same number.
+
+| Placeholder | Reads as |
+|---|---|
+| `%time%` | A bare number in the section's `time-style`: `3.3`, `47`, `1:35`. |
+| `%time_precise%` | The same value **with its unit**, whatever the style says: `0.4s`, `9.9s`, `45s`, `1m 30s`. |
+
+A text written `%time%s` reads `1:35s` once the countdown passes a minute; `%time_precise%` is what new
+defaults should use.
+
+### Teleport warmups
+
+A teleport does this for you: `onStart(effect)` counts over the warmup it was given, and whatever the
+countdown put on screen — a boss bar, a title — is taken down the moment the teleport ends, arrived or
+cancelled. `onArrive` and `onCancel` play after it.
+
+## One part, with values
+
+A plugin that keeps a single title or boss bar as its own config block plays it through the same
+path:
+
+```java
+Display bar = effects.play(EffectConfig.of(config.resetBar()).filled(values), player, seconds);
+```
+
+`EffectConfig.of(Title | ActionBar | BossBar)` is an effect holding only that part; `filled(Values)`
+substitutes `%name%` into the text before it is parsed, so `%time%` and PlaceholderAPI still resolve.
 
 ## A whole effect on one line
 
@@ -55,33 +102,32 @@ Effects.particleFrom("FLAME|20|0.5").at(location).show(player);   // one spread 
 `NAME|volume|pitch` for sounds, `NAME|count|dx|dy|dz|speed` for particles, and a shorter
 `NAME|count|spread|speed` is accepted too. Pipe is the only separator — a namespaced key like
 `minecraft:flame` carries a colon that has to survive the split. Missing parts fall back to full
-volume and pitch, count 1, no spread.
+volume and pitch, count 1, no spread. A blank line plays nothing.
 
 ## Builders
 
 ```java
 Effects.title("{success}&lWIN").subtitle("{muted}%player%").show(player);
 Effects.bossBar("{primary}Starting in {highlight}%time%").countdown(10).showAll();
-Effects.firework().shape("BALL_LARGE").colours("#8a51c4").at(location).show();
+Effects.firework().shape("BALL_LARGE").colour("#8a51c4").at(location).show();
 ```
 
-## The countdown belongs to the caller
+Fireworks the library sets off deal no damage.
 
-**How long a timer runs is not a config key.** A countdown is always the same number something else is
-already counting — the match, the warmup, the combat tag — so a key that could set it to anything else
-could only ever disagree with what is happening. The seconds come from the code, the look from the
-file:
+## Playing and stopping
 
-```java
-Effects.play(config.onCountdown(), player, matchSeconds);   // a whole block, counting
-Effects.title(text).countdown(matchSeconds).show(player);   // or one display
-```
+| Call | What it does |
+|---|---|
+| `effects.play(config, viewer)` | Play it for one player, returning a `Display`. |
+| `effects.play(config, viewer, seconds)` | The same, counting over `seconds`. |
+| `effects.playAll(config)` | Every online viewer. |
+| `Effects.stopFor(viewer)` | Stop whatever is showing them. |
+| `Effects.stopAll(pluginName)` | Stop everything a plugin owns. |
 
-A teleport already does this for you: `onStart(effect)` counts over the warmup it was given.
-
-Times are **seconds with decimals**: `countdown(3.3)` is 3.3 real seconds and `%time%` shows `3.3`.
-`%time%` belongs to the effect, never to the global registry — two countdowns on screen must not show
-the same number. `timeStyle` is a `TimeFormats` style name: `auto`, `tenths`, `clock` and the rest.
+A `Display` is the handle to everything one play put on screen: `stop()` takes every part of it down,
+`text(...)` rewrites what a bar says without restarting it (the same text again is a no-op),
+`progress(float)` sets the fill, `addTime(seconds)` extends it and `onEnd(runnable)` runs exactly once,
+however it ends.
 
 ## Timers
 
@@ -89,7 +135,7 @@ the same number. `timeStyle` is a `TimeFormats` style name: `auto`, `tenths`, `c
 
 | Factory | What it is |
 |---|---|
-| `Timer.countdown(seconds)` | Runs to zero. |
+| `Timer.countdown(seconds)` / `countdownTicks(ticks)` | Runs to zero. |
 | `Timer.countUp()` / `countUp(total)` | Elapsed-time displays. |
 | `Timer.ofCooldown(player, key)` | Reads a running cooldown instead of counting on its own. |
 
@@ -98,42 +144,88 @@ display just looks at it, finishing the moment the cooldown does. `advance` and 
 such a timer; give the time through `Cooldowns` and the bar shows it.
 
 `Ticks` converts: `fromSeconds`, `toSeconds`, `fromMillis`, `toMillis`, and `parse(text, fallback)`
-understanding `s`, `ms`, `t`, `m` and `h` suffixes.
+understanding `s`, `ms`, `t`, `m`, `h`, `d` and `w`, combined as in `7d12h30m`.
 
 ### Time styles
 
-`TimeFormats` is what a `timeStyle` names, and what every duration in the ecosystem is written with:
+`TimeFormats` is what a `time-style` names, and what every duration in the ecosystem is written with:
 
 | Style | Reads as | For |
 |---|---|---|
-| `AUTO` | `3.3`, `47`, `1:35` | Decimals only where they carry information. The default. |
-| `SECONDS` | `3` | Whole seconds, rounded down. |
-| `TENTHS` / `HUNDREDTHS` | `3.3` / `3.34` | A number a player is reacting to. |
-| `CLOCK` | `1:35`, `1:05:03` | Padded, past an hour. |
-| `FULL` | `1h 5m 3s`, `5d` | Every part, days downwards, for a duration read once. |
-| `COMPACT` | `3d`, `2.5h`, `45s` | The largest unit only, up to years, for a duration inside a sentence. |
+| `auto` | `3.3`, `47`, `1:35` | Tenths under ten seconds, whole seconds to a minute, a clock past that. The default. |
+| `seconds` | `3` | Whole seconds, rounded down. |
+| `tenths` / `hundredths` | `3.3` / `3.34` | A number a player is reacting to. |
+| `clock` | `1:35`, `1:05:03` | Padded, past an hour. |
+| `full` | `1h 5m 3s`, `5d` | Every part, days downwards, for a duration read once. |
+| `compact` | `3d 4h`, `59m 50s`, `45s` | The two largest units that say something, whole, up to years. |
+| `precise` | `0.4s`, `9.9s`, `45s`, `1m 30s` | `compact` with tenths under ten seconds, unit included. |
 
-`FULL` rolls into days rather than counting hours forever, so a five-day cooldown reads `5d` and not
-`120h`. `COMPACT` goes further — a month is thirty days and a year three hundred and sixty-five, which
-is the point: `2mo ago` is not claiming to know which months. Everything these styles write,
-`duration()` input reads back: `30s`, `1h30m`, `2d`, `1w`, `2.5h`.
+`compact` and `precise` round **down**: a countdown that rounds up tells a player they have time they
+do not have, and `compact` never writes a decimal — `59m 50s`, not `59.9m`. A month is thirty days and
+a year three hundred and sixty-five. `full` rolls into days, so a five-day cooldown reads `5d`, not
+`120h`. Decimals always use a dot, whatever the host's locale.
 
-## Playing and stopping
+## Potion effects
 
-| Call | What it does |
+A different `Effects`, in `net.exylia.lib.util`, applies potion effects written one per line:
+
+```java
+Effects.apply(player, "SPEED|2|5");                    // Speed II, 5 seconds
+Effects.apply(player, "SPEED|2|5|false|false");        // the same, nothing on screen
+Effects.applyInfinite(player, kit.passiveEffects());   // no end; the duration is ignored
+Effects.remove(player, kit.passiveEffects());
+```
+
+`NAME|LEVEL|SECONDS|PARTICLES|ICON|AMBIENT`:
+
+| Part | Means |
 |---|---|
-| `Effects.play(config, viewer)` | Play it for one player, returning a `Display`. |
-| `Effects.playAll(config)` | Every online viewer. |
-| `Effects.stopFor(viewer)` | Stop whatever this plugin is showing them. |
-| `Effects.stopAll(pluginName)` | Stop everything a plugin owns. |
+| `LEVEL` | As a player reads it — `SPEED\|2` is Speed II. Missing means I. |
+| `SECONDS` | `infinite` or `-1` never ends. Missing means 10. Also reads `90s`, `1m30s`. |
+| `PARTICLES`, `ICON`, `AMBIENT` | `true`/`false` (or `yes`/`no`). Missing means what a potion normally does: particles and icon shown, not ambient. |
 
-A `Display` is the handle: `text(...)` rewrites what a bar says without restarting it, and `stop()`
-takes it down.
+The same three flags are `particles:` `icon:` `ambient:` on a sequence's `[POTION]` line. A malformed
+line is skipped, never fatal. `clear(player)` removes every effect — pair `applyInfinite` with
+`remove`, not with `clear`, because the player's own potions are not yours to take.
+
+### Kept while inside
+
+```java
+Effects.ensureInfinite(player, zone.effects());   // on a timer while they stand there
+Effects.removeInfinite(player, zone.effects());   // when they leave
+```
+
+`ensureInfinite` applies only what is missing: milk, a death or a weaker potion took it away, and the
+next check puts it back. An effect already there at the same level or higher is left alone and costs
+no packet. `removeInfinite` removes only effects with no end, so a potion the player drank survives.
+
+### Kept through a totem
+
+A totem clears every effect — right for a potion, wrong for a kit buff the other side still has.
+
+```java
+Effects.keepThroughTotem(this, player -> kits.effectsOf(player));
+Effects.keepThroughTotem(this, "classes", player -> classes.passivesOf(player));
+```
+
+The totem still clears everything; the next tick puts back the lines the rule names, at their written
+level. Only effects the player had when the totem fired come back, never for longer than they had
+left: milk that took a buff away is not undone, and a timed effect does not start over. One rule per
+plugin, or per `id` for a plugin whose modules each keep their own; dropped when the plugin disables.
+
+### Lending effects for a while
+
+`EffectSnapshot.of(player, List.of("SPEED", "STRENGTH"))` holds those types, and `restoreTo(player)`
+removes what is on now within that scope and puts back what was held — for a duel or arena that has to
+hand back what the player came in with. `EffectSnapshot.of(player)` holds every type.
+
+All of these touch the player, so call them from the thread that owns the player
+(`tasks.runAtEntity`); `parse` is pure data and safe anywhere.
 
 ## Sequences
 
-A sequence is choreography written in configuration — shapes, sounds, delays, display entities and
-bodies, compiled once:
+A sequence is choreography written in configuration — shapes, sounds, delays, display entities,
+bodies and camera shots, compiled once:
 
 ```java
 PluginSequences sequences = Sequences.of(this);
@@ -142,20 +234,7 @@ Sequence intro = sequences.compile(config.onCapture());
 sequences.play(intro, SequenceTarget.at(location));
 ```
 
-Twenty-five shapes, thirteen other tokens, and every shape drawable with particles **or** with display
-entities that move, spin and fall by themselves. Entries carry odds, conditions and an audience, so
-"one in five times, only if the player is crouching, seen by everyone within twenty blocks" is
-configuration rather than code.
-
-The whole syntax, the API and the in-game editor are in [Sequences](/docs/exylialib/sequences).
-
-## Previews
-
-Showing one player an effect against an empty sky and putting them back afterwards:
-
-```java
-Previews.of(this).show(player, sequence);
-```
-
-It is what an editor uses so somebody choosing a kill effect can see it before saving, without firing
-it into a live arena.
+Twenty-six shapes and every one drawable with particles **or** with display entities. Entries carry
+odds, conditions and an audience, so "one in five times, only if the player is crouching, seen by
+everyone within twenty blocks" is configuration rather than code. The whole syntax, the API, previews
+and the in-game editor are in [Sequences](/docs/exylialib/sequences).

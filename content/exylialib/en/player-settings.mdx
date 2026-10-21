@@ -1,0 +1,123 @@
+---
+title: "Player settings"
+description: "Preferences every Exylia plugin registers, announcement channels players can mute, and one /settings screen that shows them all."
+---
+
+Every plugin used to grow its own `/toggle` command and its own table of booleans. Now a plugin
+registers its preferences once and the library stores them, answers them from memory and draws them
+on one shared screen.
+
+```java
+@Override
+public void onEnable() {
+    Settings.category(this, "requests", "ENDER_PEARL", "Requests", "How other players reach you.");
+    Settings.register(this, Setting.toggle("trade-requests", true)
+            .category("requests")
+            .icon("EMERALD")
+            .name("Trade requests")
+            .description("Whether players can ask you", "to {highlight}trade{letters}.")
+            .build());
+
+    deaths = Broadcasts.channel(this, "death-messages", "SKELETON_SKULL", "Death messages",
+            "Messages about players dying", "anywhere on the server.");
+}
+
+// anywhere, any thread
+if (!Settings.enabled(target, this, "trade-requests")) { refuse(); return; }
+Broadcasts.send(deaths, Text.from(this, messages.death()).with("player", victim.getName()));
+```
+
+## Kinds
+
+| Builder | Holds | A click |
+|---|---|---|
+| `Setting.toggle(key, default)` | `true` / `false` | flips it |
+| `Setting.choice(key, default, options...)` | one option id; `.label(id, text)` names it on screen | left forward, right back, wrapping |
+| `Setting.number(key, default, min, max, step)` | a number kept between `min` and `max` | left `+step`, right `-step` |
+
+Optional on every builder:
+
+| Call | What it does |
+|---|---|
+| `category`, `icon`, `name`, `description` | Where and how it is drawn. `icon` takes anything a menu's `material:` accepts; the description allows palette tokens. |
+| `permission(node)` | A player without it sees the setting locked and reads its default. |
+| `available(check, reason)` | Asked whenever the menu draws; a setting whose feature is off is shown disabled with the reason. |
+| `perServer()` | Each server of a network keeps its own value instead of one shared value. |
+| `store(Store)` | The value lives in a column your plugin already has. `get`/`set` run on the caller's thread and read memory; `loaded` says whether a click can be trusted yet. |
+
+## Reading and writing
+
+| Call | Answers |
+|---|---|
+| `Settings.enabled(player, plugin, key)` | A toggle. `true` for a key never registered. |
+| `Settings.value(player, plugin, key)` | The value as text; `null` for a key never registered. |
+| `Settings.number(player, plugin, key)` | A number setting. |
+| `Settings.set(player, plugin, key, value)` | `false` when the key is unknown or the value is not one it holds. |
+| `Settings.set(uuid, plugin, key, value)` | The same for a player who may be offline — imports, admin commands. Not for a `store` setting. |
+| `Settings.toggle` / `Settings.step(…, direction)` | One click. `false` while the player's values are not read yet. |
+| `Settings.isLoaded(player, plugin)` | Whether the join read is back. |
+
+- **Reads are memory.** A player's values are read in the background when they join, and every question
+  is answered from memory, from any thread. Until the read is back the answer is the default.
+- **Writes land in order.** Two quick clicks reach the database in the order they were made, and a value
+  set while the join read is out wins over the row it reads.
+- **Only what differs from the default is stored.** Setting a value back to the default deletes its row,
+  so a default changed in a later release reaches everybody who never touched it.
+
+Values live in `exylia_player_settings`, in the **registering plugin's own database**. A network that
+shares that database shares its players' settings; with Redis on, a change on one server is picked up
+on the others at once, and without it a player is read again when they join another server.
+
+## Announcements
+
+`Broadcasts.channel(plugin, key, icon, name, description...)` registers a toggle that starts on, kept
+apart from the settings on its own screen and grouped by plugin. `Broadcasts.send(channel, text)` sends
+to every online player who has it on, and to the console, each on the thread that owns them; the text is
+built once. `Broadcasts.send(channel, String)` builds it with the plugin's own `%prefix%`. A channel
+whose feature can be off takes the overload with `available` and a reason.
+
+## The screen
+
+Two cards — **Settings** and **Announcements** — then the plugins that registered something, a plugin's
+categories, and one category's settings. A step with a single choice is skipped. States are drawn live,
+so a click, or a change made on another server, shows without reopening.
+
+`Settings.open(player)` and `Settings.openAnnouncements(player)` open it from a plugin's own command.
+
+The screens are files the server can restyle, in the library's language folder:
+
+```
+plugins/ExyliaLib/lang/<code>/menus/settings/
+├── settings.yml        # the root
+├── settings_hub.yml    # a plugin's categories
+├── settings_page.yml   # one category's settings
+└── settings_list.yml   # a paginated list
+```
+
+They are written on first start and read on every start and `/exylialib reload`. An update only adds
+missing keys; a changed default waits in `/exylialib updates` and your edits are never overwritten. The
+hub and page files leave `pagination.slots` to the library, which centres the cards in their row. A file
+that cannot be parsed is reported and the bundled English one is shown until it is fixed. The words on
+the rows — names, states, click hints — are in `lang/<code>/phrases.yml`.
+
+## The command
+
+The library adds no player command unless the server asks. In ExyliaLib's `config.yml`:
+
+```yaml
+settings:
+  command:
+    enabled: false
+    name: settings
+    aliases: [preferences, options]
+```
+
+`enabled: true` registers it with permission `exylialib.settings` (default true). It is read at startup,
+so a change needs a restart. A plugin with its own settings command can skip it when
+`Settings.commandEnabled()` is `true`.
+
+## Lifecycle
+
+Register from `onEnable`; registering a key again replaces it, so a reload may register everything again
+with new text. Everything a plugin registered is forgotten one tick after it is disabled, after its own
+`onDisable`, so it can still announce its shutdown.

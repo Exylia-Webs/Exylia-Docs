@@ -1,0 +1,134 @@
+---
+title: "Web editor"
+description: "Editing every Exylia plugin's files from the browser with /exylialib editor, and what a plugin registers for richer screens."
+---
+
+`/exylialib editor` uploads what is editable on this server and answers with a link. The admin edits in
+the browser, and a second command, typed in game, brings the result back. The server never opens a port
+and nothing reaches it unless somebody with permission asks for it.
+
+## For server owners
+
+<Steps>
+  <Step title="Open a session">
+    `/exylialib editor` covers every plugin you may edit; `/exylialib editor ExyliaFFA` only that one. The
+    chat answers with a button that opens the editor, an **Apply** button and a **Trust** button.
+  </Step>
+  <Step title="Edit and save in the browser">
+    Settings, messages in the active language, menus and every other YAML file of each Exylia plugin are
+    listed, with the comments of each key as its help text. Saving in the browser changes nothing on the
+    server yet.
+  </Step>
+  <Step title="Apply in game">
+    Click **Apply** in chat (it runs `/exylialib editor apply <code>`). The change is read, checked, written,
+    and the plugin is reloaded. Anything that needs a second look is listed first and applied only with
+    **Apply anyway** (`/exylialib editor apply <code> confirm`).
+  </Step>
+</Steps>
+
+All three commands need `exylialib.editor` (`op` by default). A plugin can narrow a file further with a
+permission of its own; a file you may not edit is left out of the session and refused at apply time.
+
+### What is offered
+
+Every enabled Exylia plugin's files, found without the plugin doing anything:
+
+- **Settings** — every config file the plugin declared.
+- **Messages** — the active language's files under `lang/<code>/` (and `lang/custom/`).
+- **Menus** — checked with the plugin's own menu compiler before they are written; a menu that would not
+  compile is refused.
+- **Files** — any other `.yml` the plugin installed in its folder.
+
+Left out: admin menus the plugin rewrites on every start, other languages' folders, folders named
+`data`, `players`, `playerdata`, `logs`, `backups`, `cache`, `storage`, `database`, `exports` or
+`schematics`, hidden folders, files over 1 MB, files that do not parse, and files the plugin never
+installed. Plugins can also register richer screens — a hologram editor with a preview, mines or kits
+kept in a database — which replace the plain form for those files.
+
+### What needs `confirm`
+
+- A change under a path the plugin marked sensitive, such as a hologram's click commands.
+- Any changed line that runs a console command (`console:`, `[CONSOLE]`, `op:`…).
+- Deleting a stored entry, such as a mine or a kit.
+- A file that changed on the server after the browser loaded it.
+
+A value of the wrong type is refused the same way it would be in the YAML file, and the rest of the change
+still applies.
+
+### Security
+
+- **The link is not the key.** It carries only a public code. The secret that reads a change back stays in
+  the server's memory, so a leaked link lets somebody look and propose, never apply.
+- **One browser owns a session.** The first browser to open the link edits; another browser, or the same
+  link from another address, is read-only and shows a short challenge.
+  `/exylialib editor trust <code> <challenge>` in game makes it an editor.
+- **Trust is per server.** A trusted browser stays trusted for this server's later sessions. The server is
+  recognised by `plugins/ExyliaLib/editor-key.txt`, a key generated once and never shown to a browser.
+  **Delete that file to revoke every trusted browser.**
+- **Sessions are short-lived.** A session lasts 24 hours, at most 32 are open at once, and a restart
+  forgets them all.
+- **Nothing about players is uploaded** beyond the name of the admin who opened the session.
+
+```yaml title="plugins/ExyliaLib/config.yml"
+web-editor:
+  enabled: true                   # false: /exylialib editor refuses
+  url: https://utils.exylia.net   # only change it to run your own copy
+```
+
+## For plugin developers
+
+A plugin needs no code for its files to be editable. Register a subject when discovery cannot know what
+you need: a richer screen, a narrower permission, sensitive paths, a checker, or entries kept outside a
+config file.
+
+```java
+WebEditor.of(this)
+        .subject("holograms", hologramsFile, "displays/hologram")
+        .title("Holograms")
+        .permission("exyliadisplays.holograms")
+        .sensitive("holograms.*.click")
+        .onApplied(this::reloadHolograms);
+```
+
+| Call | What it registers |
+|---|---|
+| `subject(id, configFile[, kind])` | A `ConfigFile`. The form is drawn from the record: comments become help text, an enum a select, a `@Time` key a duration field. A `kind` names a richer screen the editor ships. |
+| `yaml(id, path[, kind])` | A YAML file the plugin compiles itself, with no record behind it. The form is inferred from its contents. Give it a `check`. |
+| `entries(id, recordType, store[, kind])` | Entries the plugin stores itself — mines, kits, arenas — created, edited and deleted from the browser through an `EntryStore`. |
+| `exclude(patterns…)` | Keeps files out of discovery: paths relative to the data folder, `*` and `**`. |
+| `discover(false)` | Turns discovery off for this plugin. |
+| `remove(id)` | Forgets one subject while the plugin runs. |
+
+Every subject takes `title`, `permission`, `sensitive(paths…)` (dotted paths, `*` for any one key, matched
+as a prefix) and `onApplied(runnable)`. A YAML subject also takes `check(yaml -> problems)`: any line it
+returns refuses the change whole.
+
+```java
+WebEditor.of(this).yaml("tags", "cosmetics/tags", "chatcosmetics/catalog")
+        .check(yaml -> catalog.problems(yaml))
+        .onApplied(catalog::reload);
+```
+
+An `EntryStore<R>` answers `entries()` from memory and writes with futures:
+
+```java
+public final class MineStore implements EntryStore<MineEdit> {
+    public Map<String, MineEdit> entries() { return manager.asEdits(); }
+    public List<String> check(String id, MineEdit mine, boolean created) { return manager.problems(id, mine); }
+    public CompletableFuture<Void> save(String id, MineEdit mine, boolean created) { return manager.save(id, mine); }
+    public CompletableFuture<Void> delete(String id) { return manager.delete(id); }
+}
+```
+
+Each entry is read through the config binder before the store sees it, and one problem in one entry
+refuses the subject whole, so the store never receives half a change. Every deletion needs `confirm`.
+
+`WebEditor.open(sender, plugin)` opens a session from a plugin's own command, and
+`WebEditor.available(plugin)` says whether it would open anything. Registrations are forgotten when the
+plugin disables.
+
+<Callout type="note" title="Threads">
+Registration is safe from any thread. Applying writes the file and runs `onApplied` on the global thread;
+`EntryStore` methods are called there too, so hand database work off and complete the future when it is
+done.
+</Callout>

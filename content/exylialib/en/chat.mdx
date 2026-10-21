@@ -1,6 +1,6 @@
 ---
-title: "Chat rules"
-description: "Who reads whose chat messages: one rule per plugin, and the audience the server delivers to."
+title: "Chat"
+description: "Who reads whose chat messages, and taking a line out of chat before anybody else reads it."
 ---
 
 A plugin registers one rule, and the library takes the receivers that rule refuses off every message
@@ -22,6 +22,8 @@ Chats.rule(this, (listener, speaker) -> {
 | `Chats.rule(plugin, rule)` | Registers this plugin's rule, replacing its previous one. |
 | `Chats.clear(plugin)` | Drops it. |
 | `Chats.canHear(listener, speaker)` | The answer every rule agrees on, for text a plugin delivers itself. |
+| `Chats.bypass(player, bypass)` | Puts a player above every rule, or back under them. |
+| `Chats.bypassing(uuid)` | Whether they are above the rules right now. |
 
 `ChatRule` is a functional interface: `boolean canHear(Player listener, Player speaker)`.
 
@@ -33,15 +35,17 @@ Chats.rule(this, (listener, speaker) -> {
 | **Every rule has to agree** | Rules are combined with AND: a message reaches a player only when no plugin objects. One rule per plugin, dropped when that plugin is disabled. |
 | **The question is asymmetric** | `canHear(a, b)` and `canHear(b, a)` are separate answers — which is what lets a spectator read a match while the players read nothing back. |
 | **A speaker always reads themselves** | Rules are never asked about that. |
+| **A bypass is the only way past a no** | No rule can undo another plugin's refusal, so `Chats.bypass` takes the player out of the question: they read every message and are read by everyone. Staff reading an isolated chat is what it is for. It lasts until they quit; store it and set it again on join to remember it. |
 | **Nothing is remembered between messages** | A rule is asked as the message is delivered, so somebody who joins mid-sentence is inside for the next line. |
 | **A broken rule loses its say, not the chat** | A rule that throws is ignored for that message and reported once, by plugin name. |
-| **No rules costs nothing** | Both handlers read one map and return. |
+| **No rules costs nothing** | The handler reads one map and returns. |
 
 ## What it needs, and what it does not cover
 
 A chat plugin that lets the server deliver the message: Paper's own chat and every renderer-based chat
-plugin do. Both chat events are handled, the modern `AsyncChatEvent` and the legacy
-`AsyncPlayerChatEvent`.
+plugin do. Only the modern `AsyncChatEvent` is handled. When a plugin still listens to the legacy
+`AsyncPlayerChatEvent`, Paper runs that one first and hands its recipients to the modern event, so the
+audience trimmed here is the audience delivered either way.
 
 A plugin that instead cancels the event and sends each line itself has taken delivery over; those
 copies are out of reach, and an audience handed over as unmodifiable is reported once and left alone.
@@ -55,3 +59,42 @@ never was a chat event here. Filter that where it is delivered, with `Chats.canH
 Not the main thread. A rule must be cheap and read shared state only: no world access, no entity
 access, nothing that blocks. Registering and clearing a rule is safe from any thread.
 </Callout>
+
+## Taking a line out of chat
+
+`ChatIntercept` is the other half of the module, and a different job: not who reads a message, but a
+message that never becomes one. Staff chat, a clan channel, a freeze session, an answer to a prompt —
+each reads what a player typed and cancels it.
+
+```java
+intercept = ChatIntercept.register(this, EventPriority.LOWEST, true, (player, message) -> {
+    if (!staffChat.isToggled(player)) return false;
+    staffChat.send(player, message);
+    return true;   // taken out of public chat
+});
+
+intercept.close();   // when the feature stops; disabling the plugin drops it too
+```
+
+| Call | What it does |
+|---|---|
+| `ChatIntercept.register(plugin, priority, ignoreCancelled, intercept)` | Intercepts chat on the event this server really uses. The `BiPredicate<Player, String>` gets the plain text typed and returns whether it took the line: `true` cancels it. |
+| `close()` | Stops intercepting. |
+
+**Why not a plain `AsyncChatEvent` listener.** As soon as any plugin listens to the legacy
+`AsyncPlayerChatEvent` — DiscordSRV, WorldGuard, an older chat plugin — Paper runs every message through
+the legacy event *first* and only then through `AsyncChatEvent`. A cancel on the modern event comes
+after those listeners already read the line: DiscordSRV posts the staff channel to Discord.
+
+So the interception registers where the chat really is. With a legacy listener present it goes on the
+legacy event, its cancel is the first thing the others see, and Paper carries the cancel into the modern
+event. With none it stays on `AsyncChatEvent`, and the legacy path stays off — registering a legacy
+listener is what turns it on. The choice is made one tick after `register`, once every plugin has
+registered its listeners.
+
+**One line, one interception.** Some chat plugins fire the chat event a second time for the same line.
+A repeat of a line this interception took, from the same player within 250 ms, is cancelled without
+asking it again, so a staff channel never says it twice.
+
+The interception runs on the chat thread: read shared state, and hop with `Tasks` before touching the
+world.

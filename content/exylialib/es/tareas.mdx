@@ -59,6 +59,13 @@ la tarea:
 tasks.runAtEntity(player, () -> give(player, kit), () -> queueForLater(player));
 ```
 
+Un temporizador de entidad se para solo cuando su entidad desaparece. Un **jugador** cuenta como
+desaparecido solo cuando se desconecta, así que un temporizador por jugador sigue corriendo a través de
+la muerte y el respawn — en Paper exactamente igual que en Folia.
+
+`tasks.cancelAll()` cancela todo lo que programó el plugin, y `tasks.activeTasks()` dice cuántas siguen
+en marcha.
+
 ## Preguntar dónde estás
 
 ```java
@@ -72,7 +79,7 @@ act(player);
 | Llamada | Responde |
 |---|---|
 | `isGlobalThread()` | Si este es el hilo global. |
-| `isOwnedBy(entity)` | Si este hilo puede tocar esa entidad. |
+| `isOwnedBy(entity)` / `isOwnedBy(location)` | Si este hilo puede tocar esa entidad o esa posición. |
 
 Volver de una consulta a la base de datos es el motivo habitual de preguntar: el future se completa en
 un hilo del pool, y todo lo que quieras hacer con la respuesta pertenece al jugador.
@@ -80,6 +87,18 @@ un hilo del pool, y todo lo que quieras hacer con la respuesta pertenece al juga
 ```java
 kits.find(id).thenAccept(found ->
         tasks.runAtEntity(player, () -> found.ifPresent(kit -> give(player, kit))));
+```
+
+Las respuestas escritas en una [entrada](/docs/exylialib/entrada-y-editores) llegan en el hilo que
+usara el transporte. `answered` devuelve ambos desenlaces al hilo del jugador, y reabre la pantalla
+anterior solo cuando el jugador canceló — no por un timeout, una desconexión o una petición más nueva:
+
+```java
+PluginInputs inputs = Inputs.of(this);
+
+inputs.answered(player, inputs.text(player, "Nombra la casa").open(),
+        name -> homes.create(player, name),   // en el hilo del jugador
+        () -> homesMenu.open(player));        // solo si canceló; puede ser null
 ```
 
 ## Ticks
@@ -91,3 +110,8 @@ Bukkit los mantendría, así que un número copiado de una config antigua sigue 
 
 Las tareas de un plugin se cancelan cuando se desactiva. Los menús se cierran primero, para que un
 botón no pueda responder un último clic hacia un classloader moribundo.
+
+Programar desde un plugin que ya está desactivado — a lo que el scheduler del propio servidor responde
+lanzando una excepción — ejecuta una tarea única (`runAsync` incluido) en línea, en el hilo que la pidió,
+para que un guardado o una limpieza lanzados desde `onDisable` sigan ocurriendo. Un temporizador se
+descarta y su handle vuelve cancelado.

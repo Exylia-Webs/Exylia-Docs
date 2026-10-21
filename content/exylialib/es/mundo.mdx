@@ -1,70 +1,148 @@
 ---
-title: "Regiones, esquemáticas y mundos"
-description: "Áreas del mundo, guardar y pegar cajas de él, y crear mundos desde cualquier hilo."
+title: "Esquemáticas y mundos"
+description: "Guardar y pegar cajas del mundo, regenerar arenas, crear mundos desde cualquier hilo, el mundo temporal compartido, y bloques y bordes que solo ven algunos jugadores."
 ---
 
-## Regiones
-
-Un área del mundo con reglas asociadas, indexada para que preguntar qué hay en una ubicación salga
-barato.
-
-```java
-PluginRegions regions = Regions.of(this);
-
-List<RegionSnapshot> aqui = Regions.at(player.getLocation());
-```
-
-| Concepto | Qué es |
-|---|---|
-| Forma | Cuboide o esfera, en un mundo. |
-| Snapshot | Una vista inmutable de una región tal y como está ahora. |
-| Política | Qué pasa donde las regiones se solapan. |
-| Eventos | Entrada y salida, levantados según se mueven los jugadores. |
-
-El índice es inmutable y se reconstruye al cambiar en vez de mutarse, así que una consulta nunca ve una
-región a medio escribir y nunca necesita un lock.
-
-`Regions.resolve(location, policy)` es lo que hay que usar cuando dos regiones se solapan y solo una
-respuesta tiene sentido: la política decide cuál gana en vez de que cada llamante invente una regla.
-
-El módulo también dibuja contornos — la caja de partículas que usa cada editor de arenas — y se encarga
-de la selección con el selector compartido.
+Las regiones tienen [su propia página](/docs/exylialib/regiones), y grabar peleas está en
+[Repeticiones](/docs/exylialib/repeticiones).
 
 ## Esquemáticas
 
-Guardar una caja del mundo y pegarla de vuelta, sobre FastAsyncWorldEdit:
+Guardar una caja del mundo, pegarla de vuelta y regenerar una arena entre partidas:
 
 ```java
 PluginSchematics schematics = Schematics.of(this);
 
-schematics.save("arena_main", min, max);
-schematics.regenerate("arena_main", cuboid, worldId);
-schematics.paste("arena_main", location);
-schematics.exists("arena_main");
+schematics.save("arena_1", bounds, world);                 // un Cuboid y un WorldIdentity
+schematics.regenerate("arena_1", bounds, world)
+        .thenAccept(result -> { if (result.isSuccess()) reopen(); });
+schematics.paste("arena_1", location);
+boolean ready = schematics.exists("arena_1");               // de memoria, nunca del disco
 ```
 
-Es lo que regenera una arena entre partidas, con sus cofres todavía llenos. Cada llamada es un future, y
-el trabajo ocurre fuera del hilo principal.
+`save` también acepta un `RegionSnapshot` (solo cuboides), dos `BlockPosition` o dos `Location`. Cada
+llamada es segura desde cualquier hilo y devuelve un future que se completa en el hilo que terminó el
+trabajo, así que vuelve por `Tasks.of(plugin).runAtLocation(...)` antes de tocar el juego.
 
-<Callout type="warning" title="Comprueba isSupported">
-`Schematics.isSupported()` es `false` sin FastAsyncWorldEdit, y `unsupportedReason()` es una cadena que
-puedes imprimir. Cada llamada entonces no hace nada en vez de lanzar — y merece la pena manejarlo,
-porque una arena que en silencio no se regeneró parece un bug del plugin.
-</Callout>
+### Dos motores, un formato
+
+FastAsyncWorldEdit si está instalado y activo; si no, un **motor propio** que lee y escribe los mismos
+ficheros Sponge `.schem` solo con la API de Paper, para servidores donde FAWE no puede correr (híbridos
+Forge o NeoForge). Una arena guardada por uno se pega con el otro, así que añadir o quitar FAWE nunca
+obliga a volver a guardar arenas.
+
+El motor propio conserva el contenido de los contenedores, el texto de los carteles y el tipo de los
+spawners, pero no el resto de datos de block entities (patrones de estandartes, dueños de cabezas,
+libros de atriles). Carga los chunks de forma asíncrona, escribe solo los bloques que difieren y reparte
+las escrituras entre ticks, así que una regeneración normal acaba en uno o dos ticks. Las cajas tienen
+un máximo de 2<sup>26</sup> bloques.
+
+`Schematics.isSupported()` es `true` siempre que la librería esté corriendo; `unsupportedReason()`
+nombra el motor en uso.
+
+### Regenerar
+
+```java
+schematics.regenerate("arena_1", bounds, world, RegenerateOptions.defaults()
+        .clearEntities(false)         // los soportes de armadura son parte de la construcción
+        .moveTrappedPlayers(true));
+```
+
+Tres etapas en este orden: se quitan las entidades sueltas dentro de la caja (chunk a chunk, cada uno en
+el hilo que lo posee), vuelven los bloques con el aire incluido, y a quien hayan enterrado los bloques
+nuevos se le sube al aire más cercano con `teleportAsync`, que también funciona en Folia. Las dos etapas
+extra vienen activadas. El future se completa cuando los bloques ya están de vuelta.
+
+### Resultados
+
+Nada se completa con excepción. Cada future da un `SchematicResult`:
+
+| `outcome()` | Significa |
+|---|---|
+| `SUCCESS` | hecho |
+| `NOT_FOUND` | no existe esa esquemática |
+| `UNSUPPORTED` | la librería no está corriendo |
+| `FAILED` | se intentó y no terminó; `reason()` dice por qué |
+
+Un plugin que se desactiva a mitad de un pegado completa sus futures pendientes como `FAILED`.
+
+### Ficheros
+
+Se escriben en `<carpeta del plugin>/schematics/<nombre>.schem`. Los ficheros de la carpeta antigua
+`schematics/regions/` se siguen leyendo, y `delete` borra las dos copias. Los nombres son letras,
+dígitos, `.`, `_` y `-`, hasta 128 caracteres, sin punto al principio. Las entidades no se copian salvo
+que `save(..., true)` / `paste(..., true)` las pida; los biomas nunca.
+
+`exists()` y `names()` responden desde una lista leída una vez al arrancar y mantenida al día por
+`save` y `delete`: un `.schem` copiado a mano se ve tras reiniciar. `isIndexed()` dice si esa primera
+lectura ya terminó.
 
 ## Mundos
 
-Crear y borrar mundos con el plugin Worlds, desde cualquier hilo:
+Crear y borrar mundos con el plugin Worlds (`net.thenextlvl.worlds`), desde cualquier hilo:
 
 ```java
-Worlds.create(Key.key("myplugin", "arena"), "arena_1")
-      .thenAccept(world -> paste(world));
+Worlds.create(Key.key("myplugin", "arena"), "arena_1")   // un mundo vacío
+      .thenAccept(world -> { if (world != null) paste(world); });
 
+Worlds.create(key, "arena_2", false);                     // con el generador propio del mundo
 Worlds.delete(world);
 ```
 
-`Worlds.isAvailable()` dice si se puede crear algo, y `backendName()` nombra qué lo está haciendo.
+En Folia es la única forma de crear un mundo. Nada lanza: sin un Worlds compatible `isAvailable()` es
+`false`, `backendName()` es `"none"`, `create` se completa con `null` y `delete` con `false`. Se
+soportan Worlds 3.x (Minecraft 1.21) y 4.x (26.x).
 
-En Folia esta es la **única** forma: la creación de mundos de Bukkit no está disponible ahí. Sin el
-plugin Worlds el módulo no hace nada en voz alta, y quien llama se entera por el future en vez de por
-una excepción a mitad de una secuencia de arranque.
+## El mundo temporal
+
+Un mundo desechable en el que todos los plugins pegan sus copias de arena: clones de duelos, cuadros de
+eventos, parcelas de construcción, escenarios de repeticiones.
+
+```java
+TemporaryWorld.world();   // opcional, en onEnable: créalo ya en vez de en la primera partida
+
+TemporaryWorld.reserve(width, depth).thenAccept(plot -> {
+    if (plot == null) return;   // este servidor no tiene mundo: usa la arena original
+    schematics.paste(name, plot.origin(64));
+});
+```
+
+- **Nunca se conserva.** La carpeta `exylialib_temporary` se borra al activarse la librería y otra vez
+  al desactivarse. Se crea al primer uso.
+- **Parcelas.** Alineadas a chunks, con un hueco vacío hasta la siguiente más ancho que la distancia de
+  visión del servidor (al menos 64 bloques), así que nadie en una copia ve otra. Un hueco nunca se
+  entrega dos veces en la misma ejecución, así que una parcela siempre cae en vacío sin tocar y no hay
+  nada que liberar ni limpiar.
+- **Reglas.** Vacío, difícil, PvP activo, congelado a mediodía; sin clima, mobs, propagación de fuego,
+  destrozos de mobs, ticks aleatorios, phantoms, mensajes de logros o muertes, ni autoguardado.
+- **Compartido.** `TemporaryWorld.is(world)` dice si un mundo es este, pero tiene las arenas de todos:
+  limita tus listeners a tus propias parcelas.
+
+Se crea con Worlds en Folia y con `WorldCreator` en el resto. En 26.x el mundo se busca por su clave,
+así que su nombre de Bukkit no siempre es `exylialib_temporary`.
+
+## Bloques y bordes que solo ven algunos jugadores
+
+Los dos viven en el módulo de [paquetes](/docs/exylialib/modulos) y necesitan PacketEvents. El mundo
+del servidor nunca cambia.
+
+```java
+FakeBlocks fake = Packets.of(this).fakeBlocks();
+fake.show(viewer, Map.of(location, Material.BARRIER.createBlockData()));
+fake.clear(viewer);   // vuelve a enviar los bloques reales
+```
+
+Una pared falsa no detiene a nadie, y un chunk que el servidor reenvía vuelve a mostrar la verdad. El
+módulo olvida lo que mostró cuando quien mira se va o cambia de mundo.
+
+```java
+VirtualBorder zone = Packets.of(this).worldBorders().create(arena.center(), 200);
+match.players().forEach(zone::show);
+zone.size(20, Duration.ofMinutes(2));   // un paquete; cada cliente lo anima
+```
+
+Un borde por arena o por partida en el mismo mundo. A quien está fuera le hace daño como el vanilla
+(por defecto: aviso a 5 bloques o 15 segundos, 0.2 de daño por bloque pasados 5), ajustable con
+`warning` y `damage`. Un borde virtual por jugador entre todos los plugins; solo cuadrado; la colisión,
+colocar bloques y los portales siguen el borde propio del mundo. `hide(viewer)` devuelve el borde del
+mundo.

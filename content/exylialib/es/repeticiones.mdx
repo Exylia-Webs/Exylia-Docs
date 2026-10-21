@@ -1,0 +1,243 @@
+---
+title: "Repeticiones"
+description: "Graba una pelea tick a tick desde el propio estado del servidor y reprodúcela como cuerpos de paquetes, con una caja negra que guarda el último minuto alrededor de todos."
+---
+
+Grabar lo que pasó y volver a verlo: un duelo, una ronda, un reporte. Una grabación es el propio estado
+del servidor, tick a tick; una reproducción lo dibuja como cuerpos de paquetes en las pantallas de quien
+lo pidió.
+
+```java
+PluginReplays replays = Replays.of(this);
+
+ReplayRecorder recorder = replays.record(arena.spawn());
+recorder.follow(red);
+recorder.follow(blue);
+
+// cuando acaba el duelo
+duels.saveReplay(duelId, recorder.stop().toBytes());
+
+// cuando alguien pide verlo
+Replay replay = Replay.from(duels.replayOf(duelId));
+ReplayPlayback watching = replays.play(replay, arena.spawn(), List.of(viewer));
+watching.speed(0.25);
+watching.onEnd(() -> lobby.send(viewer));
+```
+
+<Callout type="note" title="Para verlas hace falta PacketEvents">
+Grabar funciona en cualquier servidor. Reproducir dibuja cuerpos de paquetes, así que sin PacketEvents
+`play` devuelve `null` y `Replays.isSupported()` es `false`.
+</Callout>
+
+## Qué se graba
+
+Cada tick, para cada jugador seguido:
+
+| | |
+|---|---|
+| Posición | a la milésima de bloque |
+| Yaw, pitch y cabeza | a la resolución del propio protocolo |
+| Postura | de pie, agachado, arrastrándose, durmiendo, planeando, riptide, muriendo |
+| Flags | corriendo, en el suelo, ardiendo, invisible, brillando, qué mano está levantada |
+| Vida | al medio punto más cercano |
+| Equipo | las seis ranuras, anotadas cuando una cambia |
+
+Más marcas para lo que pasa una vez: golpes al aire, impactos, ataques (crítico, barrido, empuje, sobre
+escudo), muertes, reapariciones, tótems, teletransportes, montar, recoger, picar bloques, cambios de
+bloque y explosiones. Todo sale de los propios eventos del servidor, así que un plugin lo tiene sin
+escribir un listener.
+
+Cada muestra lleva el tick del servidor, no el reloj de pared, así que dos jugadores muestreados en el
+mismo tick caen en el mismo frame. Un jugador muerto o en **modo espectador** se graba como ausente.
+
+Una grabación muestra lo que decidió el servidor, no lo que predijo el cliente de un jugador. Para
+"¿entró ese golpe?", esa es la autoridad.
+
+## El ancla
+
+Una grabación no guarda mundo ni coordenadas: cada posición es relativa al ancla contra la que se hizo.
+Reprodúcela contra el mismo punto de una arena pegada en otro sitio, en otro servidor, una semana
+después. No hay rotación: un ancla mirando a otro lado desplaza la repetición, no la gira.
+
+## La arena
+
+Solo el plugin sabe qué eventos son de su partida, así que los ofrece él:
+
+```java
+recorder.follow(arrow);                       // cualquier cosa con posición: perlas, pociones, cristales, TNT
+recorder.block(at, became, was);              // un bloque que cambió; pasa `was` o la rotura no suena
+recorder.explosion(at, power);                // el destello y el estruendo; sus bloques son llamadas a block()
+recorder.markAt("trap", at, null);            // algo que pasó en un sitio
+recorder.reset();                             // la arena se pegó de nuevo
+```
+
+O deja que el grabador vigile una caja por sí solo:
+
+```java
+recorder.watch(48);   // todo lo que esté a 48 bloques del ancla
+```
+
+`watch(radius)` sigue lo que esté en la caja o entre en ella (jugadores, mobs, ítems, flechas, barcas) y
+graba cada bloque que cambia según los eventos del servidor: colocado, roto, volado, quemado, crecido,
+pistones y líquidos que fluyen. Displays, entidades de interacción, markers, soportes de hologramas,
+cuadros y marcos se dejan fuera. Un cambio avisado dos veces se dibuja una.
+
+Límites: 400 cosas seguidas por grabación (las más nuevas a partir de ahí se descartan), decenas de
+miles de cambios de bloque (a partir de ahí se deja de grabar la arena, no la pelea).
+
+## Sonido
+
+Una reproducción hace su propio ruido a partir de las marcas que ya tiene: el sonido del golpe y sus
+partículas, el sonido de rotura o colocación de cada bloque y sus trozos, explosiones a escala, arcos,
+perlas y mechas.
+
+Con PacketEvents, la caja negra y los grabadores con `watch` guardan además los sonidos, explosiones y
+pociones arrojadizas que el servidor **realmente envió** (marcas `SOUND`, `BLAST` y `WORLD_EVENT`), así
+que una carga de viento suena a carga de viento. Los sonidos de plugins en las categorías `MASTER` y
+`UI` no se graban. `playback.sounds(false)` lo apaga todo.
+
+## Reproducir
+
+```java
+replays.play(replay, arena.spawn(), List.of(viewer));                       // PACKET
+replays.play(replay, arena.spawn(), List.of(viewer), ReplayWorld.SOLID);    // SOLID
+replays.play(replay, anchors, viewers, ReplayWorld.PACKET);                 // un ancla por escena
+```
+
+| `ReplayWorld` | Los bloques cambiados |
+|---|---|
+| `PACKET` (por defecto) | se dibujan solo para quien mira. No cuesta nada ni necesita limpieza, pero el servidor no los tiene, así que quien choca con uno es empujado de vuelta. |
+| `SOLID` | se escriben en el mundo y se devuelven exactamente al parar. Solo para una arena que nadie más esté usando. |
+
+Los cuerpos son entidades de paquetes movidas como jugadores reales: un paso y un giro de cabeza por
+tick, metadatos solo cuando cambian, la animación de daño con la dirección del golpe, chispas de crítico
+y barridos, muertes que caen y desaparecen en una nube, pasos con el sonido del bloque que pisan. La
+cámara lenta sigue enviando un paso por tick, interpolado. Una reproducción es privada: dos jugadores
+pueden ver dos grabaciones en la misma arena sin ver la del otro.
+
+```java
+watching.pause();  watching.resume();
+watching.speed(0.25);                 // de 1/16 a 8
+watching.seek(1200);                  // un minuto; hacia atrás igual que hacia delante
+watching.step(1);                     // un frame adelante, y se queda ahí
+watching.loop(true);
+watching.follow(red.getUniqueId());   // primera persona; null devuelve los ojos propios
+watching.highlight(red.getUniqueId());// un cuerpo brillando
+watching.reveal(true);                // los invisibles se dibujan brillando
+watching.onMark(mark -> ...);
+```
+
+**Primera persona** pone la cámara de cada espectador en ese cuerpo, y su propia pantalla muestra lo que
+tenía ese jugador: el ítem en la mano, los corazones, el golpe, los impactos recibidos y los tótems.
+
+Una reproducción que llega al final **se pausa en el último frame** y llama a `onEnd`, salvo que esté en
+bucle. Termina al pararla, cuando se va el último espectador, o cuando se para el plugin o el servidor.
+
+## Marcas
+
+`SWING`, `HURT`, `ATTACK`, `EQUIP`, `BLOCK`, `EXPLOSION`, `MOUNT`, `DISMOUNT`, `PICKUP`, `BREAKING` y
+`SHIELD_DISABLED` las dibuja el módulo y nunca llegan a `onMark`. `DEATH`, `RESPAWN`, `TOTEM`, `TELEPORT`
+y `CHAT` se dibujan y además llegan. Lo demás es del plugin:
+
+```java
+recorder.mark("round", null, "2");
+recorder.mark("combo", red, String.valueOf(hits));
+playback.onMark(mark -> { if (mark.kind().equals("combo")) overlay.show(viewer, mark.text()); });
+```
+
+`playback.placeOf(mark)` devuelve una marca de lugar en la arena donde corre la repetición.
+
+## Un grabador hay que pararlo
+
+`stop()` devuelve el `Replay`; `cancel()` lo descarta. Una de las dos tiene que pasar en todos los
+caminos, partidas abandonadas incluidas. Un grabador olvidado se para solo a los **30 minutos** y avisa
+en consola; uno cuyo plugin se desactiva se cancela.
+
+`toBytes()` da un blob para una columna de base de datos; `Replay.from(bytes)` lo lee. El formato actual
+es el 3, y las grabaciones en formato 2 siguen reproduciéndose.
+
+## La caja negra
+
+Un grabador hay que arrancarlo antes de que pase algo. La caja negra siempre está corriendo y guarda solo
+el último tramo, así que una grabación se puede recortar **después**:
+
+```java
+ReplayBlackBox box = replays.blackBox(BlackBoxSettings.defaults()
+        .hidden(vanish::isVanished));
+
+// en un listener de muerte
+box.capture(event.getEntity()).thenAccept(replay -> store.save(replay.toBytes(chunks)));
+```
+
+| `BlackBoxSettings` | Por defecto | Rango |
+|---|---|---|
+| `seconds` | 60 | 10 a 300 |
+| `radius` | 32 bloques alrededor de cada jugador | 8 a 96 |
+| `maxEntities` (no jugadores, todo el servidor) | 1500 | |
+| `terrain` | `true` | |
+| `verticalMargin` | 6 bloques | 4 a 128 |
+| `maxChunks` por captura | 400 | |
+| `hidden` | nadie | |
+
+- **Capturas.** `capture(player)`, `capture(uuid, seconds)` (el jugador no tiene que estar conectado),
+  `capture(uuid, seconds, afterSeconds)` para incluir la caída tras una muerte, `capture(location,
+  seconds)` para un lugar. Una captura sin nada en su ventana se completa con excepción.
+- **Sigue a la persona.** Todo lo que haya en el radio de cualquier sitio donde estuvo: una persecución,
+  una perla, un vuelo con élitros. Un teletransporte largo, un portal o un cambio de mundo la corta en
+  **escenas**, cada una con su ancla.
+- **El suelo.** Con terreno activo, cada sección de chunk del recorrido se guarda como estaba al empezar
+  la escena, entre el punto más bajo y el más alto en el que alguien estuvo, más `verticalMargin`, chunk
+  a chunk. Las regeneraciones de esquemáticas y los bloques temporales que caducan también se graban.
+- **Lag.** Una vez por segundo anota el ping de cada jugador (`PING`) y los TPS y MSPT del servidor
+  (`SERVER`, `"tps;mspt"`); un jugador que se va anota `QUIT` con el motivo. `replay.last(kind, actor,
+  tick)` lee el valor en cualquier tick.
+- **Compartida.** Una caja sirve a todo el servidor; los plugins que piden una la comparten y se queda
+  con el mayor de cada ajuste. Los jugadores ocultos (staff en vanish) y los espectadores nunca están.
+
+`replay.toBytes(chunks)` guarda cada sección de terreno una sola vez en un almacén `ReplayChunks`, con
+el SHA-1 de su contenido como clave, y escribe solo las claves en el blob; `Replay.from(blob, chunks)`
+las lee. Una sección que el almacén perdió es un agujero en el suelo, no una grabación rota.
+
+## Escenarios y el visor
+
+Una grabación con terreno se puede ver en cualquier sitio. `replays.stage(replay)` coloca el suelo de
+cada escena en su propia parcela del [mundo temporal](/docs/exylialib/mundo#el-mundo-temporal), a su
+altura real, como mucho 8.000 bloques por tick, y la reproducción corre ahí con la arena escrita de
+verdad.
+
+```java
+replays.stage(replay).thenAccept(stage -> Tasks.of(this).runAtEntity(viewer, () ->
+        ReplayViewer.open(this, viewer, stage, focus).thenAccept(watching -> {
+            watching.hud(status -> Component.text(status.elapsed() + " / " + status.length()));
+            watching.onLeave(() -> overlay.hide(viewer));
+        })));
+```
+
+`ReplayViewer` es la cámara y los controles compartidos, así que la pantalla de repeticiones de cada
+plugin se comporta igual. El espectador vuela en modo aventura y no puede recibir daño; la hotbar o el
+menú del plugin llaman a `toggle`, `skip(seconds)`, `frame(ticks)`, `faster` / `slower` (de 1/16 a 8),
+`restart`, `next(kinds)` / `previous(kinds)` (saltar a un segundo antes del siguiente ataque o muerte),
+`cycleFollow`, `follow`, `goTo`. `hud` alimenta la barra de acción cada cuatro ticks desde un `Status`
+(tick, velocidad, pausa, escena, a quién sigue). Dónde estaba, su modo de juego y su vuelo se restauran
+exactamente al salir, desconectarse o pararse el plugin; quien entra en el mundo temporal tras un crash
+es enviado al spawn del mundo principal.
+
+## Folia
+
+- Folia no tiene un tick global, así que allí el reloj es tiempo de pared en pasos de 50 ms, fijo
+  durante cada tick de región.
+- Los jugadores se vuelven a recoger cuando Folia descarta sus temporizadores al reaparecer o cambiar de
+  mundo.
+- Las marcas `SERVER` llevan los TPS de la región de un jugador, con `?` como MSPT.
+- Los escenarios colocan bloques y cargan chunks en la región de cada parcela.
+
+## Lo que no incluye
+
+- **Lo que vio un jugador.** La predicción del cliente, el FOV y el balanceo de la vista nunca
+  existieron en el servidor.
+- **Variantes de mobs.** Un no jugador conserva su tipo, ítem, bloque, si es cría y su nombre; colores,
+  razas y armaduras de caballo usan los valores por defecto del cliente.
+- **Block entities.** Se guardan los estados de bloque, no el texto de carteles ni el contenido de
+  cofres.
+- **Cambios que nadie avisó.** Un grabador sin `watch` solo tiene lo que el plugin le ofreció. Un
+  `setType` directo no dispara ningún evento: llama a `reset()` o `block()` desde lo que lo hizo.

@@ -1,6 +1,6 @@
 ---
 title: "Menús"
-description: "Todo lo que puede decir un archivo de menú: ventanas, listas, plantillas, rellenos, condiciones, animaciones, clics y redibujado."
+description: "Todo lo que puede decir un archivo de menú: ventanas, listas, grupos, plantillas, rellenos, condiciones, clics, sonidos y redibujado."
 ---
 
 Un menú es un archivo YAML, compilado una vez y abierto barato. Nada de él se escribe en Java salvo los
@@ -29,19 +29,63 @@ Leer el archivo es la mitad cara y ocurre una vez. Abrir dibuja los slots que se
 |---|---|
 | `load(id, section)` | Compila un menú, reportando las partes malas a consola. |
 | `load(id, section, problems)` | Lo mismo, reportándolas donde tú quieras. |
+| `check(section)` | Los problemas que reportaría `load`, una línea `dónde: qué` cada uno, sin registrar nada. |
 | `register(definition)` | Registra un menú ya compilado. |
 | `definition(id)` | Recupera uno. |
 | `unload()` | Olvidarlos todos, para una recarga. |
 | `sounds(UiSounds)` | A qué suenan los menús de este plugin. |
-| `refreshBundledDirectory(clase, ruta)` | Reemplaza un directorio de menús empaquetados con la copia del jar al arrancar. |
+| `refreshBundledDirectory(clase, ruta)` | Reemplaza un directorio empaquetado que nadie edita con la copia del jar al arrancar. |
+| `refreshVersionedDirectory(clase, ruta)` | Instala y actualiza un directorio de menús que edita el dueño del servidor. |
 | `open(player, id)` | Abrirlo. Seguro desde cualquier hilo. |
 | `open(player, id, context)` | Abrirlo con valores de contexto. |
+| `open(player, id, context, rows)` | Abrirlo con su única lista leída de una lambda en cada redibujado. |
 | `openNow(player, definition, context)` | Abrir y devolver la sesión. Solo desde el hilo del jugador. |
+| `openNow(player, definition, context, sections)` | Lo mismo, con las listas llenas antes del primer dibujo. |
+| `update(player, id, context, rows)` | Redibuja el menú ya abierto con valores nuevos. Solo desde el hilo del jugador. |
 | `back(player)` / `close(player)` | De donde vino, o cerrar. |
 | `session(player)` | La sesión abierta, si es una de las nuestras. |
+| `sessions()` | Todos los menús de este plugin que alguien tiene abiertos, para un temporizador que los redibuja. |
 
 `open` se mueve solo al hilo dueño del jugador, así que quien vuelva de una consulta a la base de datos
 no tiene que hacerlo. `openNow` no puede, porque devuelve la sesión que abrió.
+
+Una parte que no compila — una acción que no existe, un encantamiento mal escrito — se convierte en un
+botón muerto y una línea en consola, y el resto del menú se abre igual. Un archivo vacío o que no existe
+también se reporta (Bukkit lee un archivo que falta como uno vacío, y antes abría un cofre en blanco
+titulado "Menu" sin decir nada).
+
+### Archivos de menú empaquetados
+
+```java
+menus.refreshVersionedDirectory(MyPlugin.class, "menus");     // menús que ven los jugadores
+menus.refreshBundledDirectory(MyPlugin.class, "menus/admin"); // los del jar, reescritos en cada arranque
+```
+
+`refreshVersionedDirectory` escribe los archivos que faltan, añade las claves nuevas del plugin y deja
+un valor por defecto cambiado — un slot movido, una línea de lore reescrita — esperando en
+`/exylialib updates` en vez de pisar un valor que el dueño puede haber elegido. Un cambio que el archivo
+viejo no puede soportar se declara con un `menu-version` más alto en el archivo empaquetado: un archivo
+sin tocar se reemplaza al momento, uno editado espera en `/exylialib updates` como un solo cambio, y
+aplicarlo guarda el archivo viejo como `<nombre>.v<versión vieja>`. Un archivo en disco que no se puede
+parsear nunca se sobrescribe.
+
+### Redibujar con valores nuevos
+
+Una pantalla se dibuja con la instantánea con la que se abrió, así que `session.refresh()` redibuja los
+valores viejos. Cuando cambiaron — se editó un campo, se añadió una fila — `update` escribe la nueva
+instantánea en la sesión abierta en vez de abrirla otra vez, que reenviaría todos los slots, repetiría
+el sonido de apertura y devolvería a la página uno a quien estaba en la dos:
+
+```java
+Map<String, Object> context = Map.of("mine_id", mine.id());
+if (!menus.update(player, "mine_levels", context, rows)) {
+    menus.openNow(player, definition, context, Map.of(UiSection.MAIN, rows));
+}
+menus.update(player, "mine_detail", context);   // un menú sin lista
+```
+
+Solo se reemplazan las claves de contexto dadas; `rows` reemplaza la lista principal, y `null` la
+conserva. Responde `false` y no toca nada cuando ese menú no es el abierto — la señal para abrirlo.
 
 ### Contexto
 
@@ -60,7 +104,7 @@ botón verde. Una fila que use la misma clave tapa al contexto y mantiene su pro
 
 ```yaml
 type: SIMPLE     # un cofre; el valor por defecto
-size: 54         # solo un cofre es redimensionable
+size: 54         # solo un cofre es redimensionable; rows: 6 dice lo mismo
 ```
 
 `SIMPLE`, `PAGINATION`, `MULTI_PAGINATION`, `ITEM_INPUT` y `STATIC` son todos cofres — que un menú
@@ -88,8 +132,18 @@ El título **sigue al lector por la lista**, cosa que Bukkit no puede hacer: el 
 paquete y el cliente lo acepta como un retitulado de la ventana que ya tiene abierta. Solo se manda
 cuando el título nombra una página y el texto ha cambiado de verdad.
 
-Esto necesita **PacketEvents**. Sin él el título se queda en la página en la que se abrió, y todo lo
-demás funciona igual.
+El retitulado va por PacketEvents, que ExyliaLib requiere.
+
+### Abrir, cerrar y subir
+
+```yaml
+open-actions:  ["practice:mark_seen"]
+close-actions: ["practice:save_draft"]
+parent: main     # a dónde va back cuando el jugador no tiene historial
+```
+
+`open-actions` y `close-actions` son líneas de acción que se ejecutan al abrir y cerrar el menú.
+`parent` nombra el menú que abre `back` para un jugador que llegó por otro lado, como un comando.
 
 ## Listas
 
@@ -160,6 +214,16 @@ actions.registerSync("select", (context, args) -> {
 Reemplazar las filas deja al lector donde estaba, ajustado a lo que siga existiendo — un leaderboard que
 se refresca bajo alguien que está en la página tres lo deja en la página tres.
 
+Un handler detrás de un botón que el menú solo enseña a algunos jugadores puede recibir el permiso al
+registrarse:
+
+```java
+actions.registerSync("delete_mine", "mines.admin", (context, args) -> { ... });
+```
+
+Sin el permiso el handler no se ejecuta y la acción responde éxito, así que el resto de la secuencia
+sigue como si el botón fuera decoración.
+
 ### Valores literales, y los que no lo son
 
 `with()` inserta el valor como texto; `withFormatted()` lo parsea. La misma regla que en toda la
@@ -171,6 +235,38 @@ UiEntry.of(player)
         .withFormatted("rank", config.rankDisplay())    // lo escribió un dueño
         .build();
 ```
+
+### Valores que cambian con el menú abierto
+
+Un valor se decide una vez, al abrir el menú. Lo que cambia mientras alguien mira — una cuenta atrás, un
+stock, un número de jugadores, los miembros de una lista — se pasa como lambda:
+
+```java
+UiEntry.of(mine)
+        .with("mine_name", mine.name())                                // se lee una vez
+        .withFormatted("next_reset", () -> MineStatus.nextReset(mine)) // se lee en cada redibujado
+
+menus.open(player, "mine_hub", Map.of(
+        "mine_id", mine.id(),
+        "next_reset", (Supplier<String>) () -> MineStatus.nextReset(mine)));   // contexto vivo
+
+menus.open(player, "mine_list", Map.of(),
+        () -> mines.all().stream().map(MineListMenu::row).toList());          // una lista que sigue a sus filas
+// o en una sesión: session.entries("mines", () -> rows());
+```
+
+- **El archivo no necesita nada.** Un menú con un valor vivo o una lista seguida se redibuja cada
+  segundo como `SMART` cuando el archivo no tiene bloque `refresh`. Un archivo que escribe
+  `mode: DISABLED` se obedece.
+- **Un slot que saldría idéntico no se vuelve a dibujar.** Una lista de cuarenta filas con una cuenta
+  atrás renderiza un item por segundo. Un slot con un placeholder que nadie pasó (PlaceholderAPI) no se
+  puede juzgar así y se redibuja en cada refresco.
+- **Una lista seguida conserva la página del lector**, y una fila creada o borrada aparece sin reabrir.
+- **Las lambdas corren en el hilo del jugador, en cada redibujado.** Lee lo que está en memoria, nunca
+  una base de datos.
+- **Los títulos no releen valores vivos** cada segundo; los leen al enviarse (al abrir, al pasar página).
+
+`live(name, supplier)` y `liveFormatted(...)` son las formas antiguas y siguen funcionando.
 
 ### Varias líneas de lore desde un valor
 
@@ -204,6 +300,33 @@ Cualquier clave que termine en `template` es una, nombrada por lo que va antes:
 
 Se leen por forma y no de una lista cerrada, así que un plugin inventa los nombres que necesite. Un
 nombre que el archivo no declara dibuja la fila normal en vez de dejar un slot vacío.
+
+## Grupos: una fila que cierra filas
+
+Las tarjetas que se ocultan solas — una función apagada — dejan huecos cuando cada una tiene un `slot`
+fijo. Dales un `group` y las visibles se colocan centradas en los slots del grupo en cada dibujo:
+
+```yaml
+groups:
+  sections:
+    slots: "19-25"     # el orden es el orden de colocación
+    spacing: auto      # auto (por defecto), o un hueco fijo como 0 o 1
+items:
+  land:
+    group: sections    # en vez de slot
+    condition: "%land_enabled% == true"
+  people:
+    group: sections
+```
+
+Los miembros cuya condición pasa se colocan en orden de archivo. Con `auto` dejan un slot vacío entre
+ellos mientras quepa, y si no van pegados — en siete slots: una tarjeta en 22, dos en 21 y 23, tres en
+20, 22, 24, cinco en 20–24. Un sobrante impar se inclina a la izquierda, y los slots del grupo que
+sobran son fondo.
+
+Un item lleva `slot`/`slots` **o** `group`, nunca ambos. Un grupo sin slots, o un item que nombra un
+grupo no definido, se reporta y se salta. Más miembros visibles que slots: los que sobran no se
+dibujan, y la carga avisa cuando eso puede pasar.
 
 ## Rellenos
 
@@ -244,6 +367,9 @@ join:
 Operadores: `==` `!=` `>` `<` `>=` `<=` `contains` `startsWith` `endsWith`, y un valor a secas leído
 como booleano.
 
+Dos items pueden reclamar el mismo slot: son un botón en dos estados, y se dibuja el primero cuya
+condición pase.
+
 Un slot cuya condición falla no está en blanco — **no está ahí**, así que pulsarlo no hace nada. Una
 condición que no se puede leer oculta el slot, porque fallar al revés daría un botón a quien no debería
 tenerlo.
@@ -263,6 +389,28 @@ Tipos: `left`, `right`, `middle`, `shift_left`, `shift_right`, `drop`, `control_
 Cada decisión se toma contra la sesión, nunca contra el item que el cliente dice haber pulsado: el
 paquete lleva un número de slot, y el servidor ya sabe qué dibujó ahí. Un botón nunca se coge, y un
 arrastre que toque cualquier botón se rechaza.
+
+Un slot fuera de la ventana — que quedó tras reducir `size` — se reporta al cargar el archivo y se
+salta, y el resto del menú se abre.
+
+### Un clic, una ejecución
+
+Algunos gestos llegan al servidor como una ráfaga: un shift-doble-clic manda un shift-clic al pulsar y
+otro por cada slot coincidente al soltar, y un doble clic sigue a su clic con un `DOUBLE_CLICK`. Todos
+los menús pasan por `ClickGuard`, así que un botón se ejecuta como mucho una vez por jugador y cooldown
+— 150 ms por defecto — y un `DOUBLE_CLICK` nunca ejecuta nada. Un clic rechazado se cancela igual.
+
+```yaml
+click_cooldown: 250   # milisegundos para este menú; 0 apaga la protección
+```
+
+`ClickGuard.cooldown(Duration)` cambia el valor por defecto de todo el servidor. Un plugin con su propio
+inventario de Bukkit usa la misma protección:
+
+```java
+event.setCancelled(true);
+if (!ClickGuard.tryClick(event)) return;   // DOUBLE_CLICK, o dentro del cooldown
+```
 
 ### Acciones integradas
 
@@ -324,13 +472,13 @@ Un menú también puede redibujarse solo:
 ```yaml
 refresh:
   mode: SMART      # DISABLED | FULL | SMART | ON_CLICK
-  interval: 20     # ticks, para los modos con temporizador
+  interval: 20     # ticks, para los modos con temporizador; 1s dice lo mismo
   click_delay: 4   # ticks tras un clic, para ON_CLICK y SMART
 ```
 
 | Modo | Cuándo |
 |---|---|
-| `DISABLED` | Solo cuando un plugin lo pide. El de por defecto. |
+| `DISABLED` | Solo cuando un plugin lo pide. El de por defecto — salvo un menú con un valor vivo, que se redibuja cada segundo como `SMART`. |
 | `FULL` | Todo, en el intervalo. |
 | `SMART` | En el intervalo, pero solo los slots que pueden cambiar — y tras un clic. |
 | `ON_CLICK` | Tras un clic, pasado `click_delay`. |
@@ -363,41 +511,49 @@ El clic anterior ya ejecutó el botón, así que entregar el par lo ejecutaría 
 interruptor pulsado rápido se apagaría solo. Se rechaza antes de llegar a ningún handler.
 </Callout>
 
-## Animaciones
-
-```yaml
-animation: center_out
-```
-
-```yaml
-animation:
-  type: rows_alternate
-  speed: 3          # ticks entre fotogramas
-```
-
-Diecisiete formas: `center_out`, `explosion`, `corners`, `cascade`, `slide_left`, `slide_top`,
-`wave_horizontal`, `wave_vertical`, `rows_alternate`, `columns_alternate`, `checkerboard`, `snake`,
-`spiral`, `spiral_out`, `typewriter`, `random`, `none`.
-
-Todo se dibuja y se registra **antes** de que empiece la animación, así que un clic en un slot que
-todavía no ha aparecido visualmente funciona igual. Pulsar se salta el resto, porque quien está
-interactuando ha dejado de mirar.
-
-`random` va sembrado por el tamaño del menú y no por el reloj, así que se ve igual para todos. Un nombre
-que no sea uno de estos se reporta al leer el archivo y el menú aparece de golpe — el silencio haría que
-una errata se pareciera exactamente a un menú que nunca tuvo animación.
-
 ## Sonidos
 
 ```yaml
 sounds:
-  open: "BLOCK_BARREL_OPEN|0.6|1.4"
-  click: "UI_BUTTON_CLICK|1.0|1.5"
+  open: "minecraft:block.ender_chest.open|1.0|1.4"
+  click: "minecraft:block.note_block.hat|1.0|1.0"
   denied: ""        # silencio, que no es lo mismo que ausente
 ```
 
-Nombres: `open`, `close`, `click`, `denied`, `failed`, `back`, `page`. Las listas antiguas
-`open_sounds` y `click_sounds` también funcionan, y el bloque gana donde un archivo tenga ambos.
+Nombres: `open`, `close`, `click`, `denied`, `failed`. Las listas antiguas en la raíz (`open_sounds`,
+`click_sounds`, `close_sounds`…) también funcionan, solo suena su primera entrada, y el bloque gana
+donde un archivo tenga ambos.
+
+Lo que no se escribe usa los valores por defecto:
+
+| Sonido | Por defecto |
+|---|---|
+| `open` | `minecraft:block.ender_chest.open\|1.0\|1.4` |
+| `close` | `minecraft:block.barrel.close\|1.0\|0.7` |
+| `click` | `minecraft:block.note_block.hat\|1.0\|1.0` |
+| `denied` | `BLOCK_NOTE_BLOCK_BASS\|0.6\|0.8` |
+| `failed` | `ENTITY_VILLAGER_NO\|0.6\|1` |
+
+Un botón puede sonar a sí mismo en vez de al clic — las flechas de página y los botones de volver
+llevan el suyo:
+
+```yaml
+pagination:
+  navigation:
+    next:
+      slot: 50
+      sound: "minecraft:item.book.page_turn|1.0|1.0"
+items:
+  back:
+    slot: 49
+    sound: "minecraft:item.bundle.remove_one|1.0|0.5"
+```
+
+`sound: ""` silencia un botón; sin `sound` suena el clic del menú.
+
+Un menú que reemplaza a otro — un botón, un comando, `back` — es una pantalla que cambia: se omiten el
+sonido de cierre del viejo y el de apertura del nuevo, así que el clic se oye solo. Un botón cuya acción
+hace un sonido de menú (`close`, un rechazo) suena eso en vez del clic, no encima.
 
 `denied` y `failed` suenan cuando un botón se niega, así que un clic que no hizo nada suena distinto de
 uno que funcionó — el reporte de "el menú está roto" más común que existe.
@@ -408,4 +564,11 @@ Nada sobrevive a su pantalla. Una secuencia de acciones con un paso retrasado, l
 cancela al cerrar el menú. Desactivar un plugin cierra sus ventanas antes de liberar sus tareas.
 
 Los menús se encuentran por el holder de la ventana y no por un mapa indexado por jugador, así que un
-jugador que abre un cofre encima de un menú no se confunde con uno de los nuestros.
+jugador que abre un cofre encima de un menú no se confunde con uno de los nuestros. El holder se lee
+sin tocar el mundo, así que un cofre que se cierra en Folia — un jugador que sale o al que teletransportan
+— nunca lanza fuera del hilo de su región.
+
+<Callout type="note" title="Las animaciones de apertura ya no existen">
+Los menús ya no se animan al abrirse: todos los slots aparecen a la vez. Una clave `animation` que quede
+en un archivo viejo se ignora.
+</Callout>

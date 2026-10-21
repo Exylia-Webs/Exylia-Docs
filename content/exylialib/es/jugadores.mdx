@@ -1,6 +1,6 @@
 ---
 title: "Jugadores"
-description: "Un registro de reservas, cooldowns, teletransportes, snapshots, clanes, combate y cabezas."
+description: "Un registro de reservas, estancias, cooldowns locales y de red, multicuentas, bloques colocados, teletransportes, snapshots, clanes, combate y cabezas."
 ---
 
 ## Un jugador, una actividad
@@ -18,7 +18,7 @@ if (!Sessions.isFree(player)) {
     return;
 }
 
-sessions.claim(player, "Event", () -> leaveEvent(player))
+sessions.claim(player, "Event", () -> { leaveEvent(player); return true; })
         .ifPresent(claim -> join(player));
 ```
 
@@ -28,7 +28,8 @@ sessions.claim(player, "Event", () -> leaveEvent(player))
 | `Sessions.holder(player)` | Quién lo tiene, y cómo lo llamó. |
 | `sessions.claim(player, kind, onRelease)` | Tomarlo. **Atómico** — esto es lo que decide de verdad. |
 | `sessions.mine(player)` | La reserva, si es nuestra. |
-| `sessions.release(player)` | Devolverlo. |
+| `sessions.release(player)` | Devolverlo: termina nuestra reserva, nunca la de otro plugin. |
+| `Sessions.release(player)` | Pedir a quien lo tenga que lo devuelva. |
 
 <Callout type="warning" title="isFree no es una reserva">
 Entre preguntar y actuar, otro puede haberse llevado al jugador. `claim` es lo que decide, y devuelve
@@ -36,10 +37,60 @@ vacío cuando perdió la carrera. El callback de liberación es cómo se le dice
 suelte.
 </Callout>
 
+El callback de liberación devuelve si la petición se **acepta**, no si ha terminado: devolver a un
+jugador es un teletransporte y una restauración, que acaban más tarde, así que un manejador que acepta
+suelta la reserva desde su propio callback. Devolver `false` la rechaza — un jugador en combate no está
+disponible — y a quien pregunta se le dice que no. Una reserva tomada sin callback se suelta sin más
+cuando alguien lo pide.
+
+El trabajo que termina más tarde se protege contra la reserva, para que no pueda tocar a un jugador que
+ya se fue a otra cosa:
+
+```java
+teleport(player, spawn).thenRun(() -> claim.ifCurrent(() -> giveKit(player)));
+```
+
 La reserva es **reentrante** para su dueño: un jugador que pasa del lobby de un evento a la partida, o
 de jugar a espectar, mantiene una única reserva continua en vez de soltarla y competir por recuperarla.
+Una reserva también termina cuando el jugador se desconecta o su plugin se desactiva.
 
 Nada del registro sabe qué modos existen, así que un modo añadido más tarde queda cubierto sin tocarlo.
+
+## Estancias
+
+La mayoría de reservas significan "llévalo a mi arena y devuélvelo tal como vino". `Stays` es eso, con
+los tres órdenes que cada plugin de arenas tuvo que aprender a las malas ya incorporados:
+
+```java
+PluginStays stays = Stays.of(this);
+
+// Entrar: reservado y guardado aquí, vaciado cuando ya está en la arena.
+stays.enter(player, "duel", () -> { endMatch(player); return true; }).ifPresent(stay ->
+        stay.ready().thenCompose(ignored -> teleport(player, arena))
+                .thenCompose(ignored -> stays.dress(player, GameMode.ADVENTURE, stay::isCurrent)));
+
+// Salir: a casa, restaurado allí, liberado al final.
+stays.leave(player);
+
+// Al entrar al servidor: lo que dejó un crash vuelve, y el jugador también.
+stays.recover(player);
+```
+
+| Llamada | Qué hace |
+|---|---|
+| `enter(player, kind, onRelease)` | Reserva al jugador y guarda un snapshot suyo. `stay.ready()` se completa cuando está guardado — la señal para moverlo. |
+| `enter(player, claim)` | Convierte en estancia una reserva que este plugin ya tiene (una cola que pasa a su jugador a la partida). Conserva el token y el manejador de la reserva. |
+| `dress(player, mode, still)` | Lo vacía y le pone el modo de juego, al llegar. Se salta si `still` dice que ya no se le quiere. |
+| `leave(player)` / `leave(player, home)` | De vuelta a donde vino (o a un lobby), restaurado allí, y luego liberado. |
+| `leaveHere(player)` | Restaurado donde está, para un jugador que se fue por un portal. |
+| `recover(player)` | Devuelve cada estancia guardada que dejó un crash o un reinicio. Llámalo al entrar. |
+| `isHeld(uuid)` | Si este plugin responde por sus pertenencias: reservado, o aún saliendo. |
+
+- El snapshot se toma **antes** del teletransporte y el inventario se vacía solo **después**, porque un
+  plugin de inventario por mundo escribe lo que lleve el jugador en el mundo que deja.
+- Una restauración nunca empieza antes de que su guardado haya llegado.
+- La reserva se suelta **al final**, para que nada más pueda vestir al jugador mientras sus cosas aún
+  vuelven.
 
 ## Cooldowns
 
@@ -47,19 +98,105 @@ La base sobre la que se apoya cada cooldown del ecosistema, para que una barra p
 ser su dueña:
 
 ```java
-PluginCooldowns cooldowns = Cooldowns.of(this);
+PluginCooldowns cooldowns = Cooldowns.forPlugin(this);   // las claves pasan a ser "miplugin:pearl"
 
 cooldowns.startSeconds(player, "pearl", 16);
 cooldowns.isActive(player, "pearl");
 cooldowns.remainingSeconds(player, "pearl");
+cooldowns.tryStart(player, "pearl", Duration.ofSeconds(16));   // false mientras corre
 ```
 
-`CooldownScope` amplía la clave más allá de un jugador — un cooldown por arena, por clan o de servidor
-entero. `ItemCooldowns` pone además el barrido de cooldown de vanilla sobre un item, para que el cliente
-lo apague visualmente.
+`CooldownScope` amplía la clave más allá de un jugador — `CooldownScope.GLOBAL`,
+`CooldownScope.group(clanId)` o cualquier `CooldownScope.of(tipo, id)`. Los cooldowns de **cinco minutos o
+más** se escriben a disco y vuelven tras un reinicio; los más cortos viven en memoria.
+
+`ItemCooldowns` pone además el barrido de cooldown de vanilla sobre un item, para que el cliente lo
+apague visualmente. En Lunar y en el mod de SurvivalCore el cooldown también se dibuja en el HUD con el
+item como icono — ver [Integración de cliente](/docs/exylialib/integracion-de-cliente).
 
 Un efecto puede leer un cooldown en marcha en vez de contar por su cuenta — ver
 [Efectos · Temporizadores](/docs/exylialib/efectos#temporizadores).
+
+### Entre reconexiones y servidores
+
+`Cooldowns` pertenece a la memoria de un servidor: un jugador que sale o cambia de servidor empieza de
+cero un cooldown de treinta segundos. Para cualquier cosa que merezca la pena abusar — una reparación,
+una curación, una recompensa por kill — usa `NetworkCooldowns`, escrito en la base de datos del plugin
+para que todos los servidores que la comparten vean el mismo:
+
+```java
+NetworkCooldowns cooldowns = NetworkCooldowns.of(this);   // una vez, en onEnable
+
+if (!cooldowns.tryStart(player.getUniqueId(), "repair", Duration.ofMinutes(10))) {
+    if (!cooldowns.isLoaded(player.getUniqueId())) { say(player, "Aún cargando."); return; }
+    say(player, "Espera " + cooldowns.remaining(player.getUniqueId(), "repair").toSeconds() + "s.");
+    return;
+}
+```
+
+Los cooldowns de un jugador se leen al entrar y después se responden desde memoria. **Hasta que esa
+lectura vuelve, la respuesta es "espera"**: `isActive` es `true` y `tryStart` es `false`, así que un
+jugador no puede colarse por el hueco que abre un salto de servidor. `start` y `clear` cambian la memoria
+al momento y se escriben en el orden en que se hicieron. Las filas viven en `exylia_network_cooldowns` y
+se borran al limpiarse o cuando el dueño vuelve a entrar después de que terminaran.
+
+## Multicuentas y primeras entradas
+
+`Accounts` responde si dos cuentas son probablemente la misma persona, y desde cuándo conoce la red a un
+jugador — conectado o no:
+
+```java
+Accounts accounts = Accounts.of(this);   // una vez, en onEnable
+
+accounts.sameAddress(buyer, seller).thenAccept(alt -> {
+    if (alt) return;   // nada de reputación entre un jugador y su multicuenta
+    ...
+});
+accounts.firstSeen(invited).thenAccept(first -> ...);   // Optional<Instant>
+```
+
+- **La dirección en sí nunca se guarda.** Cada entrada escribe un hash con clave de ella, con cuándo se
+  usó por última vez, más la primera vez que se vio al jugador. La clave vive en la base de datos, así que
+  todos los servidores que la comparten calculan el mismo hash para una dirección. Una dirección IPv6 se
+  resume por su `/64`.
+- `sameAddress` cuenta una dirección que ambos jugadores usaron en los últimos **30 días**
+  (`accounts.window(…)` lo cambia), o que ambos estén conectados aquí ahora mismo desde la misma.
+- `firstSeen` tiene en cuenta también la fecha de primera conexión del propio servidor, así que un
+  veterano no es "nuevo" la primera vez que lo ve este módulo.
+- Ambas se completan **con error** cuando la base de datos no puede responder. Decide qué significa: una
+  recompensa debería negarse (`.exceptionally(failure -> true)`), un aviso debería callarse.
+
+Apunta el plugin de cada servidor a una misma base de datos y las respuestas son de toda la red.
+
+## Bloques colocados
+
+Si un bloque lo puso un jugador, recordado entre reinicios — la pregunta del anti-farmeo:
+
+```java
+PlacedBlocks.track(this, List.of(Material.SUGAR_CANE, Material.DIAMOND_ORE));
+
+@EventHandler(ignoreCancelled = true)
+public void onBreak(BlockBreakEvent event) {
+    if (PlacedBlocks.placedByPlayer(event.getBlock())) return;   // sin recompensa por colocar y romper
+    reward(event.getPlayer());
+}
+```
+
+El registro vive en los datos del propio chunk, así que se guarda y se carga con los bloques y no cuesta
+nada mientras el chunk está descargado. Solo se registran los materiales seguidos; un pistón mueve el
+registro con el bloque, y romperlo lo olvida solo después de que todos los listeners por debajo de
+`MONITOR` hayan preguntado. Un bloque que se va de otra forma (explosión, fuego) conserva su registro —
+la respuesta se equivoca hacia "colocado". Cada chunk guarda como mucho 4096 posiciones.
+
+## Números en permisos
+
+```java
+int homes = PermissionNumbers.highest(player, "myplugin.homes.", settings.defaultHomes());
+```
+
+Gana el número más alto tras un prefijo, porque una escalera de rangos concede cada peldaño de subida.
+Un nodo puesto a `false` no concede nada, y una cola que no sea un número entero se ignora. Llámalo en el
+hilo del propio jugador.
 
 ## Teletransportes
 
@@ -69,23 +206,27 @@ Mover a un jugador rara vez es solo `player.teleport(...)`:
 PluginTeleports teleports = Teleports.of(this);
 
 teleports.to(player, spawn)
-         .warmup(Duration.ofSeconds(3))
+         .warmup(3.0)
          .cancelOnMove()
          .cancelOnDamage()
-         .go();
+         .cooldown("spawn", 30.0)
+         .safe()
+         .start();
 ```
 
 | Llamada | Qué hace |
 |---|---|
-| `to(player, location)` | Una petición, configurada y luego enviada. |
+| `to(player, location)` | Una petición, configurada y luego arrancada con `start()`. Nada pasa antes, y el cooldown solo se cobra entonces. |
 | `toAll(players, location)` | Un grupo a la vez. |
-| `back(player)` | Donde estaba antes del último teletransporte. |
+| `back(player)` | Una petición hacia donde estaba antes del último teletransporte. |
 | `lastLocationOf(player)` | Esa ubicación, sin moverlo. |
 | `request(from, to, …)` | Una petición estilo `/tpa`. |
-| `accept(target, from)` / `deny(…)` | Responderla. |
+| `accept(target, from)` / `deny(…)` / `cancel(…)` | Responderla. |
 
-Los calentamientos, los aterrizajes seguros, el historial de `/back` y los traspasos entre servidores
-viven aquí, y todos corren en el hilo del propio jugador.
+Una petición también puede lanzar efectos (`onStart`, `onArrive`, `onCancel`), informar de la cuenta
+atrás (`onTick`) y devolver el resultado (`then`). Los calentamientos, los aterrizajes seguros, el
+historial de `/back` y los traspasos entre servidores viven aquí, y todos corren en el hilo del propio
+jugador.
 
 ## Snapshots
 
@@ -103,6 +244,10 @@ snapshots.restore(player, "event:lms1");              // devuelto
 `capture` es el de memoria, para un menú que va a devolver el estado en un momento. `save` lo escribe
 bajo un id de contexto para que sobreviva a un reinicio, y `saveAndClear` hace las dos mitades de
 "guarda esto y dale el kit" en una llamada.
+
+Es lo que devuelve a un jugador su inventario de supervivencia tras un evento, y lo que permite a un
+editor de kits devolver lo que alguien llevaba al abrirlo. Las [estancias](#estancias) se apoyan en
+ello.
 
 ## Clanes
 
@@ -130,8 +275,8 @@ Cada proveedor llega a su plugin por reflexión, de modo que uno instalado cuya 
 se salta con un aviso en vez de ocupar el hueco en silencio. Un plugin que no esté en la lista registra
 un `ClanBridge`, y un puente registrado gana a la detección automática.
 
-Las alianzas y rivalidades forman parte de la API, y los proveedores que no tienen ese concepto
-responden vacío en vez de inventárselo.
+Las alianzas y rivalidades forman parte de la API (`areAllied`, `areRivals`), y los proveedores que no
+tienen ese concepto responden vacío en vez de inventárselo.
 
 ## Combate
 
@@ -143,7 +288,22 @@ if (Combat.isTagged(player)) {
 }
 ```
 
-La idea es la misma que en clanes: tu plugin hace una pregunta y no le importa qué plugin responde.
+La idea es la misma que en clanes: tu plugin hace una pregunta y no le importa qué plugin responde. Sin
+nada instalado todas las llamadas siguen funcionando: nadie está marcado y el PvP siempre está
+permitido.
+
+## Jugadores de Bedrock
+
+```java
+if (Clients.isBedrock(player)) {
+    // sáltate lo que un cliente Bedrock no puede dibujar, como las display entities
+}
+```
+
+Floodgate responde cuando está instalado, porque solo él conoce a un jugador vinculado; si no, responde
+el UUID, como recomienda Geyser, y se pregunta a la propia API de Geyser cuando corre sin Floodgate. El
+nombre nunca se usa. Funciona sea cual sea de los dos el que se active primero. Un jugador vinculado que está
+desconectado no se distingue de su cuenta de Java y responde `false`.
 
 ## Cabezas
 
@@ -156,3 +316,8 @@ Skulls.url(url).build();
 Cacheadas, compartidas entre plugins, y **sin bloquear nunca**: una cabeza que aún no se ha descargado
 vuelve en plano y se reemplaza cuando llega. Por eso un menú lleno de cabezas de jugador se abre al
 instante en vez de congelar el servidor en una consulta a Mojang.
+
+## Preferencias
+
+Los ajustes de jugador y la pantalla `/settings` en la que se registra cada plugin tienen su propia
+página: [Ajustes de jugador](/docs/exylialib/ajustes-de-jugador).

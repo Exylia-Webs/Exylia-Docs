@@ -1,6 +1,6 @@
 ---
 title: "Texto y placeholders"
-description: "Un solo parser para cada cadena visible, la paleta compartida, y un registro para %placeholders%."
+description: "Un solo parser para cada cadena visible, la paleta compartida, las líneas propias de un plugin y un registro para %placeholders%."
 ---
 
 ## Cuatro notaciones, una cadena
@@ -11,7 +11,7 @@ mezclan libremente:
 | Forma | Ejemplo |
 |---|---|
 | Token de paleta | `{primary}`, `{error}` |
-| Código legacy | `&a`, `&l` |
+| Código legacy | `&a`, `&l`, y `§a` |
 | Hex legacy | `&#8a51c4`, `&x&8&a&5&1&c&4` |
 | MiniMessage | `<bold>`, `<gradient:#8a51c4:#ff6b9d>…</gradient>` |
 
@@ -19,8 +19,14 @@ mezclan libremente:
 Text.of("{primary}&lBIENVENIDO &8[{success}online&8]").send(player);
 ```
 
-Las cursivas están apagadas salvo que se pidan, que es lo contrario del comportamiento de vanilla en
-items renombrados.
+El signo de sección se lee como código legacy igual que `&`. Importa para la salida de los
+placeholders: lo que devuelve PlaceholderAPI suele venir ya traducido a `§`, y una línea que lo llevaba
+llegaba a la pantalla en crudo.
+
+Las líneas que la librería pone en items — iconos de menú, items construidos desde una config — no van
+en cursiva salvo que lo pidan, lo contrario de lo que hace vanilla con los items renombrados. Un
+componente que pongas tú en un item lo consigue con `PluginMessages.item` (más abajo) o con
+`decorationIfAbsent(ITALIC, FALSE)`.
 
 ## La API
 
@@ -28,19 +34,49 @@ items renombrados.
 |---|---|
 | `Text.of(cadena)` | La forma encadenable. |
 | `Text.from(plugin, cadena)` | Lo mismo, para un mensaje de un plugin, para que `%prefix%` resuelva. |
-| `Text.component(cadena)` | Directo a un `Component`. |
-| `.with(nombre, valor)` | Sustituye un valor **como texto literal**. |
-| `.withFormatted(nombre, valor)` | Sustituye un valor que trae su propio formato. |
+| `Text.component(cadena)` | Directo a un `Component`; el camino más corto cuando no hay nada que sustituir. |
+| `.with("%coins%", valor)` | Sustituye un valor **como texto literal**. El primer argumento es el texto exacto que reemplaza. |
+| `.withFormatted("%class%", valor)` | Sustituye un valor que trae su propio formato — un nombre visible de una config. |
+| `.withColored("%tag%", valor)` | Un valor en el que metió mano un jugador pero que puede ir coloreado — un tag de clan, un nick. Funcionan colores, degradados y decoraciones; click, hover, fuentes, selectores y saltos de línea quedan como texto. |
+| `.withVerbatim("%sample%", valor)` | Como `withFormatted`, pero el valor conserva sus propias letras (sin versalitas) — palabras de alguien dibujadas dentro de una línea del servidor. |
+| `.withAll(valores, formatted, verbatim)` | Muchos valores de una vez, por nombre a secas; más barato que encadenar `with`. |
 | `.forPlayer(player)` | Resuelve `%placeholders%` para ese lector. |
 | `.forPlayerFormatted(player)` | Lo mismo, honrando valores de resolver que traen formato. |
+| `.verbatim()` / `Text.verbatim(cadena)` | Dibuja la línea con las letras con que se escribió, diga lo que diga `small-text`. Para un mensaje de chat o un nombre. |
 | `.build()` / `.send(receptor)` | Terminar, o terminar y entregar. |
 | `.plain()` / `.legacy()` / `.raw()` | Serializadores. `legacy()` es para APIs antiguas que lo exigen. |
+| `.wire()` / `Text.fromWire(plugin, wire)` | El texto y sus valores como una sola cadena para un canal de Redis, y de vuelta; el servidor que lo recibe lo construye con su propio prefijo, paleta y sonido. |
 
 <Callout type="warning" title="with o withFormatted es una decisión, no un detalle">
 Equivocarse es un bug en las dos direcciones: un nombre visible imprimiendo `{highlight}` en pantalla, o
 un jugador llamado `<rainbow>` recoloreando tu mensaje. Pregunta **de quién es el valor** — lo escribió
 el dueño del servidor, o lo tecleó un jugador.
 </Callout>
+
+El texto que tecleó un jugador y que tiene que viajar como cadena — a una línea de config, a otro
+plugin — pasa por `Text.escape(typed)`, que neutraliza tags, códigos legacy y tokens de paleta para que
+se lea tal cual al parsearse después. `Text.strip(typed)` quita todo el formato para siempre, parseando
+hasta que nada cambie, para un nombre o una descripción que se guardan sin él.
+
+Tres más para plugins que construyen componentes por su cuenta: `Text.tag(resolver)` agrega un tag de
+MiniMessage propio para todo el servidor (los tags estándar se prueban primero, así que no puede
+quitarle `<red>` a nadie); `Text.click("suggest_command", "/msg Notch ")` construye un click por el
+nombre que escribe una config, y sobrevive a Adventure 5 donde un switch sobre `ClickEvent.Action` no;
+y `Text.shadowed(component)` pone la sombra configurada del servidor bajo un componente pintado después
+del parseo.
+
+### Valores dentro de argumentos de tags
+
+Un placeholder escrito dentro del argumento de un tag se resuelve antes del parseo, así que el tag ve el
+valor:
+
+```yaml
+icon: "<head:%player_name%> {letters}%player_name%"
+```
+
+A ese valor se le quitan los `<` y `>`, así que no puede cerrar el tag ni abrir otro. Los tags de click
+y hover son la excepción: sus valores entran después del parseo, donde no pueden romper un comando ni un
+tooltip.
 
 ## La paleta
 
@@ -58,7 +94,17 @@ Los mensajes nombran un rol, no un valor hexadecimal. Vienen dieciséis roles, d
 | `{success}` | `#8fffc1` | `{warning}` | `#ff9500` |
 | `{success_light}` | `#a1ffc3` | `{warning_light}` | `#ffd2a8` |
 
-`Colors.get(token)` devuelve uno como `TextColor`, y `Colors.names()` los lista.
+`colors.yml` también guarda `server-ip`, escrito `{server-ip}` en cualquier mensaje, así que la
+dirección de cada scoreboard y mensaje cambia en un solo lugar. `Colors.get(token)` lee un color como
+`TextColor`, y `Colors.names()` los lista.
+
+## El estilo: versalitas y sombra
+
+Cada línea que escribe un plugin de Exylia se dibuja en versalitas Unicode y con una sombra suave de su
+propio color, configurables en el `config.yml` de ExyliaLib (`small-text`, `text-shadow`). Las dos se
+aplican a la plantilla, nunca a los valores sustituidos: un jugador llamado `Steve` sigue siendo
+`Steve` y un saldo sigue siendo `1500`. El texto que son palabras de otro y no del servidor — un mensaje
+de chat, un nombre — usa `verbatim()` para conservar también sus letras.
 
 ## El prefijo
 
@@ -71,10 +117,59 @@ Prefixes.set(this, messages.prefix());                 // al activar, y otra vez
 Text.from(this, messages.ready()).send(player);        // %prefix% resuelve al tuyo
 ```
 
+`Text.of` deja `%prefix%` tal cual, y un plugin que nunca fijó uno lo deja visible, así que el olvido se
+nota en vez de pasar en silencio.
+
 <Callout type="note" title="Vuelve a fijarlo tras una recarga">
 Un prefijo editado que no se vuelve a registrar se queda obsoleto hasta el siguiente reinicio. Cada
 plugin de Exylia llama a `Prefixes.set` como último paso de cargar sus configs precisamente por esto.
 </Callout>
+
+## Las líneas propias de un plugin
+
+Un plugin que lee sus líneas de un archivo de mensajes tiene un `PluginMessages` y arma una bolsa
+`Values` por mensaje:
+
+```java
+messages = PluginMessages.of(this);                                  // onEnable
+
+messages.send(player, lang.created(), Values.of("mine", mine.id()));
+messages.send(player, lang.renamed(), Values.of("old", old).putText("new", typedName));
+menus.open(player, "mine_list", values.map());                       // la misma bolsa como contexto de menú
+```
+
+- Cada línea pasa por `Text.from`, así que `%prefix%` es el de este plugin y un tag de efecto al inicio
+  suena.
+- **Una línea vacía no manda nada.** Vaciar un mensaje en el archivo es como el dueño lo apaga;
+  `Text.send` en cambio sí manda una línea vacía.
+- `put` es un valor que escribió el servidor y se honra su formato; `putText` es algo que tecleó un
+  jugador y queda literal. Los nombres van a secas: `"mine"` llena `%mine%`, y `null` pasa a ser cadena
+  vacía.
+- `Values` toma las tres formas que piden sus consumidores: `applyTo(text)` en un solo `withAll`,
+  `map()` para un contexto de menú, `apply(cadena)` empalmado en una línea cruda. Empalmado, un valor
+  tecleado pasa por `Values.inert`, así que un jugador que escribe `%player_ip%` nunca lo ve resuelto.
+- `messages.text(línea, values)`, `item(línea, values)` (sin cursiva) y `plain(línea, values)` dan la
+  misma línea como `Text`, como `Component` de item o como texto plano para la consola.
+
+## Efectos y centrado dentro de un mensaje
+
+Un mensaje puede llevar un sonido, partículas, un fuego artificial o centrado, en un bloque entre
+corchetes al principio de la línea:
+
+```yaml
+level-up: "[sound:ENTITY_PLAYER_LEVELUP|1.0|1.2;particle:FLAME|20;center]{success}Bien hecho"
+```
+
+`;` separa los tipos, `,` varios del mismo tipo, y `|` los argumentos de un tipo. Los tipos son `sound`,
+`particle`, `firework` y `center` (cada uno también en plural, y `centered`). El tag nunca llega a la
+pantalla, a un log ni al nombre de un item; solo un jugador recibe los efectos; un corchete que no
+significa nada, como `[Server] Reiniciando`, se deja tal cual; y una entrada mal escrita se avisa una
+vez sin comerse el mensaje.
+
+El centrado se mide en píxeles sobre lo que leerá el jugador — valores incluidos, negrita contada,
+versalitas medidas como el glifo que se dibuja. Un valor que parte líneas (una lista de recompensas, un
+top tres) centra cada línea que genera, no solo la primera. `Centering.center(línea)`,
+`centerWithin(línea, ancho)` y `pixelWidth(línea)` hacen lo mismo directamente.
 
 ## Placeholders
 
@@ -89,7 +184,16 @@ Placeholders.group(this, "clan")
 ```
 
 Eso declara `%clan_name%` y `%clan_members%`. El nombre final es **el prefijo del grupo, un guion bajo
-y el nombre de la entrada** — `add("")` registra el prefijo a secas.
+y el nombre de la entrada** — `add("")` registra el prefijo a secas. Registrar otra vez el mismo nombre
+lo reemplaza, así que una recarga no duplica nada, y el grupo entero se va cuando el plugin se
+desactiva.
+
+| Escrito | Significa |
+|---|---|
+| `%clan_top_3%` | Argumento `3`. |
+| `%eco_balance:comma%` | Con formato: `comma`, `compact`, `percent`, `upper`, `lower`, `yesno`, `time`, `fixed1`, `fixed2`, o un patrón de `DecimalFormat`. |
+| `%clan_name\|Sin clan%` | Una alternativa cuando no hay valor. |
+| `%%` | Un signo de porcentaje literal. |
 
 ### Argumentos
 
@@ -103,14 +207,25 @@ Gana el nombre registrado más largo y lo que sobra pasa a ser argumentos:
 corta del texto **tal y como está escrito**, así que las mayúsculas de un valor sobreviven aunque el
 nombre se compare en minúsculas.
 
+Para un argumento que es un id que puede contener `_`, `:` o `|`, marca los nombres con `.verbatim()`:
+todo lo que va después del nombre llega al resolver como **un** argumento, tal cual está escrito, sin
+partir, sin formato y sin alternativa.
+
+```java
+Placeholders.group(this, "exyliashields")
+        .verbatim()
+        .add("unlocked", r -> r.argCount() == 0 ? total(r) : owns(r, r.arg(0, "")))
+        .register();
+```
+
+`%exyliashields_unlocked_pattern:globe%` llega con `["pattern:globe"]`. Un nombre verbatim se lleva
+todo el resto, así que no registres otro nombre que empiece igual.
+
 ### Sin respuesta no es cadena vacía
 
 Un resolver que devuelve `null` significa "no hay valor", y el texto conserva la alternativa que se
-escribiera:
-
-```text
-%clan_name|Sin clan%
-```
+escribiera — o el propio placeholder, para que una errata se vea. Devuelve `""` solo cuando vacío es la
+respuesta real.
 
 Devolver `"-"` en su lugar haría indistinguible "no hay nadie en el tercer puesto" de "esa arena no
 existe".
@@ -120,6 +235,7 @@ existe".
 | Llamada | Qué hace |
 |---|---|
 | `Placeholders.apply(texto, lector)` | Resolver todo para un lector. |
+| `Placeholders.apply(texto, lector, data)` | Lo mismo, con valores para este mensaje; un resolver registrado sigue ganando. |
 | `Placeholders.applyRelational(texto, lector, objetivo)` | Resolver un placeholder de dos jugadores. |
 | `Placeholders.compile(texto)` | Compilar una vez, resolver muchas. |
 | `Placeholders.isDynamic(texto)` | Si contiene algo que resolver. |
@@ -129,19 +245,37 @@ existe".
 
 Registrar un grupo registra la expansión; no hay nada que instalar desde eCloud. Fuera, el nombre del
 plugin es el identificador: `total_players` registrado por ExyliaFFA se lee como
-`%exyliaffa_total_players%`.
+`%exyliaffa_total_players%`. Esa forma también funciona en cualquier texto de Exylia, con o sin
+PlaceholderAPI, y le pregunta solo a ese plugin — la manera de llegar a un nombre que registran dos
+plugins.
 
 Un grupo cuyo prefijo ya **es** el nombre del plugin también está contemplado — PlaceholderAPI se come
 esa palabra como identificador, y la librería la vuelve a poner en vez de obligar a nadie a escribirla
-dos veces.
+dos veces. Ese grupo no registra nada corto, así que sus nombres nunca chocan con los de otro plugin.
 
-No hay segundo identificador: un plugin responde solo bajo su propio nombre.
+Un plugin puede agregar un identificador propio más corto:
+
+```java
+Placeholders.identifier(this, "practice");   // %practice_stats_kills% además de %exyliapracticecore_stats_kills%
+```
+
+Las dos formas siguen funcionando. El identificador es una palabra sin `_`, `%` ni espacios; uno al que
+ya responde otro plugin se rechaza con un aviso en vez de quitárselo, y se olvida cuando el plugin se
+desactiva.
 
 ## Líneas escritas para varias líneas
 
 Un valor que contenga `<nl>` se convierte en varias líneas de lore. `Lines.value(section, key)` lee una
 clave de config que puede ser cadena o lista a esa misma forma canónica, normalizando saltos de línea
-reales y `\n` literales por el camino.
+reales y `\n` literales por el camino; `Lines.read(section, claves...)` devuelve las líneas en sí,
+probando cada clave en orden para que una clave renombrada siga leyendo archivos viejos.
 
 Solo se estiran las líneas que mencionan el valor multilínea, y el resto de la plantilla se repite
 alrededor de cada una — así que una viñeta sigue siendo una viñeta en la segunda línea.
+
+## Rendimiento
+
+El texto sin caracteres de formato se salta el parser, y todo lo demás se parsea una vez y se cachea,
+así que reenviar la misma línea cada tick es una búsqueda. Los valores sustituidos con `with` y
+`forPlayer` entran después del parseo, que es lo que mantiene esa caché compartida entre jugadores.
+Concatenar un valor en la cadena, en cambio, le da a cada jugador una cadena distinta y la pierde.

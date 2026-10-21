@@ -22,6 +22,10 @@ actions:
 
 ## Namespaces
 
+`Actions.of(plugin, "practice")` names the namespace; `Actions.of(plugin)` derives it from the plugin's
+name, lower-cased with anything outside `a-z 0-9 _ . -` dropped (`MyPlugin` answers to `myplugin:`).
+Name it explicitly for anything a server owner writes, so renaming the jar never breaks their files.
+
 Public YAML always writes the full id. A plugin may compile its own local id, but `Actions.compile`
 without one rejects it — that prevents the old failure where a bare id worked until a second plugin
 registered the same one and both became ambiguous.
@@ -52,6 +56,23 @@ args.string(0);      // Ranked Boxing
 args.decimal(1);     // -0.5
 args.bool(2, false); // true
 ```
+
+## Actions that depend on the row
+
+A menu row's button often carries that row's id, or nothing at all for a row the viewer cannot act on.
+`template` compiles a string that still has placeholders in it:
+
+```java
+// "practice:party_kick %member_id%", or "none" when the viewer is not the leader
+ActionTemplate kick = actions.template(config.getString("kick-action"));
+
+kick.resolve(viewer, Map.of("member_id", member.id())).execute(context);
+```
+
+A template with no placeholders is compiled once, at load, so a typo in a static action is reported
+when the menu loads rather than when somebody presses it. The values passed to `resolve` win over a
+registered placeholder of the same name, so a row's button means that row. `resolveOrNoop` turns an id
+that no longer exists into a dead button instead of an error.
 
 ## Context
 
@@ -85,8 +106,13 @@ becoming a second event framework.
 | Registration | Runs on |
 |---|---|
 | `registerSync(id, handler)` | The player's thread. |
+| `registerSync(id, permission, handler)` | The same, only for players holding `permission`. |
 | `registerAsync(id, handler)` | A pool thread. |
 | `register(id, handler)` | The handler decides. |
+
+The permission form is the check behind a button a menu already hides: without the permission the
+handler does not run and the action answers `SUCCESS`, so the rest of the sequence carries on as if the
+button were decoration rather than printing a failure for something the player was never shown.
 
 When an async step finishes, the sequence resumes on the player-owning thread — so a step that reads
 the database and a step that opens a menu can sit next to each other in one list.
@@ -104,8 +130,8 @@ Or built, when a config carries delays:
 
 ```java
 ActionSequence sequence = actions.sequence()
-        .step("practice:freeze", 0)
-        .step("practice:start", 60)      // ticks to wait before this step
+        .then("practice:freeze")
+        .then("practice:start", 60)      // ticks to wait before this step
         .build();
 ```
 

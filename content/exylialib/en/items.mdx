@@ -183,3 +183,86 @@ A string that names nothing, or a `bytes:` value that cannot be decoded, renders
 as nothing. An unreadable row is still a row somebody has to see and delete, and paper reads as "this
 could not be read" where a stone block reads as somebody's configuration.
 </Callout>
+
+### Storing an item that *is* the prize
+
+`Source.whole(stack).raw()` is the same reading with nothing thrown away: name, lore, enchantments and
+attributes. Use it when the stored item is handed back to a player — a reward, a kit slot, a shop's
+stock — and `Source.of` when it is only drawn. It costs length: a gradient name serialises as component
+JSON, so the column needs room for it.
+
+## Items inside items
+
+`Containers` reads shulker boxes and bundles alike, from the item itself, so it is safe on any thread.
+
+```java
+if (Containers.isContainer(stack)) rows = Containers.contentsOf(stack);
+ItemStack inner = Containers.resolve(kitItems, "6.13");
+if (Containers.isBlocked(stack, settings.blockedMaterials())) refuse();
+ItemStack repacked = Containers.withContents(box, remaining);
+```
+
+| Call | Answers |
+|---|---|
+| `isContainer(item)` | A bundle or a shulker box. |
+| `contentsOf(item)` | What is inside, positions kept, `null` for an empty slot. |
+| `isFilled(item)`, `count(contents)` | Whether anything is inside, and how many non-empty stacks a contents list holds. |
+| `resolve(items, "6.13")` | Position 6 of the list, then position 13 of what was in it. `parentOf`, `child` and `depth` walk the path. |
+| `isBlocked(stack, names)` | Whether the stack, or anything it carries at any depth, is on a list of material names. A box is no way around a block list. |
+| `withContents(item, contents)` | A copy holding other contents: a box takes the first 27 slot by slot, a bundle the non-empty ones in order. Anything else comes back unchanged. |
+
+## Items as words
+
+`ItemTexts` turns an item into text for messages and logs:
+
+| Call | Answers |
+|---|---|
+| `describe(stack)` | The display name as plain text, or the material as words: `Diamond sword`. |
+| `enchantments(stack)` | Its enchantments, a book's stored ones included. `enchantmentName(e)` names one. |
+| `summary(stack)` | An audit line: `1x "Loot" Shulker Box{3x Diamond}`. Also for a template and amount, or a list. |
+
+A display name is a player's words: insert it into a message with `Values.putText`, never as parsed
+text.
+
+## Which shelf an item goes on
+
+```java
+ItemGroup group = ItemGroup.of(Material.DIAMOND_PICKAXE);   // TOOLS
+```
+
+`ItemGroup.of(material)` answers `BLOCKS`, `TOOLS`, `ARMOUR`, `FOOD`, `REDSTONE`, `ENCHANTED_BOOKS`,
+`POTIONS` or `MISC`, so a market's category tabs and a price list's filter agree. `id()` is the config
+spelling (`enchanted-books`) and `ItemGroup.byId` reads it back, `armor` included. A plugin that wants
+another answer for a material keeps its own overrides in front of it.
+
+## Loadouts
+
+A kit, an arena loadout or a class's gear is one flat list of 41 positions, in the order a player
+reads an inventory:
+
+| Positions | Part |
+|---|---|
+| `0`–`3` | Helmet, chestplate, leggings, boots. |
+| `4` | Offhand. |
+| `5`–`31` | The 27 storage slots. |
+| `32`–`40` | The 9 hotbar slots. |
+
+```java
+List<ItemStack> kit = Loadout.capture(player);           // what they wear and carry, trimmed
+
+Editors.of(this).loadout(kit)                            // an inventory-shaped editor
+        .title("{primary}&lEDIT KIT")
+        .onSave(items -> kits.save(id, items))
+        .open(player);
+
+List<String> diff = Loadout.differences(layout, kit.toArray(ItemStack[]::new));
+boolean fair = Loadout.isRearrangement(layout, kitItems);
+```
+
+`Loadout.partOf(index)` names a position, and `Loadout.at(items, index)` reads one (past the end is
+`null`, not an error). A loadout ends at its last item.
+
+`differences` compares a layout a player arranged with the kit it came from: positions and stack splits
+do not count, only how many of each item there are. Each line is `+n item` for extra or `-n item` for
+missing; empty means it is a fair rearrangement. Items are compared as an inventory holds them, and
+looks are ignored — names, lore, dye, trims, banner patterns, models — since none of them gives an edge.

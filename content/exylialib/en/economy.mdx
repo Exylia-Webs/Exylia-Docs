@@ -1,0 +1,217 @@
+---
+title: "Economy"
+description: "Money for every Exylia plugin: one facade over the server's economies, prices any plugin can ask, boosters any plugin can feed, and how amounts are written."
+---
+
+A plugin asks for *money*; `plugins/ExyliaLib/economy.yml` decides which economy serves it. A plugin
+that cares about a second currency names it by id.
+
+```java
+Economy.balance(uuid);                      // the default currency
+Economy.has(uuid, price);
+Economy.charge(uuid, price);                // true when it was taken; nothing changes otherwise
+Economy.pay(uuid, reward);
+Economy.transfer(from, to, amount);         // TransferResult
+
+Economy.of("gems").balance(uuid);           // a named currency
+```
+
+Every amount is a `BigDecimal` and every player a `UUID`.
+
+## What the library does and does not keep
+
+The library **talks to economies and keeps no balances**. It adapts Vault and PlayerPoints by
+reflection (neither is needed at compile time), and takes any currency a plugin registers.
+
+Stored currencies, the currency file, the ledger, leaderboards, publishing a currency to Vault and the
+`%economy_…%` placeholders belong to the plugin that keeps the currencies:
+[ExyliaEconomy](/docs/exyliaeconomy). ExyliaLib registers no balance placeholders.
+
+An economy plugin that enables after ExyliaLib is still picked up: the library watches for it.
+
+## `economy.yml`
+
+```yaml
+default-currency: vault
+fallback: []
+balance-cache-millis: 500
+```
+
+| Key | Default | Meaning |
+|---|---|---|
+| `default-currency` | `vault` | The currency used when a call names none. `vault`, `points`, or the id of any registered currency. |
+| `fallback` | `[]` | Tried in order when the default is not available. The switch is written to the log once, not per call. |
+| `balance-cache-millis` | `500` | How long a read balance is reused. Accepts `500ms`, `2s`. Changes made through the library refresh at once. |
+
+`/exylialib reload` applies it without a restart. Fallback applies only to the default: a call that
+names a currency gets that currency or `NOT_AVAILABLE`, never the right number in the wrong currency.
+
+## Currencies
+
+| Call | Answers |
+|---|---|
+| `Economy.of(id)` | The operations bound to one currency; `of(null)` or `of("")` is the default. |
+| `Economy.isAvailable()` | Whether any currency can serve. |
+| `Economy.currencies()` | Every registered id. |
+| `Economy.ordered()` | The same in the owner's order, then by id — what a wallet or a picker lists. |
+| `Economy.canonical(id)` | The id it is really kept under: `vault` becomes the currency serving Vault, when one does. |
+| `Economy.defaultId()` | The default currency, canonical. |
+| `Economy.kind(id)` | `STORED`, `ITEM`, `EXPERIENCE`, `EXTERNAL` or `UNKNOWN`. |
+| `Economy.canUse(player, id)` | Whether the currency names no permission, or they have it. |
+| `Economy.info(id)` | Name, plural, symbol, icon, decimals and formats. |
+| `Economy.format(id, amount)` / `formatCompact(id, amount)` | `$1,250.00`, `3 Tokens`, `$1.2k`. |
+| `Economy.parseAmount("2.5k")` | `100`, `2.5k`, `1m`, `3b`; `null` for anything not positive. |
+
+When Vault is served by a registered currency, `vault` is that currency under a second name:
+`currencies()` lists it once, and a price in `vault` and in that currency are the same money.
+
+On a `CurrencyView` (`Economy.of(id)`): `balance`, `has`, `withdraw`, `deposit`, `charge`, `pay`,
+`transfer`, `set` (zero allowed), `info`, `format`, and `balanceLater(uuid)` — a `CompletableFuture`
+that fetches the balance of somebody who is not on this server, completing off the server thread.
+
+### Item and experience currencies
+
+```java
+PluginRewards rewards = Rewards.of(this)
+        .overflow(OverflowPolicy.QUEUE)
+        .pending(PendingRewards.database(this));
+
+Economy.register(ItemCurrency.of(rewards, emeraldInfo, new ItemStack(Material.EMERALD)));
+Economy.register(ExperienceCurrency.levels(rewards));   // xp_levels
+Economy.register(ExperienceCurrency.points(rewards));   // xp_points
+```
+
+The balance is what the player carries. A deposit is a [reward](/docs/exylialib/rewards) delivery under
+the plugin's overflow policy, never an item left on the ground; a player who is not here is owed it on
+their next join. A withdraw off the player's thread is refused. Amounts are whole units. Both take an
+optional `order` so they sort among the other currencies.
+
+### Writing your own
+
+Implement `CurrencyProvider` and `Economy.register(provider)`; `Economy.unregister(id)` on disable. A
+taken id throws. Besides `balance`, `deposit`, `withdraw`, `currencyName` and `symbol`, a provider can
+answer:
+
+| Method | Default | For |
+|---|---|---|
+| `kind()` | `EXTERNAL` | Where balances live. |
+| `order()` | last | Position in currency lists. |
+| `permission()` | `null` | Who may see and use it. |
+| `info()` | from name and symbol | How it presents itself. |
+| `balanceLater(uuid)` | the memory answer | A real read for a player who is elsewhere. |
+| `transfer(from, to, amount)` | `null` | Only when the backend moves money in one step. |
+| `servesVault()` | `false` | It is the server's Vault economy right now. |
+| `announcesChanges()` | `false` | It fires `BalanceChangeEvent` itself, where changes really land. |
+
+`Economy.remember(id, uuid, balance)` tells the cache about a balance that changed outside the library,
+and `Economy.overlays(map)` lays the owner's names, symbols, icons and formats over any provider.
+
+## Results, not exceptions
+
+| | |
+|---|---|
+| **Returned** | Not enough money, no economy, an amount the currency cannot hold, the provider refusing. `EconomyResponse` (`type()`, `isSuccess()`, `balance()`, `shortfall()`, `message()`) or `TransferResult`. |
+| **Thrown** (`EconomyException`) | A null player, a zero or negative amount, a taken id. Bugs, not balances. |
+
+A transfer withdraws first, deposits second and refunds if the deposit fails. If the refund fails too
+the result is `PARTIAL`, logged as `SEVERE` with everything needed to refund by hand. A transfer to
+oneself is `INVALID_AMOUNT`.
+
+```java
+Economy.of("gems").withdraw(buyer, price, Transaction.of("market:buy"));
+```
+
+Every successful change fires `BalanceChangeEvent` (player, currency, before, after, transaction),
+whatever the currency. A transfer is one event per side, a refund its own, and a change made through
+`vault` while a registered currency serves it fires once, under that currency's id.
+
+## Prices
+
+What an item sells for, answered by whichever plugin knows — a shop, a worth list — and asked by any
+other.
+
+```java
+Prices.sell(stack).ifPresent(quote -> lines.add(quote.format(quote.each())));
+BigDecimal worth = Prices.sell(stack, stack.getAmount()).orElse(BigDecimal.ZERO);
+if (!Prices.sellable(drop)) return;
+
+Prices.register(this, shopProvider, 100);   // asked first
+Prices.register(this, worthProvider);       // Prices.NORMAL, 0
+```
+
+| Call | Answers |
+|---|---|
+| `Prices.sell(stack)` | `Optional<PriceQuote>`: `price`, `unit` (items per price), `currency` (blank is the default), `provider`. |
+| `Prices.sell(stack, amount)` | What `amount` items pay, rounded down to the currency's decimals. |
+| `Prices.sellable(stack)` | Whether anybody buys it back. |
+| `Prices.buy(stack)` | From providers that also sell. |
+
+Providers are asked from the highest priority down; the first non-empty answer wins and nothing is
+combined. A quote is the base price: boosters are applied by whoever pays, through Modifiers.
+Providers are memory-only and released with their plugin.
+
+## Modifiers
+
+One multiplier pipeline for everything players earn. Plugins that pay call it; plugins that boost feed
+it.
+
+```java
+BigDecimal paid = Modifiers.pay(player, "missions", mission.money());
+List<ItemStack> loot = Modifiers.drops(uuid, "mines", drops, "mine:" + mine.id());
+int xp = Modifiers.xp(uuid, "mines", points);
+rewards.give(player, Modifiers.rewards(uuid, "crates", won));
+double elo = Modifiers.apply(uuid, "elo", "ranked", 25);
+
+Modifiers.source(this, "ranked", "IRON_SWORD", "elo");               // listed on booster screens
+Modifiers.register(this, (player, type, source, scope) ->
+        "elo".equals(type) ? eloBoosts.factor(player) : 1.0);
+```
+
+- **Types** are lower-case strings: `money`, `xp`, `drops`, or any a plugin passes. A type is never a
+  wildcard.
+- **Sources** name what pays: `mines`, `shop-sell`, `votes`. A booster for `*` covers every source of
+  its type.
+- **Scope** is optional (`mine:gold`, `event:koth`) and reaches every provider, so a boost can apply to
+  one place.
+- Every provider's factor is **multiplied**: a booster at x2 and a rank at x1.5 make x3. A provider
+  that throws counts as `1.0`; below zero is zero.
+- Fractions are rolled, not rounded: one drop at x1.2 is two drops a fifth of the time.
+
+Built in, with no setup, permissions `exylia.modifier.<type>.<source>.<factor>`:
+
+| Node | Means |
+|---|---|
+| `exylia.modifier.money.*.1.5` | x1.5 on every money source. |
+| `exylia.modifier.drops.mines.2` | x2 drops from mines. |
+
+Among a player's matching nodes the highest wins. They are read once and kept 10 seconds, refreshed on
+join, quit and `/exylialib reload`.
+
+`Modifiers.rewards` boosts `ECONOMY` lines in the default currency by money, `EXPERIENCE` by xp and
+`ITEM` by drops; commands and the rest are untouched. Only earnings go through here, only the default
+currency is boosted, and a payout queued for an offline player is boosted when it is queued.
+
+## Formats
+
+What a player reads, and what a player types:
+
+```java
+Formats.money(balance);          // "$1,250.00", the way formats.yml writes money
+Formats.compact(1500);           // "1.5K" with the defaults; cuts, so 8,992 reads "8.9K"
+Formats.percent(42);             // "42%" — takes the hundred scale
+Formats.progress(0.9996);        // "99.9%" — from a ratio, rounded down
+Formats.percentOf(3, 12);
+Formats.date(epochMillis);
+Formats.relative(epochMillis);   // "3 minutes ago"
+
+Amounts.parse("10M");            // Optional<BigDecimal>, back from what a player typed
+```
+
+`Amounts.parse` is the same reader the [`amount` input](/docs/exylialib/input-and-editors) and
+cosmetic prices use, so a menu, a command and a chat prompt accept the same shorthand. It refuses
+negatives but accepts `0`; check the sign before charging.
+
+<Callout type="note" title="Locale is pinned deliberately">
+Decimal formats use a fixed locale rather than the host's. A server in Spain would otherwise write
+`1,50`, and that value breaks every scoreboard, comparison and config that reads it back.
+</Callout>

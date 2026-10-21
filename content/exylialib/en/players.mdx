@@ -1,6 +1,6 @@
 ---
 title: "Players"
-description: "One claim registry, cooldowns, teleports, snapshots, clans, combat and heads."
+description: "One claim registry, stays, cooldowns local and network-wide, alts, placed blocks, teleports, snapshots, clans, combat and heads."
 ---
 
 ## One player, one activity
@@ -18,7 +18,7 @@ if (!Sessions.isFree(player)) {
     return;
 }
 
-sessions.claim(player, "Event", () -> leaveEvent(player))
+sessions.claim(player, "Event", () -> { leaveEvent(player); return true; })
         .ifPresent(claim -> join(player));
 ```
 
@@ -28,7 +28,8 @@ sessions.claim(player, "Event", () -> leaveEvent(player))
 | `Sessions.holder(player)` | Who holds them, and what they called it. |
 | `sessions.claim(player, kind, onRelease)` | Take them. **Atomic** — this is what actually decides. |
 | `sessions.mine(player)` | The claim, if it is ours. |
-| `sessions.release(player)` | Give them back. |
+| `sessions.release(player)` | Give them back: ends our claim, never another plugin's. |
+| `Sessions.release(player)` | Ask whoever holds them to give them back. |
 
 <Callout type="warning" title="isFree is not a reservation">
 Between asking and acting, somebody else may have taken the player. `claim` is the one that decides,
@@ -36,29 +37,162 @@ and it returns empty when it lost the race. The release callback is how whoever 
 let go.
 </Callout>
 
+The release callback returns whether the request is **accepted**, not whether it has finished: handing
+a player back is a teleport and a restore, which end later, so an accepting handler releases the claim
+from its own callback. Returning `false` refuses — a player in combat is not available — and the asker
+is told no. A claim taken with no callback is dropped outright when somebody asks.
+
+Work that finishes later is fenced against the claim, so it cannot touch a player who has since moved
+on:
+
+```java
+teleport(player, spawn).thenRun(() -> claim.ifCurrent(() -> giveKit(player)));
+```
+
 The claim is **re-entrant** for its owner: a player moving from an event's lobby into the game, or from
-playing into spectating, keeps one continuous claim rather than releasing and racing to retake it.
+playing into spectating, keeps one continuous claim rather than releasing and racing to retake it. A
+claim also ends when the player disconnects or its plugin is disabled.
 
 Nothing in the registry knows which modes exist, so a mode added later is covered without touching it.
+
+## Stays
+
+Most claims mean "take them into my arena and give them back as they came". `Stays` is that, with the
+three orderings every arena plugin had to learn the hard way built in:
+
+```java
+PluginStays stays = Stays.of(this);
+
+// In: claimed and saved here, emptied once they stand in the arena.
+stays.enter(player, "duel", () -> { endMatch(player); return true; }).ifPresent(stay ->
+        stay.ready().thenCompose(ignored -> teleport(player, arena))
+                .thenCompose(ignored -> stays.dress(player, GameMode.ADVENTURE, stay::isCurrent)));
+
+// Out: home, restored there, released last.
+stays.leave(player);
+
+// On join: whatever a crash left behind goes back, and so does the player.
+stays.recover(player);
+```
+
+| Call | What it does |
+|---|---|
+| `enter(player, kind, onRelease)` | Claims the player and saves a snapshot of them. `stay.ready()` completes once it is stored — the cue to move them. |
+| `enter(player, claim)` | Turns a claim this plugin already holds into a stay (a queue moving its player into the match). Keeps the claim's token and handler. |
+| `dress(player, mode, still)` | Empties them and sets their game mode, on arrival. Skipped when `still` says they are no longer wanted. |
+| `leave(player)` / `leave(player, home)` | Back where they came from (or to a lobby), restored there, then released. |
+| `leaveHere(player)` | Restored where they stand, for a player who walked out through a portal. |
+| `recover(player)` | Gives back every stored stay a crash or restart left behind. Call on join. |
+| `isHeld(uuid)` | Whether this plugin answers for their belongings: held, or still on the way out. |
+
+- The snapshot is taken **before** the teleport and the inventory emptied only **after** it, because a
+  per-world inventory plugin writes whatever the player holds into the world they leave.
+- A restore never starts before its save has landed.
+- The claim is released **last**, so nothing else can dress the player while their things are still on
+  the way back.
 
 ## Cooldowns
 
 The base every cooldown in the ecosystem sits on, so a bar can display one without owning it:
 
 ```java
-PluginCooldowns cooldowns = Cooldowns.of(this);
+PluginCooldowns cooldowns = Cooldowns.forPlugin(this);   // keys become "myplugin:pearl"
 
 cooldowns.startSeconds(player, "pearl", 16);
 cooldowns.isActive(player, "pearl");
 cooldowns.remainingSeconds(player, "pearl");
+cooldowns.tryStart(player, "pearl", Duration.ofSeconds(16));   // false while running
 ```
 
-`CooldownScope` widens the key beyond one player — a cooldown per arena, per clan or server-wide.
+`CooldownScope` widens the key beyond one player — `CooldownScope.GLOBAL`, `CooldownScope.group(clanId)`
+or any `CooldownScope.of(type, id)`. Cooldowns of **five minutes or more** are written to disk and come
+back after a restart; shorter ones live in memory.
+
 `ItemCooldowns` puts the vanilla cooldown sweep on an item at the same time, so the client greys it
-out.
+out. On Lunar and the SurvivalCore mod the cooldown is also drawn on the HUD with the item as its icon
+— see [Client integration](/docs/exylialib/client-integration).
 
 An effect can read a running cooldown instead of counting on its own — see
 [Effects · Timers](/docs/exylialib/effects#timers).
+
+### Across relogs and servers
+
+`Cooldowns` belongs to one server's memory: a player who quits or switches server starts a
+thirty-second cooldown over. For anything worth abusing — a repair, a heal, a kill reward — use
+`NetworkCooldowns`, written to the plugin's database so every server sharing it sees the same one:
+
+```java
+NetworkCooldowns cooldowns = NetworkCooldowns.of(this);   // once, in onEnable
+
+if (!cooldowns.tryStart(player.getUniqueId(), "repair", Duration.ofMinutes(10))) {
+    if (!cooldowns.isLoaded(player.getUniqueId())) { say(player, "Still loading."); return; }
+    say(player, "Wait " + cooldowns.remaining(player.getUniqueId(), "repair").toSeconds() + "s.");
+    return;
+}
+```
+
+A player's cooldowns are read when they join and answered from memory afterwards. **Until that read is
+back the answer is "wait"**: `isActive` is `true` and `tryStart` is `false`, so a player cannot slip
+through the gap a server hop opens. `start` and `clear` change memory at once and are written in the
+order they were made. Rows live in `exylia_network_cooldowns` and are deleted when cleared or when the
+owner next joins after they ended.
+
+## Alts and first joins
+
+`Accounts` answers whether two accounts are likely the same person, and how long the network has known
+a player — online or not:
+
+```java
+Accounts accounts = Accounts.of(this);   // once, in onEnable
+
+accounts.sameAddress(buyer, seller).thenAccept(alt -> {
+    if (alt) return;   // no reputation between a player and their alt
+    ...
+});
+accounts.firstSeen(invited).thenAccept(first -> ...);   // Optional<Instant>
+```
+
+- **The address itself is never stored.** Every join writes a keyed hash of it, with when it was last
+  used, plus the earliest time the player was seen. The key lives in the database, so every server
+  sharing it hashes an address the same way. An IPv6 address is hashed by its `/64`.
+- `sameAddress` counts an address both players used within the last **30 days** (`accounts.window(…)`
+  changes it), or both being online here from the same address right now.
+- `firstSeen` also takes the server's own first-played date, so a veteran is not "new" the first time
+  this module sees them.
+- Both complete **exceptionally** when the database cannot answer. Decide what that means: a reward
+  should refuse (`.exceptionally(failure -> true)`), a warning should stay quiet.
+
+Point every server's plugin at one database and the answers are network-wide.
+
+## Placed blocks
+
+Whether a block was put there by a player, remembered across restarts — the anti-farming question:
+
+```java
+PlacedBlocks.track(this, List.of(Material.SUGAR_CANE, Material.DIAMOND_ORE));
+
+@EventHandler(ignoreCancelled = true)
+public void onBreak(BlockBreakEvent event) {
+    if (PlacedBlocks.placedByPlayer(event.getBlock())) return;   // no reward for place-and-break
+    reward(event.getPlayer());
+}
+```
+
+The record lives in the chunk's own data, so it is saved and loaded with the blocks and costs nothing
+while the chunk is unloaded. Only tracked materials are recorded; a piston moves the record with the
+block, and breaking it forgets it only after every listener below `MONITOR` has asked. A block that
+leaves another way (explosion, burning) keeps its record — the answer errs on "placed". Each chunk keeps
+at most 4096 positions.
+
+## Numbers in permissions
+
+```java
+int homes = PermissionNumbers.highest(player, "myplugin.homes.", settings.defaultHomes());
+```
+
+The largest number behind a prefix wins, because a rank ladder grants every step on the way up. A node
+set to `false` grants nothing, and a tail that is not a whole number is ignored. Call it on the
+player's own thread.
 
 ## Teleports
 
@@ -68,23 +202,26 @@ Moving a player is rarely just `player.teleport(...)`:
 PluginTeleports teleports = Teleports.of(this);
 
 teleports.to(player, spawn)
-         .warmup(Duration.ofSeconds(3))
+         .warmup(3.0)
          .cancelOnMove()
          .cancelOnDamage()
-         .go();
+         .cooldown("spawn", 30.0)
+         .safe()
+         .start();
 ```
 
 | Call | What it does |
 |---|---|
-| `to(player, location)` | A request, configured then sent. |
+| `to(player, location)` | A request, configured then started with `start()`. Nothing happens before that, and the cooldown is only charged then. |
 | `toAll(players, location)` | A group at once. |
-| `back(player)` | Where they were before the last teleport. |
+| `back(player)` | A request to where they were before the last teleport. |
 | `lastLocationOf(player)` | That location, without moving them. |
 | `request(from, to, …)` | A `/tpa`-style request. |
-| `accept(target, from)` / `deny(…)` | Answering one. |
+| `accept(target, from)` / `deny(…)` / `cancel(…)` | Answering one. |
 
-Warmups, safe landings, `/back` history and cross-server handovers all live here, and every one of them
-runs on the player's own thread.
+A request can also play effects (`onStart`, `onArrive`, `onCancel`), report the countdown (`onTick`) and
+hand back the result (`then`). Warmups, safe landings, `/back` history and cross-server handovers all
+live here, and every one of them runs on the player's own thread.
 
 ## Snapshots
 
@@ -103,7 +240,7 @@ under a context id so it survives a restart, and `saveAndClear` does both halves
 give them the kit" in one call.
 
 It is what gives a player their survival inventory back after an event, and what lets a kit editor hand
-back what somebody was carrying when they opened it.
+back what somebody was carrying when they opened it. [Stays](#stays) are built on it.
 
 ## Clans
 
@@ -131,8 +268,8 @@ Every provider reaches its plugin by reflection, so one that is installed but wh
 reached is skipped with a warning rather than taking the slot silently. A plugin not on the list
 registers a `ClanBridge`, and a registered bridge beats automatic detection.
 
-Alliances and rivalries are part of the API, and providers that have no concept of them answer empty
-rather than guessing.
+Alliances and rivalries are part of the API (`areAllied`, `areRivals`), and providers that have no
+concept of them answer empty rather than guessing.
 
 ## Combat
 
@@ -145,6 +282,20 @@ if (Combat.isTagged(player)) {
 ```
 
 The point is the same as clans: your plugin asks one question and does not care which plugin answers.
+With nothing installed every call still works: nobody is tagged and PvP is always allowed.
+
+## Bedrock players
+
+```java
+if (Clients.isBedrock(player)) {
+    // skip what a Bedrock client cannot draw, such as display entities
+}
+```
+
+Floodgate answers when it is installed, since only it knows a linked player; otherwise the UUID does,
+the way Geyser recommends, and Geyser's own API is asked when it runs without Floodgate. The name is
+never used. It works whichever of the two enables first. A linked player who is offline cannot be told
+apart from their Java account and answers `false`.
 
 ## Heads
 
@@ -157,3 +308,8 @@ Skulls.url(url).build();
 Cached, shared across plugins, and **never blocking**: a head that has not been fetched yet comes back
 plain and is replaced when it arrives. That is why a menu full of player heads opens instantly instead
 of freezing the server on a Mojang lookup.
+
+## Preferences
+
+Player toggles and the `/settings` screen every plugin registers into have their own page:
+[Player settings](/docs/exylialib/player-settings).
