@@ -1,0 +1,185 @@
+---
+title: "Red"
+description: "Baúles entre servidores: la base de datos compartida, un bloqueo por baúl, escrituras que nunca pisan una fila más nueva, Redis, qué evita que se dupliquen objetos, y venir de ExyliaSurvivalCore."
+---
+
+Todos los servidores que apuntan a la misma base de datos comparten los mismos baúles. No hay nada que
+configurar aparte de la propia base de datos; Redis permite que el staff cierre un baúl abierto en otro
+servidor.
+
+## Una base de datos
+
+Pon la misma base de datos en `plugins/ExyliaPlayerVaults/database.yml` en todos los servidores — MySQL,
+MariaDB, PostgreSQL o MongoDB — con Redis activado si lo tienes. Ver
+[Instalación](/docs/exyliaplayervaults/instalacion#base-de-datos). Un solo servidor va bien con el archivo
+H2 por defecto.
+
+## Una ventana, en cualquier sitio
+
+Un baúl es un contenedor real con objetos reales, así que todos los bugs de duplicación de un
+almacenamiento con forma de cofre vienen del mismo error: dos ventanas construidas a partir del mismo
+contenido guardado. Saca un stack de cada una y el stack existe dos veces.
+
+Por eso una ventana mantiene el **bloqueo** de su baúl mientras está abierta. El bloqueo es una fila en la
+tabla `exylia_row_locks` de ExyliaLib, con la clave `vaults:<owner>|<number>`, que ven todos los servidores
+de la base de datos. Un segundo intento de abrirlo — el mismo jugador dos veces en un tick, el dueño en otro
+servidor, el staff — recibe que el baúl está en uso en vez de una segunda copia.
+
+El bloqueo es un **arrendamiento** de 60 segundos, renovado cada 20 segundos mientras la ventana sigue
+abierta, así que un baúl puede estar abierto todo el tiempo que quiera quien lo mira. Un servidor que crashea
+no puede devolver sus bloqueos: sus baúles quedan cerrados hasta que vence el arrendamiento, un minuto como
+mucho, y después cualquier servidor puede abrirlos.
+
+Cuando una renovación descubre que el arrendamiento se perdió — la base de datos inaccesible durante casi un
+minuto — la ventana se guarda y se cierra, y a quien la mira se le dice *"El baúl `<number>` se guardó y
+cerró tras un corte de conexión. Ábrelo de nuevo para seguir."*, porque a partir de ahí otro servidor podría
+entregar el baúl.
+
+## Cambiar de servidor
+
+El bloqueo se devuelve solo **después** de que haya llegado la última escritura de la ventana. Un jugador que
+cierra un baúl y entra en otro servidor enseguida lo encuentra bloqueado un momento; el nuevo servidor sigue
+intentándolo hasta tres segundos antes de decir que está en uso, que es tiempo de sobra para que el servidor
+anterior termine.
+
+La lectura que llena la siguiente ventana se salta todas las cachés y va directa a la base de datos, así que
+siempre ve la fila que escribió el servidor anterior, aunque todavía no haya llegado la invalidación de caché
+de ese servidor.
+
+## Solo se escribe sobre la fila que se leyó
+
+Cada escritura lleva una `version` aleatoria nueva y solo se aplica mientras la fila siga teniendo la versión
+que esta ventana leyó o escribió por última vez; la primera escritura de un baúl solo crea la fila si no
+existe. Así, un servidor que perdió su bloqueo nunca puede escribir encima de una fila más nueva escrita en
+otro sitio.
+
+Una escritura cuya respuesta nunca llegó se recuerda. Si una escritura posterior encuentra esa versión en la
+fila, sabe que la suya llegó y sigue desde ahí, en vez de tomarla por la de otro servidor.
+
+## Cuando la base de datos deja de responder
+
+- Una escritura de checkpoint que falla se reintenta hasta cinco veces, un segundo más cada vez, y luego se
+  registra; la ventana sigue abierta y el siguiente checkpoint o el cierre lo vuelven a intentar.
+- La **última** escritura, al cerrar, se reintenta cada cinco segundos hasta que la base de datos responde.
+  El bloqueo se mantiene todo ese tiempo, así que el baúl sigue cerrado en vez de reabrirse desde la fila de
+  antes de la escritura, lo que volvería a entregar lo que se sacó.
+- Al apagarse, el plugin guarda todos los baúles abiertos y espera hasta diez segundos a las escrituras y los
+  bloqueos. Una escritura que aun así no puede llegar se abandona, y la consola registra completo lo que
+  debería tener el baúl, para que el staff lo devuelva.
+
+## Cuando dos servidores escribieron el mismo baúl
+
+Si una escritura encuentra en la fila la versión de otro servidor — algo que solo pasa tras perder el
+arrendamiento — la ventana se cierra y la fila más nueva **se conserva entera**: pisarla desharía lo que se
+hiciera en ese servidor. Lo que hubo en esta ventana desde su última escritura se resuelve así:
+
+- los stacks **metidos** aquí desde entonces no están en ninguna fila, y se le devuelven a quien tenía la
+  ventana abierta, a su inventario o al volver a entrar;
+- los stacks **sacados** aquí desde entonces ya los tiene ese jugador y puede que sigan en la fila
+  conservada; nada puede quitárselos, así que solo se registran.
+
+Si alguna escritura de esta ventana pudo llegar sin respuesta, no se sabe qué leyó el otro servidor y
+devolver algo podría duplicarlo. Entonces no se devuelve nada y los stacks se registran para el staff. En
+ambos casos queda constancia en el registro de auditoría como `vault-conflict`, con los dos grupos de
+stacks.
+
+## Redis
+
+Redis lleva una sola cosa para los baúles: la petición de guardar y cerrar un baúl abierto en otro servidor,
+que se envía cuando el staff lo [edita, vacía o restaura](/docs/exyliaplayervaults/staff). El servidor que
+tiene la ventana la guarda y la cierra, y el servidor del staff puede tomar el bloqueo.
+
+Sin Redis, los baúles son igual de seguros — los bloqueos y las versiones están en la base de datos — pero el
+staff no puede cerrar un baúl a distancia: se le dice que está en uso hasta que quien lo mira lo cierre.
+
+## Qué evita que se dupliquen objetos
+
+| Forma de duplicar | Qué lo impide |
+|---|---|
+| Dos ventanas sobre un baúl, aquí o en dos servidores | Un bloqueo por baúl, en la base de datos. |
+| Reabrir antes de que llegue la última escritura | El bloqueo se devuelve solo después; la siguiente lectura se salta todas las cachés. |
+| Un servidor que perdió su bloqueo escribiendo sobre una fila más nueva | Cada escritura es un compare-and-set sobre `version`. |
+| Un crasheo entre la escritura del baúl y el archivo del jugador | `save-player-on-write` guarda al jugador tras cada escritura que cambió el baúl. |
+| Un crasheo con una ventana abierta | Checkpoints cada 30 segundos; el arrendamiento libera el baúl en un minuto. |
+| Un baúl encogido que paga dos veces sus stacks ocultos | Se pagan solo cuando ha llegado una escritura sin ellos. |
+| Una vista de solo lectura | Cada clic y cada arrastre cancelados, en cualquier inventario. |
+| Dos compras a la vez | La cuenta de compras es un compare-and-set, cobrado antes de contarse. |
+
+## Tablas
+
+| Tabla | Guarda |
+|---|---|
+| `sc_vaults` | Una fila por jugador y baúl: el contenido, cuántas ranuras se usan, cuándo y con qué `version` se escribió. La fila se crea la primera vez que se escribe un baúl. |
+| `playervaults_looks` | Nombres e iconos. |
+| `playervaults_buyers` | Cuántos baúles compró cada jugador. |
+| `playervaults_history` | Copias anteriores de cada baúl. |
+| `exylia_row_locks` | Los bloqueos de ExyliaLib, compartidos con todos los plugins de la base de datos. |
+| `exylia_pending_rewards` | La cola de ExyliaLib de stacks que se deben a jugadores, entregados al volver a entrar. |
+
+## Venir de ExyliaSurvivalCore
+
+ExyliaPlayerVaults es el módulo `vaults` de ExyliaSurvivalCore, como plugin propio. Guarda los baúles en la
+**misma tabla, `sc_vaults`, con las mismas columnas**, y los bloquea con la misma clave `vaults`, así que
+pasarse consiste en abrir la misma base de datos. Las filas escritas por versiones antiguas, de antes de las
+columnas `used` y `version`, también se leen y se completan en su siguiente escritura.
+
+<Steps>
+  <Step title="Actualiza ExyliaSurvivalCore">
+    Instala la versión de ExyliaSurvivalCore sin el módulo `vaults`, en todos los servidores, a la vez que
+    ExyliaPlayerVaults. Dos plugins respondiendo a `/pv` sobre una misma base de datos es justo lo que este
+    plugin existe para evitar.
+  </Step>
+  <Step title="Apúntalo a la misma base de datos">
+    Dale a `plugins/ExyliaPlayerVaults/database.yml` los mismos datos de conexión que a
+    `plugins/ExyliaSurvivalCore/database.yml`. En una base de datos compartida MySQL, MariaDB, PostgreSQL o
+    MongoDB, todos los baúles están ahí desde el primer arranque.
+  </Step>
+  <Step title="Pasa los ajustes">
+    Escribe tus valores antiguos en el nuevo `config.yml` y concede los permisos nuevos; las tablas de abajo
+    los relacionan.
+  </Step>
+</Steps>
+
+<Callout type="danger" title="Con H2, no se copia nada por ti">
+El plugin no copia el `database.yml` de ExyliaSurvivalCore ni su archivo H2. Con la base de datos H2 por
+defecto, ExyliaPlayerVaults abre un archivo nuevo en su propia carpeta y todos los baúles parecen vacíos —
+siguen en el archivo de ExyliaSurvivalCore, intactos. Para traerlos, para el servidor, haz copia de
+seguridad de las dos carpetas y copia el archivo H2 de ExyliaSurvivalCore (la ruta de `h2.file` en su
+`database.yml`, `database/h2` por defecto) a la misma ruta dentro de `plugins/ExyliaPlayerVaults/` antes de
+que ExyliaPlayerVaults haya escrito baúles propios.
+</Callout>
+
+### Ajustes
+
+No se lee nada de la carpeta `modules/vaults/` de ExyliaSurvivalCore: ni `config.yml`, ni `messages.yml`, ni
+el menú.
+
+| ExyliaSurvivalCore | ExyliaPlayerVaults |
+|---|---|
+| `settings.default-vaults` | `vaults.default-amount` |
+| `settings.max-vaults` | `vaults.max-amount` |
+| `settings.rows` | `vaults.default-rows`, y ahora `exyliaplayervaults.rows.<1-6>` por rango |
+| `title`, `admin-title` en `modules/vaults/messages.yml` (`settings.title` en versiones antiguas) | `title`, `admin-title` en `lang/<code>/messages.yml`; `%name%` es el nombre del baúl |
+| `settings.blocked-materials` | `vaults.blocked-materials`, que ahora también mira dentro de cajas de shulker y bolsas |
+| `sounds.opened`, `sounds.closed` | `sounds.opened`, `sounds.closed` |
+
+Un baúl que encogía le devolvía al dueño sus stacks sobrantes. Ahora por defecto los guarda fuera de la
+vista; `vaults.hidden-slots: return` los devuelve como antes.
+
+### Permisos
+
+Los nodos antiguos **no** se vuelven a declarar. Concede los nuevos:
+
+| ExyliaSurvivalCore | ExyliaPlayerVaults |
+|---|---|
+| `exyliasurvivalcore.vaults` | `exyliaplayervaults.use` (todos por defecto) |
+| `exyliasurvivalcore.vaults.amount.<number>` | `exyliaplayervaults.amount.<number>` |
+| `exyliasurvivalcore.vaults.admin` | `exyliaplayervaults.admin`, o los nodos `admin.*` sueltos |
+
+### Comandos, menús y acciones
+
+`/vault`, `/pv` y `/vaults` siguen funcionando. `/vaultadmin` ya no existe: el staff usa `/pvadmin`, donde
+`view` ahora es de solo lectura y `edit` abre un baúl para cambiarlo. La lista de baúles es un archivo nuevo,
+`lang/<code>/menus/user/vaults.yml`; el antiguo `modules/vaults/menus/vaults.yml` no se lee. Los botones que
+en otros sitios usen `survivalcore:vault_open <number>` o `survivalcore:vaults_open` hay que reescribirlos: la
+lista se abre con `/pv`, y un baúl con `exyliaplayervaults:open <owner-uuid> <number>`.

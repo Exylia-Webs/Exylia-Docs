@@ -1,0 +1,135 @@
+---
+title: "Red"
+description: "Una tabla para todos los servidores, qué servidor dibuja una tumba, Redis, recoger entre servidores, por qué nada se duplica, y cómo venir de ExyliaSurvivalCore."
+---
+
+Todos los servidores que apuntan a la misma base de datos comparten una tabla de tumbas. No hay nada que
+configurar aparte de la propia base de datos; Redis hace que una tumba tomada en un servidor desaparezca
+al momento donde está.
+
+## La base de datos
+
+Las tumbas son filas de `sc_graves`, en la base de datos a la que apunta
+`plugins/ExyliaGraves/database.yml`: `h2` por defecto, o `mysql`, `mariadb`, `postgresql` o `mongodb`.
+Ver [Instalación](/docs/exyliagraves/instalacion#base-de-datos) y la
+[página de base de datos de la librería](/docs/exylialib/base-de-datos).
+
+| Columna | Guarda |
+|---|---|
+| `id` | El ID de la tumba. |
+| `ownerUuid`, `ownerName` | De quién es. Indexada por dueño. |
+| `killerUuid` | Quién lo mató, o vacío para una caída o un mob. |
+| `location` | Servidor, mundo y bloque. |
+| `originalBlock` | Lo que reemplazó la cabeza, que se devuelve cuando se va. |
+| `items` | Cada stack, serializado. El único sitio donde están. |
+| `experience` | Los puntos guardados. |
+| `created_at`, `expiresAt`, `protectedUntil` | Cuándo se creó, cuándo caduca (`-1` nunca), hasta cuándo está protegida (`-1` para siempre). |
+
+El contenido que espera a un jugador que tenía el inventario lleno o no estaba se guarda en las
+recompensas pendientes de ExyliaLib, en la misma base de datos; los avisos que esperan a que entre, en
+`exylia_notices`.
+
+## Qué servidor dibuja una tumba
+
+Una tumba guarda el servidor donde se creó. Cada servidor lee y dibuja solo las suyas: la cabeza, el
+holograma, la revisión de caducidad, el límite, los placeholders y la brújula al reaparecer se refieren a
+tumbas de **este** servidor. `/graves` y `/gravesadmin` leen la tabla, así que listan todos los servidores.
+
+El nombre del servidor es el que le da el puente de proxy de ExyliaLib, y si no, `server-id` bajo `redis`
+en `database.yml` — que se tiene en cuenta aunque Redis esté desactivado.
+
+<Callout type="danger" title="Dale a cada servidor su propio server-id">
+Es `server-1` en todos los servidores que nunca lo cambiaron. Dos servidores que comparten la tabla con el
+mismo ID creen que todas las tumbas son suyas: cada uno dibuja las del otro en las mismas coordenadas de
+su propio mundo con el mismo nombre, y cada uno las revisa para caducarlas. Dale a cada servidor su propio
+ID antes de que compartan base de datos.
+</Callout>
+
+## Recoger entre servidores
+
+Un jugador recoge una tumba en el servidor donde está, haciendo clic en ella. El staff devuelve o elimina
+una desde cualquier sitio. La tome quien la tome, el contenido va al jugador **por ID** a través del
+almacén de recompensas de ExyliaLib:
+
+- a su inventario, si está aquí y cabe;
+- si no, se guarda y se le entrega la próxima vez que entre, en el servidor que sea.
+
+Un jugador que muere, sale o cambia de servidor entre el clic y la entrega sigue recibiéndolo todo, una
+sola vez.
+
+## Con y sin Redis
+
+| | Con Redis | Sin Redis |
+|---|---|---|
+| Una tumba tomada desde otro servidor | Su cabeza y su texto se quitan al momento donde está. | Se quedan hasta que alguien hace clic en ella allí (*"Esa tumba ya no existe."*), o hasta que caduca. |
+| Avisos a un dueño conectado en otro servidor | Se muestran al momento en ese servidor. | Se muestran la próxima vez que entre. |
+| Teletransporte desde `/graves` a otro servidor | Funciona. | Se rechaza con *"No se puede conectar con ese servidor ahora mismo."* y se reembolsa. |
+| Las tumbas, la lista, las entregas | Compartidas a través de la base de datos. | Compartidas a través de la base de datos. |
+
+## Por qué nada se duplica
+
+- Lo que se suelta sale del evento de muerte y entra en **una fila, y solo ahí**. No hay ningún
+  contenedor con los ítems de una tumba; una vista previa es una copia en la que se cancela cada clic y
+  cada arrastre.
+- Una tumba se toma **borrando su fila**. Solo la llamada cuyo borrado la eliminó entrega algo, así que dos
+  jugadores, dos servidores, una caducidad y una acción del staff compitiendo por la misma tumba la
+  entregan una sola vez.
+- Mientras la primera escritura de una tumba nueva no ha respondido, nadie puede tomarla.
+- Una tumba cuya escritura falló se vuelve a borrar antes de que sus ítems caigan al suelo. Una cuya
+  escritura pudo haberse guardado y no se pudo deshacer se deja en pie, en lugar de soltar su contenido
+  encima de una fila que quizá lo tiene.
+- Una cabeza solo se quita en el servidor donde está. Una tumba tomada mientras su chunk no está cargado
+  quita su cabeza en cuanto el chunk carga; un reinicio entre medias deja esa cabeza en pie, y un clic en
+  ella dice que ya no existe.
+
+## Al apagar un servidor
+
+Al apagarse, se quitan los hologramas y se cierra cualquier vista previa abierta. Las cabezas y las filas
+se quedan, y se vuelven a dibujar en el siguiente arranque.
+
+## Viniendo de ExyliaSurvivalCore
+
+ExyliaGraves es el módulo `graves` de ExyliaSurvivalCore convertido en plugin propio, y ese módulo ya no
+existe en ExyliaSurvivalCore. La tabla conserva su nombre, `sc_graves`, y sus columnas, así que las tumbas
+en pie cuando cambias se conservan — **siempre que ExyliaGraves abra la base de datos que las tiene**.
+
+<Steps>
+  <Step title="Apúntalo a la misma base de datos">
+    ExyliaGraves tiene su propio `plugins/ExyliaGraves/database.yml` y no copia nada de la carpeta de
+    ExyliaSurvivalCore. En MySQL, MariaDB, PostgreSQL o MongoDB, copia el bloque de la base de datos y el
+    bloque `redis` (con el mismo `server-id`) de `plugins/ExyliaSurvivalCore/database.yml`.
+  </Step>
+  <Step title="Conserva los IDs de servidor">
+    Una tumba la dibuja el servidor cuyo ID guardó. Un servidor que cambia de ID deja de dibujar las tumbas
+    que creó antes.
+  </Step>
+  <Step title="Rehaz tus ajustes">
+    `config.yml`, los mensajes y el menú son archivos nuevos con claves nuevas. No se lee nada de
+    `modules/graves/`.
+  </Step>
+</Steps>
+
+<Callout type="warning" title="Con H2">
+Con el H2 por defecto, ExyliaGraves empieza un archivo nuevo y vacío en su propia carpeta: las tumbas que
+queden en el archivo H2 de ExyliaSurvivalCore no se leen. Deja que los jugadores las recojan antes de
+cambiar, o pasa primero a un motor de base de datos compartido.
+</Callout>
+
+Qué cambió para el staff y los jugadores:
+
+| Antes (ExyliaSurvivalCore) | Ahora |
+|---|---|
+| `modules/graves/config.yml` → `settings.expire-minutes` | `graves.expire-time` |
+| `settings.on-expire` | `graves.on-expire` |
+| `settings.protect-minutes` | `graves.protection-time` |
+| `settings.killer-can-loot` | `graves.killer-can-loot` |
+| `settings.keep-experience` | `contents.experience` (`NONE`, `VANILLA`, `ALL`) y `contents.experience-percent` |
+| `settings.max-graves-per-player` | `graves.max-per-player` |
+| `settings.blacklisted-worlds` | `graves.disabled-worlds` |
+| `settings.allow-teleport`, `settings.teleport-cost` | `teleport.enabled`, `teleport.cost` |
+| `hologram.enabled`, `hologram.offset` | Las mismas claves |
+| `hologram.lines` | `hologram-lines` en `messages.yml` |
+| `sounds.created`, `sounds.collected` | Una etiqueta `[sound:…]` al principio de los mensajes `created` y `collected` |
+| `exyliasurvivalcore.graves` | `exyliagraves.menu`. El nodo antiguo no se conserva. |
+| La acción `survivalcore:graves_open` | Ninguna. Un botón de menú puede ejecutar el comando `/graves`. |
+| A un jugador sin tumbas se le avisaba y no se abría menú | `/graves` se abre con su estado vacío. |

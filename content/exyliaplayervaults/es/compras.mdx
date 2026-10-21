@@ -1,0 +1,106 @@
+---
+title: "Compras"
+description: "Vender baúles extra desde la lista: activarlo, qué moneda se cobra, cómo sube el precio, los límites y qué pasa cuando un pago sale mal."
+---
+
+Los jugadores pueden comprar baúles por encima de lo que les da su rango, desde la lista de baúles. Las
+compras están desactivadas hasta que las actives.
+
+## Activarlo
+
+```yaml title="plugins/ExyliaPlayerVaults/config.yml"
+purchase:
+  enabled: true
+  currency: ''
+  base-price: 5000.0
+  price-multiplier: 1.5
+  max-purchases: 9
+```
+
+`/pvadmin reload` lo aplica. A partir de ahí, el primer baúl bloqueado de la lista de un jugador se dibuja
+con `buy_template` y su precio, mientras todavía pueda comprar uno. Comprar necesita
+`exyliaplayervaults.buy`, que tiene todo el mundo por defecto.
+
+## Qué moneda se cobra
+
+`purchase.currency` es el ID de una moneda tal como la conoce ExyliaLib. Vacío, el valor por defecto, usa la
+moneda por defecto del servidor: `default-currency` en `plugins/ExyliaLib/economy.yml`. Sirve cualquier
+moneda que alcance ExyliaLib — una moneda de [ExyliaEconomy](/docs/exyliaeconomy/monedas) como `shards`,
+`vault` para el plugin que sirva Vault, PlayerPoints, etc. Los precios se escriben como los escribe esa
+moneda.
+
+```yaml
+purchase:
+  currency: shards
+```
+
+## Cómo sube el precio
+
+El primer baúl que compra un jugador cuesta `base-price`. Cada uno de los siguientes cuesta
+`price-multiplier` veces el anterior:
+
+```text
+precio = base-price × price-multiplier ^ (baúles ya comprados)
+```
+
+Redondeado a dos decimales. Con los valores por defecto:
+
+| Baúl comprado | Precio |
+|---|---|
+| 1.º | 5.000,00 |
+| 2.º | 7.500,00 |
+| 3.º | 11.250,00 |
+| 4.º | 16.875,00 |
+| 5.º | 25.312,50 |
+
+Con `1.0` todos los baúles cuestan `base-price`.
+
+## Los límites
+
+Un jugador no puede comprar otro baúl cuando se cumple cualquiera de estas dos cosas:
+
+- ya compró `max-purchases` (9);
+- los baúles de su rango más los que compró ya llegan a `vaults.max-amount`.
+
+Los baúles comprados se suman al rango, por debajo de `max-amount`. Por eso, un jugador cuyo rango sube
+después puede acabar con menos baúles comprados utilizables de los que pagó, porque el total tiene tope;
+sube `max-amount` junto con tus rangos si eso te importa.
+
+Sin nada más que comprar, la lista no muestra ninguna entrada de compra,
+`%exyliaplayervaults_playervaults_next_price%` queda vacío y un clic suelto responde *"No puedes comprar más
+baúles."*
+
+## Comprar
+
+<Steps>
+  <Step title="Clic en la entrada de compra">
+    La lista se cierra y una confirmación pregunta *"¿Comprar el baúl `<number>` por `<price>`?"*
+  </Step>
+  <Step title="Confirma">
+    Se cobra el dinero y luego se cuenta la compra. Al jugador se le dice
+    *"El baúl `<number>` es tuyo. Pagaste `<price>`."* y la lista se vuelve a abrir con el baúl nuevo.
+  </Step>
+</Steps>
+
+Rechazar vuelve a abrir la lista. A un jugador que no puede pagar se le dice *"Necesitas `<price>` para
+comprar ese baúl."*
+
+## Cuando algo sale mal
+
+El dinero siempre se cobra **antes** de contar el baúl, porque un baúl contado antes del cobro es un baúl
+gratis cada vez que el cobro falla. La cuenta es un compare-and-set en la base de datos, así que dos compras
+a la vez en dos servidores, o un doble clic, nunca cuentan el mismo baúl dos veces.
+
+| Qué pasó | Qué recibe el jugador |
+|---|---|
+| Otra compra cambió la cuenta entre el precio mostrado y el clic | *"La compra no se completó y no se te cobró nada."* No se cobra nada. |
+| Una compra en otro servidor se quedó la cuenta | Se le devuelve el dinero, con el mismo mensaje. |
+| La base de datos no respondió, y releerla tres veces no lo aclaró | *"No se pudo leer ese baúl."* El dinero queda cobrado, y la consola registra un error con el jugador, el precio y la cuenta que debería tener `playervaults_buyers`, para que el staff lo revise y lo devuelva. |
+
+Cada compra queda en el registro de auditoría como `vault-buy`, con el baúl y el precio.
+
+## Dónde se guarda la cuenta
+
+Cuántos baúles compró cada jugador es una fila por jugador en `playervaults_buyers`, creada la primera vez
+que entra. Se lee al entrar y se mantiene en memoria mientras está conectado, que es lo que muestran la
+lista y los placeholders.

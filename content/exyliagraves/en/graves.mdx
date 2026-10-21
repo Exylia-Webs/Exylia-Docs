@@ -1,0 +1,193 @@
+---
+title: "Graves"
+description: "What happens on death, where the head goes, collecting, protection, previews, experience, item rules, expiry, limits by rank, notices and the compass after respawning."
+---
+
+## When a death makes a grave
+
+A grave is made when a player dies and every one of these holds:
+
+- they have `exyliagraves.use` (everybody by default);
+- the world does not keep inventories, and no plugin kept it for this death;
+- the world is not in `graves.disabled-worlds` (names, any case);
+- no other plugin owns the death: a player held in an arena through ExyliaLib sessions, or a duel that
+  claimed its drops (ExyliaSurvivalCore's duel rooms do), gets no grave — those drops are that plugin's;
+- there is something to keep: at least one item, or some experience.
+
+Otherwise the drops fall exactly as they would without the plugin.
+
+The drops are taken out of the death at `HIGH`, one step before `HIGHEST`, where death plugins usually
+scatter what is left: by then there is nothing of the grave's left to scatter. The grave itself is only
+stored at `MONITOR`, once the event has settled, from what really left the player. A plugin that cancels
+the death later, keeps the inventory, keeps the level, or keeps an item through the death's keep list is
+respected: none of that goes into the grave too.
+
+## Where the head goes
+
+| Situation | Where |
+|---|---|
+| The player died in a block a head can replace | That block. |
+| They died inside something else | The first such block above, up to six blocks up. |
+| They fell into the void | The highest block of that column, one above. |
+| No room at all | No grave: the drops fall as they would have. |
+
+A head can replace air, water, lava, short and tall grass, ferns, snow, seagrass and dead bushes. That
+means a death in a lake or a lava pool leaves the grave **in** the water or lava, not above it. A block
+that already holds a grave, or that another Exylia plugin has claimed through ExyliaLib, is never used.
+
+When the grave goes, what it replaced is put back: a water or lava source stays a source, seagrass becomes
+water, anything else becomes air. Flowing liquid never becomes a new source.
+
+The head is skinned with the owner's face. Above it floats the hologram, three lines by default — whose
+grave, how many stacks and the countdown, and who may open it — refreshed every second. Both are only a
+picture of the database row: they are drawn when the chunk loads and the text is dropped when it unloads.
+
+<Callout type="note" title="Somebody built over a grave">
+If a block other than a head now stands where a grave's head was (WorldEdit, a reset, a crash), the
+block is left alone and the grave shows as text only. Clicking that block still collects the grave.
+</Callout>
+
+## Nothing breaks a grave
+
+The head cannot be mined: breaking it is cancelled with *"Click the grave to collect it; it cannot be
+broken."* Explosions skip it, withers, endermen and falling blocks cannot change it, fire does not burn
+it, flowing water or lava does not wash it away, and a piston that would move it does not fire.
+
+## Collecting
+
+A click on the head — left or right, main hand — collects it. There is no window onto a grave's real
+contents: the click deletes the row, and if that delete is the one that removed it, everything is handed
+over:
+
+- items go into the collector's inventory;
+- when the owner collects it themselves and `collect.auto-equip` is on, armour and the offhand item go
+  straight back on, into empty slots only;
+- the experience is given with the items;
+- what does not fit is kept in ExyliaLib's reward store and handed over on the player's next join, on any
+  server of the network, with *"N item(s) from your graves were handed to you."*
+
+Everything goes by player id, so a player who dies, quits or switches servers between the click and the
+delivery still gets it all, once.
+
+The owner reads *"Grave collected: N item(s) and N experience."*; anybody else reads that they looted the
+grave, and the owner is sent a notice (see [Notices](#notices)).
+
+If the database cannot be reached at that moment, the grave stays standing and the player reads *"The
+grave could not be opened right now. It is still there; try again in a moment."*. If somebody else got it
+first, *"That grave is gone."*
+
+## Protection
+
+| `graves.protection-time` | Who may open it |
+|---|---|
+| `15` (default) | The owner, and for those 15 minutes nobody else. After that, anybody. |
+| `0` | Anybody from the start. |
+| `-1` | Only ever the owner. |
+
+During a timed protection the player who made the kill is let in too while `graves.killer-can-loot` is
+`true` (the default). A grave protected for good lets nobody but the owner in, killer or not. Staff with
+`exyliagraves.bypass.protection` open any grave.
+
+A player who may not open it is told whose grave it is and how long until it opens to everybody, or that
+only the owner ever can. The hologram's third line and the menus show the same state: *"Only the owner can
+open it"*, *"Anybody can open it"*, or *"Protected » 12m 3s"*.
+
+## Looking inside
+
+With `exyliagraves.preview` (everybody by default) a player can look at what a grave holds without taking
+anything:
+
+- **sneak-click** the head, while `collect.sneak-to-preview` is on (the default);
+- **right-click** a grave in [`/graves`](/docs/exyliagraves/menu).
+
+Only graves they may open: someone else's protected grave answers *"You cannot look inside that grave."*
+Staff with `exyliagraves.admin.view` look inside any. Sneak-clicking without the preview permission
+simply collects.
+
+The preview is a copy. Every click and drag is cancelled while it is open, the player's own inventory
+included, so not even a shift-click or a double-click moves an item; the grave's row is still the only
+place its items are.
+
+## Experience
+
+| `contents.experience` | What the grave keeps |
+|---|---|
+| `NONE` | Nothing. The orbs drop as they would without graves. |
+| `VANILLA` (default) | What vanilla would have dropped as orbs, at most 100 points. |
+| `ALL` | Every point the player had, levels included. They respawn at level 0. |
+
+`contents.experience-percent` (default `100`) is the share of that the grave keeps, 0 to 100; the rest
+is lost. At `0` nothing is kept and the orbs drop as usual. A world or plugin that keeps the level puts
+nothing in the grave.
+
+## Item rules
+
+| Key | What it does |
+|---|---|
+| `contents.ignored-materials` | Materials that never go into a grave: they drop on the floor as usual. |
+| `contents.kept-materials` | Materials the player keeps through death, in their inventory. |
+
+Both take Bukkit material names, such as `TOTEM_OF_UNDYING` or `COMPASS`. A name that is not a material is
+skipped. They only apply to deaths that would make a grave: in a disabled world, or without
+`exyliagraves.use`, a kept material drops like anything else.
+
+## Expiry
+
+`graves.expire-time` (default `60` minutes) is how long a grave stands. `-1` keeps it until it is
+collected. A rank can be given longer with `exyliagraves.expire.<minutes>`: the largest number a player
+holds wins, and a number below the configured time is ignored. With `-1` configured, graves never expire
+whatever the permissions say; `0` also never expires, but there an `exyliagraves.expire.<minutes>` node
+still gives its holder a timed grave.
+
+Expired graves are swept once a second. What happens to the contents is `graves.on-expire`:
+
+| Value | What happens |
+|---|---|
+| `DROP` (default) | Items and experience drop where the grave stood. An unloaded chunk is loaded in the background first. |
+| `DELETE` | They are gone. The audit log keeps a summary of what the grave held. |
+
+Anything other than `DELETE` drops. A grave whose world is no longer loaded on this server has no floor to
+drop on, so its contents are handed to the owner instead.
+
+An expiry goes through the same delete as a click, so a grave being collected at that exact moment is not
+also dropped. A delete that fails leaves the grave standing and is tried again a minute later.
+
+## Limits
+
+`graves.max-per-player` (default `5`) is how many graves one player may have standing **on this server**.
+Dying with that many tips the oldest one out where it stands — its contents drop, whatever `on-expire`
+says — and the owner is told it expired. `-1` (or `0`) is no limit.
+
+`exyliagraves.limit.<n>` raises it for a rank: the largest number wins, and a number below the configured
+limit is ignored. With `-1` configured there is no limit for anybody; with `0`, a `limit` node still
+gives its holder one.
+
+Graves still being written, or being taken at that moment, are not counted.
+
+## Notices
+
+The owner is told when something happens to a grave while they are not looking:
+
+| Event | Message |
+|---|---|
+| Somebody looted it | *"Steve looted your grave in world: 12 item(s)."* |
+| It expired and dropped | *"One of your graves expired and its 12 item(s) are on the ground where it stood."* |
+| It expired and was deleted | *"One of your graves expired and its 12 item(s) are gone."* |
+
+These are ExyliaLib notices: shown at once when the owner is on this server, on the server they are on
+when Redis is configured, and otherwise on their next join.
+
+## Back on their feet
+
+After respawning, when the player has a grave standing on this server:
+
+- `respawn.point-compass` (default `true`) points their compass at their newest grave, when it is in the
+  world they respawned in;
+- `respawn.remind` (default `true`) says where it is: *"Your grave is at x, y, z (world). Your compass
+  points to it."*
+
+## Audit log
+
+Every grave created, collected, looted, expired, deleted on expiry, handed back or removed is recorded in
+ExyliaLib's audit log, under the actions `grave-create`, `grave-collect`, `grave-loot`, `grave-expire`,
+`grave-delete`, `grave-restore` and `grave-remove`. See [Staff tools](/docs/exyliagraves/staff#audit-log).

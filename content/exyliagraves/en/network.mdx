@@ -1,0 +1,130 @@
+---
+title: "Network"
+description: "One table for every server, which server draws a grave, Redis, collecting across servers, why nothing duplicates, and coming from ExyliaSurvivalCore."
+---
+
+Every server that points at the same database shares one table of graves. There is nothing to configure
+beyond the database itself; Redis makes a grave taken on one server disappear at once where it stands.
+
+## The database
+
+Graves are rows of `sc_graves`, in the database `plugins/ExyliaGraves/database.yml` points at: `h2` by
+default, or `mysql`, `mariadb`, `postgresql` or `mongodb`. See
+[Installation](/docs/exyliagraves/installation#database) and the
+[library's database page](/docs/exylialib/database).
+
+| Column | Holds |
+|---|---|
+| `id` | The grave's id. |
+| `ownerUuid`, `ownerName` | Whose grave. Indexed by owner. |
+| `killerUuid` | Who made the kill, or empty for a fall or a mob. |
+| `location` | Server, world and block. |
+| `originalBlock` | What the head replaced, put back when it goes. |
+| `items` | Every stack, serialised. The only place they are. |
+| `experience` | Points kept. |
+| `created_at`, `expiresAt`, `protectedUntil` | When it was made, when it expires (`-1` never), until when it is protected (`-1` for good). |
+
+Contents waiting for a player who was full or away are kept in ExyliaLib's pending rewards, in the same
+database; notices waiting for a join, in `exylia_notices`.
+
+## Which server draws a grave
+
+A grave records the server it was made on. Each server reads and draws only its own: the head, the
+hologram, the expiry sweep, the limit, the placeholders and the compass after respawning are all about
+graves on **this** server. `/graves` and `/gravesadmin` read the table, so they list every server.
+
+The server's name is the one the ExyliaLib proxy bridge gives it, otherwise `server-id` under `redis` in
+`database.yml` — set even when Redis itself is off.
+
+<Callout type="danger" title="Give every server its own server-id">
+It is `server-1` on every server that never set it. Two servers sharing the table under the same id both
+believe every grave is theirs: each draws the other's graves at the same coordinates in its own world of
+the same name, and each sweeps them for expiry. Give every server its own id before they share a
+database.
+</Callout>
+
+## Collecting across servers
+
+A player collects a grave on the server it stands on, by clicking it. Staff hand back or remove one from
+anywhere. Whoever takes it, the contents go to the player **by id** through ExyliaLib's reward store:
+
+- into their inventory when they are here and it fits;
+- otherwise kept and handed over on their next join, on whichever server.
+
+A player who dies, quits or switches servers between the click and the delivery still gets everything,
+once.
+
+## With and without Redis
+
+| | With Redis | Without Redis |
+|---|---|---|
+| A grave taken from another server | Its head and text come down at once where it stands. | They stay until somebody clicks it there (*"That grave is gone."*), or until it expires. |
+| Notices to an owner online elsewhere | Shown at once on that server. | Shown on their next join. |
+| Teleport from `/graves` to another server | Works. | Refused with *"That server cannot be reached right now."* and refunded. |
+| The graves, the list, the deliveries | Shared through the database. | Shared through the database. |
+
+## Why nothing duplicates
+
+- The drops leave the death event and go into **one row, and only there**. There is no container holding
+  a grave's items; a preview is a copy that every click and drag is cancelled in.
+- A grave is taken **by deleting its row**. Only the call whose delete removed it hands anything over, so
+  two players, two servers, an expiry and a staff action racing for one grave hand it over once.
+- While a new grave's first write has not answered, nobody can take it.
+- A grave whose write failed is removed again before its items go back on the floor. One whose write
+  might have landed and could not be undone is left standing rather than dropped on top of a row that may
+  hold it.
+- A head is only ever removed on the server it stands on. A grave taken while its chunk is not loaded has
+  its head removed the moment the chunk loads; a restart in between leaves that one head standing, and a
+  click on it says it is gone.
+
+## Stopping a server
+
+On stop, the holograms come down and any open preview is closed. The heads and the rows stay, and are
+drawn again on the next start.
+
+## Coming from ExyliaSurvivalCore
+
+ExyliaGraves is ExyliaSurvivalCore's `graves` module as its own plugin, and that module is gone from
+ExyliaSurvivalCore. The table keeps its name, `sc_graves`, and its columns, so graves standing when you
+switch are kept — **as long as ExyliaGraves opens the database that holds them**.
+
+<Steps>
+  <Step title="Point it at the same database">
+    ExyliaGraves has its own `plugins/ExyliaGraves/database.yml` and copies nothing from
+    ExyliaSurvivalCore's folder. On MySQL, MariaDB, PostgreSQL or MongoDB, copy the database block and the
+    `redis` block (with the same `server-id`) from `plugins/ExyliaSurvivalCore/database.yml`.
+  </Step>
+  <Step title="Keep the server ids">
+    A grave is drawn by the server whose id it recorded. A server whose id changes no longer draws the
+    graves it made before.
+  </Step>
+  <Step title="Redo your settings">
+    `config.yml`, the messages and the menu are new files with new keys. Nothing from
+    `modules/graves/` is read.
+  </Step>
+</Steps>
+
+<Callout type="warning" title="On H2">
+With the default H2, ExyliaGraves starts a new, empty file in its own folder: graves left in
+ExyliaSurvivalCore's H2 file are not read. Let players collect them before switching, or move to a shared
+database engine first.
+</Callout>
+
+What changed for staff and players:
+
+| Before (ExyliaSurvivalCore) | Now |
+|---|---|
+| `modules/graves/config.yml` → `settings.expire-minutes` | `graves.expire-time` |
+| `settings.on-expire` | `graves.on-expire` |
+| `settings.protect-minutes` | `graves.protection-time` |
+| `settings.killer-can-loot` | `graves.killer-can-loot` |
+| `settings.keep-experience` | `contents.experience` (`NONE`, `VANILLA`, `ALL`) and `contents.experience-percent` |
+| `settings.max-graves-per-player` | `graves.max-per-player` |
+| `settings.blacklisted-worlds` | `graves.disabled-worlds` |
+| `settings.allow-teleport`, `settings.teleport-cost` | `teleport.enabled`, `teleport.cost` |
+| `hologram.enabled`, `hologram.offset` | the same keys |
+| `hologram.lines` | `hologram-lines` in `messages.yml` |
+| `sounds.created`, `sounds.collected` | A `[sound:…]` tag at the start of the `created` and `collected` messages |
+| `exyliasurvivalcore.graves` | `exyliagraves.menu`. The old node is not kept. |
+| The `survivalcore:graves_open` action | None. A menu button can run the `/graves` command instead. |
+| A player with no graves was told so and no menu opened | `/graves` opens with its empty state. |

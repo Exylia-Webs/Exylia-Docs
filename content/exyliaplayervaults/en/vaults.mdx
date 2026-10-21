@@ -1,0 +1,148 @@
+---
+title: "Vaults"
+description: "How many vaults a player has and how big they are, what happens when one shrinks, the /pv list, names and icons, search, restrictions and blocked items."
+---
+
+A vault is a real chest window, filled from the database when it opens and written back while it is open
+and when it closes. `/pv` lists them; `/pv <number>` opens one directly.
+
+## How many and how big
+
+Both come from permissions, and the **largest number a player holds wins**.
+
+| Node | Without one | Capped at |
+|---|---|---|
+| `exyliaplayervaults.amount.<number>` | `vaults.default-amount`, 1 | `vaults.max-amount`, 9 |
+| `exyliaplayervaults.rows.<1-6>` | `vaults.default-rows`, 6 | 1 to 6 |
+
+The number of vaults a player may open is their rank's amount **plus** the vaults they
+[bought](/docs/exyliaplayervaults/purchases), never more than `max-amount`. Rows are the same for every
+vault a player has: a VIP with `rows.6` sees all their vaults at six rows.
+
+`/pv <number>` past that count answers *"You do not have vault `<number>`."*. Losing a node never deletes
+anything: the vaults past the new count show as locked in the list, and what they hold stays in the
+database until the player can reach them again.
+
+## When a vault gets smaller
+
+A vault can hold more than its window shows: the player lost the rank that gave them more rows, or
+`default-rows` was lowered. `vaults.hidden-slots` decides what happens to the stacks past the last slot:
+
+| Value | What happens |
+|---|---|
+| `keep` (default) | They stay stored, out of sight, and are written back untouched with every save. The player is told *"`<count>` stack(s) of this vault are kept out of sight until it has more rows again."* They come back the moment the vault is big enough. |
+| `return` | They are handed back to the owner: into their inventory, or, when it is full, queued and given on their next join. The player is told how many stacks no longer fit. |
+
+With `return`, nothing is paid before the shrunken vault is written: the stacks are handed over only once
+the row stops holding them, so a failed write cannot pay them twice.
+
+<Callout type="note" title="Staff see everything">
+A vault opened by staff with `/pvadmin edit` is always six rows, whatever the owner's rank, so nothing is
+out of their sight. Stacks staff put past the owner's rows follow `hidden-slots` the next time the owner
+opens it.
+</Callout>
+
+## The list
+
+`/pv` opens `menus/user/vaults.yml`, a paginated screen of 36 vaults a page with a header showing the
+player, how many vaults they have, how many they bought and their rows. It draws one entry per number from
+1 up to `max-amount` (or further, when a player has more):
+
+| Entry | Template | Clicks |
+|---|---|---|
+| A vault the player has | `item_template`, drawn as its icon, with its name and `used/size` | Left: open. Right: rename. Shift-right: change icon. |
+| The next vault, when one can be bought | `buy_template`, with its price | Left: buy. See [Purchases](/docs/exyliaplayervaults/purchases). |
+| Any other vault | `locked_template` | None. |
+
+How full a vault is comes from its last write: a vault open right now reads as it was last saved, and one
+that was never written reads as empty. The file is yours to restyle; its values are listed on
+[Configuration](/docs/exyliaplayervaults/configuration#the-vault-list).
+
+## Names and icons
+
+From the list, a player renames a vault with a right-click and changes its icon with a shift-right-click,
+on vaults they have unlocked only.
+
+- **Names** are typed into a prompt that starts with the current name. They may be up to
+  `customization.name-max-length` (24) characters, and hold letters, digits, spaces and
+  `- _ ' . ! ? # ( )` only, so a name can never carry colours or placeholders. Typing `-` gives the vault
+  its default name back, `#<number>` (`default-name` in `messages.yml`).
+- **Icons** are picked from ExyliaLib's icon prompt: the item in the player's hand, a search over the
+  server's materials, or a head from the head catalogue. Until one is picked a vault is drawn as
+  `customization.default-icon`, `BARREL`.
+
+The name is what the vault window's title shows (`%name%` in `title`). Renaming needs
+`exyliaplayervaults.customize.name`, changing the icon `exyliaplayervaults.customize.icon`; both are granted
+to everyone by default. Names and icons live in their own table, so renaming a vault that is open
+elsewhere never overwrites its contents.
+
+## Search
+
+`/pv search <item>` (`exyliaplayervaults.search`) says which of a player's vaults hold something:
+
+```text
+/pv search diamond
+/pv search diamond sword
+```
+
+An item matches when its material, written the way a player says it (`diamond sword` for
+`DIAMOND_SWORD`), or its display name contains what was typed, ignoring case. Items inside shulker boxes
+and bundles are counted too, three levels deep. The answer is a total and one line per vault with how many
+it holds; only vaults the player can currently open are searched.
+
+A search reads stored contents, so a vault open right now counts as of its last write. A player can search
+once every three seconds, or once per `open-cooldown` when that is longer;
+`exyliaplayervaults.bypass.cooldown` lifts it.
+
+## Where and when
+
+Every way a player opens their own vault — `/pv <number>` or a click in the list — goes through the same
+checks. Staff opening someone else's vault do not.
+
+| Setting | Default | Refusal |
+|---|---|---|
+| `restrictions.disabled-worlds` | none | *"Vaults cannot be opened in this world."* |
+| `restrictions.disabled-game-modes` | `SPECTATOR` | *"Vaults cannot be opened in this game mode."* |
+| `restrictions.block-in-combat` | `true` | *"You cannot open a vault while in combat."* |
+| `restrictions.open-cooldown` | `500ms` | *"Wait `<time>` before opening another vault."* `0s` turns it off. |
+
+World and game-mode names are compared ignoring case. Combat is whatever combat plugin ExyliaLib reads
+(DeluxeCombat, PvPManager…). With `block-in-combat` on, a vault that is already open is also closed — and
+saved — as soon as its viewer hits or is hit by another player, so it cannot be used to stash loot
+mid-fight.
+
+`exyliaplayervaults.bypass.restrictions` skips the world, game-mode and combat checks;
+`exyliaplayervaults.bypass.cooldown` skips the cooldown. Both are for operators by default.
+
+## Blocked items
+
+`vaults.blocked-materials` lists materials, by name, that may not go into a vault. A shulker box or bundle
+carrying one is refused too, however deeply it is packed.
+
+```yaml title="plugins/ExyliaPlayerVaults/config.yml"
+vaults:
+  blocked-materials:
+    - BEDROCK
+    - SPAWNER
+```
+
+The item is refused by every route into the window: placing it, shift-clicking it up from the inventory,
+swapping it in with a number key or the offhand key, dragging it across the slots, and putting it into a
+bundle stored in the vault or emptying a bundle into it. The player is told *"That item cannot go in a
+vault."*
+
+A blocked item already inside a vault is not removed. Staff editing a vault with `/pvadmin edit` are not
+held to the list, and `exyliaplayervaults.bypass.blocked` lets a player past it; that node is granted to
+nobody by default, not even by `exyliaplayervaults.*`.
+
+## Saving
+
+A vault is written when it closes — Escape, a disconnect, a death, another window opening on top — and
+every `vaults.checkpoint` (30 seconds) while it stays open, when it changed. With
+`vaults.save-player-on-write` on, the player's own inventory file is saved after each write that changed
+the vault, so a crash right after can never leave an item both in the vault and in their inventory.
+
+A vault is open in one window at a time on the whole network. Anyone else who tries to open it — the
+owner from a second server, a second click in the same tick — is told *"That vault is open somewhere else
+right now. Try again in a moment."* Only staff editing it can take it over. How that holds across servers,
+crashes and database hiccups is on [Network](/docs/exyliaplayervaults/network).

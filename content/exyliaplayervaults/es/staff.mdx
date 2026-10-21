@@ -1,0 +1,119 @@
+---
+title: "Herramientas de staff"
+description: "Recorrer los baúles de cualquiera, en solo lectura o para editar, conectado, desconectado o en otro servidor; vaciar uno, su historial y restaurar una copia, y el registro de auditoría."
+---
+
+El staff llega a los baúles de cualquiera con `/pvadmin` (`/playervaultsadmin`). El jugador puede estar
+conectado aquí, conectado en otro servidor o desconectado, siempre que este servidor lo haya visto antes;
+los nombres se sugieren mientras escribes.
+
+| Comando | Permiso | Qué hace |
+|---|---|---|
+| `/pvadmin list <player>` | `exyliaplayervaults.admin.view` | Su lista de baúles. |
+| `/pvadmin view <player> <number>` | `exyliaplayervaults.admin.view` | Un baúl tal como está guardado, en solo lectura. |
+| `/pvadmin edit <player> <number>` | `exyliaplayervaults.admin.edit` | Un baúl, para cambiarlo. |
+| `/pvadmin history <player> <number>` | `exyliaplayervaults.admin.history` | Sus copias anteriores. |
+| `/pvadmin clear <player> <number>` | `exyliaplayervaults.admin.clear` | Lo vacía, tras una confirmación. |
+
+Todos son para jugadores, no para la consola. `/pvadmin` solo muestra el uso, y `/pvadmin reload` está en
+[Comandos](/docs/exyliaplayervaults/comandos#pvadmin).
+
+## La lista de alguien
+
+`/pvadmin list <player>` abre la misma pantalla que ve el jugador, sobre sus baúles. Cada número hasta
+`max-amount` — o hasta el baúl guardado más alto, si es mayor — aparece abierto, porque el staff no está
+limitado por el rango del dueño, y cada uno se ve como un baúl de 54 ranuras.
+
+Lo que hace un clic depende del miembro del staff:
+
+| Clic | Con `admin.edit` | Solo con `admin.view` |
+|---|---|---|
+| Izquierdo | Lo abre para editar | Lo abre en solo lectura |
+| Derecho, shift + derecho | Lo renombra, le cambia el icono | Rechazado |
+
+La cantidad de baúles comprados de la cabecera se lee de la memoria, así que solo es correcta mientras el
+dueño está conectado en este servidor.
+
+## Solo lectura
+
+`/pvadmin view <player> <number>` lee el baúl directamente de la base de datos y lo muestra en una ventana
+de seis filas con el título `view-title`. No puede salir nada de ella: mientras está encima se cancela cada
+clic y cada arrastre, también en el inventario del propio staff, así que ni un shift + clic ni un doble clic
+que recoge stacks mueven un objeto. Es una copia y nunca se escribe en ningún sitio.
+
+Como no toma ningún bloqueo, nunca molesta a quien tenga el baúl abierto. La otra cara: un baúl abierto
+ahora mismo se ve según su última escritura, como mucho un checkpoint (30 segundos) por detrás.
+
+## Editar
+
+`/pvadmin edit <player> <number>` abre el baúl en la misma ventana única que tendría el dueño, bajo el mismo
+bloqueo, siempre con seis filas para que se vean los stacks por encima de las filas del dueño. El número no
+se compara con lo que tiene el dueño, así que el staff puede abrir, y llenar, un baúl al que el dueño todavía
+no llega.
+
+Si el baúl está abierto en algún sitio:
+
+- **en este servidor**, esa ventana se guarda y se cierra, a quien la mira se le dice *"El baúl `<number>`
+  se guardó y cerró porque un miembro del staff lo está revisando."*, y el baúl se abre para el staff medio
+  segundo después;
+- **en otro servidor**, se le pide por Redis a ese servidor que lo guarde y lo cierre. Al staff se le dice
+  *"El baúl `<number>` estaba abierto en otro servidor; se está guardando y cerrando."* y se le abre unos
+  segundos después. Sin Redis la petición no viaja, y al staff se le dice que está en uso hasta que quien
+  lo mira lo cierre.
+
+La ventana del staff no está sujeta a `blocked-materials` y el combate no la cierra. Abrirla queda en el
+registro de auditoría como `vault-open`, y al cerrarla, lo que cambió queda como `vault-edit`, con los stacks
+añadidos y quitados.
+
+## Vaciar un baúl
+
+`/pvadmin clear <player> <number>` pregunta *"¿Vaciar el baúl `<number>` de `<player>`?"* y, si dices que sí,
+lo vacía. Lo que tenía se guarda antes en su historial, así que un vaciado se puede deshacer. Queda
+registrado como `vault-clear`.
+
+Un vaciado nunca se hace con el baúl abierto: a la ventana que lo tiene se le pide que se cierre (aquí, o por
+Redis en otro sitio) y al staff se le dice que se está guardando y cerrando. Vuelve a ejecutar el comando un
+momento después.
+
+## Historial
+
+Cada baúl guarda hasta `history.keep` (10) copias anteriores, de la más nueva a la más vieja. Una copia es lo
+que tenía el baúl **antes** de que algo lo cambiara, archivada con el motivo:
+
+| Motivo | Cuándo |
+|---|---|
+| `CLOSED` | El dueño cerró el baúl después de cambiarlo. |
+| `EDITED` | El staff cerró una ventana de edición después de cambiarlo. |
+| `CLEARED` | El staff lo vació. |
+| `RESTORED` | El staff restauró una copia anterior. |
+
+Una ventana cerrada sin cambios no guarda copia, y un baúl vacío no guarda ninguna al vaciarlo o
+restaurarlo. Por encima de `keep` se borran las copias más viejas; `0` no guarda ninguna.
+
+`/pvadmin history <player> <number>` abre `menus/admin/history.yml`: una entrada por copia con cuándo se
+tomó, cuántos stacks tenía, el motivo y quién la causó.
+
+- **Clic izquierdo** mira dentro, en una ventana de solo lectura con el título `snapshot-title`.
+- **Shift + clic derecho** restaura esa copia, tras la confirmación *"¿Dejar el baúl `<number>` de
+  `<player>` como estaba `<when>`?"* Necesita `exyliaplayervaults.admin.edit` además de `admin.history`,
+  porque restaurar una copia puede devolver lo que el dueño sacó después.
+
+Una restauración funciona como un vaciado: nunca con el baúl abierto, y lo que tenía el baúl se guarda a su
+vez como copia `RESTORED`, así que también se puede deshacer. Queda registrada como `vault-restore`.
+
+## El registro de auditoría
+
+Las acciones del staff y las compras van al registro de auditoría de ExyliaLib, que se lee con
+`/exylialib logs`:
+
+| Acción | Se registra cuando |
+|---|---|
+| `vault-open` | El staff abre el baúl de otro para editarlo. |
+| `vault-edit` | Esa ventana se cierra con cambios, con lo añadido y lo quitado. |
+| `vault-view` | El staff mira un baúl en solo lectura. |
+| `vault-clear` | Se vacía un baúl. |
+| `vault-restore` | Se restaura una copia, con su fecha. |
+| `vault-buy` | Un jugador compra un baúl, con el precio. |
+| `vault-conflict` | Hubo que resolver una ventana después de que otro servidor escribiera su baúl. Ver [Red](/docs/exyliaplayervaults/red#cuando-dos-servidores-escribieron-el-mismo-baúl). |
+
+Abrir una lista y mirar dentro de una copia del historial no se registran.

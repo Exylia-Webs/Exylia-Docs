@@ -1,0 +1,177 @@
+---
+title: "Network"
+description: "Vaults across servers: the shared database, one lock per vault, writes that never land over a newer row, Redis, what keeps items from duplicating, and coming from ExyliaSurvivalCore."
+---
+
+Every server that points at the same database shares the same vaults. There is nothing to configure beyond
+the database itself; Redis lets staff close a vault that is open on another server.
+
+## One database
+
+Set the same database in `plugins/ExyliaPlayerVaults/database.yml` on every server — MySQL, MariaDB,
+PostgreSQL or MongoDB — with Redis on if you have it. See
+[Installation](/docs/exyliaplayervaults/installation#database). A single server is fine on the default H2
+file.
+
+## One window, anywhere
+
+A vault is a real container holding real items, so every duplication bug of chest-shaped storage comes
+from the same mistake: two windows built from the same stored contents. Take one stack out of each and the
+stack exists twice.
+
+So a window holds its vault's **lock** for as long as it is open. The lock is a row in ExyliaLib's
+`exylia_row_locks` table, keyed `vaults:<owner>|<number>`, which every server on the database sees. A
+second opener — the same player twice in a tick, the owner on another server, staff — is told the vault is
+in use instead of being handed a second copy.
+
+The lock is a **lease** of 60 seconds, renewed every 20 seconds while the window stays open, so a vault can
+stay open as long as its viewer likes. A server that crashes cannot give its locks back: its vaults stay
+shut until the lease runs out, a minute at most, and then any server may open them.
+
+When a renewal finds the lease lost — the database out of reach for most of a minute — the window is
+written and closed, and its viewer told *"Vault `<number>` was saved and closed after a connection hiccup.
+Open it again to carry on."*, because another server may hand the vault out from then on.
+
+## Switching servers
+
+The lock is given back only **after** the window's last write has landed. A player who closes a vault and
+joins another server straight away finds it still locked for a moment; the new server keeps trying for up to
+three seconds before saying it is in use, which is long enough for the previous server to finish.
+
+The read that fills the next window goes past every cache, straight to the database, so it always sees the
+row the previous server wrote, even when that server's cache invalidation has not arrived yet.
+
+## Written only over the row it read
+
+Every write carries a new random `version` and lands only while the row still holds the version this
+window last read or wrote; a vault's first write creates the row only while there is none. A server that
+lost its lock can therefore never write over a newer row written somewhere else.
+
+A write whose answer never came back is remembered. If a later write finds that version in the row, it
+knows its own write landed and carries on from it, instead of taking it for another server's.
+
+## When the database stops answering
+
+- A checkpoint write that fails is tried again up to five times, a second longer each time, then logged;
+  the window stays open and the next checkpoint or the close tries again.
+- The **last** write, on close, is tried every five seconds until the database answers. The lock is held
+  all that time, so the vault stays shut rather than being reopened from the row before the write, which
+  would hand out again whatever was taken out.
+- On shutdown the plugin writes every open vault and waits up to ten seconds for the writes and the locks.
+  A write that still cannot land is given up on, and the console logs, in full, what the vault should hold,
+  for staff to put back.
+
+## When two servers wrote the same vault
+
+If a write finds another server's version in the row — which only happens after a lost lease — the window
+is closed and the newer row is **kept whole**: overwriting it would undo whatever was done on that server.
+What was in this window since its last write is then settled:
+
+- stacks **put in** here since then are in no row, and are handed back to whoever had the window open,
+  into their inventory or on their next join;
+- stacks **taken out** here since then are already with that player and may still be in the kept row;
+  nothing can take them back, so they are only logged.
+
+When one of this window's writes may have landed without an answer, what the other server read is unknown
+and handing anything back could duplicate it. Then nothing is handed back and the stacks are logged for
+staff instead. Either way the case is recorded in the audit log as `vault-conflict`, with both groups of
+stacks.
+
+## Redis
+
+Redis carries one thing for vaults: a request to write and close a vault open on another server, sent when
+staff [edit, clear or restore](/docs/exyliaplayervaults/staff) it. The server holding the window writes and
+closes it, and staff's server can take the lock.
+
+Without Redis, vaults are just as safe — the locks and the versions live in the database — but staff
+cannot close a vault remotely: they are told it is in use until its viewer closes it.
+
+## What keeps items from duplicating
+
+| Way to duplicate | What stops it |
+|---|---|
+| Two windows on one vault, here or on two servers | One lock per vault, in the database. |
+| Reopening before the last write landed | The lock goes back only after it; the next read skips every cache. |
+| A server that lost its lock writing over a newer row | Every write is a compare-and-set on `version`. |
+| A crash between the vault write and the player's file | `save-player-on-write` saves the player after each write that changed the vault. |
+| A crash with a window open | Checkpoints every 30 seconds; the lease frees the vault within a minute. |
+| A shrunken vault paying its hidden stacks twice | Paid only once a write without them has landed. |
+| A read-only view | Every click and drag cancelled, whichever inventory. |
+| Two purchases at once | The bought count is a compare-and-set, charged before it is counted. |
+
+## Tables
+
+| Table | Holds |
+|---|---|
+| `sc_vaults` | One row per player and vault: the contents, how many slots are used, when and under which `version` it was written. A row is created the first time a vault is written. |
+| `playervaults_looks` | Names and icons. |
+| `playervaults_buyers` | How many vaults each player bought. |
+| `playervaults_history` | Earlier copies of each vault. |
+| `exylia_row_locks` | ExyliaLib's locks, shared with every plugin on the database. |
+| `exylia_pending_rewards` | ExyliaLib's queue of stacks owed to players, handed over on their next join. |
+
+## Coming from ExyliaSurvivalCore
+
+ExyliaPlayerVaults is the `vaults` module of ExyliaSurvivalCore, as its own plugin. It keeps the vaults in
+the **same table, `sc_vaults`, with the same columns**, and locks them under the same `vaults` key, so
+moving over is a matter of opening the same database. Rows written by older releases, before the `used`
+and `version` columns, are read too and filled in on their next write.
+
+<Steps>
+  <Step title="Update ExyliaSurvivalCore">
+    Install the release of ExyliaSurvivalCore without the `vaults` module, on every server, together with
+    ExyliaPlayerVaults. Two plugins answering `/pv` on one database is what this plugin exists to avoid.
+  </Step>
+  <Step title="Point it at the same database">
+    Give `plugins/ExyliaPlayerVaults/database.yml` the same database settings as
+    `plugins/ExyliaSurvivalCore/database.yml`. On a shared MySQL, MariaDB, PostgreSQL or MongoDB database,
+    every vault is there on the first start.
+  </Step>
+  <Step title="Carry the settings over">
+    Write your old values into the new `config.yml` and grant the new permissions; the tables below map
+    them.
+  </Step>
+</Steps>
+
+<Callout type="danger" title="On H2, nothing is copied for you">
+The plugin does not copy ExyliaSurvivalCore's `database.yml` or its H2 file. With the default H2 database,
+ExyliaPlayerVaults opens a new file in its own folder and every vault looks empty — they are still in
+ExyliaSurvivalCore's file, untouched. To bring them over, stop the server, back up both plugin folders, and
+copy ExyliaSurvivalCore's H2 file (the path under `h2.file` in its `database.yml`, `database/h2` by default)
+to the same path under `plugins/ExyliaPlayerVaults/` before ExyliaPlayerVaults has written vaults of its
+own.
+</Callout>
+
+### Settings
+
+Nothing in ExyliaSurvivalCore's `modules/vaults/` folder is read: not `config.yml`, not `messages.yml`, not the menu.
+
+| ExyliaSurvivalCore | ExyliaPlayerVaults |
+|---|---|
+| `settings.default-vaults` | `vaults.default-amount` |
+| `settings.max-vaults` | `vaults.max-amount` |
+| `settings.rows` | `vaults.default-rows`, and now `exyliaplayervaults.rows.<1-6>` per rank |
+| `title`, `admin-title` in `modules/vaults/messages.yml` (`settings.title` on older releases) | `title`, `admin-title` in `lang/<code>/messages.yml`; `%name%` is the vault's name |
+| `settings.blocked-materials` | `vaults.blocked-materials`, now also checked inside shulker boxes and bundles |
+| `sounds.opened`, `sounds.closed` | `sounds.opened`, `sounds.closed` |
+
+A vault that shrank used to hand its extra stacks back to the owner. Now it keeps them out of sight by
+default; `vaults.hidden-slots: return` hands them back as before.
+
+### Permissions
+
+The old nodes are **not** declared again. Grant the new ones:
+
+| ExyliaSurvivalCore | ExyliaPlayerVaults |
+|---|---|
+| `exyliasurvivalcore.vaults` | `exyliaplayervaults.use` (everyone by default) |
+| `exyliasurvivalcore.vaults.amount.<number>` | `exyliaplayervaults.amount.<number>` |
+| `exyliasurvivalcore.vaults.admin` | `exyliaplayervaults.admin`, or the single `admin.*` nodes |
+
+### Commands, menus and actions
+
+`/vault`, `/pv` and `/vaults` keep working. `/vaultadmin` is gone: staff use `/pvadmin`, where `view` is now
+read only and `edit` opens a vault to change it. The vault list is a new file,
+`lang/<code>/menus/user/vaults.yml`; the old `modules/vaults/menus/vaults.yml` is not read. Buttons bound to
+`survivalcore:vault_open <number>` or `survivalcore:vaults_open` elsewhere need rewriting: the list is opened
+with `/pv`, and a vault with `exyliaplayervaults:open <owner-uuid> <number>`.

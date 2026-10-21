@@ -1,0 +1,200 @@
+---
+title: "Tumbas"
+description: "Qué pasa al morir, dónde va la cabeza, recoger, protección, vistas previas, experiencia, reglas de ítems, caducidad, límites por rango, avisos y la brújula al reaparecer."
+---
+
+## Cuándo una muerte crea una tumba
+
+Se crea una tumba cuando un jugador muere y se cumple todo esto:
+
+- tiene `exyliagraves.use` (todo el mundo por defecto);
+- el mundo no conserva inventarios, y ningún plugin lo conservó en esta muerte;
+- el mundo no está en `graves.disabled-worlds` (por nombre, sin distinguir mayúsculas);
+- ningún otro plugin es dueño de la muerte: un jugador retenido en una arena mediante las sesiones de
+  ExyliaLib, o un duelo que reclamó lo que se suelta (como las salas de duelo de ExyliaSurvivalCore), no
+  recibe tumba — eso es cosa de ese plugin;
+- hay algo que guardar: al menos un ítem, o algo de experiencia.
+
+Si no, lo que se suelta cae exactamente igual que sin el plugin.
+
+Lo que se suelta se saca de la muerte en `HIGH`, un paso antes de `HIGHEST`, donde los plugins de muerte
+suelen esparcir lo que queda: para entonces no queda nada de la tumba que esparcir. La tumba en sí solo se
+guarda en `MONITOR`, cuando el evento ya está decidido, con lo que de verdad salió del jugador. Se respeta
+a un plugin que más tarde cancele la muerte, conserve el inventario, conserve el nivel o conserve un ítem
+mediante la lista de ítems a conservar: nada de eso entra también en la tumba.
+
+## Dónde va la cabeza
+
+| Situación | Dónde |
+|---|---|
+| El jugador murió en un bloque que una cabeza puede reemplazar | Ese bloque. |
+| Murió dentro de otra cosa | El primer bloque así que haya encima, hasta seis bloques más arriba. |
+| Cayó al vacío | Encima del bloque más alto de esa columna. |
+| No hay sitio | No hay tumba: lo que se suelta cae como habría caído. |
+
+Una cabeza puede reemplazar aire, agua, lava, hierba corta y alta, helechos, nieve, algas marinas y
+arbustos secos. Eso significa que una muerte en un lago o en un charco de lava deja la tumba **dentro**
+del agua o la lava, no encima. Nunca se usa un bloque que ya tenga una tumba, o que otro plugin de Exylia
+haya reclamado a través de ExyliaLib.
+
+Cuando la tumba desaparece, se devuelve lo que reemplazó: una fuente de agua o lava sigue siendo fuente,
+las algas marinas pasan a ser agua, y todo lo demás pasa a ser aire. Un líquido que fluye nunca se
+convierte en una fuente nueva.
+
+La cabeza lleva la cara del dueño. Encima flota el holograma, tres líneas por defecto — de quién es,
+cuántos stacks y la cuenta atrás, y quién puede abrirla —, que se actualiza cada segundo. Las dos cosas
+son solo una imagen de la fila de la base de datos: se dibujan cuando carga el chunk y el texto se quita
+cuando se descarga.
+
+<Callout type="note" title="Alguien construyó encima de una tumba">
+Si donde estaba la cabeza de una tumba ahora hay otro bloque (WorldEdit, un reinicio del mapa, un
+crasheo), el bloque se deja como está y la tumba se muestra solo como texto. Hacer clic en ese bloque
+sigue recogiendo la tumba.
+</Callout>
+
+## Nada rompe una tumba
+
+La cabeza no se puede picar: romperla se cancela con *"Haz clic en la tumba para recogerla; no se puede
+romper."* Las explosiones la saltan, ni withers, ni endermans, ni bloques que caen pueden cambiarla, el
+fuego no la quema, el agua o la lava que fluyen no se la llevan, y un pistón que la movería no se activa.
+
+## Recoger
+
+Un clic en la cabeza — izquierdo o derecho, con la mano principal — la recoge. No hay ninguna ventana al
+contenido real de una tumba: el clic borra la fila, y si ese borrado es el que la eliminó, se entrega todo:
+
+- los ítems van al inventario de quien la recoge;
+- cuando la recoge el propio dueño y `collect.auto-equip` está activo, la armadura y el ítem de la mano
+  secundaria se vuelven a poner directamente, solo en huecos vacíos;
+- la experiencia se da junto con los ítems;
+- lo que no cabe se guarda en el almacén de recompensas de ExyliaLib y se entrega la próxima vez que el
+  jugador entre, en cualquier servidor de la red, con *"N ítem(s) de tus tumbas se te devolvieron."*
+
+Todo va por ID de jugador, así que un jugador que muere, sale o cambia de servidor entre el clic y la
+entrega sigue recibiéndolo todo, una sola vez.
+
+El dueño lee *"Tumba recogida: N ítem(s) y N de experiencia."*; cualquier otro lee que saqueó la tumba, y
+al dueño se le deja un aviso (ver [Avisos](#avisos)).
+
+Si en ese momento no se puede llegar a la base de datos, la tumba sigue en pie y el jugador lee *"No se
+pudo abrir la tumba ahora. Sigue ahí; inténtalo de nuevo en un momento."*. Si otro llegó antes, *"Esa
+tumba ya no existe."*
+
+## Protección
+
+| `graves.protection-time` | Quién puede abrirla |
+|---|---|
+| `15` (por defecto) | El dueño, y durante esos 15 minutos nadie más. Después, cualquiera. |
+| `0` | Cualquiera desde el principio. |
+| `-1` | Solo el dueño, siempre. |
+
+Durante una protección con tiempo también entra quien lo mató mientras `graves.killer-can-loot` sea
+`true` (por defecto). Una tumba protegida para siempre no deja entrar a nadie más que al dueño, sea o no
+quien lo mató. El staff con `exyliagraves.bypass.protection` abre cualquier tumba.
+
+A un jugador que no puede abrirla se le dice de quién es y cuánto falta para que se abra a todos, o que
+solo su dueño puede abrirla. La tercera línea del holograma y los menús muestran lo mismo: *"Solo el dueño
+puede abrirla"*, *"Cualquiera puede abrirla"* o *"Protegida » 12m 3s"*.
+
+## Mirar dentro
+
+Con `exyliagraves.preview` (todo el mundo por defecto) un jugador puede ver lo que tiene una tumba sin
+llevarse nada:
+
+- **clic agachado** en la cabeza, mientras `collect.sneak-to-preview` esté activo (por defecto);
+- **clic derecho** en una tumba de [`/graves`](/docs/exyliagraves/menu).
+
+Solo tumbas que puede abrir: la tumba protegida de otro responde *"No puedes mirar dentro de esa tumba."*
+El staff con `exyliagraves.admin.view` mira dentro de cualquiera. Hacer clic agachado sin el permiso de
+vista previa simplemente la recoge.
+
+La vista previa es una copia. Mientras está abierta se cancela cada clic y cada arrastre, también en el
+inventario propio del jugador, así que ni un shift-clic ni un doble clic mueven un ítem; la fila de la
+tumba sigue siendo el único sitio donde están sus ítems.
+
+## Experiencia
+
+| `contents.experience` | Qué guarda la tumba |
+|---|---|
+| `NONE` | Nada. Los orbes caen como caerían sin tumbas. |
+| `VANILLA` (por defecto) | Lo que el juego normal habría soltado en orbes, como mucho 100 puntos. |
+| `ALL` | Cada punto que tenía el jugador, niveles incluidos. Reaparece en el nivel 0. |
+
+`contents.experience-percent` (por defecto `100`) es la parte de eso que guarda la tumba, de 0 a 100; el
+resto se pierde. Con `0` no se guarda nada y los orbes caen como siempre. Un mundo o un plugin que
+conserva el nivel no pone nada en la tumba.
+
+## Reglas de ítems
+
+| Clave | Qué hace |
+|---|---|
+| `contents.ignored-materials` | Materiales que nunca entran en una tumba: caen al suelo como siempre. |
+| `contents.kept-materials` | Materiales que el jugador conserva al morir, en su inventario. |
+
+Las dos aceptan nombres de material de Bukkit, como `TOTEM_OF_UNDYING` o `COMPASS`. Un nombre que no es
+un material se ignora. Solo se aplican a muertes que crearían una tumba: en un mundo desactivado, o sin
+`exyliagraves.use`, un material conservado cae como cualquier otro.
+
+## Caducidad
+
+`graves.expire-time` (por defecto `60` minutos) es cuánto dura una tumba. `-1` la mantiene hasta que se
+recoja. A un rango se le puede dar más con `exyliagraves.expire.<minutes>`: gana el número más alto que
+tenga el jugador, y un número por debajo del tiempo configurado se ignora. Con `-1` configurado, las tumbas
+nunca caducan digan lo que digan los permisos; `0` tampoco caduca, pero ahí un nodo
+`exyliagraves.expire.<minutes>` sí le da a quien lo tenga una tumba con tiempo.
+
+Las tumbas caducadas se revisan una vez por segundo. Lo que pasa con el contenido lo decide
+`graves.on-expire`:
+
+| Valor | Qué pasa |
+|---|---|
+| `DROP` (por defecto) | Los ítems y la experiencia caen donde estaba la tumba. Un chunk sin cargar se carga antes en segundo plano. |
+| `DELETE` | Se pierden. El registro de auditoría guarda un resumen de lo que tenía. |
+
+Cualquier valor que no sea `DELETE` hace que caiga. Una tumba cuyo mundo ya no está cargado en este
+servidor no tiene suelo donde caer, así que su contenido se le entrega al dueño.
+
+Una caducidad pasa por el mismo borrado que un clic, así que una tumba que se está recogiendo justo en ese
+momento no cae además al suelo. Un borrado que falla deja la tumba en pie y se reintenta un minuto
+después.
+
+## Límites
+
+`graves.max-per-player` (por defecto `5`) es cuántas tumbas puede tener en pie un jugador **en este
+servidor**. Morir con esas tumbas vacía la más antigua donde está — su contenido cae, diga lo que diga
+`on-expire` — y al dueño se le dice que caducó. `-1` (o `0`) es sin límite.
+
+`exyliagraves.limit.<n>` lo sube para un rango: gana el número más alto, y un número por debajo del límite
+configurado se ignora. Con `-1` configurado no hay límite para nadie; con `0`, un nodo `limit` sí le pone
+uno a quien lo tenga.
+
+Las tumbas que todavía se están escribiendo, o que se están tomando en ese momento, no cuentan.
+
+## Avisos
+
+Al dueño se le avisa cuando le pasa algo a una tumba mientras no está mirando:
+
+| Evento | Mensaje |
+|---|---|
+| Alguien la saqueó | *"Steve saqueó tu tumba en world: 12 ítem(s)."* |
+| Caducó y su contenido cayó | *"Una de tus tumbas expiró y sus 12 ítem(s) están en el suelo donde estaba."* |
+| Caducó y se borró | *"Una de tus tumbas expiró y sus 12 ítem(s) se perdieron."* |
+
+Son avisos de ExyliaLib: se muestran al momento si el dueño está en este servidor, en el servidor donde
+esté cuando hay Redis configurado, y si no, la próxima vez que entre.
+
+## De vuelta en pie
+
+Al reaparecer, cuando el jugador tiene una tumba en pie en este servidor:
+
+- `respawn.point-compass` (por defecto `true`) hace que su brújula apunte a su tumba más reciente, si está
+  en el mundo donde reapareció;
+- `respawn.remind` (por defecto `true`) le dice dónde está: *"Tu tumba está en x, y, z (world). Tu brújula
+  apunta hacia ella."*
+
+## Registro de auditoría
+
+Cada tumba creada, recogida, saqueada, caducada, borrada al caducar, devuelta o eliminada queda en el
+registro de auditoría de ExyliaLib, con las acciones `grave-create`, `grave-collect`, `grave-loot`,
+`grave-expire`, `grave-delete`, `grave-restore` y `grave-remove`. Ver
+[Herramientas de staff](/docs/exyliagraves/staff#registro-de-auditoría).

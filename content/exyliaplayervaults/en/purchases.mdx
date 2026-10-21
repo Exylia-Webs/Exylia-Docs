@@ -1,0 +1,103 @@
+---
+title: "Purchases"
+description: "Selling extra vaults from the vault list: turning it on, which currency pays, how the price grows, the limits, and what happens when a payment goes wrong."
+---
+
+Players can buy vaults past what their rank gives them, from the vault list. Purchases are off until you
+turn them on.
+
+## Turning it on
+
+```yaml title="plugins/ExyliaPlayerVaults/config.yml"
+purchase:
+  enabled: true
+  currency: ''
+  base-price: 5000.0
+  price-multiplier: 1.5
+  max-purchases: 9
+```
+
+`/pvadmin reload` applies it. From then on, the first locked vault in a player's list is drawn with
+`buy_template` and its price, as long as they can still buy one. Buying needs
+`exyliaplayervaults.buy`, granted to everyone by default.
+
+## Which currency pays
+
+`purchase.currency` is a currency id as ExyliaLib knows it. Empty, the default, uses the server's default
+currency: `default-currency` in `plugins/ExyliaLib/economy.yml`. Any currency ExyliaLib reaches works — an
+[ExyliaEconomy](/docs/exyliaeconomy/currencies) currency such as `shards`, `vault` for whatever plugin
+serves Vault, PlayerPoints, and so on. Prices are written the way that currency writes them.
+
+```yaml
+purchase:
+  currency: shards
+```
+
+## How the price grows
+
+The first vault a player buys costs `base-price`. Each later one costs `price-multiplier` times the one
+before:
+
+```text
+price = base-price × price-multiplier ^ (vaults already bought)
+```
+
+Rounded to two decimals. With the defaults:
+
+| Vault bought | Price |
+|---|---|
+| 1st | 5,000.00 |
+| 2nd | 7,500.00 |
+| 3rd | 11,250.00 |
+| 4th | 16,875.00 |
+| 5th | 25,312.50 |
+
+`1.0` keeps every vault at `base-price`.
+
+## The limits
+
+A player cannot buy another vault when either is true:
+
+- they already bought `max-purchases` (9);
+- their rank's vaults plus the ones they bought already reach `vaults.max-amount`.
+
+Bought vaults count on top of the rank, under `max-amount`. A player whose rank later rises can therefore
+end up with fewer usable bought vaults than they paid for, because the total is capped; raise `max-amount`
+along with your ranks if that matters.
+
+With nothing left to buy, the list shows no buy entry, `%exyliaplayervaults_playervaults_next_price%` is empty and a stray
+click answers *"You cannot buy any more vaults."*
+
+## Buying
+
+<Steps>
+  <Step title="Click the buy entry">
+    The list closes and a confirmation asks *"Buy vault `<number>` for `<price>`?"*
+  </Step>
+  <Step title="Confirm">
+    The money is taken, then the purchase is counted. The player is told
+    *"Vault `<number>` is yours. Paid `<price>`."* and the list opens again with the new vault in it.
+  </Step>
+</Steps>
+
+Declining reopens the list. A player who cannot pay is told *"You need `<price>` to buy that vault."*
+
+## When something goes wrong
+
+The money is always taken **before** the vault is counted, because a vault counted before the charge is a
+free vault whenever the charge fails. The count is a compare-and-set in the database, so two purchases
+racing on two servers, or a double click, can never count the same vault twice.
+
+| What happened | What the player gets |
+|---|---|
+| Another purchase changed the count between the price shown and the click | *"The purchase did not go through and you were not charged."* Nothing is charged. |
+| The count was taken by a purchase on another server | The money is refunded, with the same message. |
+| The database did not answer, and reading it back three times did not tell | *"That vault could not be read."* The money stays taken, and the console logs an error naming the player, the price and the count `playervaults_buyers` should hold, for staff to check and refund. |
+
+Every purchase is recorded in the audit log as `vault-buy`, with the vault and the price.
+
+## Where the count lives
+
+How many vaults each player bought is one row per player in `playervaults_buyers`, created the first time
+they join. It is read when they join and kept in memory while they are online, which is what the list and
+the placeholders show.

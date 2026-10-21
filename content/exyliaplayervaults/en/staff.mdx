@@ -1,0 +1,114 @@
+---
+title: "Staff tools"
+description: "Browsing anybody's vaults, read only or to edit, online, offline or on another server; emptying one, its history and putting a copy back, and the audit log."
+---
+
+Staff reach anybody's vaults with `/pvadmin` (`/playervaultsadmin`). The player may be online here,
+online on another server or offline, as long as this server has seen them before; names are suggested as
+you type.
+
+| Command | Permission | What it does |
+|---|---|---|
+| `/pvadmin list <player>` | `exyliaplayervaults.admin.view` | Their vault list. |
+| `/pvadmin view <player> <number>` | `exyliaplayervaults.admin.view` | A vault as stored, read only. |
+| `/pvadmin edit <player> <number>` | `exyliaplayervaults.admin.edit` | A vault, to change it. |
+| `/pvadmin history <player> <number>` | `exyliaplayervaults.admin.history` | Its earlier copies. |
+| `/pvadmin clear <player> <number>` | `exyliaplayervaults.admin.clear` | Empties it, after a confirmation. |
+
+Every one of these is for players, not the console. `/pvadmin` on its own prints the usage, and
+`/pvadmin reload` is on [Commands](/docs/exyliaplayervaults/commands#pvadmin).
+
+## Somebody's list
+
+`/pvadmin list <player>` opens the same screen the player sees, onto their vaults. Every number up to
+`max-amount` — or up to the highest vault they have stored, when that is more — is drawn as open, because
+staff are not limited by the owner's rank, and each one reads as a 54-slot vault.
+
+What a click does depends on the staff member:
+
+| Click | With `admin.edit` | With only `admin.view` |
+|---|---|---|
+| Left | Opens it to edit | Opens it read only |
+| Right, shift-right | Renames it, changes its icon | Refused |
+
+The header's bought count reads from memory, so it shows the right number only while the owner is online
+on this server.
+
+## Read only
+
+`/pvadmin view <player> <number>` reads the vault straight from the database and shows it in a six-row
+window titled `view-title`. Nothing can leave it: every click and drag is cancelled while it is on top,
+the staff member's own inventory included, so not even a shift-click or a double-click collecting stacks
+moves an item. It is a copy and is never written anywhere.
+
+Because it takes no lock, it never disturbs whoever has the vault open. The flip side: a vault open right
+now shows as of its last write, at most a checkpoint (30 seconds) behind.
+
+## Editing
+
+`/pvadmin edit <player> <number>` opens the vault in the same single window the owner would get, under
+the same lock, always at six rows so stacks past the owner's rows are in sight. The number is not checked
+against the owner's allowance, so staff can open, and fill, a vault the owner cannot reach yet.
+
+When the vault is open somewhere:
+
+- **on this server**, that window is written and closed, its viewer told *"Vault `<number>` was saved and
+  closed because a member of staff is looking at it."*, and the vault opens for staff half a second later;
+- **on another server**, that server is asked over Redis to write and close it. Staff are told *"Vault
+  `<number>` was open on another server; it is being saved and closed."* and it opens for them a few
+  seconds later. Without Redis the request does not travel, and staff are told it is in use until its viewer
+  closes it.
+
+The staff window is not held to `blocked-materials`, and it is not closed by combat. Opening it is
+recorded in the audit log as `vault-open`, and when it closes, what changed is recorded as `vault-edit`
+with the stacks added and removed.
+
+## Emptying a vault
+
+`/pvadmin clear <player> <number>` asks *"Empty vault `<number>` of `<player>`?"* and, on yes, empties
+it. What it held is kept in its history first, so a clear can be undone. It is recorded as `vault-clear`.
+
+A clear never runs while the vault is open: the window holding it is asked to close (here, or over Redis
+elsewhere) and staff are told it is being saved and closed. Run the command again a moment later.
+
+## History
+
+Each vault keeps up to `history.keep` (10) earlier copies, newest first. A copy is what the vault held
+**before** something changed it, filed under why:
+
+| Cause | When |
+|---|---|
+| `CLOSED` | The owner closed the vault after changing it. |
+| `EDITED` | Staff closed an edit window after changing it. |
+| `CLEARED` | Staff emptied it. |
+| `RESTORED` | Staff put an older copy back. |
+
+A window closed without a change takes no copy, and an empty vault takes none on a clear or restore. Past
+`keep`, the oldest copies are deleted; `0` keeps none.
+
+`/pvadmin history <player> <number>` opens `menus/admin/history.yml`: one entry per copy with when it was
+taken, how many stacks it held, the cause and who caused it.
+
+- **Left-click** looks inside, in a read-only window titled `snapshot-title`.
+- **Shift-right-click** puts that copy back, after the confirmation *"Put vault `<number>` of `<player>`
+  back as it was `<when>`?"* It needs `exyliaplayervaults.admin.edit` as well as `admin.history`, because
+  putting a copy back can bring back what the owner has taken out since.
+
+A restore runs like a clear: never while the vault is open, and what the vault held is itself kept as a
+`RESTORED` copy, so a restore can be undone too. It is recorded as `vault-restore`.
+
+## The audit log
+
+Staff actions and purchases go to ExyliaLib's audit log, read with `/exylialib logs`:
+
+| Action | Recorded when |
+|---|---|
+| `vault-open` | Staff open somebody else's vault to edit. |
+| `vault-edit` | That window closes changed, with what was added and removed. |
+| `vault-view` | Staff look at a vault read only. |
+| `vault-clear` | A vault is emptied. |
+| `vault-restore` | A copy is put back, with its date. |
+| `vault-buy` | A player buys a vault, with the price. |
+| `vault-conflict` | A window had to be settled after another server wrote its vault. See [Network](/docs/exyliaplayervaults/network#when-two-servers-wrote-the-same-vault). |
+
+Opening a list and looking inside a history copy are not recorded.

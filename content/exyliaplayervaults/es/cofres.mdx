@@ -1,0 +1,149 @@
+---
+title: "Baúles"
+description: "Cuántos baúles tiene un jugador y de qué tamaño, qué pasa cuando uno se encoge, la lista de /pv, nombres e iconos, la búsqueda, las restricciones y los objetos bloqueados."
+---
+
+Un baúl es una ventana de cofre real, que se llena desde la base de datos al abrirse y se guarda mientras
+está abierta y al cerrarse. `/pv` los lista; `/pv <number>` abre uno directamente.
+
+## Cuántos y de qué tamaño
+
+Las dos cosas vienen de permisos, y **gana el número más alto que tenga el jugador**.
+
+| Nodo | Sin ninguno | Tope |
+|---|---|---|
+| `exyliaplayervaults.amount.<number>` | `vaults.default-amount`, 1 | `vaults.max-amount`, 9 |
+| `exyliaplayervaults.rows.<1-6>` | `vaults.default-rows`, 6 | De 1 a 6 |
+
+Los baúles que un jugador puede abrir son los de su rango **más** los que haya
+[comprado](/docs/exyliaplayervaults/compras), nunca más de `max-amount`. Las filas son las mismas para todos
+los baúles de un jugador: un VIP con `rows.6` ve todos sus baúles con seis filas.
+
+`/pv <number>` por encima de esa cantidad responde *"No tienes el baúl `<number>`."*. Perder un nodo nunca
+borra nada: los baúles que quedan por encima de la nueva cantidad aparecen bloqueados en la lista, y lo que
+contienen sigue en la base de datos hasta que el jugador pueda volver a abrirlos.
+
+## Cuando un baúl se hace más pequeño
+
+Un baúl puede guardar más de lo que muestra su ventana: el jugador perdió el rango que le daba más filas, o
+se bajó `default-rows`. `vaults.hidden-slots` decide qué pasa con los stacks que quedan después de la última
+ranura:
+
+| Valor | Qué pasa |
+|---|---|
+| `keep` (por defecto) | Se quedan guardados, fuera de la vista, y se vuelven a escribir intactos en cada guardado. Al jugador se le avisa: *"`<count>` stack(s) de este baúl quedan ocultos hasta que vuelva a tener más filas."* Vuelven en cuanto el baúl es lo bastante grande. |
+| `return` | Se le devuelven al dueño: a su inventario o, si está lleno, a una cola que se le entrega al volver a entrar. Al jugador se le dice cuántos stacks ya no caben. |
+
+Con `return` no se entrega nada antes de que el baúl encogido quede escrito: los stacks se dan solo cuando
+la fila deja de tenerlos, así que una escritura fallida no puede pagarlos dos veces.
+
+<Callout type="note" title="El staff lo ve todo">
+Un baúl que el staff abre con `/pvadmin edit` tiene siempre seis filas, sea cual sea el rango del dueño,
+para que no se le escape nada. Lo que el staff deje por encima de las filas del dueño sigue
+`hidden-slots` la próxima vez que el dueño lo abra.
+</Callout>
+
+## La lista
+
+`/pv` abre `menus/user/vaults.yml`, una pantalla paginada de 36 baúles por página con una cabecera que
+muestra al jugador, cuántos baúles tiene, cuántos compró y sus filas. Dibuja una entrada por cada número
+desde 1 hasta `max-amount` (o más, si el jugador tiene más):
+
+| Entrada | Plantilla | Clics |
+|---|---|---|
+| Un baúl que el jugador tiene | `item_template`, dibujado con su icono, su nombre y `usado/tamaño` | Izquierdo: abrir. Derecho: renombrar. Shift + derecho: cambiar icono. |
+| El siguiente baúl, si se puede comprar | `buy_template`, con su precio | Izquierdo: comprar. Ver [Compras](/docs/exyliaplayervaults/compras). |
+| Cualquier otro baúl | `locked_template` | Ninguno. |
+
+Lo lleno que está un baúl sale de su última escritura: un baúl abierto ahora mismo se ve como se guardó por
+última vez, y uno que nunca se escribió se ve vacío. El archivo es tuyo para rediseñarlo; sus valores están
+en [Configuración](/docs/exyliaplayervaults/configuracion#la-lista-de-baúles).
+
+## Nombres e iconos
+
+Desde la lista, un jugador renombra un baúl con clic derecho y le cambia el icono con shift + clic derecho,
+solo en los baúles que tiene desbloqueados.
+
+- **Los nombres** se escriben en una pregunta que empieza con el nombre actual. Pueden tener hasta
+  `customization.name-max-length` (24) caracteres, y solo letras, números, espacios y
+  `- _ ' . ! ? # ( )`, así que un nombre nunca puede llevar colores ni placeholders. Escribir `-` le
+  devuelve al baúl su nombre por defecto, `#<number>` (`default-name` en `messages.yml`).
+- **Los iconos** se eligen con la pregunta de icono de ExyliaLib: el objeto que el jugador tiene en la mano,
+  una búsqueda entre los materiales del servidor, o una cabeza del catálogo de cabezas. Hasta que se elige
+  uno, el baúl se dibuja como `customization.default-icon`, `BARREL`.
+
+El nombre es lo que muestra el título de la ventana del baúl (`%name%` en `title`). Renombrar necesita
+`exyliaplayervaults.customize.name`, cambiar el icono `exyliaplayervaults.customize.icon`; los dos los tiene
+todo el mundo por defecto. Los nombres e iconos van en su propia tabla, así que renombrar un baúl abierto en
+otro sitio nunca pisa su contenido.
+
+## Búsqueda
+
+`/pv search <item>` (`exyliaplayervaults.search`) dice qué baúles de un jugador tienen algo:
+
+```text
+/pv search diamond
+/pv search diamond sword
+```
+
+Un objeto coincide cuando su material, escrito como lo diría un jugador (`diamond sword` para
+`DIAMOND_SWORD`), o su nombre visible contiene lo escrito, sin distinguir mayúsculas. También se cuenta lo
+que hay dentro de cajas de shulker y bolsas, hasta tres niveles. La respuesta es un total y una línea por
+baúl con cuántos tiene; solo se buscan los baúles que el jugador puede abrir ahora.
+
+Una búsqueda lee el contenido guardado, así que un baúl abierto en este momento cuenta según su última
+escritura. Un jugador puede buscar una vez cada tres segundos, o una vez por `open-cooldown` si es más
+largo; `exyliaplayervaults.bypass.cooldown` lo quita.
+
+## Dónde y cuándo
+
+Todas las formas en que un jugador abre su propio baúl — `/pv <number>` o un clic en la lista — pasan por
+las mismas comprobaciones. El staff que abre el baúl de otro no.
+
+| Ajuste | Por defecto | Rechazo |
+|---|---|---|
+| `restrictions.disabled-worlds` | ninguno | *"Los baúles no se pueden abrir en este mundo."* |
+| `restrictions.disabled-game-modes` | `SPECTATOR` | *"Los baúles no se pueden abrir en este modo de juego."* |
+| `restrictions.block-in-combat` | `true` | *"No puedes abrir un baúl en combate."* |
+| `restrictions.open-cooldown` | `500ms` | *"Espera `<time>` antes de abrir otro baúl."* `0s` lo desactiva. |
+
+Los nombres de mundos y modos de juego se comparan sin distinguir mayúsculas. El combate es el del plugin de
+combate que lea ExyliaLib (DeluxeCombat, PvPManager…). Con `block-in-combat` activado, un baúl que ya está
+abierto también se cierra — y se guarda — en cuanto quien lo mira golpea o recibe un golpe de otro jugador,
+para que no sirva para esconder botín en mitad de una pelea.
+
+`exyliaplayervaults.bypass.restrictions` se salta las comprobaciones de mundo, modo de juego y combate;
+`exyliaplayervaults.bypass.cooldown` se salta el cooldown. Los dos son para operadores por defecto.
+
+## Objetos bloqueados
+
+`vaults.blocked-materials` lista materiales, por nombre, que no pueden entrar en un baúl. Una caja de
+shulker o una bolsa que lleve uno también se rechaza, por muy dentro que esté.
+
+```yaml title="plugins/ExyliaPlayerVaults/config.yml"
+vaults:
+  blocked-materials:
+    - BEDROCK
+    - SPAWNER
+```
+
+El objeto se rechaza por todas las vías de entrada a la ventana: colocarlo, subirlo con shift + clic desde
+el inventario, cambiarlo con una tecla numérica o la tecla de la mano secundaria, arrastrarlo por las
+ranuras, y meterlo en una bolsa guardada en el baúl o vaciar una bolsa dentro. Al jugador se le dice
+*"Ese objeto no se puede guardar en un baúl."*
+
+Un objeto bloqueado que ya está dentro de un baúl no se quita. El staff que edita con `/pvadmin edit` no
+está sujeto a la lista, y `exyliaplayervaults.bypass.blocked` deja pasar a un jugador; ese nodo no lo tiene
+nadie por defecto, ni siquiera con `exyliaplayervaults.*`.
+
+## Guardado
+
+Un baúl se escribe al cerrarse — Escape, una desconexión, una muerte, otra ventana que se abre encima — y
+cada `vaults.checkpoint` (30 segundos) mientras sigue abierto, si cambió. Con `vaults.save-player-on-write`
+activado, el archivo de inventario del propio jugador se guarda después de cada escritura que cambió el
+baúl, así que un crasheo justo después nunca puede dejar un objeto a la vez en el baúl y en su inventario.
+
+Un baúl está abierto en una sola ventana a la vez en toda la red. Cualquier otro que intente abrirlo — el
+dueño desde un segundo servidor, un segundo clic en el mismo tick — recibe *"Ese baúl está abierto en otro
+sitio ahora mismo. Inténtalo en un momento."* Solo el staff que lo edita puede quitárselo. Cómo se sostiene
+eso entre servidores, crasheos y cortes de la base de datos está en [Red](/docs/exyliaplayervaults/red).

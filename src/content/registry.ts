@@ -1265,6 +1265,66 @@ const ECONOMY_NAV: NavGroup[] = [
   },
 ];
 
+const GRAVES_NAV: NavGroup[] = [
+  {
+    label: { en: "Getting started", es: "Empezar" },
+    pages: [
+      page("introduction", "introduction", "introduccion"),
+      page("installation", "installation", "instalacion"),
+      page("first-steps", "first-steps", "primeros-pasos"),
+    ],
+  },
+  {
+    label: { en: "Graves", es: "Tumbas" },
+    pages: [
+      page("graves", "graves", "tumbas"),
+      page("menu", "menu", "menu"),
+      page("staff", "staff", "staff"),
+      page("network", "network", "red"),
+    ],
+  },
+  {
+    label: { en: "Reference", es: "Referencia" },
+    pages: [
+      page("commands", "commands", "comandos"),
+      page("permissions", "permissions", "permisos"),
+      page("placeholders", "placeholders", "placeholders"),
+      page("configuration", "configuration", "configuracion"),
+      page("faq", "faq", "faq"),
+    ],
+  },
+];
+
+const PLAYERVAULTS_NAV: NavGroup[] = [
+  {
+    label: { en: "Getting started", es: "Empezar" },
+    pages: [
+      page("introduction", "introduction", "introduccion"),
+      page("installation", "installation", "instalacion"),
+      page("first-steps", "first-steps", "primeros-pasos"),
+    ],
+  },
+  {
+    label: { en: "Vaults", es: "Baúles" },
+    pages: [
+      page("vaults", "vaults", "cofres"),
+      page("purchases", "purchases", "compras"),
+      page("staff", "staff", "staff"),
+      page("network", "network", "red"),
+    ],
+  },
+  {
+    label: { en: "Reference", es: "Referencia" },
+    pages: [
+      page("commands", "commands", "comandos"),
+      page("permissions", "permissions", "permisos"),
+      page("placeholders", "placeholders", "placeholders"),
+      page("configuration", "configuration", "configuracion"),
+      page("faq", "faq", "faq"),
+    ],
+  },
+];
+
 export const plugins: Plugin[] = [
   {
     id: "exyliaffa",
@@ -1773,6 +1833,49 @@ export const plugins: Plugin[] = [
       { en: "Folia", es: "Folia" },
     ],
     nav: ECONOMY_NAV,
+  },
+  {
+    id: "exyliagraves",
+    name: "ExyliaGraves",
+    tagline: { en: "A grave where you died, collected exactly once", es: "Una tumba donde moriste, recogida una sola vez" },
+    summary: {
+      en: "A head where you fell holding exactly what you dropped, collected with one click, protected for the owner, with expiry and limits by rank, a /graves list across the network, paid teleports and staff restores — handed over exactly once on any server. Free and open source.",
+      es: "Una cabeza donde caíste con exactamente lo que soltaste, recogida con un clic, protegida para el dueño, con caducidad y límites por rango, una lista /graves de toda la red, teletransportes de pago y restauraciones del staff — entregada una sola vez en cualquier servidor. Gratis y de código abierto.",
+    },
+    version: "1.0.0",
+    status: "stable",
+    category: { en: "Survival", es: "Survival" },
+    minecraft: "1.21+",
+    banner: "https://s3.exylia.net/exylia-plugins/public/static/images/plugins/graves/ExyliaGravesBanner.webp",
+    download: "https://github.com/Exylia-Plugins/ExyliaGraves/releases",
+    tags: [
+      { en: "Graves", es: "Tumbas" },
+      { en: "Network", es: "Red" },
+      { en: "Folia", es: "Folia" },
+    ],
+    nav: GRAVES_NAV,
+  },
+  {
+    id: "exyliaplayervaults",
+    name: "ExyliaPlayerVaults",
+    tagline: { en: "Personal vaults, open in one place at a time", es: "Baúles personales, abiertos en un solo sitio a la vez" },
+    summary: {
+      en: "Vaults per player kept in the database, their number and size set by rank, renamed, given icons, bought with any currency and searched by item, with staff browsing and history restores — open in exactly one window across the whole network. Free and open source.",
+      es: "Baúles por jugador guardados en la base de datos, con cantidad y tamaño por rango, renombrables, con iconos, comprables con cualquier moneda y buscables por ítem, con navegación y restauración de historial para el staff — abiertos en una sola ventana en toda la red. Gratis y de código abierto.",
+    },
+    version: "1.0.0",
+    status: "stable",
+    category: { en: "Survival", es: "Survival" },
+    minecraft: "1.21+",
+    banner: "https://s3.exylia.net/exylia-plugins/public/static/images/plugins/player-vaults/ExyliaPlayerVaultsBanner.webp",
+    download: "https://github.com/Exylia-Plugins/ExyliaPlayerVaults/releases",
+    tags: [
+      { en: "Vaults", es: "Baúles" },
+      { en: "Storage", es: "Almacenamiento" },
+      { en: "Network", es: "Red" },
+      { en: "Folia", es: "Folia" },
+    ],
+    nav: PLAYERVAULTS_NAV,
   },
   {
     id: "exyliasandbox",
