@@ -17,7 +17,7 @@ COPY . .
 RUN --mount=type=cache,id=docs-next,target=/app/.next/cache,sharing=locked pnpm run build
 
 # --- serve ------------------------------------------------------------------
-FROM nginx:1.27-alpine AS runner
+FROM nginx:1.30-alpine AS runner
 
 COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=builder /app/out /usr/share/nginx/html
