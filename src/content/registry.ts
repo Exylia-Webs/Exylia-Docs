@@ -1908,7 +1908,7 @@ export const plugins: Plugin[] = [
       en: "Generated PvP worlds with their own terrain presets and border, a random-teleport entry, a 1v1 queue that drops two players facing each other, kits players write themselves, a kit room, and teleport pads that send everybody standing on them at once.",
       es: "Mundos PvP generados con sus propios presets de terreno y su borde, entrada por teletransporte aleatorio, una cola 1v1 que suelta a dos jugadores mir\u00e1ndose, kits que escribe cada jugador, una sala de kits y plataformas que mandan a la vez a todo el que est\u00e9 encima.",
     },
-    version: "1.0.3",
+    version: "1.2.0",
     status: "stable",
     category: { en: "PvP", es: "PvP" },
     minecraft: "1.21+",
