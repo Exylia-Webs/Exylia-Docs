@@ -1995,7 +1995,7 @@ export const plugins: Plugin[] = [
       en: "Packet targets every player sees alone: flick, reaction, tracking and combo drills tuned from the config, target size and distance chosen per player and weighed into a rating, best-of duels on the same target sequence, a board per drill plus an overall one, Java and Bedrock ranked apart, menus in five languages, and an admin surface that is only menus.",
       es: "Objetivos por paquetes que cada jugador ve solo: ejercicios de flick, reacción, tracking y combo ajustados desde la configuración, tamaño y distancia de objetivo elegidos por cada jugador y pesados en un rating, duelos al mejor de sobre la misma secuencia de objetivos, una tabla por ejercicio y otra general, Java y Bedrock clasificados por separado, menús en cinco idiomas, y una administración que es solo menús.",
     },
-    version: "1.1.0",
+    version: "1.2.0",
     status: "stable",
     category: { en: "Gamemode", es: "Modo de juego" },
     minecraft: "1.21.4+",
