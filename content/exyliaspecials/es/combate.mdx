@@ -1,151 +1,36 @@
 ---
 title: "Combate"
-description: "La marca de combate: elegir el proveedor, qué pone a un jugador en combate, cada restricción mientras dura, el castigo por desconectarse y los NPCs de desconexión, la barrera de las zonas seguras y los comandos de administración."
+description: "Dónde vive ahora el combat tag: ExyliaCombat se encarga del combate, las restricciones, los NPCs de desconexión, la barrera de las zonas seguras y los cooldowns vanilla; ExyliaSpecials solo lee el combate y traslada los ajustes antiguos."
 ---
 
-ExyliaSpecials necesita saber quién está en combate: ítems como **Vuelo** se niegan a funcionar entonces, los
-cooldowns pueden ser más largos y los duelos ponen en combate a sus luchadores. Trae una marca de combate completa
-propia, o lee la de un plugin de combate que ya tengas.
+ExyliaSpecials necesita saber quién está en combate — objetos como **Vuelo** se niegan a funcionar entonces, los
+cooldowns pueden ser más largos con `combat-seconds` y los duelos ponen en combate a sus luchadores. Ya no pone a
+nadie en combate por sí mismo: el combat tag, las restricciones en combate, los NPCs de desconexión, la barrera de
+las zonas seguras y los cooldowns de objetos vanilla viven en **ExyliaCombat**.
 
-## Elegir el proveedor
+## Quién pone en combate
 
-`combat.provider` en `config.yml`:
+ExyliaSpecials pregunta a la fachada de combate de ExyliaLib, así que funciona con el que esté instalado:
 
-| Valor | Quién marca |
+| Plugin | |
 |---|---|
-| `AUTO` | Por defecto. El primero de DeluxeCombat, CelestCombat y PvPManager que esté instalado; si no, la marca propia. |
-| `BUILTIN` | La marca propia, con todas las restricciones, los NPCs de desconexión y la barrera de abajo. |
-| `MANUAL` | Nadie de forma automática: solo `/specialsadmin setcombat` y otros plugins a través de la API. Sin restricciones ni castigos. |
-| `DELUXECOMBAT`, `CELESTCOMBAT`, `PVPMANAGER` | Ese plugin. Si no está instalado, la consola lo dice y se usa la marca propia. |
+| ExyliaCombat | El combate, sus restricciones, los NPCs de desconexión, la barrera y los cooldowns vanilla. |
+| DeluxeCombat o PvPManager | Su propio combate y sus ajustes. |
+| Ninguno | Nadie está nunca en combate: `combat-seconds` y la condición `in-combat` no se aplican nunca. |
 
-La consola nombra el proveedor al arrancar: `Combat provider: BuiltIn`. Con un plugin externo, sus propios ajustes
-deciden la marca y las restricciones; todo lo que hay en esta página desde
-[Qué pone a un jugador en combate](#qué-pone-a-un-jugador-en-combate) hacia abajo es solo de la marca propia.
+Los duelos siguen poniendo en combate a los dos luchadores durante la pelea más 10 segundos, por la misma fachada.
 
-Con `BUILTIN`, `MANUAL` o CelestCombat, la marca se comparte con todos los demás plugins de Exylia a través de
-ExyliaLib. En los clientes Lunar y Feather el tiempo de combate aparece como un cooldown en el HUD con cualquier
-proveedor.
+## Venir de una versión anterior
 
-Cambiar el proveedor tiene efecto con `/specialsadmin reload`; dejar la marca propia por otra borra todas las
-marcas en curso.
+Las versiones anteriores traían el combate integrado, en `combat`, `vanilla-cooldowns` y `actionbar` de
+`config.yml`. En el primer arranque de esta versión esos ajustes se copian, junto con `language`, a
+`exyliacombat-export.yml` en la carpeta del plugin, y ExyliaCombat los importa en su propio primer arranque.
+Instala ExyliaCombat para conservarlos.
 
-## Qué pone a un jugador en combate
-
-Los dos jugadores, atacante y víctima, quedan marcados durante `combat.duration` (15 s) cuando un jugador recibe
-daño de:
-
-- un golpe o un proyectil de otro jugador;
-- TNT que encendió otro jugador, o la mascota domesticada de otro jugador;
-- una poción arrojadiza o persistente con un efecto dañino lanzada por otro jugador.
-
-Un golpe nuevo nunca acorta una marca en curso. Nadie queda marcado en `combat.blacklisted-worlds`, y entrar en uno
-termina la marca. Golpear un NPC de desconexión marca a quien golpea.
-
-Al morir, la marca de la víctima termina sin aviso. Con `untag-on-kill` (por defecto `true`) también termina la del
-asesino, si la víctima era con quien estaba luchando.
-
-`exyliaspecials.combat.bypass` no evita que un jugador quede marcado; lo libra de todas las restricciones de abajo.
-
-## Mientras dura la marca
-
-| Restricción | Ajuste | Por defecto |
-|---|---|---|
-| Se quita el vuelo, y se devuelve cuando termina la marca. No en creativo ni espectador. | `disable-flight` | `true` |
-| Se deja de planear y las elytras puestas pasan al inventario. Ponérselas se rechaza. | `disable-elytra` | `true` |
-| Abrir estos inventarios se rechaza. | `blocked-inventories` | `[ENDER_CHEST]` |
-| Los teletransportes con estas causas se rechazan (`COMMAND`, `PLUGIN`, `NETHER_PORTAL`...). | `blocked-teleport-causes` | `[COMMAND]` |
-| Se rechaza cualquier comando salvo estos. | `allowed-commands` | `/msg`, `/tell`, `/w`, `/r`, `/reply`, `/discord` |
-
-`allowed-commands` se compara por el nombre del comando, con o sin barra y sin tener en cuenta un prefijo
-`plugin:`: `/msg` deja pasar `/minecraft:msg` pero no `/msgtoggle`.
-
-### Zonas seguras
-
-Con WorldGuard, un jugador marcado no puede llegar a un sitio donde la flag `pvp` está en `deny`:
-
-- entrando a pie: se le empuja hacia atrás — "¡No puedes entrar en zonas seguras en combate!";
-- teletransportándose dentro, por cualquier causa: se rechaza — "¡No puedes teletransportarte a zonas seguras en
-  combate!";
-- una perla de ender que vuela hacia una se elimina; al caer en una, el jugador vuelve a donde la lanzó;
-- la fruta chorus no se puede comer en absoluto mientras dura la marca.
-
-Cada mensaje de rechazo se puede desactivar en `combat.notifications`. Los teletransportes y las perlas rechazados
-usan `on-region-blocked`. Los mensajes se envían como mucho una vez cada 1,5 segundos.
-
-## La barrera
-
-Mientras dura la marca, el jugador ve un muro de `RED_STAINED_GLASS` en el borde de cada zona segura cercana. Solo
-lo ve él, y desaparece con la marca. Necesita WorldGuard y la marca propia.
-
-| `combat.barrier.` | Por defecto | |
-|---|---|---|
-| `enabled` | `true` | |
-| `material` | `RED_STAINED_GLASS` | |
-| `height` | 6 | Centrado en el jugador. |
-| `preview-distance` | 10 | Hasta dónde alrededor del jugador se dibuja. Más grande cuesta más. |
-| `update-interval-ticks` | 3 | |
-| `air-only` | `true` | Solo se muestra en el aire. |
-| `push-back.enabled` | `true` | Empuja al jugador lejos del muro. |
-| `push-back.trigger-distance` | 2.5 | |
-| `push-back.strength` | 0.55 | |
-| `push-back.cooldown-ticks` | 2 | |
-| `particles.enabled` | `true` | Polvo sobre el muro. |
-| `particles.color` | `FF2222` | |
-| `particles.size`, `density`, `interval-ticks` | 1.2, 20, 6 | |
-
-## Desconectarse en combate
-
-Cuando un jugador marcado sale:
-
-1. Se ejecutan los `commands-on-logout`.
-2. Con `logout-punishment: NOTHING`, eso es todo.
-3. Con `KILL` (por defecto) y `logout-npc.enabled: false`, o en un mundo de `logout-npc.blacklisted-worlds`, el
-   jugador muere donde estaba y se ejecutan los `commands-on-player-death`.
-4. Si no, un NPC de desconexión ocupa su lugar.
-
-Un jugador expulsado se libra salvo que `punish-on-kick` sea `true`. Un timeout siempre cuenta como salir.
-
-Las líneas de comando llevan `console:` (por defecto) o `player:` delante, y `%player%`:
-
-```yaml
-combat:
-  commands-on-logout:
-    - 'console:broadcast %player% logged out in combat'
-```
-
-### NPCs de desconexión
-
-El NPC se queda donde el jugador salió: un maniquí con su skin en 1.21.9 y posteriores, un zombi antes. Lleva su
-armadura y sus ítems, tiene su vida y sus efectos, y se llama como él con una cuenta atrás y su vida. Todo su
-inventario se va con él.
-
-| Entonces | Qué pasa |
-|---|---|
-| Matan al NPC | Su inventario cae donde murió (se conserva con `keepInventory`). En su siguiente entrada el jugador muere allí y se ejecutan `logout-npc.commands-on-npc-death` y `commands-on-player-death`. |
-| El NPC agota su tiempo | Desaparece. En su siguiente entrada el jugador recupera su inventario y la vida del NPC, donde estaba. |
-| El jugador vuelve antes | El NPC desaparece, recupera todo donde estaba, y vuelve a quedar marcado el tiempo que le quedaba. |
-
-| `combat.logout-npc.` | Por defecto | |
-|---|---|---|
-| `enabled` | `true` | |
-| `reset-combat-timer` | `true` | El NPC vive un `combat.duration` completo; con `false`, solo lo que quedaba de la marca. |
-| `only-player-damage` | `true` | Solo los jugadores pueden herirlo. |
-| `commands-on-npc-death` | `[]` | |
-| `blacklisted-worlds` | `[]` | Allí muere en el acto en su lugar. |
-
-Los NPCs se guardan en la base de datos, así que un reinicio no los pierde: los NPCs vivos al apagar se eliminan y
-sus dueños recuperan todo en su siguiente entrada.
-
-## Comandos
-
-| Comando | |
-|---|---|
-| `/specialsadmin setcombat <seconds> <player>` | Marca al jugador exactamente ese tiempo. |
-| `/specialsadmin removecombat <player>` | Termina su marca. |
-
-Ambos necesitan `exyliaspecials.admin.combat` y solo funcionan con `BUILTIN` o `MANUAL`; con un plugin de combate
-responden "No hay un sistema de combate manual disponible."
+Desaparecen con el traslado: `/specialsadmin setcombat` y `removecombat`, `exyliaspecials.admin.combat`,
+`exyliaspecials.combat.bypass`, los mensajes de `combat` y el ajuste `combat.provider`.
 
 ## Placeholders
 
-`%exyliaspecials_in_combat%` y `%exyliaspecials_combat_time%`. Ver [Placeholders](/docs/exyliaspecials/placeholders).
+`%exyliaspecials_in_combat%` y `%exyliaspecials_combat_time%` siguen funcionando, desde el plugin de combate que
+esté instalado. Ver [Placeholders](/docs/exyliaspecials/placeholders).
