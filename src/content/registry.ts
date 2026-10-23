@@ -1404,7 +1404,7 @@ export const plugins: Plugin[] = [
       en: "KOTH, point-scored KOTH, Conquest, Payload, Destroy The Core and Bounty, all created from in-game menus with a shared zone wand, schedules, rewards and clan support.",
       es: "KOTH, KOTH por puntos, Conquest, Payload, Destroy The Core y Bounty, todos creados desde menús in-game con selector de zona, horarios, recompensas y soporte de clanes.",
     },
-    version: "1.2.0",
+    version: "1.3.0",
     status: "stable",
     category: { en: "Events", es: "Eventos" },
     minecraft: "1.21+",
