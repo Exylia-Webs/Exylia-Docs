@@ -1951,7 +1951,7 @@ export const plugins: Plugin[] = [
       en: "A PvP training bot each player spawns for themselves: seven combat models from sword to crystal, mace and boxing, five skill rungs that change reaction, aim and discipline, gear and buffs tuned from a menu, and a public API other plugins spawn it through.",
       es: "Un bot de entrenamiento de PvP que cada jugador genera para sí mismo: siete modelos de combate, de espada a crystal, mace y boxeo, cinco niveles de habilidad que cambian reacción, puntería y disciplina, equipo y buffs ajustables desde un menú, y una API pública desde la que otros plugins lo generan.",
     },
-    version: "1.3.0",
+    version: "1.4.0",
     status: "stable",
     category: { en: "Gamemode", es: "Modo de juego" },
     minecraft: "1.21.9+",
