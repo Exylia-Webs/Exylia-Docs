@@ -1638,10 +1638,10 @@ export const plugins: Plugin[] = [
       en: "TNT Tag, Spleef, OITC, CS:GO, Capture the Flag, Murder Mystery, Zombie Horde and forty-four more, each with its own arena, settings, kits, rewards and scoreboard, run from in-game menus \u2014 and gauntlets that chain them into one series.",
       es: "TNT Tag, Spleef, OITC, CS:GO, Capture the Flag, Murder Mystery, Zombie Horde y cuarenta y cuatro m\u00e1s, cada uno con su arena, ajustes, kits, recompensas y scoreboard, todo desde men\u00fas in-game \u2014 m\u00e1s gauntlets que los encadenan en una serie.",
     },
-    version: "1.6.0",
+    version: "1.8.0",
     status: "stable",
     category: { en: "Events", es: "Eventos" },
-    minecraft: "1.21+",
+    minecraft: "1.21.4+",
     banner: "https://s3.exylia.net/exylia-plugins/public/static/images/plugins/events/ExyliaEventsBanner.webp",
     purchase: "https://builtbybit.com/resources/exylia-events-core-22-minigames.95715/",
     tags: [
