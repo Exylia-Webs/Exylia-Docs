@@ -1,6 +1,6 @@
 ---
 title: "Levels"
-description: "EXP from kills, kill streaks and rival multipliers, the ten-level table, and the caps each level raises."
+description: "EXP from kills, kill streaks and rival multipliers, the ten-level table, and the caps and perks each level grants."
 ---
 
 A clan's level is not stored. It is derived from its EXP every time it is read: the highest level whose
@@ -62,6 +62,19 @@ The relation is checked one way only: it is enough that the killer's clan declar
 or not the victim declared back. With the `rivals` module off, or the multiplier at `1.0`, no lookup is
 done at all.
 
+## Boosting kill EXP
+
+Kill EXP — base, streak bonus and rival multiplier together — goes through ExyliaLib's
+[modifiers](/docs/exylialib/economy#modifiers) as type `clan-exp`, source `clan-kills`, once per killer.
+Any booster a player holds for it multiplies what their kill is worth to the clan; with nothing
+installed the factor is `1.0`. The built-in permission form is:
+
+```
+exylia.modifier.clan-exp.clan-kills.1.5
+```
+
+Deaths, raids and `/clanadmin setexp` are never boosted.
+
 ## The level table
 
 ```yaml
@@ -101,6 +114,47 @@ adding an eleventh row without raising `max-level` leaves it unread.
 
 Every cap the plugin enforces is derived from this table at the moment it is asked, so an edit and a
 `/clanadmin reload` change what existing clans may do straight away.
+
+## Level perks
+
+Each row can also carry `modifiers`: earnings every member gets boosted while the clan is at that level.
+They are fed into ExyliaLib's [modifiers](/docs/exylialib/economy#modifiers), so they apply to any plugin
+that pays through it, and multiply with every other booster the player has.
+
+```yaml
+levels:
+  level-definitions:
+    "5":
+      required-exp: 7000
+      max-members-bonus: 20
+      max-alliances-bonus: 2
+      max-rivals-bonus: 3
+      modifiers:
+        "money:*": 1.05
+        "xp:*": 1.05
+```
+
+Each key is `<type>:<source>` and each value a factor: `1.05` is +5%. The types are `money`, `xp`,
+`drops`, or another plugin's own type, which only matches when named. A source of `*` covers every
+source of that type, and an exact source wins over `*`. Like the caps, a row is the **total** at that
+level, not added to the rows below. `clan-exp` is refused here (with a console warning), so a level can
+never speed up its own climb; a key that is not `<type>:<source>` is skipped the same way.
+
+| Level | Ships with |
+|---|---|
+| 1–2 | Nothing |
+| 3–4 | `money:*` 1.05 |
+| 5–6 | `money:*` 1.05, `xp:*` 1.05 |
+| 7–8 | `money:*` 1.10, `xp:*` 1.05 |
+| 9–10 | `money:*` 1.10, `xp:*` 1.10, `drops:*` 1.10 |
+
+The level menu lists each row's perks under **Perks**, worded by `level.perk-line`, `level.perk-types` and `level.perks-none` in `messages.yml`.
+
+<Callout type="note" title="Servers that predate perks start without them">
+Only fresh installs get the shipped perks. On a server that already had a level table, the update writes
+an empty `modifiers: {}` into each shipped level it finds, so no clan gains a boost it never had. Fill
+them in and `/clanadmin reload` to turn perks on.
+</Callout>
 
 <Callout type="warning" title="Losing EXP can lose a level">
 Deaths and raids remove EXP, and the level is recomputed from the new total. A clan that drops below a

@@ -1,0 +1,179 @@
+---
+title: "Guerras de clanes"
+description: "Dos clanes, el mismo número de luchadores, una arena: declarar, plantillas, los tres reglamentos, espectadores, y cómo preparar arenas y kits."
+---
+
+Una guerra de clanes es una pelea entre dos clanes con el mismo número de jugadores en cada bando, en una
+arena que el servidor ha preparado. La arena se restaura tras cada guerra, nada de lo que haga un
+luchador dentro toca el DTR, las estadísticas ni la EXP del clan, y el resultado se guarda como
+victoria, derrota o empate por clan.
+
+Las guerras son el [módulo](/docs/exyliaclans/modulos) `wars` y vienen activadas. Necesitan al menos
+una arena antes de que nadie pueda pelear — ver [Preparar arenas](#preparar-arenas).
+
+## Declarar una guerra
+
+```
+/clan war
+/clan war declare <clan>
+/clan war accept <clan>
+/clan war decline <clan>
+```
+
+`/clan war` abre el centro de guerras del clan: **Declarar guerra**, **Peticiones de guerra** y
+**Guerras activas**. Declarar, aceptar y rechazar necesitan el permiso de rango `MANAGE_WARS`, que tienen
+los rangos de líder y oficial de fábrica — ver [Rangos](/docs/exyliaclans/roles).
+
+`/clan war declare` abre la pantalla de preparación, donde el bando que declara elige:
+
+| Ajuste | Opciones |
+|---|---|
+| Tamaño del equipo | De `min-team-size` a `max-team-size`; empieza en 3 |
+| Reglas | Kit del servidor, objetos propios · amistosa, u objetos propios · pérdida real |
+| Kit | Uno de los kits de guerra del servidor, cuando las reglas usan kit |
+| Arena | Una concreta, o aleatoria |
+| Espectadores | Permitidos, o solo miembros de los dos clanes |
+| Luchadores | Exactamente tantos miembros conectados como el tamaño del equipo |
+
+Al enviarla, cada miembro del otro clan con `MANAGE_WARS` recibe la petición, con botones clicables de
+**aceptar** y **rechazar**. Aceptar abre la misma pantalla de plantilla para el bando defensor; en cuanto
+eligen a sus luchadores la guerra empieza. Una petición caduca a los `request-expire-seconds`, y un clan
+tiene que esperar `declare-cooldown-seconds` antes de volver a declarar.
+
+Un luchador tiene que estar conectado, en el clan, fuera de otra guerra o sesión, sin etiqueta de
+combate y vivo cuando se envía la petición y otra vez cuando se acepta.
+
+## Los tres reglamentos
+
+| Reglas | Qué usan los luchadores | Qué pierden |
+|---|---|---|
+| **Kit del servidor** | El kit elegido en la preparación, el mismo para todos. Se quitan los efectos. | Nada: su inventario se guarda aparte y se devuelve después. |
+| **Objetos propios · amistosa** | Su propio inventario. | Nada: se devuelve tal como estaba. |
+| **Objetos propios · pérdida real** | Su propio inventario. | Todo lo que llevan al morir cae en la arena. Los supervivientes tienen `loot-seconds` para recogerlo. |
+
+El modo kit es el de partida cuando el servidor tiene al menos un kit; sin kits una guerra nueva empieza
+como amistosa.
+
+## La pelea
+
+A todos se les cura y se les teletransporta al spawn de su equipo, y se quedan congelados durante
+`countdown-seconds`. Cuando empieza la pelea:
+
+- Solo los luchadores enemigos pueden dañarse entre sí. Ni compañeros, ni espectadores, ni gente de fuera.
+- Solo se pueden poner y romper bloques dentro de los límites de la arena, y la arena se regenera desde
+  su schematic al acabar la guerra.
+- Salir de los límites de la arena te devuelve a tu spawn.
+- Los comandos se bloquean salvo `/clan war leave` y los de `allowed-commands`.
+- Un luchador que muere, se desconecta o escribe `/clan war leave` queda eliminado y pasa a espectador.
+
+La guerra termina cuando a un bando no le queda nadie. Si antes se agota `max-duration-seconds`, gana el
+bando con más jugadores vivos y un empate a vivos es empate. Todos se quedan `end-delay-seconds` viendo el
+resultado antes de volver a donde estaban. Con `broadcast-result` activado, se avisa a todo el servidor
+de quién ganó.
+
+Un administrador puede terminar una guerra con `/clanadmin war stop <clan>`; una guerra detenida no
+cuenta para nadie.
+
+## Espectadores
+
+```
+/clan war spectate <clan>
+/clan war leave
+```
+
+Los espectadores van al spawn de espectadores de la arena en modo espectador y vuelven a casa con
+`/clan war leave`. Si la guerra se configuró solo para miembros, se rechaza a los jugadores de fuera de
+los dos clanes.
+
+## wars.yml
+
+```yaml
+min-team-size: 1
+max-team-size: 10
+request-expire-seconds: 120
+countdown-seconds: 5
+max-duration-seconds: 600
+loot-seconds: 15
+end-delay-seconds: 5
+declare-cooldown-seconds: 60
+broadcast-result: true
+allowed-commands:
+  - msg
+  - r
+  - tell
+```
+
+| Clave | Por defecto | Significado |
+|---|---|---|
+| `min-team-size` | `1` | El equipo más pequeño con el que se puede declarar |
+| `max-team-size` | `10` | El más grande |
+| `request-expire-seconds` | `120` | Cuánto dura una petición |
+| `countdown-seconds` | `5` | Congelados en el spawn antes de la pelea |
+| `max-duration-seconds` | `600` | Límite de tiempo de la pelea; `0` es sin límite |
+| `loot-seconds` | `15` | Tiempo de saqueo para los supervivientes, solo en pérdida real |
+| `end-delay-seconds` | `5` | Tiempo en la arena tras el resultado |
+| `declare-cooldown-seconds` | `60` | Por clan, entre dos declaraciones |
+| `broadcast-result` | `true` | Anunciar cada resultado a todo el servidor |
+| `allowed-commands` | `msg`, `r`, `tell` | Comandos que luchadores y espectadores pueden seguir usando |
+
+`wars.yml` está junto a `config.yml` y se relee con `/clanadmin reload`. Los mensajes de la guerra están
+en las secciones `war` y `war-admin` de `messages.yml`. Las pantallas de guerra del jugador (`war_hub`,
+`war_setup`, `war_roster`, `war_requests`, `war_list`) y los mensajes `war` vienen solo en inglés por
+ahora, sea cual sea el `language`.
+
+## Preparar arenas
+
+Todo está bajo `/clanadmin war`, tras `exyliaclans.admin.war`. Escrito sin argumentos dentro del juego
+abre el menú de preparación de guerras (arenas, kits y guerras en curso), donde todo lo de abajo se
+puede hacer con clics.
+
+| Comando | Hace |
+|---|---|
+| `/clanadmin war arena create <id>` | Crea una arena |
+| `/clanadmin war arena setspawn <id> <a\|b>` | Spawn de un equipo en tu posición (`1` y `2` también valen) |
+| `/clanadmin war arena setspectator <id>` | Spawn de espectadores en tu posición |
+| `/clanadmin war arena setbounds <id>` | Empieza una selección de dos esquinas; al terminarla guarda el schematic |
+| `/clanadmin war arena saveschematic <id>` | Guarda los bloques actuales de la arena como el estado al que se restaura |
+| `/clanadmin war arena toggle <id>` | La activa o desactiva |
+| `/clanadmin war arena tp <id>` | Te teletransporta a ella |
+| `/clanadmin war arena info <id>` | Abre su menú (desde consola, la imprime) |
+| `/clanadmin war arena list` | Abre la lista de arenas (desde consola, la imprime) |
+| `/clanadmin war arena delete <id>` | La borra junto con su schematic |
+
+Una arena solo se puede activar cuando tiene los dos spawns, el de espectadores y los límites; el
+rechazo dice qué falta. Una arena con una guerra dentro no se puede borrar ni volver a guardar. Una
+guerra con arena aleatoria toma cualquier arena activa y libre; sin ninguna libre la guerra no se puede
+enviar.
+
+## Kits
+
+| Comando | Hace |
+|---|---|
+| `/clanadmin war kit create <id>` | Abre un editor de equipamiento vacío; guardar crea el kit |
+| `/clanadmin war kit edit <id>` | Abre el editor con los objetos del kit |
+| `/clanadmin war kit icon <id>` | Usa el objeto de tu mano como icono del kit |
+| `/clanadmin war kit list` | Abre la lista de kits (desde consola, la imprime) |
+| `/clanadmin war kit delete <id>` | Lo borra |
+
+El editor respeta armadura, segunda mano, inventario y barra rápida, y los luchadores reciben el kit
+exactamente como se colocó.
+
+## Placeholders
+
+| Placeholder | Descripción |
+|---|---|
+| `%exyliaclans_war_wins%` | Victorias en guerra del clan del jugador |
+| `%exyliaclans_war_losses%` | Sus derrotas |
+| `%exyliaclans_war_draws%` | Sus empates |
+| `%exyliaclans_war_in_war%` | `true` mientras el jugador pelea o mira una guerra |
+
+## Almacenamiento
+
+| Tabla | Guarda |
+|---|---|
+| `clan_war_arenas` | Spawns, spawn de espectadores, esquinas y si está activa, por arena |
+| `clan_war_kits` | Icono y objetos de cada kit |
+| `clan_war_records` | Victorias, derrotas y empates por clan |
+| `clan_war_returns` | De dónde vino un luchador de pérdida real, para que un reinicio en mitad de la guerra aún lo devuelva |
+
+Los schematics de las arenas se guardan a través de ExyliaLib como `clanwar_<id>`.

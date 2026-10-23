@@ -1,0 +1,174 @@
+---
+title: "Clan wars"
+description: "Two clans, an equal number of fighters, one arena: declaring, rosters, the three rule sets, spectators, and setting up arenas and kits."
+---
+
+A clan war is a fight between two clans with the same number of players on each side, in an arena the
+server has prepared. The arena is reset after every war, nothing a fighter does inside it touches the
+clan's DTR, stats or EXP, and the result is kept as a win, loss or draw per clan.
+
+Wars are the `wars` [module](/docs/exyliaclans/modules) and ship switched on. They need at least one
+arena before anybody can fight — see [Setting up arenas](#setting-up-arenas).
+
+## Declaring a war
+
+```
+/clan war
+/clan war declare <clan>
+/clan war accept <clan>
+/clan war decline <clan>
+```
+
+`/clan war` opens the clan's war hub: **Declare war**, **War requests** and **Active wars**. Declaring,
+accepting and declining need the `MANAGE_WARS` rank permission, which the shipped leader and officer
+ranks have — see [Roles](/docs/exyliaclans/roles).
+
+`/clan war declare` opens the setup screen, where the declaring side picks:
+
+| Setting | Choices |
+|---|---|
+| Team size | From `min-team-size` to `max-team-size`; starts at 3 |
+| Rules | Server kit, own items · friendly, or own items · real loss |
+| Kit | One of the server's war kits, when the rules use a kit |
+| Arena | A specific one, or random |
+| Spectators | Allowed, or members of the two clans only |
+| Fighters | Exactly as many online members as the team size |
+
+Sending it posts a request to every member of the other clan with `MANAGE_WARS`, with clickable
+**accept** and **decline** buttons. Accepting opens the same roster screen for the defending side; once
+they pick their fighters the war starts. A request expires after `request-expire-seconds`, and a clan
+has to wait `declare-cooldown-seconds` before declaring again.
+
+A fighter has to be online, in the clan, not in another war or session, not combat-tagged and alive when
+the request is sent and again when it is accepted.
+
+## The three rule sets
+
+| Rules | What fighters use | What they lose |
+|---|---|---|
+| **Server kit** | The kit chosen in setup, the same for everybody. Effects are cleared. | Nothing: their own inventory is put away and given back after. |
+| **Own items · friendly** | Their own inventory. | Nothing: it is given back as it was. |
+| **Own items · real loss** | Their own inventory. | Everything they die with drops in the arena. The survivors get `loot-seconds` to pick it up. |
+
+Kit mode is the default when the server has at least one kit; with no kits a new war starts as
+friendly.
+
+## The fight
+
+Everyone is healed and teleported to their team's spawn, then frozen for `countdown-seconds`. When the
+fight starts:
+
+- Only enemy fighters can hurt each other. Teammates, spectators and outsiders cannot.
+- Blocks can be placed and broken only inside the arena bounds, and the arena is regenerated from its
+  schematic when the war ends.
+- Leaving the arena bounds puts you back at your spawn.
+- Commands are blocked except `/clan war leave` and the ones in `allowed-commands`.
+- A fighter who dies, disconnects or types `/clan war leave` is eliminated and turned into a spectator.
+
+The war ends when one side has nobody left. If `max-duration-seconds` runs out first, the side with more
+players alive wins and an even count is a draw. Everybody stays `end-delay-seconds` to see the result
+before being sent back to where they were. With `broadcast-result` on, the whole server is told who won.
+
+An administrator can end a war with `/clanadmin war stop <clan>`; a stopped war counts for nobody.
+
+## Spectators
+
+```
+/clan war spectate <clan>
+/clan war leave
+```
+
+Spectators go to the arena's spectator spawn in spectator mode and are sent home with
+`/clan war leave`. When the war was set to members only, players outside the two clans are refused.
+
+## wars.yml
+
+```yaml
+min-team-size: 1
+max-team-size: 10
+request-expire-seconds: 120
+countdown-seconds: 5
+max-duration-seconds: 600
+loot-seconds: 15
+end-delay-seconds: 5
+declare-cooldown-seconds: 60
+broadcast-result: true
+allowed-commands:
+  - msg
+  - r
+  - tell
+```
+
+| Key | Default | Meaning |
+|---|---|---|
+| `min-team-size` | `1` | The smallest team a war can be declared with |
+| `max-team-size` | `10` | The largest |
+| `request-expire-seconds` | `120` | How long a request stands |
+| `countdown-seconds` | `5` | Frozen at the spawn before the fight |
+| `max-duration-seconds` | `600` | Fight time limit; `0` is no limit |
+| `loot-seconds` | `15` | Time the survivors get to loot, real-loss wars only |
+| `end-delay-seconds` | `5` | Time in the arena after the result |
+| `declare-cooldown-seconds` | `60` | Per clan, between two declarations |
+| `broadcast-result` | `true` | Announce every result to the whole server |
+| `allowed-commands` | `msg`, `r`, `tell` | Commands fighters and spectators may still use |
+
+`wars.yml` sits next to `config.yml` and is re-read by `/clanadmin reload`. The war's messages live in
+the `war` and `war-admin` sections of `messages.yml`. The player war screens (`war_hub`, `war_setup`,
+`war_roster`, `war_requests`, `war_list`) and the `war` messages ship in English only for now, whatever
+the `language`.
+
+## Setting up arenas
+
+Everything is under `/clanadmin war`, behind `exyliaclans.admin.war`. Typed with no arguments in game
+it opens the war setup menu (arenas, kits and wars in progress), where all of the below can be done by
+clicking.
+
+| Command | Does |
+|---|---|
+| `/clanadmin war arena create <id>` | Creates an arena |
+| `/clanadmin war arena setspawn <id> <a\|b>` | Team spawn at your position (`1` and `2` work too) |
+| `/clanadmin war arena setspectator <id>` | Spectator spawn at your position |
+| `/clanadmin war arena setbounds <id>` | Starts a two-corner selection; finishing it saves the schematic |
+| `/clanadmin war arena saveschematic <id>` | Saves the arena's current blocks as the state it is reset to |
+| `/clanadmin war arena toggle <id>` | Enables or disables it |
+| `/clanadmin war arena tp <id>` | Teleports you to it |
+| `/clanadmin war arena info <id>` | Opens its menu (prints it from the console) |
+| `/clanadmin war arena list` | Opens the arena list (prints it from the console) |
+| `/clanadmin war arena delete <id>` | Deletes it and its schematic |
+
+An arena can only be enabled once it has both spawns, the spectator spawn and bounds; the refusal lists
+what is missing. An arena with a war in it cannot be deleted or re-saved. A random-arena war picks any
+enabled, free arena; with none free the war cannot be sent.
+
+## Kits
+
+| Command | Does |
+|---|---|
+| `/clanadmin war kit create <id>` | Opens an empty loadout editor; saving creates the kit |
+| `/clanadmin war kit edit <id>` | Opens the editor with the kit's items |
+| `/clanadmin war kit icon <id>` | Uses the item in your hand as the kit's icon |
+| `/clanadmin war kit list` | Opens the kit list (prints it from the console) |
+| `/clanadmin war kit delete <id>` | Deletes it |
+
+The editor keeps armour, off hand, inventory and hotbar in place, and fighters receive the kit exactly
+as laid out.
+
+## Placeholders
+
+| Placeholder | Description |
+|---|---|
+| `%exyliaclans_war_wins%` | The viewer's clan's war wins |
+| `%exyliaclans_war_losses%` | Its war losses |
+| `%exyliaclans_war_draws%` | Its draws |
+| `%exyliaclans_war_in_war%` | `true` while the viewer is fighting in or spectating a war |
+
+## Storage
+
+| Table | Holds |
+|---|---|
+| `clan_war_arenas` | Each arena's spawns, spectator spawn, corners and whether it is enabled |
+| `clan_war_kits` | Each kit's icon and items |
+| `clan_war_records` | Wins, losses and draws per clan |
+| `clan_war_returns` | Where a real-loss fighter came from, so a restart mid-war still sends them back |
+
+Arena schematics are saved through ExyliaLib as `clanwar_<id>`.
