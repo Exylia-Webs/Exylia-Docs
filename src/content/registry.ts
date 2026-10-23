@@ -1379,7 +1379,7 @@ export const plugins: Plugin[] = [
       en: "Ranked matchmaking, duels, parties, a per-player kit editor, arenas that clone and regenerate themselves, nine ELO ranks and seasons — the largest plugin in the ecosystem.",
       es: "Matchmaking clasificatorio, duelos, parties, editor de kits por jugador, arenas que se clonan y regeneran solas, nueve rangos de ELO y temporadas: el plugin más grande del ecosistema.",
     },
-    version: "1.0.9",
+    version: "1.3.0",
     status: "stable",
     category: { en: "Gamemode", es: "Modo de juego" },
     minecraft: "1.21+",
