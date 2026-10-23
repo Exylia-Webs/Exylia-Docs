@@ -1572,7 +1572,7 @@ export const plugins: Plugin[] = [
       en: "Tags, nick, rank, chat and shadow colours, fonts and modifiers a player wears from a menu, custom tags and colours they mix themselves, grants that expire, loadouts — and a full chat module underneath: channels, formats, a bilingual filter, mentions, emojis, item renders, whispers and an announcer.",
       es: "Etiquetas, colores de nick, de rango, de chat y de sombra, fuentes y modificadores que el jugador se pone desde un menú, etiquetas y colores que se mezcla él mismo, concesiones que caducan, loadouts — y debajo un módulo de chat completo: canales, formatos, un filtro bilingüe, menciones, emojis, ítems mostrados, susurros y un anunciador.",
     },
-    version: "1.0.0",
+    version: "1.3.0",
     status: "stable",
     category: { en: "Social", es: "Social" },
     minecraft: "1.21+",
