@@ -1685,7 +1685,7 @@ export const plugins: Plugin[] = [
       en: "Classic mines refilled from a weighted composition and realistic mines whose blocks grow back one by one, all built from a menu, with custom loot, lucky rewards, timed boosts, Fortune rules, holograms and statistics.",
       es: "Minas clásicas que se rellenan desde una composición ponderada y minas realistas cuyos bloques vuelven a crecer uno a uno, todo montado desde un menú, con botín propio, premios de suerte, potenciadores temporales, reglas de Fortuna, hologramas y estadísticas.",
     },
-    version: "1.6.0",
+    version: "1.7.0",
     status: "stable",
     category: { en: "Survival", es: "Survival" },
     minecraft: "1.21+",
