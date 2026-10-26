@@ -1,0 +1,57 @@
+---
+title: "API"
+description: "Spawning ExyliaMobs' templates from another plugin through ExyliaLib's shared mob store, reading and saving them with their reward lists, and opening the mob screen."
+---
+
+ExyliaMobs has no API artifact of its own. It answers ExyliaLib's **shared mob store**: on start it hands
+the library a `MobStore`, and any plugin asks for it with `Mobs.store()`, without depending on ExyliaMobs.
+The store's types are ExyliaLib's, documented on
+[The shared store](/docs/exylialib/mobs-and-models#the-shared-store).
+
+```java
+Mobs.store().ifPresent(store -> {
+    MobTemplate template = store.mobs().template("stone_golem");
+    if (template != null) store.mobs().spawn(template, spot);
+});
+```
+
+`Mobs.store()` is empty when ExyliaMobs is not installed, and goes empty again when it disables.
+
+<Callout type="note" title="Adding ExyliaLib to your project">
+The artifact, the repository and the `plugin.yml` line are on the [public API page](/docs/exylialib/api).
+Add `ExyliaMobs` to your `softdepend` so it enables first.
+</Callout>
+
+## What the store answers
+
+| Method | What it does |
+|---|---|
+| `mobs()` | ExyliaMobs' `PluginMobs`: its registered templates, spawns and handlers. |
+| `stored()` | Every template in the database, read now rather than from the cache, each with its `Payouts`. A row this server cannot read is left out. |
+| `save(template, payouts)` | Stores a template and registers it. `payouts` `null` keeps what the stored row pays (nothing for a new one). Completes once the write landed. |
+| `edit(player, id, back)` | Opens ExyliaMobs' mob screen on a template. Its BACK runs `back`; `null` returns to the mob list. `false` when there is no such template. |
+
+## Payouts
+
+`MobStore.Payouts` is what ExyliaMobs pays beyond the template's own rewards, which are the top damager's
+list.
+
+| Field | Meaning |
+|---|---|
+| `booster` | The booster source. Blank is `mobs`. |
+| `mode` | The mob's item delivery, `DROP` or `INVENTORY`. Blank follows `reward-mode` in `config.yml`. |
+| `lists` | Reward lists by name: `SECOND`, `THIRD`, `SHARED`, `HIT`, `LAST_HIT`, `EVERYONE`, `NEARBY`, `DEATH`, `ESCAPED`. Unknown names are ignored. |
+
+Saving with payouts replaces every list it names and empties those it does not. Each list's own delivery
+mode, set on ITEM DELIVERY, is kept as stored. See [Rewards](/docs/exyliamobs/rewards) for who each list
+pays.
+
+## Mobs spawned through the store
+
+A mob spawned through `store.mobs()` is ExyliaMobs': it pays its reward lists like any other, counts on
+`/mobsadmin`, and is removed by `/mobsadmin killall`. A listener added with `onHit` or `onDeath` on the
+store's `PluginMobs` hears every one of its mobs, so filter by your own entities, and take the handler off
+again when your plugin disables.
+
+ExyliaRewards uses exactly this for vote party piñatas: it spawns the chosen mob through the store, and
+its EDIT MOB button calls `edit` with a `back` that returns to the piñata.

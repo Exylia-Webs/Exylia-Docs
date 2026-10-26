@@ -1,0 +1,86 @@
+---
+title: "API"
+description: "Lee juegos, partidas e historiales, abre un lobby o una mesa en nombre de un jugador, cancela una partida, y escucha cuándo se crean, se ocupan, empiezan y terminan las partidas."
+---
+
+`TableService` es como otro plugin lee los juegos y las partidas de ExyliaTabletop, mete a un jugador en su
+flujo (un lobby, una mesa, una invitación) y cancela una partida. Cuatro eventos siguen una partida desde
+que está a punto de crearse hasta su pago.
+
+```java
+ExyliaAPI.get(TableService.class).ifPresent(tables -> tables.openLobby(player, "tictactoe"));
+```
+
+<Callout type="note" title="Añadirla a tu proyecto">
+El artefacto, el repositorio y la línea de `plugin.yml` son los mismos para todos los plugins de Exylia y
+están en la [página de la API pública](/docs/exylialib/api). El contrato de Tabletop llegó en la API pública
+**3.0.0**, en el paquete `net.exylia.lib.api.tabletop`.
+</Callout>
+
+Un `Optional` vacío significa que el servidor no tiene ExyliaTabletop, no que algo haya fallado. El servicio
+se registra cuando todas las partes del plugin están en marcha y desaparece cuando se desactiva.
+
+## Métodos
+
+### Juegos y partidas
+
+| Método | Qué hace |
+|---|---|
+| `List<TableGameInfo> games()` | Todos los juegos de esta versión, jugables o no. |
+| `Optional<TableGameInfo> game(String gameId)` | Un juego, por su id. |
+| `Optional<TableMatch> match(String matchId)` | Una partida en vivo, por su id. |
+| `Optional<TableMatch> matchOf(UUID player)` | La partida en vivo en la que un jugador tiene asiento: una mesa abierta, una invitación o una en juego. |
+| `boolean isPlaying(UUID player)` | Si el jugador está en una partida que ha salido del lobby: empezando o en juego. |
+| `List<TableMatch> matches()` | Todas las partidas en vivo. |
+| `List<TableMatch> offers(String gameId)` | Las mesas abiertas de un juego que puede ocupar cualquiera, de la más antigua a la más reciente. |
+| `CompletableFuture<TableStats> stats(UUID player, String gameId)` | El historial de un jugador en un juego; ceros si nunca lo jugó. Se lee de memoria para un jugador conectado y de la base de datos en otro caso. |
+
+### Actuar como un jugador
+
+Estos ejecutan el propio flujo del jugador, con las mismas comprobaciones y mensajes que los comandos, y
+vuelven antes de cobrar ningún importe. El importe y la moneda que se pasan se validan, nunca se dan por
+buenos.
+
+| Método | Qué hace |
+|---|---|
+| `openLobby(Player player, String gameId)` | Abre el lobby de un juego, para un NPC o el menú de otro plugin. |
+| `createOffer(Player host, String gameId, String currency, BigDecimal stake)` | Abre una mesa, como hace `/<game> create <importe> <moneda>`. |
+| `duel(Player host, Player target, String gameId, String currency, BigDecimal stake)` | Invita a un jugador, como hace `/<game> duel <jugador> <importe> <moneda>`. |
+| `join(Player player, String matchId)` | Ocupa un asiento en una mesa abierta, o acepta una invitación enviada a este jugador. No pide confirmación. |
+| `forfeit(Player player)` | Saca al jugador de donde esté: un asiento en espera se reembolsa, una mesa que tiene abierta se cierra, una partida en juego se pierde. |
+
+### Actuar como el servidor
+
+| Método | Qué hace |
+|---|---|
+| `boolean cancel(String matchId)` | Cancela una partida en vivo y reembolsa todo lo puesto en juego. Responde si existía esa partida. |
+
+## Lo que devuelve
+
+| Tipo | Contiene |
+|---|---|
+| `TableGameInfo` | `id`, `displayName` (con tokens de la paleta), `minPlayers`, `maxPlayers`, `playable` (si el servidor acepta mesas de él ahora mismo) y `commands` (el primero es el comando). |
+| `TableMatch` | Una copia de la partida tal como estaba al leerla: `id` (como lo admite `/tabletopadmin cancel`), `gameId`, `state`, `currency`, `stake` (lo que paga cada asiento), `pot` (todo lo retenido hasta ahora), `seats` (el anfitrión primero), `invitee` (`null` en una mesa abierta), `createdAt` y `startedAt` (milisegundos epoch, `0` antes de empezar). `host()`, `isDuel()` y `seatOf(uuid)` la leen. |
+| `TableSeat` | `player` y `name`. El asiento 0 es el anfitrión. |
+| `MatchState` | `CREATING`, `OPEN`, `STARTING`, `PLAYING`, `ENDED`, en ese orden. |
+| `TableStats` | `wins`, `losses`, `draws`, `played()` y `winRate()`. |
+
+`TableMatch.arena` siempre es `null` aquí: las partidas se juegan donde está cada jugador, nunca en una arena.
+
+## Eventos
+
+| Evento | Cancelable | Cuándo |
+|---|---|---|
+| `TableMatchCreateEvent` | sí | Un jugador está a punto de abrir una mesa o enviar una invitación, antes de cobrar su importe. `getHost()`, `getInvitee()` (`null` en una mesa abierta), `getGame()`, `getCurrency()`, `getStake()`. |
+| `TableMatchJoinEvent` | sí | Un jugador está a punto de ocupar un asiento, antes de cobrar su importe. No se lanza para el asiento del anfitrión. `getMatch()`, `getPlayer()`. |
+| `TableMatchStartEvent` | no | Todos los jugadores están sentados y se está jugando el primer turno. `getMatch()`. |
+| `TableMatchEndEvent` | no | Una vez por partida, incluidas las mesas que expiraron, se rechazaron o se cancelaron. `getMatch()`, `getWinner()` (`null` en un reembolso), `getReason()`, `getPrize()` y `getFee()` (cero en un reembolso). |
+
+`EndReason` es `WIN`, `DRAW`, `FORFEIT` (los demás se fueron) o `CANCELLED`; `isRefund()` es verdadero en un
+empate o una cancelación. Un evento de creación o de unión cancelado no le envía nada al jugador: el plugin
+que lo canceló dice por qué.
+
+Cada partida de un evento es una instantánea. Pregunta `match(id)` cuando necesites el estado actual. Los
+eventos se lanzan desde el hilo que llegó a ese paso, y se marcan como asíncronos cuando no es el hilo
+principal: en Folia, no toques un bloque, un chunk ni otra entidad desde un handler sin un salto de
+planificador propio.

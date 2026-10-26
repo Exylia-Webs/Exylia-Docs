@@ -1,0 +1,89 @@
+---
+title: "API"
+description: "Leer y controlar el combate desde otro plugin con la fachada Combat de ExyliaLib, y los eventos de entrada, salida y desconexión en combate."
+---
+
+ExyliaCombat no tiene una API propia de la que depender. Los demás plugins usan la fachada `Combat` de
+ExyliaLib (`net.exylia.lib.util.combat`), y ExyliaCombat se registra detrás de ella. El código escrito así
+sigue funcionando, y compilando, en un servidor donde responde DeluxeCombat o PvPManager, o donde no hay
+ningún plugin de combate.
+
+```java
+if (Combat.isTagged(player)) {
+    Text.of("{error}You cannot warp while in combat.").send(player);
+    return;
+}
+
+Combat.tag(target, attacker, Duration.ofSeconds(20));
+```
+
+<Callout type="note" title="Añadirla a tu proyecto">
+El artefacto, el repositorio y la línea de `plugin.yml` son los mismos para todos los plugins de Exylia y
+están en la [página de la API pública](/docs/exylialib/api). La fachada en sí se describe en
+[jugadores de ExyliaLib](/docs/exylialib/jugadores#combate).
+</Callout>
+
+## A qué responde ExyliaCombat
+
+| Método | Lo responde |
+|---|---|
+| `boolean isTagged(Player)` | El proveedor activo. |
+| `Duration remaining(Player)` | El tiempo que queda, `Duration.ZERO` si no está en combate. |
+| `Optional<Player> opponentOf(Player)` | El rival, con el proveedor integrado y con CelestCombat. |
+| `void tag(Player target, Player attacker)` | Marca durante `combat.duration` (causa `API`). Solo proveedores integrado y manual. |
+| `void tag(Player target, Player attacker, Duration)` | Marca durante ese tiempo. Si el combate en marcha dura más, se mantiene. |
+| `void untag(Player)` | Termina el combate (motivo `API`). Solo proveedores integrado y manual. |
+| `void forgetFlight(Player)` | El vuelo quitado al entrar en combate no se devuelve al terminar. Para un plugin que dio vuelo durante un tiempo y lo retiró mientras tanto. |
+| `boolean isProtected(Player)` | `true` bajo protección de novato o al reaparecer. |
+| `boolean isPvpEnabled(Player)` | El interruptor de PvP; `true` con `pvp-toggle` desactivado. |
+| `void setPvpEnabled(Player, boolean)` | Lo fija, ejecutando los comandos del módulo. No hace nada con `pvp-toggle` desactivado. |
+| `boolean canAttack(Player attacker, Player defender)` | Todas las reglas de rechazo a la vez: interruptor de PvP, protección de novato y al reaparecer. |
+| `Optional<CombatStats> statsOf(Player)` | Kills, muertes, racha, mejor racha, desconexiones en combate y puntos de un jugador conectado, con `stats` activo; vacío si no. `ratio()` es el KDR. |
+| `String providerName()` | `ExyliaCombat (BuiltIn)`, `ExyliaCombat (CelestCombat)`... |
+
+ExyliaCombat se registra con prioridad `100`. Con DeluxeCombat o PvPManager y ninguno de `pvp-toggle`,
+`newbie-protection`, `stats` y `respawn-protection` activo, no se registra, y ExyliaLib lee directamente ese
+plugin.
+
+## Eventos
+
+Los lanzan los proveedores integrado y manual en el propio hilo del jugador marcado (su hilo de región en
+Folia; `isAsynchronous()` lo indica). Un proveedor externo lanza sus propios eventos.
+
+| Evento | Cuándo |
+|---|---|
+| `CombatTagEvent` | Antes de cada entrada o renovación. Cancelable: el jugador se queda exactamente como estaba. `setDuration` cambia cuánto dura; `isRefresh()` es `true` si ya estaba en combate; `getAttacker()` puede ser `null`. |
+| `CombatUntagEvent` | Después de que termine el combate. |
+| `CombatLogEvent` | Una desconexión castigada, con el jugador aún conectado y antes del castigo. Cancelable: sin castigo, comandos, anuncio ni webhook. `getOpponent()`, `getRemaining()`. Después llega `CombatUntagEvent` con `LOGOUT` en cualquier caso. |
+
+`CombatTagEvent.getCause()`:
+
+| Causa | Cuándo |
+|---|---|
+| `DAMAGED` | Al jugador le han golpeado. |
+| `ATTACKED` | El jugador ha golpeado a alguien, o a un NPC de desconexión. |
+| `ADMIN` | `/combatadmin settag` o el panel de administración. |
+| `API` | `Combat.tag`. |
+| `OTHER` | Alguien que vuelve mientras su NPC seguía en pie, o un combate traído de otro servidor. |
+
+`CombatUntagEvent.getReason()`:
+
+| Motivo | Cuándo |
+|---|---|
+| `EXPIRED` | El combate se agotó. |
+| `KILLED` | El jugador mató a su rival, con `combat.untag-on-kill`. |
+| `DIED` | El jugador murió. |
+| `LOGOUT` | Se fue estando en combate; en una desconexión castigada llegó antes un `CombatLogEvent`. |
+| `KICKED` | Lo expulsaron y se le perdonó, sin `combat.punish-on-kick`. |
+| `ADMIN` | `/combatadmin untag` o el panel de administración. |
+| `API` | `Combat.untag`. |
+| `OTHER` | Entró en un mundo excluido, cambió de servidor con `cross-server`, o se recargó el proveedor. |
+
+```java
+@EventHandler
+public void onTag(CombatTagEvent event) {
+    if (arenas.isInArena(event.getPlayer())) {
+        event.setCancelled(true);
+    }
+}
+```

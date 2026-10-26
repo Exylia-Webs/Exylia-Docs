@@ -1,0 +1,53 @@
+---
+title: "Networks"
+description: "Keeping the combat tag when a player switches server on a proxy, punishing the switch instead, and the player record shared through Redis."
+---
+
+## The tag across servers
+
+The `cross-server` module is off by default. For a proxy network whose servers share one Redis, it decides what happens to a tagged
+player who switches server: `/server`, a portal or a server selector.
+
+<Steps>
+  <Step title="Connect every server to Redis">
+    In `database.yml` on every server, enable `database.redis` with the same host and `key-prefix`, and a
+    different `server-id` on each, matching the proxy's server names.
+  </Step>
+  <Step title="Use the built-in provider">
+    Every server needs `combat.provider` on `BUILTIN` (or `AUTO` with no other combat plugin).
+  </Step>
+  <Step title="Switch the module on">
+    `modules.cross-server: true` in `config.yml` on every server, and restart.
+  </Step>
+</Steps>
+
+`modules/cross-server/config.yml`:
+
+| Key | Default | What it does |
+|---|---|---|
+| `on-switch` | `CARRY` | `CARRY`: the player stays tagged on the new server with the time they had left, and is not punished. `PUNISH`: switching counts as logging out in combat (`combat.logout-punishment`) and nothing is carried. |
+| `arrival-window` | `10s` | How long after connecting a player still counts as arriving from another server. Only needs to cover the moment the proxy hands them over. |
+
+How `CARRY` tells a switch from a real logout: each server records an arrival in Redis as a player
+connects. When a tagged player leaves, the server they left looks for that arrival on another server; if it
+finds one, the remaining tag is sent over and nobody is punished. If not, the quit is a combat log as usual.
+On arrival the player is tagged again (cause `OTHER`) with their opponent remembered when the opponent is on
+that server, and is sent `carried` from `lang/<language>/modules/cross-server/messages.yml` (`%time%`,
+`%server%`, `%opponent%`). Kicks are never carried.
+
+While Redis is not connected, switching server while tagged counts as logging out, and the console says so.
+
+<Callout type="warning" title="/server cannot be blocked from a backend">
+Proxy commands such as `/server` run on the proxy, so `combat-restrictions` never sees them. `PUNISH` is how
+a network makes leaving that way cost something.
+</Callout>
+
+## The player record
+
+The PvP switch, newbie protection and stats live in one row per player (`exyliacombat_players`). That row is
+shared through ExyliaLib's Redis row cache, with or without the `cross-server` module: when another server
+writes the row of a player who is online here (the server they just left, saving on quit), this server reads
+it again and reloads the player's modules, so the destination never keeps or writes back a stale copy.
+
+For this to work across servers, every server must point `database.yml` at the same database. See
+ExyliaLib's [database](/docs/exylialib/database#redis).

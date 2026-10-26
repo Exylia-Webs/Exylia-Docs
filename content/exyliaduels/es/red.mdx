@@ -1,0 +1,68 @@
+---
+title: "Red"
+description: "Retar a jugadores de otros servidores, duelos con kit del servidor en un servidor de arenas, qué necesita una red y qué nunca cruza de servidor."
+---
+
+Con `network.enabled: true` los jugadores pueden retar a cualquiera de la red, y los duelos con kit del
+servidor se juegan en un **servidor de arenas**. Los dos jugadores van allí, luchan, y después vuelven cada
+uno a su servidor.
+
+## Qué necesita una red
+
+<Steps>
+  <Step title="Una base de datos">
+    La misma base de datos en todos los servidores en `plugins/ExyliaDuels/database.yml` (MySQL, MariaDB,
+    PostgreSQL o MongoDB), para compartir kits, estadísticas y el depósito.
+  </Step>
+  <Step title="Redis">
+    Redis activado en ese mismo `database.yml` en todos los servidores, con el mismo Redis y el mismo
+    `key-prefix`, y un **`server-id` distinto en cada servidor**. Consulta
+    [la base de datos de ExyliaLib](/docs/exylialib/base-de-datos).
+  </Step>
+  <Step title="ExyliaProxyUtils">
+    [ExyliaProxyUtils](/docs/exyliaproxyutils/introduccion) en el proxy, con los nombres de servidor del proxy
+    **iguales a los `server-id` de los backends**: ese nombre es adonde se mandan mensajes y jugadores.
+  </Step>
+  <Step title="Un servidor de arenas">
+    Con las arenas construidas en él, su `server-id` escrito en `network.arena-server` en todos los
+    servidores, y `network.enabled: true` también allí.
+  </Step>
+  <Step title="Economía compartida, si la hay">
+    `network.shared-economy: true` solo cuando todos los servidores leen los mismos saldos (una ExyliaEconomy
+    compartida, o una economía de Vault sobre la base de datos compartida). Si no, los jugadores de
+    servidores distintos no pueden apostar dinero.
+  </Step>
+</Steps>
+
+## Cómo va un duelo en red
+
+- `/duel <player>` encuentra al jugador esté donde esté y autocompleta todos los nombres de la red. La
+  solicitud, la respuesta y su caducidad viajan entre los dos servidores; el retado recibe el mismo bloque
+  clicable que en un solo servidor.
+- **Los duelos con kit del servidor** pueden cruzar la red. Al aceptar, los dos jugadores quedan retenidos
+  donde están, se avisa al servidor de arenas de quién va, y se manda a los dos allí. Cuando han llegado los
+  dos, lee el kit de nuevo desde la base de datos, retiene las apuestas de dinero, hace la cuenta atrás, el
+  kit y el combate, y devuelve a cada jugador a su servidor.
+- Si alguien no llega en **30 segundos**, el duelo se cancela y quien sí llegó vuelve a su servidor; no se
+  cobró nada. Un jugador que aparezca en los dos minutos siguientes se manda directamente a casa.
+- Un jugador retenido al que nunca se llega a mandar queda libre a los 30 segundos.
+- Un duelo con kit del servidor entre dos jugadores del **mismo** servidor que no tiene arena para él (ninguna
+  arena lista para ese kit, o la arena elegida no está lista aquí) también se manda al servidor de arenas.
+
+## Qué nunca cruza de servidor
+
+| Condición | Entre servidores |
+|---|---|
+| Inventario propio, con o sin riesgo | No: el inventario de un jugador vive en su servidor. "Luchar con tu propio inventario requiere que ambos estéis en el mismo servidor." |
+| Apuestas de objetos | No: "Las apuestas de objetos requieren que ambos estéis en el mismo servidor." |
+| Apuestas de dinero | Solo con `network.shared-economy: true`, y nunca en una moneda de objetos o de experiencia, que se queda en el servidor donde la lleva el jugador. |
+| Kit del servidor | Sí. |
+
+Cuando los jugadores están en servidores distintos, la pantalla de reto se abre con kit del servidor y no deja
+cambiar a inventario propio ni activar una apuesta de objetos. El selector de arenas muestra entonces todas
+las arenas activadas, porque el duelo se juega en el servidor de arenas.
+
+## Ver duelos
+
+Las arenas, los espectadores y sus schematics son locales del servidor que los construyó: un duelo en red se
+mira desde el servidor de arenas.

@@ -1,0 +1,127 @@
+---
+title: "Logging out"
+description: "What happens to a player who leaves while tagged: the punishment, who is spared, commands, the broadcast, the Discord webhook and the logout NPC."
+---
+
+Logging out is punished with the built-in provider only. With an external provider, that plugin handles its
+own combat loggers; with `MANUAL`, nobody is punished.
+
+## Who is punished
+
+A tagged player who leaves the server is a combat logger, except:
+
+| Case | What happens |
+|---|---|
+| The server is stopping or restarting | Nobody is punished. |
+| They have `combat.logout.exempt-permission` | Default `exyliacombat.bypass.logout`. Empty: nobody is exempt. |
+| They stand in a world of `combat.logout.exempt-worlds` | Not punished there. |
+| They were kicked | Punished only with `combat.punish-on-kick` (default `false`): staff kicks and anti-cheat kicks are spared. A timeout is always punished. |
+| They switched server under `cross-server` with `on-switch: CARRY` | The tag goes with them. See [Networks](/docs/exyliacombat/cross-server). |
+
+## What happens, in order
+
+<Steps>
+  <Step title="CombatLogEvent">
+    ExyliaLib's cancellable `CombatLogEvent` is fired while the player is still online. A plugin that
+    cancels it spares them everything below.
+  </Step>
+  <Step title="Commands">
+    `combat.commands-on-logout` run, with `%player%`.
+  </Step>
+  <Step title="Broadcast and webhook">
+    `combat.logout-broadcast` in `messages.yml` is sent to everyone else online, and
+    `combat.logout.webhook` is posted to Discord.
+  </Step>
+  <Step title="Punishment">
+    `combat.logout-punishment` is applied.
+  </Step>
+  <Step title="CombatUntagEvent">
+    `CombatUntagEvent` fires with `LOGOUT` (`KICKED` for a spared kick), whether or not the log was
+    cancelled.
+  </Step>
+</Steps>
+
+The `stats` module counts every punished logout as a combat log (`%exyliacombat_combat_logs%`).
+
+## The punishment
+
+| `combat.logout-punishment` | What happens |
+|---|---|
+| `KILL` (default) | The player dies on the spot, and `combat.commands-on-player-death` run. With the `logout-npc` module on, an NPC is left behind instead. |
+| `DROP_INVENTORY` | Everything they carry falls where they stood, without a death. |
+| `NOTHING` | No punishment. The commands, the broadcast and the webhook still run. |
+
+With [loot protection](/docs/exyliacombat/protection#loot-protection) on, the items a `DROP_INVENTORY`
+logout drops are reserved for the opponent, like the drops of a PvP death.
+
+## Commands
+
+`combat.commands-on-logout` and `combat.commands-on-player-death` take `%player%` (or `%player_name%`).
+A line runs from the console unless it starts with `player:`; `console:` can be written for clarity, and a
+leading `/` is dropped. At quit time only console commands are reliable.
+
+## Broadcast
+
+`combat.logout-broadcast` in `messages.yml`, sent to every other online player, with `%player%`,
+`%opponent%` and `%time%` (the tag that was left). Empty sends nothing.
+
+```yaml
+logout-broadcast: '%prefix% {highlight}%player% {error}logged out in combat{letters}.'
+```
+
+## Discord webhook
+
+`combat.logout.webhook` posts a message for every combat log, sent off the main thread. An empty `url`
+sends nothing; a URL that is not a Discord webhook is ignored with a warning in the console.
+
+| Key | Default | What it does |
+|---|---|---|
+| `combat.logout.webhook.url` | empty | The webhook URL, `https://discord.com/api/webhooks/...`. |
+| `combat.logout.webhook.message` | a red `COMBAT LOG` card | The message, in ExyliaLib's webhook template format. |
+
+The default card has the title `COMBAT LOG`, the description `**%player%** logged out in combat.`, the
+player's head as the author icon and four inline fields: Opponent, Time left, World and Punishment. Values:
+`%player%`, `%opponent%` (`-` when none), `%time%`, `%world%`, `%punishment%` (`kill`, `drop inventory` or
+`nothing`) and `%player_head%`. Every key of the template (colour, fields, buttons, footer, coalescing) is
+described in ExyliaLib's [Discord webhooks](/docs/exylialib/discord-webhooks#the-template).
+
+## The logout NPC
+
+With `logout-punishment: KILL` and the `logout-npc` module on (default), a combat logger does not die on the
+spot. They leave an NPC behind: a mannequin with their skin on 1.21.9 or newer, a zombie otherwise. It wears
+their armour and held items and has their health, attributes and potion effects. The rest of their
+inventory is held by the plugin, saved to the database.
+
+- **The NPC is killed:** its killer gets the logger's whole inventory as drops (unless the world has
+  `keepInventory`), with no experience. When the logger comes back, they are moved to where it died and
+  killed, and `commands-on-npc-death` and `combat.commands-on-player-death` run for them. With loot
+  protection on, the drops are reserved for whoever killed the NPC.
+- **The NPC survives** its lifetime: it disappears, and when the logger comes back they get everything back,
+  with the health the NPC had, where it stood.
+- **The logger comes back while the NPC still stands:** the NPC is removed, they get everything back where it
+  stood, and they are tagged again for the time it had left.
+
+The NPC's name counts down: `combat.logout-npc-name` in `messages.yml`, with `%player%`, `%time%` and
+`%health%`, and the mannequin carries `combat.logout-npc-tag` (`⚠ Disconnected in combat`) under it. It
+does not move, does not burn, is never targeted by mobs and cannot be turned into another mob. With
+WorldGuard, it can be hit wherever PvP is allowed.
+
+A restart while NPCs stand removes them and gives the loggers everything back when they return. Pending
+loggers are restored by the core even with the module switched off.
+
+`modules/logout-npc/config.yml`:
+
+| Key | Default | What it does |
+|---|---|---|
+| `reset-combat-timer` | `true` | `true`: the NPC lives for the full `combat.duration`. `false`: only for the tag the player had left. |
+| `only-player-damage` | `true` | Only players can damage the NPC. |
+| `tag-attackers` | `true` | Players who hit it are tagged. |
+| `mannequin` | `true` | A skinned mannequin on 1.21.9+. `false`, or an older server: a zombie. |
+| `announce-radius` | `50` | Players within this many blocks are sent `combat.logout-npc-spawned`. `0`: nobody. |
+| `commands-on-npc-death` | `[]` | Commands run when the owner reconnects after their NPC was killed. `%player%`; `console:` (default) or `player:`. |
+| `blacklisted-worlds` | `[]` | Worlds where no NPC is left: the logger is killed on the spot instead. |
+
+<Callout type="note" title="The NPC announcement is empty by default">
+`combat.logout-npc-spawned` in `messages.yml` ships empty, so nobody is told an NPC spawned until you write
+a line there (`%player%` is the logger).
+</Callout>

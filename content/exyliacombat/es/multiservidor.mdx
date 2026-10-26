@@ -1,0 +1,57 @@
+---
+title: "Redes"
+description: "Mantener el combate cuando un jugador cambia de servidor en un proxy, castigar el cambio en su lugar, y el registro del jugador compartido por Redis."
+---
+
+## El combate entre servidores
+
+El módulo `cross-server` está desactivado por defecto. Para una red de proxy cuyos servidores comparten un
+mismo Redis, decide qué le pasa a un jugador en combate que cambia de servidor: `/server`, un portal o un
+selector de servidores.
+
+<Steps>
+  <Step title="Conecta todos los servidores a Redis">
+    En `database.yml` de cada servidor, activa `database.redis` con el mismo host y el mismo `key-prefix`, y
+    un `server-id` distinto en cada uno, igual que los nombres de servidor del proxy.
+  </Step>
+  <Step title="Usa el proveedor integrado">
+    Todos los servidores necesitan `combat.provider` en `BUILTIN` (o `AUTO` sin otro plugin de combate).
+  </Step>
+  <Step title="Activa el módulo">
+    `modules.cross-server: true` en `config.yml` de cada servidor, y reinicia.
+  </Step>
+</Steps>
+
+`modules/cross-server/config.yml`:
+
+| Clave | Por defecto | Qué hace |
+|---|---|---|
+| `on-switch` | `CARRY` | `CARRY`: el jugador sigue en combate en el servidor nuevo con el tiempo que le quedaba, y no se le castiga. `PUNISH`: cambiar de servidor cuenta como desconectarse en combate (`combat.logout-punishment`) y no se traslada nada. |
+| `arrival-window` | `10s` | Cuánto tiempo después de conectarse un jugador sigue contando como recién llegado de otro servidor. Solo tiene que cubrir el momento en que el proxy lo traspasa. |
+
+Cómo distingue `CARRY` un cambio de servidor de una desconexión real: cada servidor apunta una llegada en
+Redis cuando un jugador se conecta. Cuando un jugador en combate se va, el servidor que deja busca esa
+llegada en otro servidor; si la encuentra, envía el combate restante y no se castiga a nadie. Si no, la
+salida es una desconexión en combate como siempre. Al llegar, el jugador vuelve a entrar en combate (causa
+`OTHER`), con su rival recordado si el rival está en ese servidor, y se le envía `carried` de
+`lang/<language>/modules/cross-server/messages.yml` (`%time%`, `%server%`, `%opponent%`). Las expulsiones
+nunca se trasladan.
+
+Mientras Redis no está conectado, cambiar de servidor en combate cuenta como desconectarse, y la consola lo
+avisa.
+
+<Callout type="warning" title="/server no se puede bloquear desde un backend">
+Los comandos del proxy como `/server` se ejecutan en el proxy, así que `combat-restrictions` nunca los ve.
+`PUNISH` es la forma de que irse así tenga un coste en una red.
+</Callout>
+
+## El registro del jugador
+
+El interruptor de PvP, la protección de novatos y las estadísticas viven en una fila por jugador
+(`exyliacombat_players`). Esa fila se comparte a través de la caché de filas por Redis de ExyliaLib, con o
+sin el módulo `cross-server`: cuando otro servidor escribe la fila de un jugador que está conectado aquí (el
+servidor que acaba de dejar, guardando al salir), este servidor la vuelve a leer y recarga los módulos del
+jugador, así que el destino nunca se queda con una copia vieja ni la vuelve a escribir.
+
+Para que funcione entre servidores, todos tienen que apuntar `database.yml` a la misma base de datos.
+Consulta la [base de datos](/docs/exylialib/base-de-datos#redis) de ExyliaLib.

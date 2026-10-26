@@ -1,0 +1,133 @@
+---
+title: "Kill rewards"
+description: "The kill-abuse checks that keep farmed kills out of stats and rewards, and what a PvP kill pays: money, experience, rewards, permission groups, streak milestones and bounties."
+---
+
+Every PvP kill is first judged by `kill-abuse`, then counted by `stats` and paid by `kill-rewards`, each only
+when the verdict lets it.
+
+## Kill abuse
+
+The `kill-abuse` module flags kill farming. Three checks run on every kill by a player, in this order:
+
+| Check | Flags a kill when |
+|---|---|
+| `repeat-kills` | The killer killed the same victim more than `max-kills` times within `window`. |
+| `same-address` | Killer and victim are online from the same address now, or, with `check-history`, both used one address within `history-window` (ExyliaLib's account history, network wide when every server shares the database). |
+| `low-playtime` | The victim has played less than `minimum` on this server. |
+
+Each check has its own `response`. A flagged kill can be kept out of the stats, out of the rewards, or
+both, and the plugin can tell the killer, the victim and staff, run commands and lock the pair out.
+
+`modules/kill-abuse/config.yml`:
+
+| Key | Default | What it does |
+|---|---|---|
+| `repeat-kills.enabled` | `true` | |
+| `repeat-kills.max-kills` | `1` | Kills of the same victim that still count within the window. The next one is flagged. |
+| `repeat-kills.window` | `5m` | How far back kills of the same victim are counted. `0s` turns this check off. |
+| `same-address.enabled` | `true` | |
+| `same-address.check-history` | `true` | Also flag accounts that joined from one address in the past. `false`: only players online from the same address now. |
+| `same-address.history-window` | `30d` | How recently both accounts must have used the address. |
+| `low-playtime.enabled` | `false` | |
+| `low-playtime.minimum` | `15m` | A victim who has played less than this is flagged. |
+| `notify-permission` | `exyliacombat.notify.killabuse` | Who is told about detections with `notify-staff` on. The console is told too. |
+| `bypass-permission` | empty | Kills by or of a player with this permission are never checked. Empty: nobody skips the checks. |
+
+Every check's `response`:
+
+| Key | `repeat-kills` | `same-address` | `low-playtime` | What it does |
+|---|---|---|---|---|
+| `deny-stats` | `true` | `true` | `false` | The kill is not counted in the stats. |
+| `deny-rewards` | `true` | `true` | `true` | The kill gives no rewards and takes nothing from the victim. |
+| `warn-killer` | `true` | `true` | `true` | Tells the killer why it did not count. |
+| `warn-victim` | `false` | `false` | `false` | Tells the victim too. |
+| `notify-staff` | `false` | `true` | `false` | Tells every player with `notify-permission`. |
+| `lockout` | `0s` | `0s` | `0s` | After a detection, every kill between the two is treated the same way for this long, whichever check would have caught it. |
+| `commands` | `[]` | `[]` | `[]` | Commands run for the killer on a detection, not again during the lockout. `%player_name%`, `%victim%`, `%reason%`; prefixes `console:` (default), `player:`, `player-proxy:` or `console-proxy:`. Example: `console:kick %player_name% Kill farming`. |
+
+Text in `lang/<language>/modules/kill-abuse/messages.yml`: `warn-killer`, `warn-victim`, `staff-notice`, and
+the name of each check under `reasons` (`same victim too often`, `same address`, `victim is too new`).
+
+## Kill rewards
+
+The `kill-rewards` module pays for PvP kills that `kill-abuse` lets through. Kills in `disabled-worlds` or in
+a region of `disabled-regions` (WorldGuard or ExyliaLib region ids) give and take nothing.
+
+### Money
+
+Moved through the economy chosen in ExyliaLib's `economy.yml`. Off by default.
+
+| Key | Default | What it does |
+|---|---|---|
+| `money.enabled` | `false` | |
+| `money.currency` | empty | Currency id from ExyliaLib's `economy.yml`. Empty: the default currency. |
+| `money.killer-reward` | `50` | Paid to the killer out of nowhere on every kill, scaled by their group multiplier. |
+| `money.steal-percent` | `0` | Percent of the victim's balance moved to the killer. `0`: nothing is stolen. |
+| `money.max-steal` | `0` | Most a single kill can steal. `0`: no limit. |
+| `money.victim-loss` | `0` | Taken from the victim on every kill and given to nobody, never more than they have left. |
+
+The killer is sent `money-gained` and the victim `money-lost`, with `%amount%` in the currency's format.
+
+### Experience
+
+| Key | Default | What it does |
+|---|---|---|
+| `experience.steal-percent` | `0` | Percent of the experience the victim drops that goes straight to the killer instead of falling as orbs. `0`: orbs drop as usual. On a flagged kill the orbs fall where the victim died. |
+
+### Rewards and commands
+
+| Key | Default | What it does |
+|---|---|---|
+| `killer-rewards` | `[]` | Rewards given to the killer on every kill. Money and experience in it scale with the group multiplier. |
+| `killer-commands` | `[]` | Commands run for the killer on every kill. |
+| `victim-commands` | `[]` | Commands run for the victim on every kill. |
+
+Reward lists use ExyliaLib's [reward format](/docs/exylialib/rewards#in-a-config-file): each entry is a bare
+command run by the console (`give %player_name% diamond 1`), or a block with `type` (`COMMAND`, `ITEM`,
+`MESSAGE`, `ECONOMY`, `EXPERIENCE`, `POTION`) and `command`, `itemSnapshot`, `message` or `value`, plus
+optional `chance`, `permission`, `condition`, `minAmount`/`maxAmount`, `currency` and `deliveryMessage`.
+Command lists take `%player_name%` (the player they run for), `%killer%`, `%victim%` and `%streak%`, with the
+prefixes `console:` (default), `player:`, `player-proxy:` or `console-proxy:`.
+
+### Permission groups
+
+```yaml
+groups:
+  vip:
+    permission: exyliacombat.rewards.vip
+    multiplier: 1.5
+    rewards: []
+```
+
+A killer with a group's permission gets that group's `rewards` on top. The highest `multiplier` of their
+groups scales `money.killer-reward`, the bounty and the money and experience in `killer-rewards`; what is
+stolen from the victim is not scaled.
+
+### Kill streak milestones
+
+```yaml
+killstreaks:
+  '5':
+    broadcast: true
+    rewards: []
+    commands: []
+```
+
+When a kill takes the killer's streak to a listed number, its `rewards` and `commands` are given, and with
+`broadcast` the whole server reads `streak-broadcast`. The default file lists 5, 10 and 25. Streaks are
+counted by the `stats` module, which must be on, and a kill kept out of the stats does not raise the streak.
+
+### Bounty for ending a streak
+
+| Key | Default | What it does |
+|---|---|---|
+| `shutdown.enabled` | `true` | |
+| `shutdown.minimum-streak` | `5` | The victim's streak needed for a bounty. |
+| `shutdown.money-per-streak` | `0` | Money paid to the killer per kill of the ended streak, scaled by the multiplier. Needs `money.enabled`. |
+| `shutdown.broadcast` | `true` | Announces it to the whole server with `shutdown-broadcast`. |
+| `shutdown.rewards`, `shutdown.commands` | `[]` | Given to the killer. |
+
+Text in `lang/<language>/modules/kill-rewards/messages.yml`: `money-gained`, `money-lost`,
+`experience-gained`, `streak-broadcast` (`%player%`, `%streak%`), `shutdown-broadcast` (`%killer%`,
+`%victim%`, `%streak%`) and `shutdown-bounty`.

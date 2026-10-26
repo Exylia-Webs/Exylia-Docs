@@ -1,0 +1,86 @@
+---
+title: "Network and data"
+description: "Running ExyliaRewards on several servers: one database, Redis, boosters, rewards kept for later, Folia, the tables and the statistics other plugins count."
+---
+
+## One database for the network
+
+Every module stores its data in the database `database.yml` points at: H2 in a file by default, or MySQL,
+MariaDB, PostgreSQL or MongoDB through ExyliaLib. See [Database](/docs/exylialib/database). Point the
+`database.yml` of every server at the same database and they share rewards, claims, streaks, freezes, codes,
+votes, the vote party, piñatas and referrals, and every reward is paid once across the network:
+
+- A claim is written before it is paid, and only while the row is still the one the server read, so two
+  servers or two clicks racing on one claim pay it once.
+- A code's last use, a vote, the vote party and a referral settling in are each taken by exactly one server.
+- Playtime and paid AFK time are added up from every server.
+
+AFK zones are the exception: each zone belongs to the server it was created on, and each server loads only
+its own. Piñata spawn points name their server too.
+
+### Redis
+
+With Redis on in `database.yml` (the same Redis on every server, a different `server-id` on each), the
+servers also talk to each other at once: vote announcements, the vote party and its countdown, piñatas,
+referral notices, and edits to rewards or resets made on another server reaching the server a player is on.
+Without Redis these messages stay within the server that sent them, which is all a single server needs.
+
+## Boosters
+
+Money, items and experience paid by every module go through ExyliaLib's modifiers, so booster plugins can
+multiply them by source. See [Modifiers](/docs/exylialib/economy#modifiers).
+
+| Source | What it boosts |
+|---|---|
+| `rewards` | Every reward except playtime ones, and redeem codes. |
+| `playtime-rewards` | Playtime rewards. |
+| `afk-zones` | AFK zone payouts. |
+| `votes` | Votes, vote streaks and the vote party. |
+| `referrals` | Referral payouts and milestones. |
+
+## Rewards kept for later
+
+A reward that does not fit in a full inventory, or that reaches a player who is not online on that server,
+is kept and handed over on the player's next join, with a line saying how many arrived. They wait in
+ExyliaLib's pending rewards table, `exylia_pending_rewards`, and staff can list, give or cancel them with
+`/exylialib pendingrewards`. See [Pending rewards](/docs/exylialib/rewards#pending-rewards).
+
+## Folia
+
+The plugin declares `folia-supported: true`. Everything a player sees or receives runs on that player's own
+thread, and database work runs off it.
+
+## The tables
+
+| Table | Holds |
+|---|---|
+| `rewards` | Every reward and its settings, contents, bonuses and calendar days. |
+| `rewards_claims` | What each player claimed of each reward: when, how often, the streak, the calendar days. Redeemed codes are rows here too, under `code:<code>`. |
+| `rewards_daily_claims` | Claims per reward per day, for the stats. |
+| `rewards_codes` | The redeem codes. |
+| `rewards_freezes` | Streak freezes per player. |
+| `sc_afk_zones` | The AFK zones. |
+| `rewards_afk_stats` | Paid AFK time per player. |
+| `sc_votes`, `sc_votes_seen`, `sc_voters`, `sc_vote_log`, `sc_vote_party` | Votes waiting to be paid, votes already seen, totals and streaks, the votes counted towards the party, and the party's token. |
+| `sc_vote_pinatas`, `sc_vote_pinata_spawns` | The piñatas and their spawn points. |
+| `sc_referrals` | Who named whom, and whether it settled in. |
+
+The `sc_` tables keep the names they had in ExyliaSurvivalCore, so a server that ran its AFK zones, votes or
+referrals on the same database finds them here as they were. Playtime itself is ExyliaLib's
+`exylia_playtime` table.
+
+## Statistics
+
+When ExyliaSurvivalCore is installed, its missions and seasons can count these statistics. Without it
+nothing is sent.
+
+| Statistic | Counted when |
+|---|---|
+| `rewards.claimed` | A reward other than a playtime one is claimed. |
+| `playtime.rewards` | A playtime reward is claimed. |
+| `rewards.codes` | A code is redeemed. |
+| `afkzones.rewards`, `afkzones.<zone>.rewards` | An AFK zone pays. |
+| `votes.total`, `votes.<site>` | A vote is paid. |
+| `votes.best_streak` | A player's best vote streak grows. |
+| `votes.pinata_hits`, `votes.pinata_breaks` | A piñata is hit, or broken. |
+| `referrals.brought` | A player the referrer brought settles in. |

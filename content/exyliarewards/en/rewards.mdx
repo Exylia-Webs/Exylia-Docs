@@ -1,0 +1,167 @@
+---
+title: "Rewards"
+description: "The rewards module: the eight triggers, requirements, contents, streaks and streak freezes, notices, what players see and the reward editor."
+---
+
+A reward is something a player claims: a list of money, items, commands, experience and the rest, a
+**trigger** that says when it can be claimed, and requirements that say who may. Every reward is a row in
+the database, created and edited in game with `/rewardsadmin`.
+
+## Triggers
+
+| Trigger | When it can be claimed |
+|---|---|
+| Daily | Once per day, from the reset hour. |
+| Weekly | Once per week, from the weekly reset day at the reset hour. |
+| Monthly | Once per month, from the first of the month at the reset hour. |
+| Cooldown | Again once its wait has passed since the last claim. |
+| Once | Once per player, ever. |
+| Playtime | Once the player has actively played its duration; again every repeat when it has one. |
+| Condition | Once, when a placeholder check passes, such as `%statistic_mob_kills% >= 20`. |
+| Calendar | A grid of days, one claimed per day. See [Login calendars](/docs/exyliarewards/calendar). |
+
+### The clock
+
+Daily, weekly and monthly rewards, streaks, calendars and vote days all follow one clock, set in
+`config.yml` under `clock`: a timezone, a reset hour and the day weeks start on. A day starts at the reset
+hour, not at midnight: with a reset hour of 5, 03:00 still belongs to yesterday. Nothing is scheduled: a
+player who logs in after a week away is simply in a later period, and a server that was off over a reset
+needs no catch-up.
+
+### Playtime
+
+Playtime is ExyliaLib's tracker: time a player is idle (five minutes without moving, looking, typing or
+clicking, by default) is not counted, and with every server on one database the total is network-wide. A
+playtime reward with a **repeat** can be claimed again each time the player plays that much more: the
+playtime it needs is its duration plus one repeat per claim already made. Without a repeat it is claimed
+once.
+
+### Condition
+
+A condition reward waits for its **unlock condition**, a placeholder check in ExyliaLib's condition syntax:
+operators `>=`, `<=`, `>`, `<`, `==` and `!=`. The check is asked again every minute and whenever the
+player opens a rewards screen. Once it passes, the reward is claimed once, like a one-time reward.
+
+## Requirements
+
+A reward that fails a requirement is **locked** for that player. They are asked in this order, and the
+first that fails is the line the player reads:
+
+| Requirement | Default | What it does |
+|---|---|---|
+| Permission | none | A node the player needs. A reward can be **shown** locked (default) or **hidden** from players without it. |
+| Condition | none | A placeholder check, as the unlock condition above. Unlike the unlock condition, it keeps the reward locked rather than waiting. |
+| Worlds | all | The worlds it can be claimed in, comma separated. |
+| Claim first | none | Reward IDs the player must have claimed before this one. An ID that no longer names a reward is ignored. |
+| One per address | off | Only one account per address may claim it per period: per day, week or month, per day for a calendar, within the wait for a cooldown, and once for good for the rest. |
+| Playtime range | none | The least playtime needed, and the most allowed: a reward for new players stops being offered once they pass it. |
+| Claim limit | unlimited | How many times it can be claimed in total. Once and Condition rewards, and Playtime rewards without a repeat, are always claimed once. |
+
+<Callout type="note" title="One per address asks the database">
+The accounts sharing an address come from ExyliaLib's join records, on every server of the network. When
+the database cannot answer, the claim is refused rather than let through.
+</Callout>
+
+## Contents
+
+What a reward pays is an ExyliaLib reward list: money, items, commands, experience, messages and potion
+effects, each with its own chance, amount, permission and condition. It is edited with the library's reward
+editor; see [Rewards in ExyliaLib](/docs/exylialib/rewards) for every field. In a command entry,
+`%player%`, `%reward%` and `%streak%` are filled in for the claim.
+
+How the list is handed out is the reward's **Handed out as** option:
+
+| Mode | What the player gets |
+|---|---|
+| Everything | The whole list. The default. |
+| Pick one | One group of their choice. Entries that share a name are one group; entries with no name come with every group. With more than one group, claiming opens a choice; with one, it is paid straight away. |
+| Mystery roll | One entry, rolled by weight among those the player is eligible for, and hidden until claimed. The entry's own chance still applies, so a roll can come up with nothing. |
+
+## Streaks
+
+Daily, weekly, monthly and cooldown rewards count streaks when their **Streak** option is on (the default
+for those triggers).
+
+- A calendar-period reward continues its streak when the last claim was in the period just before this
+  one; anything else starts it again at 1.
+- A cooldown reward continues it when the last claim was within two waits.
+
+**Streak bonuses** are extra reward lists by streak day, paid with the claim on that day. With a **streak
+cycle**, the days run 1 to the cycle and start over, so a 7-day cycle pays its day-7 bonus on days 7, 14,
+21 and so on. Without one (`0`), the day is the streak itself, so a day-30 bonus is paid once, on the 30th
+claim in a row.
+
+### Streak freezes
+
+A freeze keeps a streak alive over one missed period. When a claim would start a live streak over, the
+plugin counts the periods (or waits) missed since the last claim; if the player holds that many freezes,
+they are spent and the streak continues. Vote streaks spend them the same way. Freezes are held per player
+across the network.
+
+| Way | How |
+|---|---|
+| Given | `/rewardsadmin freeze give <player> <amount>`. A reward's command entry can run it, so any reward can grant freezes: `rewardsadmin freeze give %player% 1`. |
+| Bought | `/rewards freeze buy [amount]`, at `streak-freezes.price` in the plugin's `currency`, when the price is above 0. |
+| Checked | `/rewards freeze` shows the balance and the price. |
+
+`streak-freezes.max` caps how many a player may hold by buying; `0` is no cap.
+
+## Notices
+
+| Notice | When |
+|---|---|
+| Ready on join | On join, how many rewards are ready (`notifications.ready-on-join`). |
+| Ready notice | A reward with the **Ready notice** option tells the player once when it becomes claimable, checked every minute. |
+| Toasts | With `notifications.toasts` on (the default), both are said with one advancement toast, "N reward(s) ready", at most once per `toast-cooldown-minutes`; joining always shows one. Off, they are chat lines with a clickable `[✔ CLAIM]`. |
+
+Players switch these notices off for themselves in ExyliaLib's `/settings`, under **Rewards ready**.
+
+**Auto-claim** claims a reward for the player the minute it becomes ready, quietly. A pick-one reward with
+a choice to make is never auto-claimed: the player is told it is ready instead.
+
+## What players see
+
+`/rewards` opens the hub: the player's ready count, playtime and streak freezes, and a card for each part.
+
+| Card | Opens |
+|---|---|
+| Periodic rewards | Daily, weekly, monthly, cooldown, one-time and condition rewards. |
+| Playtime rewards | Playtime rewards. `/playtime` opens this list directly. |
+| Login calendar | Calendar rewards. Shown while one exists. |
+| AFK zones | The AFK zones list. Shown while the module runs. |
+| Votes | The `/vote` screen. Shown while the module runs. |
+| Referrals | The `/referral` summary. Shown while the module runs. |
+
+In a list, each reward is drawn as **ready**, **waiting** (with its countdown), **used** or **locked** (with
+the reason). Left-click claims it, right-click previews its contents. Disabled rewards are not listed.
+Every count and countdown updates on its own while the screen is open.
+
+A claim is recorded in the database first and paid only once that write wins, so a double click or two
+servers at once pay it once. The payout is delivered by id: an item that does not fit, or a player who left
+meanwhile, gets it on their next join.
+
+## The reward editor
+
+`/rewardsadmin` lists every reward. **Create reward** asks the trigger, an ID (lowercase, no spaces) and a
+display name, then an icon, then opens the contents editor. Left-click a reward to edit it, right-click to
+delete it (asked to confirm; every claim of it is forgotten).
+
+A reward's screen has a card per part:
+
+| Card | Holds |
+|---|---|
+| Status | Enabled or disabled. A disabled reward is hidden and cannot be claimed. |
+| General | Display name, description, icon and list order (lower comes first). |
+| When | The trigger, and what it needs: the wait of a cooldown, the playtime and repeat of a playtime reward, the unlock condition, or a calendar's length, day counting and catch-up price. |
+| Requirements | Permission (and shown or hidden when locked), condition, playtime range, claim limit, claim first, one per address and worlds. |
+| Rewards | The contents, streak bonuses by day, a calendar's days and its completion bonus. |
+| Options | Streak, streak cycle, auto-claim, ready notice and how the list is handed out. |
+| Stats | Claims in total, this week, players who claimed it, active streaks and the best streak, network-wide. |
+| Player view | The preview a player sees. |
+
+A new reward starts enabled, with a one-hour wait, shown when locked, unlimited claims, the ready notice on
+and its streak on when the trigger counts one. Two admins editing different fields of one reward keep both
+changes: each edit applies to the reward as it is now.
+
+`/rewardsadmin stats` prints the same numbers for every reward. They are worked out half a minute after
+start and then every five minutes.

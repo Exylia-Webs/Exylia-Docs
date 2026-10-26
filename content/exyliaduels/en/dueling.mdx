@@ -1,0 +1,160 @@
+---
+title: "Duelling"
+description: "The challenge screen, the request, collecting the stakes, the countdown and the fight, how a duel ends and is paid, spectators and records."
+---
+
+## Challenging
+
+`/duel <player>` opens the challenge screen. It tab-completes every player on this server, and every player
+on the network when [network duels](/docs/exyliaduels/network) are on.
+
+Before the screen opens, the plugin checks that:
+
+- the player is not challenging themselves;
+- the target takes challenges (`/duel toggle` turns them off);
+- neither player is already in a duel, watching one or on their way to one, or held by another plugin
+  (an ExyliaLib session such as a queue or a minigame);
+- neither player is combat tagged;
+- at least one arena is ready (or, on a network, a kit duel could be fought on the arena server);
+- the challenger is not on the challenge cooldown (`requests.cooldown`, skipped with
+  `exyliaduels.bypass.cooldown`).
+
+### The challenge screen
+
+One screen, one card per term. Every click redraws it in place; ESC closes it and leaves nothing behind.
+
+| Card | What it does |
+|---|---|
+| **Challenge** (top) | The opponent's head. |
+| **Mode** | Switches between **own inventory** and **server kit**. Only the modes the server allows are offered. |
+| **Kit** or **Risk** | With a server kit, opens a picker of the enabled kits. With their own inventory, toggles **risk**: whether the loser's inventory goes to the winner. |
+| **Arena** | Opens a picker: **Random**, or any ready arena. An arena bound to a kit is listed as `Name (Kit)`, and picking it also picks its kit. |
+| **Money bet** | Asks for the currency, when more than one is offered, then the amount each player stakes, between the minimum and maximum; `0` removes the bet. |
+| **Item bet** | Toggles an item bet: both players fill a trade window before the fight. |
+| **Send challenge** | Checks everything again and sends it. |
+
+The screen opens on own inventory when the server allows it and an arena takes it; otherwise on the first
+enabled kit. A change that the chosen arena no longer takes (a different kit, or own inventory in a
+kit-bound arena) puts the arena back to **Random**. A money bet the player cannot afford, or under the
+minimum, is refused when typed, so the screen never shows a bet that cannot go out.
+
+### The request
+
+On send, the cooldown starts and the challenged player receives a centred block in chat: who, the mode, the
+arena, the bet and how long it waits, with clickable **[✔ ACCEPT]** and **[✘ DECLINE]** buttons. A
+challenge waits `requests.expiry` (60 seconds by default); when it runs out both are told.
+
+Each player has at most one challenge out: a new one replaces the previous. Leaving the server drops every
+challenge a player sent or received.
+
+| Command | What it does |
+|---|---|
+| `/duel accept [player]` | Accepts that player's challenge; without a name, the newest one. |
+| `/duel decline [player]` | Declines it; without a name, the newest one. The challenger is told. |
+
+## From accept to fight
+
+Accepting checks the terms, both players and both balances **again**: the server, the arenas or either
+player may have changed since the challenge was sent. Then:
+
+<Steps>
+  <Step title="Both players are claimed">
+    The moment the duel is accepted, both players are held for it, so no other plugin takes them while the
+    stakes are collected. From now until they are home, only the commands in `allowed-commands` work.
+  </Step>
+  <Step title="Item bet">
+    With an item bet, a trade window opens for both. Each puts their stake in, both see both offers live
+    (with the money bet and the mode under the title), and both confirm. Neither may confirm an empty offer.
+    Closing it, or two minutes passing, calls the duel off; nothing was lost. Confirmed items go to the
+    escrow.
+  </Step>
+  <Step title="Money bet">
+    Both stakes are taken by ExyliaLib's escrow. If either player cannot pay, the duel is called off and
+    whatever was taken goes back.
+  </Step>
+  <Step title="An arena">
+    The chosen arena, or a random one. When it is busy, a copy is made in the temporary world, up to the
+    number of copies the arena allows. When none is free, the duel is called off and every stake goes back.
+  </Step>
+  <Step title="Into the arena">
+    Each player's state is saved, then they are taken to their spawn: the challenger to spawn A, the
+    challenged player to spawn B. In a kit duel both are put in survival and dressed in the kit.
+  </Step>
+  <Step title="Countdown">
+    Both start even: survival, full health and food, no potion effects, no fire. They are frozen in place
+    through `match.countdown` (5 seconds by default) with a countdown title, and the duel scoreboard comes up.
+  </Step>
+  <Step title="Fight">
+    **FIGHT!** Both are released, and a boss bar shows the time left of `match.max-duration`.
+  </Step>
+</Steps>
+
+## The fight
+
+- **Only the two opponents can hurt each other.** This runs last, so a no-PvP region of another plugin does
+  not stop a duel, and nobody outside can join one. Fighters and spectators cannot hurt players outside the
+  duel.
+- **Nobody leaves the arena.** A fighter cannot walk out of the arena's columns, and a teleport away is
+  refused with "You can't leave the arena during a duel." Nobody else walks or teleports into an arena in use, except
+  players with `exyliaduels.admin`.
+- **Falling out loses.** Dropping more than a block below the arena's floor counts as a death.
+- **Commands** outside `allowed-commands` are refused.
+- **Dropping items** is refused in kit duels and own-inventory duels without risk: what the snapshot gives
+  back would come back twice. In a risk duel the items are the players' to throw.
+- **The ender chest** cannot be opened from the arena on: it is restored with the player afterwards.
+- **Dying** never really happens: the death is cancelled and nothing drops. During the fight it loses the
+  duel. Graves, death chests and kill rewards never see a duel death.
+
+## How a duel ends
+
+| Ending | Result |
+|---|---|
+| A player dies or falls out | The other wins. |
+| A player quits during the fight | The other wins: "… left the duel. You win!". Combat-log punishments are cancelled; quitting already forfeits. |
+| A player quits before the arena | The duel is called off; every stake goes back. |
+| `match.max-duration` runs out | A **draw**: every stake goes back. |
+| Another plugin takes a player back | Before the fight it is called off; during it, a draw. |
+
+Both see a VICTORY, DEFEAT or DRAW title. The result stays on screen for `match.end-delay` (3 seconds by
+default). Then spectators are sent back, both players are restored, the stakes are settled, and the arena is
+freed and regenerated.
+
+### Who gets what
+
+| Stake | Winner | Draw or called off |
+|---|---|---|
+| Money | Both stakes, less `bets.money.tax-percent` (5% by default), which is destroyed: a money sink. Players with `exyliaduels.bypass.tax` keep it all. | Refunded in full. |
+| Items | Both stakes, sent to the winner's inventory. | Refunded. |
+| Risk duel | The loser's whole inventory, armour and off hand (the cursor and crafting grid included). The loser keeps everything else they had. | Nobody loses anything. |
+| Server kit | Nobody keeps the kit. Both get their own things back. | Same. |
+
+A player who quit gets their things back on their next join. Wins, losses and streaks are only recorded when
+there is a winner; a draw changes no record.
+
+<Callout type="note" title="Crashes and restarts">
+Money and items are written to the escrow before they move, and each player is saved before the teleport
+in. A crash refunds what was held on the next start and gives each player their saved state on their next
+join; a risk duel's inventory is the escrow's, so it is never given back twice. On a plugin disable,
+running duels are dropped the same way, and players still online are sent to the main world's spawn.
+</Callout>
+
+## Spectators
+
+`/duel spectate <player>` watches a duel being fought on this server, from inside the arena, in spectator
+mode. It tab-completes the players fighting here. The spectator is saved and taken between the two spawns,
+a little above them; both fighters are told who is watching.
+
+A spectator cannot leave the arena's box and can only use the commands in `allowed-commands`.
+`/duel leave` sends them back exactly as they came, and so does the end of the duel. Switched off with
+`spectators.enabled: false`.
+
+## Records
+
+Every player has a record: wins, losses, current win streak, best streak and money won. `/duel stats`
+shows your own, `/duel stats <player>` anybody's the server knows.
+
+Money won only counts payouts in the configured currency (`bets.money.currency`, or the server's default):
+amounts in different currencies do not add up.
+
+`/duel toggle` stops or resumes receiving challenges; it is stored with the record, so it follows the
+player across servers sharing the database.

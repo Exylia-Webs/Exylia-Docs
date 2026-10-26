@@ -1,0 +1,132 @@
+---
+title: "Protection"
+description: "The PvP switch, newbie protection, respawn protection and loot protection: who can be hit, for how long, and who may pick up the drops."
+---
+
+## Refused hits
+
+The PvP switch, newbie protection and respawn protection each add a rule to one check that runs on every
+hit between two players, whichever provider decides the tag. A refused hit does nothing, and covers:
+
+- melee and projectiles;
+- splash potions with a harmful effect (the refused player is left out of the splash);
+- lingering clouds with a harmful effect;
+- fishing rods hooking a player.
+
+The attacker is told why, at most once every 1.5 seconds, when the module's `notify-attacker` is on. Other
+plugins ask the same check through `Combat.canAttack`, see [API](/docs/exyliacombat/api).
+
+## PvP switch
+
+The `pvp-toggle` module adds `/pvp`, which lets players switch their own PvP off. A player with PvP off can neither hit players nor be hit by
+them. The state is saved with the [player record](/docs/exyliacombat/installation#the-database).
+
+| Command | What it does |
+|---|---|
+| `/pvp`, `/pvp toggle` | Switches it. |
+| `/pvp on`, `/pvp off` | Sets it. |
+| `/pvp status` | Says whether it is on. |
+
+`modules/pvp-toggle/config.yml`:
+
+| Key | Default | What it does |
+|---|---|---|
+| `command-labels` | `[pvp, togglepvp]` | The command's names: the first is the command, the rest aliases. Read at startup. Empty: no command; staff and other plugins still switch PvP. |
+| `permission` | empty | Permission needed to switch. Empty: everybody may. |
+| `cooldown` | `30s` | Time between two switches. `0s`: no wait. |
+| `block-while-tagged` | `true` | Refuses the switch while the player is tagged. |
+| `default-state` | `true` | PvP state of a player who joins for the first time. |
+| `forced-on-worlds` | `[]` | Worlds where PvP is always on, whatever players chose. |
+| `forced-off-worlds` | `[]` | Worlds where PvP is always off: nobody fights there. |
+| `notify-attacker` | `true` | Tells a player whose hit was refused why. |
+| `commands-on-enable`, `commands-on-disable` | `[]` | Commands run when a player switches PvP on or off, with `%player_name%`. Prefixes `console:` (default), `player:`, `player-proxy:` or `console-proxy:`. |
+
+Text in `lang/<language>/modules/pvp-toggle/messages.yml`: `state-on` and `state-off` (`%state%` in every
+other line), `enabled`, `disabled`, `already-enabled`, `already-disabled`, `status`, `cooldown`, `tagged`,
+`no-permission`, `forced-world`, `attacker-disabled`, `defender-disabled` and `admin-set`.
+
+With newbie protection on, `/pvp on` from a protected player first asks them to drop their protection.
+
+## Newbie protection
+
+With the `newbie-protection` module, players who join for the first time cannot hit players nor be hit by them for a while. They can drop it
+themselves with `/newbie disable`, after a confirmation; it cannot be given back except by staff.
+
+| Command | What it does |
+|---|---|
+| `/newbie`, also `/protection` | Shows the protection left. |
+| `/newbie disable` | Asks to drop it: `DROP IT` or `KEEP IT`. |
+
+Who counts as new is `new-players`: `FIRST_JOIN` (never joined this server) or `FIRST_PLAYED_AFTER` (first
+join on or after `first-played-after`). A player who already has a record is never given it again, so
+switching the module on later does not protect everyone who already played.
+
+`modules/newbie-protection/config.yml`:
+
+| Key | Default | What it does |
+|---|---|---|
+| `duration` | `30m` | How long a new player is protected. |
+| `mode` | `PLAYTIME` | `PLAYTIME`: the time only runs while the player is online. `REAL_TIME`: it runs from the first join. |
+| `new-players` | `FIRST_JOIN` | `FIRST_JOIN` or `FIRST_PLAYED_AFTER`. |
+| `first-played-after` | empty | For `FIRST_PLAYED_AFTER`: a date (`2026-10-21`) or date and time (`2026-10-21T18:00`), in the server's time zone. |
+| `command-labels` | `[newbie, protection]` | The command's names. Read at startup. Empty: no command. |
+| `drop-with-pvp-command` | `true` | `/pvp on` (or `/pvp`) asks a protected player to drop their protection, as `/newbie disable` does. |
+| `display` | `BOSS_BAR` | How the time left is shown: `BOSS_BAR`, `ACTION_BAR` or `NONE`. |
+| `boss-bar-colour`, `boss-bar-overlay` | `GREEN`, `PROGRESS` | The boss bar's look. |
+| `remind-on-join` | `true` | Tells a protected player how long they have left each time they join. |
+| `disabled-worlds` | `[]` | Worlds where the protection does not apply. The time still runs there. |
+| `blocked-actions` | `[ENDER_PEARL]` | What a protected player cannot do: `ITEM_PICKUP`, `ITEM_DROP`, `ENDER_PEARL`, `ELYTRA`. |
+| `blocked-commands` | `[]` | Commands a protected player cannot run, matched by label: `/warp` blocks `/warp pvp`. |
+| `notify-attacker` | `true` | Tells a player whose hit was refused why. |
+| `commands-on-start` | `[]` | Commands run when a player is given protection, with `%player_name%`. |
+| `commands-on-end` | `[]` | Commands run when it runs out or is dropped. |
+
+Staff give and take it with `/combatadmin newbie give <player> [time]` and `/combatadmin newbie remove <player>`,
+or from the admin panel. A time is written `30m`, `1h30m` or `2d`; left out, it is `duration`.
+Text lives in `lang/<language>/modules/newbie-protection/messages.yml`.
+
+## Respawn protection
+
+The `respawn-protection` module is off by default. For a few seconds after respawning, other players cannot hit the player, with a boss bar
+that drains.
+
+`modules/respawn-protection/config.yml`:
+
+| Key | Default | What it does |
+|---|---|---|
+| `duration` | `5s` | How long it lasts. `0s` turns it off. |
+| `cancel-on-attack` | `true` | `true`: hitting another player ends the protection. `false`: a protected player cannot hit anyone. |
+| `only-after-pvp-death` | `false` | Only after a death caused by another player. |
+| `notify-attacker` | `true` | Tells the attacker why their hit did nothing. |
+| `boss-bar.enabled`, `colour`, `overlay` | `true`, `GREEN`, `PROGRESS` | The boss bar. |
+| `disabled-worlds` | `[]` | Worlds where nobody is protected after respawning. |
+
+Text in `lang/<language>/modules/respawn-protection/messages.yml`: `started`, `ended`, `cancelled`,
+`attacker-protected`, `defender-protected` and `boss-bar`.
+
+Both protections answer `Combat.isProtected`, so other plugins can tell a shielded player apart.
+
+## Loot protection
+
+The `loot-protection` module is off by default. After a PvP kill, the victim's drops can only be picked up by the killer for a while, and
+others who try are told whose they are. It covers the drops of a PvP death, the items of a
+`DROP_INVENTORY` logout (reserved for the opponent) and the gear dropped when somebody kills a logout NPC
+(reserved for that killer). Protected items do not merge with other stacks.
+
+`modules/loot-protection/config.yml`:
+
+| Key | Default | What it does |
+|---|---|---|
+| `duration` | `30s` | How long the drops stay reserved. `0s` turns it off. |
+| `share-with-clan` | `true` | Members of the killer's clan may pick them up too, through ExyliaLib's clan support. |
+| `share-with-allies` | `false` | Members of clans allied with the killer's may pick them up too. |
+| `glow` | `true` | Protected items glow for everybody. |
+| `timer` | `true` | Protected items show whose they are and the time left above them. |
+| `block-other-pickups` | `true` | Mobs and hoppers cannot take protected items either. |
+| `disabled-worlds` | `[]` | Worlds where drops are never protected. |
+
+| Message | Default |
+|---|---|
+| `protected-for-killer` | `%prefix% {success}The loot is yours for {info}%time% ⌚{success}.` |
+| `pickup-denied` | `This loot belongs to {highlight}%owner%{error} for {info}%time% ⌚`, at most once every 1.5s |
+| `item-label` | `{highlight}%owner% {letters_black}» {info}%time% ⌚`, above the item |

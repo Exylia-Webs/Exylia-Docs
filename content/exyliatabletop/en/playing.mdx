@@ -1,0 +1,137 @@
+---
+title: "Playing a match"
+description: "The lobby, opening a table and inviting a player, choosing the stake, the match itself, the payout and every way a match ends."
+---
+
+## Finding a match
+
+Every way in leads to the same tables:
+
+| Way | What it does |
+|---|---|
+| `/games` | Opens ExyliaLib's games catalogue. Under **Tabletop**, every game the server has on has a card with its seats and the players at it right now; clicking one opens its lobby. |
+| `/<game>` | Opens that game's lobby: `/ttt`, `/poker`, `/battleship`. |
+| `/<game> create [amount] [currency]` | Opens a table anybody may take. |
+| `/<game> duel <player> [amount] [currency]` | Invites one player. |
+
+### The lobby
+
+The lobby lists the game's open tables, oldest first, and follows them live: a table somebody opens or
+fills appears or vanishes while the screen is open, and its age counts up. Invitations that opened up to
+everyone are listed too.
+
+| Item | What it does |
+|---|---|
+| A table | The host's head, the stake, the pot once every seat is taken, the currency and how long it has been listed. A click asks "Stake … against …? The winner takes …" and seats you on a yes. |
+| **YOUR TABLE** | Your own table, while it waits. A click closes it and refunds your stake. |
+| **OPEN A TABLE** | Asks for the stake and opens a table. Replaced by **CLOSE YOUR TABLE** while you host one. |
+| **YOUR RECORD** | Your wins, losses, draws and win rate at this game, the open tables, the matches being played and the server fee. |
+| **CHALLENGE A PLAYER** | How to invite one player: `/<game> duel <player> <amount>`. |
+
+## Choosing the stake
+
+Whatever is left out of the command is asked:
+
+1. **The currency**, only when the player may play for more than one and typed no amount. A choice dialog
+   lists them.
+2. **The stake**, in an amount dialog that states the minimum (and the maximum, when there is one).
+
+An amount typed in the command uses the server's default currency when the player may use it, and the first
+currency offered otherwise. Amounts accept the short forms of ExyliaLib's economy, such as `2.5k`.
+
+Every seat pays the same stake, the host's included: the host's stake is held as soon as the table opens,
+each guest's as they sit down.
+
+### When a seat is refused
+
+| Refused because | The player reads |
+|---|---|
+| No currency they may use is offered | There is no currency you can play for. |
+| The currency typed is not offered | … can't be staked here. |
+| Not a positive amount | That is not an amount you can stake. |
+| Under `wager.minimum` or over `wager.maximum` | The smallest stake is … / The largest stake is … |
+| They cannot afford it | You need … to take that seat. |
+| They are already at a table | You are already at a table. |
+| Another plugin holds them | You are busy in … |
+| Another plugin advises against seating them | Its own reason. |
+| Two attempts inside `matches.join-cooldown` | Slow down. Try again in … |
+| The game is switched off | … is not available on this server. |
+| The escrow is still settling the last run | Tables are closed for a moment. Try again shortly. |
+
+Every check runs **before** anything is charged. A charge that fails answers "Your stake could not be taken.
+Nothing was charged."
+
+## Tables and invitations
+
+- **One table at a time.** A player has one table, open, invited or played, across the whole server.
+- **An open table** waits in the lobby for `matches.open-expiry` (10 minutes). If nobody fills it, it is
+  closed and every stake refunded.
+- **An invitation** reaches the player as a centred block in chat, with the game, the stake, the pot and
+  clickable **ACCEPT** and **DECLINE** buttons. It waits `matches.invite-expiry` (60 seconds).
+  `/<game> accept [player]` and `/<game> deny [player]` answer it too; without a name they answer the
+  newest. A decline or an expiry refunds the host.
+- **Tables of more than two** start when every seat is taken. Each new player is announced to the table
+  with the seats left and the command others join with. Once the game's minimum is seated, the host gets a
+  clickable **START** button and may also type `/<game> start` to begin without waiting. An invitation to
+  such a table opens to everyone once the invitee sits down, and from then on waits as long as an open
+  table does.
+- **Before the start**, a guest who leaves gets their seat and stake back; a host who leaves or types
+  `/<game> cancel` closes the table and every stake is refunded.
+
+## The match
+
+When the table fills, each player is seated **where they stand**: nobody is teleported, and their
+inventories stay theirs. A countdown title (`matches.start-delay`, 3 seconds) names the opponents, then:
+
+- **The room.** A closed dark room is drawn round each player, only for them, and other players are hidden
+  from them meanwhile. It is styled by `room` in `config.yml`.
+- **The board.** The game is drawn in front of their eyes, on a dark board with a softly lit frame, under a
+  heading with the game and the pot.
+- **The clock.** A boss bar says whose turn it is and how long is left.
+- **Held still.** With `arena.freeze` on, they cannot walk away from their board.
+
+The crosshair plays the game: what can be clicked glows under it with a soft sound, and a left or right click
+presses it. In turn-based games whoever moves first is drawn at random, so hosting is never an advantage. A
+turn that runs out is played for the player with an automatic move; it is never a forfeit. See
+[Games](/docs/exyliatabletop/games) for what each game plays.
+
+While a match is up the player cannot be hurt, does not get hungry, cannot drop, pick up, break or place
+anything, and cannot move items in their inventory. Commands are blocked, except the game's own commands
+(so `/ttt leave` works) and those listed in `arena.allowed-commands` (`msg`, `r`, `tell` by default). A
+blocked command answers "Leave the match with /ttt leave first."
+
+## The result
+
+| Outcome | What happens |
+|---|---|
+| A win | The winner takes the pot less the server fee: "You won …! (server fee …)" and a **VICTORY** title. Every other player reads "You lost …" and a **DEFEAT** title. |
+| A draw | Every stake is refunded, with a **DRAW** title. |
+
+The verdict also lands on each board, and stays there for three seconds before the room is taken down.
+
+The **server fee** is `wager.fee-percent` (5% by default) of the pot, rounded down to the currency's
+decimals so rounding favours the winner. The fee is not paid to anyone: it leaves the economy. A winner with
+`exyliatabletop.bypass.fee` keeps the whole pot.
+
+Every finished match counts for every seat: a win for the winner, a loss for the others, a draw for all.
+Matches called off are not counted.
+
+## How a match ends
+
+| What happens | What it costs |
+|---|---|
+| The game plays out | Paid or refunded as the result says. |
+| `/<game> leave` (asked to confirm), quitting, dying, a teleport not made by a plugin, changing world | The player forfeits. In a game of two, the opponent wins the pot. In a game of more, the player is taken out, their stake stays in the pot and the rest play on; the last one left wins. |
+| A player leaves during the start countdown | The match is called off and every stake refunded. |
+| The match outlasts its game's time limit | Called off and every stake refunded. The limit is worked out from the game's turn time and length (Ludo has its own `max-duration`). |
+| An admin calls it off | Every stake refunded: "The match was called off. Every stake was refunded." |
+| The server stops or the plugin is disabled | Every table, waiting or played, is called off and refunded. |
+
+Dying in a match keeps the inventory and the levels. `/tabletopadmin reload` does not touch matches under
+way: they are left to finish, and a game switched off only refuses new tables.
+
+<Callout type="note" title="Teleports by other plugins">
+A teleport whose cause is a plugin (or unknown) does not forfeit a match, so another plugin moving a
+player does not cost them their stake. A teleport by command, an ender pearl or a portal does; so does
+any change of world.
+</Callout>

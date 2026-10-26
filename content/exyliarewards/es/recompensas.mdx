@@ -1,0 +1,175 @@
+---
+title: "Recompensas"
+description: "El módulo de recompensas: los ocho activadores, los requisitos, el contenido, las rachas y las congelaciones de racha, los avisos, lo que ven los jugadores y el editor de recompensas."
+---
+
+Una recompensa es algo que el jugador reclama: una lista de dinero, ítems, comandos, experiencia y demás,
+un **activador** que dice cuándo se puede reclamar, y requisitos que dicen quién puede. Cada recompensa es
+una fila de la base de datos, creada y editada en el juego con `/rewardsadmin`.
+
+## Activadores
+
+| Activador | Cuándo se puede reclamar |
+|---|---|
+| Diaria | Una vez al día, desde la hora de reinicio. |
+| Semanal | Una vez a la semana, desde el día de reinicio semanal a la hora de reinicio. |
+| Mensual | Una vez al mes, desde el día uno a la hora de reinicio. |
+| Con espera | De nuevo cuando ha pasado su espera desde el último reclamo. |
+| Una vez | Una vez por jugador, para siempre. |
+| Tiempo de juego | Cuando el jugador ha jugado activamente su duración; de nuevo cada repetición si tiene. |
+| Condición | Una vez, cuando se cumple una comprobación de placeholder, como `%statistic_mob_kills% >= 20`. |
+| Calendario | Una cuadrícula de días, uno al día. Consulta [Calendarios de conexión](/docs/exyliarewards/calendario). |
+
+### El reloj
+
+Las recompensas diarias, semanales y mensuales, las rachas, los calendarios y los días de voto siguen un
+único reloj, configurado en `config.yml` en `clock`: una zona horaria, una hora de reinicio y el día en que
+empiezan las semanas. Un día empieza a la hora de reinicio, no a medianoche: con una hora de reinicio de 5,
+las 03:00 todavía son de ayer. No se programa nada: un jugador que entra tras una semana fuera simplemente
+está en un periodo posterior, y un servidor que estaba apagado durante un reinicio no necesita ponerse al
+día.
+
+### Tiempo de juego
+
+El tiempo de juego es el contador de ExyliaLib: el tiempo que el jugador está inactivo (cinco minutos sin
+moverse, mirar, escribir ni hacer clic, por defecto) no cuenta, y con todos los servidores en una base de
+datos el total es de toda la red. Una recompensa de tiempo de juego con **repetición** se puede reclamar de
+nuevo cada vez que el jugador juega eso más: el tiempo que necesita es su duración más una repetición por
+cada reclamo ya hecho. Sin repetición se reclama una vez.
+
+### Condición
+
+Una recompensa de condición espera a su **condición de desbloqueo**, una comprobación de placeholder con la
+sintaxis de condiciones de ExyliaLib: operadores `>=`, `<=`, `>`, `<`, `==` y `!=`. La comprobación se repite
+cada minuto y cada vez que el jugador abre una pantalla de recompensas. Cuando se cumple, la recompensa se
+reclama una vez, como una de una sola vez.
+
+## Requisitos
+
+Una recompensa que no cumple un requisito queda **bloqueada** para ese jugador. Se comprueban en este
+orden, y el primero que falla es la línea que lee el jugador:
+
+| Requisito | Por defecto | Qué hace |
+|---|---|---|
+| Permiso | ninguno | Un nodo que necesita el jugador. La recompensa puede **mostrarse** bloqueada (por defecto) u **ocultarse** a quien no lo tiene. |
+| Condición | ninguna | Una comprobación de placeholder, como la condición de desbloqueo. A diferencia de esta, deja la recompensa bloqueada en lugar de en espera. |
+| Mundos | todos | Los mundos donde se puede reclamar, separados por comas. |
+| Reclamar antes | ninguna | IDs de recompensas que el jugador tiene que haber reclamado antes que esta. Un ID que ya no nombra ninguna recompensa se ignora. |
+| Una por dirección | desactivado | Solo una cuenta por dirección puede reclamarla por periodo: por día, semana o mes, por día en un calendario, dentro de la espera en una con espera, y una vez para siempre en el resto. |
+| Rango de tiempo de juego | ninguno | El tiempo de juego mínimo necesario y el máximo permitido: una recompensa para jugadores nuevos deja de ofrecerse cuando lo superan. |
+| Límite de reclamos | ilimitado | Cuántas veces se puede reclamar en total. Las de Una vez y Condición, y las de Tiempo de juego sin repetición, se reclaman siempre una vez. |
+
+<Callout type="note" title="Una por dirección consulta la base de datos">
+Las cuentas que comparten dirección salen de los registros de entrada de ExyliaLib, en todos los servidores
+de la red. Cuando la base de datos no puede responder, el reclamo se rechaza en lugar de dejarlo pasar.
+</Callout>
+
+## Contenido
+
+Lo que paga una recompensa es una lista de recompensas de ExyliaLib: dinero, ítems, comandos, experiencia,
+mensajes y efectos de poción, cada uno con su probabilidad, cantidad, permiso y condición. Se edita con el
+editor de recompensas de la librería; consulta [Recompensas en ExyliaLib](/docs/exylialib/recompensas) para
+cada campo. En una entrada de comando se rellenan `%player%`, `%reward%` y `%streak%` para el reclamo.
+
+Cómo se entrega la lista lo decide la opción **Se entrega como** de la recompensa:
+
+| Modo | Qué recibe el jugador |
+|---|---|
+| Todo | La lista entera. Por defecto. |
+| Elegir una | Un grupo a su elección. Las entradas que comparten nombre forman un grupo; las entradas sin nombre van con todos los grupos. Con más de un grupo, al reclamar se abre una elección; con uno, se paga directamente. |
+| Sorteo misterioso | Una entrada, sorteada por peso entre las que el jugador puede recibir, y oculta hasta reclamarla. La probabilidad propia de la entrada sigue contando, así que un sorteo puede no dar nada. |
+
+## Rachas
+
+Las recompensas diarias, semanales, mensuales y con espera cuentan rachas cuando su opción **Racha** está
+activada (por defecto en esos activadores).
+
+- Una recompensa de periodo de calendario continúa su racha cuando el último reclamo fue en el periodo
+  justo anterior; cualquier otra cosa la reinicia en 1.
+- Una recompensa con espera la continúa cuando el último reclamo fue dentro de dos esperas.
+
+Los **bonus de racha** son listas de recompensas extra por día de racha, que se pagan con el reclamo de ese
+día. Con un **ciclo de racha**, los días van de 1 al ciclo y vuelven a empezar, así que un ciclo de 7 días
+paga su bonus del día 7 en los días 7, 14, 21 y siguientes. Sin ciclo (`0`), el día es la propia racha, así
+que un bonus del día 30 se paga una vez, en el reclamo número 30 seguido.
+
+### Congelaciones de racha
+
+Una congelación mantiene viva una racha durante un periodo perdido. Cuando un reclamo reiniciaría una racha
+viva, el plugin cuenta los periodos (o esperas) perdidos desde el último reclamo; si el jugador tiene esas
+congelaciones, se gastan y la racha continúa. Las rachas de votos las gastan igual. Las congelaciones se
+guardan por jugador en toda la red.
+
+| Forma | Cómo |
+|---|---|
+| Dadas | `/rewardsadmin freeze give <player> <amount>`. Una entrada de comando de una recompensa puede ejecutarlo, así que cualquier recompensa puede dar congelaciones: `rewardsadmin freeze give %player% 1`. |
+| Compradas | `/rewards freeze buy [amount]`, a `streak-freezes.price` en la `currency` del plugin, cuando el precio es mayor que 0. |
+| Consultadas | `/rewards freeze` muestra el saldo y el precio. |
+
+`streak-freezes.max` limita cuántas puede tener un jugador comprando; `0` es sin límite.
+
+## Avisos
+
+| Aviso | Cuándo |
+|---|---|
+| Al entrar | Al entrar, cuántas recompensas están listas (`notifications.ready-on-join`). |
+| Aviso de lista | Una recompensa con la opción **Aviso de lista** avisa al jugador una vez cuando pasa a poder reclamarse, comprobado cada minuto. |
+| Toasts | Con `notifications.toasts` activado (por defecto), los dos se dicen con un único toast de logro, "N recompensa(s) lista(s)", como mucho una vez cada `toast-cooldown-minutes`; al entrar siempre se muestra uno. Desactivado, son líneas de chat con un `[✔ RECLAMAR]` clicable. |
+
+Cada jugador puede desactivar estos avisos para sí mismo en `/settings` de ExyliaLib, en **Recompensas
+listas**.
+
+El **reclamo automático** reclama una recompensa por el jugador en el minuto en que está lista, sin
+mensajes. Una recompensa de elegir una con una elección pendiente nunca se reclama sola: se avisa al jugador
+de que está lista.
+
+## Lo que ven los jugadores
+
+`/rewards` abre el panel: las recompensas listas, el tiempo de juego y las congelaciones de racha del
+jugador, y una tarjeta por apartado.
+
+| Tarjeta | Abre |
+|---|---|
+| Recompensas periódicas | Las diarias, semanales, mensuales, con espera, de una vez y de condición. |
+| Recompensas por tiempo de juego | Las de tiempo de juego. `/playtime` abre esta lista directamente. |
+| Calendario de conexión | Las recompensas de calendario. Se muestra mientras exista alguna. |
+| Zonas AFK | La lista de zonas AFK. Se muestra mientras el módulo funciona. |
+| Votos | La pantalla de `/vote`. Se muestra mientras el módulo funciona. |
+| Referidos | El resumen de `/referral`. Se muestra mientras el módulo funciona. |
+
+En una lista, cada recompensa se dibuja como **lista**, **en espera** (con su cuenta atrás), **usada** o
+**bloqueada** (con el motivo). El clic izquierdo la reclama, el derecho muestra su contenido. Las
+recompensas desactivadas no aparecen. Cada contador y cuenta atrás se actualiza solo mientras la pantalla
+está abierta.
+
+Un reclamo se registra primero en la base de datos y solo se paga cuando esa escritura gana, así que un
+doble clic o dos servidores a la vez lo pagan una vez. El pago se entrega por id: un ítem que no cabe, o un
+jugador que se fue mientras tanto, lo recibe en su siguiente entrada.
+
+## El editor de recompensas
+
+`/rewardsadmin` lista todas las recompensas. **Crear recompensa** pregunta el activador, un ID (minúsculas,
+sin espacios) y un nombre visible, luego un icono, y después abre el editor de contenido. Clic izquierdo en
+una recompensa para editarla, clic derecho para eliminarla (pide confirmación; se olvidan todos sus
+reclamos).
+
+La pantalla de una recompensa tiene una tarjeta por apartado:
+
+| Tarjeta | Contiene |
+|---|---|
+| Estado | Activada o desactivada. Una desactivada se oculta y no se puede reclamar. |
+| General | Nombre visible, descripción, icono y orden en la lista (menor va primero). |
+| Cuándo | El activador y lo que necesita: la espera de una con espera, el tiempo y la repetición de una de tiempo de juego, la condición de desbloqueo, o la duración, el conteo de días y el precio de recuperación de un calendario. |
+| Requisitos | Permiso (y mostrar u ocultar si está bloqueada), condición, rango de tiempo de juego, límite de reclamos, reclamar antes, una por dirección y mundos. |
+| Recompensas | El contenido, los bonus de racha por día, los días de un calendario y su bonus por completar. |
+| Opciones | Racha, ciclo de racha, reclamo automático, aviso de lista y cómo se entrega la lista. |
+| Estadísticas | Reclamos en total, esta semana, jugadores que la reclamaron, rachas activas y la mejor racha, de toda la red. |
+| Vista del jugador | La vista previa que ve un jugador. |
+
+Una recompensa nueva empieza activada, con una espera de una hora, mostrada si está bloqueada, reclamos
+ilimitados, el aviso de lista activado y la racha activada cuando el activador la cuenta. Dos
+administradores editando campos distintos de una recompensa conservan los dos cambios: cada edición se
+aplica a la recompensa tal como está en ese momento.
+
+`/rewardsadmin stats` muestra los mismos números para cada recompensa. Se calculan medio minuto después del
+arranque y luego cada cinco minutos.

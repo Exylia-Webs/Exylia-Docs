@@ -1,0 +1,167 @@
+---
+title: "Duelos"
+description: "La pantalla de reto, la solicitud, cómo se recogen las apuestas, la cuenta atrás y el combate, cómo termina y se paga un duelo, los espectadores y las estadísticas."
+---
+
+## Retar
+
+`/duel <player>` abre la pantalla de reto. Autocompleta a todos los jugadores de este servidor, y a todos los
+de la red cuando los [duelos en red](/docs/exyliaduels/red) están activados.
+
+Antes de abrir la pantalla, el plugin comprueba que:
+
+- el jugador no se está retando a sí mismo;
+- el retado acepta retos (`/duel toggle` los desactiva);
+- ninguno de los dos está ya en un duelo, viendo uno o de camino a uno, ni retenido por otro plugin (una
+  sesión de ExyliaLib como una cola o un minijuego);
+- ninguno de los dos está en combate;
+- hay al menos una arena lista (o, en una red, un duelo con kit podría jugarse en el servidor de arenas);
+- quien reta no está en el cooldown de retos (`requests.cooldown`, que se salta con
+  `exyliaduels.bypass.cooldown`).
+
+### La pantalla de reto
+
+Una pantalla, una tarjeta por condición. Cada clic la redibuja en el sitio; ESC la cierra sin dejar nada
+pendiente.
+
+| Tarjeta | Qué hace |
+|---|---|
+| **Reto** (arriba) | La cabeza del rival. |
+| **Modo** | Cambia entre **inventario propio** y **kit del servidor**. Solo se ofrecen los modos que permite el servidor. |
+| **Kit** o **Riesgo** | Con kit del servidor, abre un selector con los kits activados. Con inventario propio, activa o desactiva el **riesgo**: si el inventario del perdedor pasa al ganador. |
+| **Arena** | Abre un selector: **Aleatoria**, o cualquier arena lista. Una arena ligada a un kit aparece como `Nombre (Kit)`, y elegirla elige también su kit. |
+| **Apuesta de dinero** | Pregunta la moneda, si se ofrece más de una, y luego la cantidad que apuesta cada jugador, entre el mínimo y el máximo; `0` quita la apuesta. |
+| **Apuesta de objetos** | Activa o desactiva una apuesta de objetos: los dos llenan una ventana de intercambio antes del combate. |
+| **Enviar reto** | Lo comprueba todo otra vez y lo envía. |
+
+La pantalla se abre con inventario propio cuando el servidor lo permite y alguna arena lo acepta; si no, con
+el primer kit activado. Un cambio que la arena elegida ya no acepta (otro kit, o inventario propio en una
+arena ligada a un kit) devuelve la arena a **Aleatoria**. Una apuesta de dinero que el jugador no puede
+pagar, o por debajo del mínimo, se rechaza al escribirla, así que la pantalla nunca muestra una apuesta que
+no se pueda enviar.
+
+### La solicitud
+
+Al enviar, empieza el cooldown y el jugador retado recibe un bloque centrado en el chat: quién, el modo, la
+arena, la apuesta y cuánto espera, con los botones clicables **[✔ ACEPTAR]** y **[✘ RECHAZAR]**. Un reto
+espera `requests.expiry` (60 segundos por defecto); cuando caduca se avisa a los dos.
+
+Cada jugador tiene como mucho un reto enviado: uno nuevo sustituye al anterior. Salir del servidor descarta
+todos los retos que un jugador envió o recibió.
+
+| Comando | Qué hace |
+|---|---|
+| `/duel accept [player]` | Acepta el reto de ese jugador; sin nombre, el más reciente. |
+| `/duel decline [player]` | Lo rechaza; sin nombre, el más reciente. Se avisa a quien retó. |
+
+## De aceptar a luchar
+
+Al aceptar se comprueban **otra vez** las condiciones, los dos jugadores y los dos saldos: el servidor, las
+arenas o cualquiera de los jugadores pueden haber cambiado desde que se envió el reto. Después:
+
+<Steps>
+  <Step title="Se reserva a los dos jugadores">
+    En cuanto se acepta el duelo, los dos quedan reservados para él, así que ningún otro plugin se los lleva
+    mientras se recogen las apuestas. Desde ahora hasta que estén en casa, solo funcionan los comandos de
+    `allowed-commands`.
+  </Step>
+  <Step title="Apuesta de objetos">
+    Con apuesta de objetos, se abre una ventana de intercambio para los dos. Cada uno pone su apuesta, los
+    dos ven ambas ofertas en directo (con la apuesta de dinero y el modo bajo el título), y los dos
+    confirman. Nadie puede confirmar una oferta vacía. Cerrarla, o que pasen dos minutos, cancela el duelo;
+    no se pierde nada. Los objetos confirmados van al depósito.
+  </Step>
+  <Step title="Apuesta de dinero">
+    El depósito de ExyliaLib retiene las dos apuestas. Si alguno no puede pagar, el duelo se cancela y lo
+    que se hubiera cobrado se devuelve.
+  </Step>
+  <Step title="Una arena">
+    La elegida, o una aleatoria. Si está ocupada, se hace una copia en el mundo temporal, hasta el número de
+    copias que permita la arena. Si no hay ninguna libre, el duelo se cancela y se devuelven todas las
+    apuestas.
+  </Step>
+  <Step title="A la arena">
+    Se guarda el estado de cada jugador y se les lleva a su spawn: quien reta al spawn A, el retado al
+    spawn B. En un duelo con kit los dos pasan a survival y se les equipa el kit.
+  </Step>
+  <Step title="Cuenta atrás">
+    Los dos empiezan igualados: survival, vida y comida al máximo, sin efectos de pociones, sin fuego. Quedan
+    congelados durante `match.countdown` (5 segundos por defecto) con un título de cuenta atrás, y aparece
+    el scoreboard del duelo.
+  </Step>
+  <Step title="Combate">
+    **¡LUCHA!** Los dos quedan libres, y una boss bar muestra el tiempo que queda de `match.max-duration`.
+  </Step>
+</Steps>
+
+## El combate
+
+- **Solo los dos rivales pueden hacerse daño.** Esto se aplica lo último, así que una región sin PvP de
+  otro plugin no detiene un duelo, y nadie de fuera puede meterse. Los luchadores y los espectadores no
+  pueden dañar a jugadores de fuera del duelo.
+- **Nadie sale de la arena.** Un luchador no puede salir andando de las columnas de la arena, y un
+  teletransporte hacia fuera se rechaza con "No puedes salir de la arena durante un duelo." Nadie más entra
+  andando ni por teletransporte en una arena en uso, salvo quien tenga `exyliaduels.admin`.
+- **Caer fuera es perder.** Bajar más de un bloque por debajo del suelo de la arena cuenta como una muerte.
+- **Los comandos** que no estén en `allowed-commands` se rechazan.
+- **Tirar objetos** se rechaza en los duelos con kit y en los de inventario propio sin riesgo: lo que
+  devuelve la instantánea volvería dos veces. En un duelo a riesgo los objetos son de los jugadores y pueden
+  tirarlos.
+- **El cofre de ender** no se puede abrir desde la arena: se restaura con el jugador después.
+- **Morir** nunca llega a pasar: la muerte se cancela y no cae nada. Durante el combate supone perder el
+  duelo. Las tumbas, los cofres de muerte y las recompensas por kill nunca ven una muerte en duelo.
+
+## Cómo termina un duelo
+
+| Final | Resultado |
+|---|---|
+| Un jugador muere o cae fuera | Gana el otro. |
+| Un jugador se desconecta durante el combate | Gana el otro: "… abandonó el duelo. ¡Ganas tú!". Los castigos por combat log se cancelan; desconectarse ya es rendirse. |
+| Un jugador se desconecta antes de la arena | El duelo se cancela; se devuelven todas las apuestas. |
+| Se acaba `match.max-duration` | **Empate**: se devuelven todas las apuestas. |
+| Otro plugin reclama a un jugador | Antes del combate se cancela; durante él, empate. |
+
+Los dos ven un título de VICTORIA, DERROTA o EMPATE. El resultado se queda en pantalla `match.end-delay` (3
+segundos por defecto). Después se devuelve a los espectadores, se restaura a los dos jugadores, se liquidan
+las apuestas, y la arena se libera y se regenera.
+
+### Quién se lleva qué
+
+| Apuesta | Ganador | Empate o cancelado |
+|---|---|---|
+| Dinero | Las dos apuestas, menos `bets.money.tax-percent` (5% por defecto), que se destruye: un sumidero de dinero. Quien tenga `exyliaduels.bypass.tax` se lo queda todo. | Se devuelve entero. |
+| Objetos | Las dos apuestas, enviadas al inventario del ganador. | Se devuelven. |
+| Duelo a riesgo | El inventario entero, la armadura y la mano secundaria del perdedor (incluidos el cursor y la cuadrícula de crafteo). El perdedor conserva todo lo demás que tenía. | Nadie pierde nada. |
+| Kit del servidor | Nadie se queda el kit. Los dos recuperan sus cosas. | Igual. |
+
+Quien se desconectó recupera sus cosas cuando vuelve a entrar. Las victorias, derrotas y rachas solo se
+anotan cuando hay ganador; un empate no cambia ninguna estadística.
+
+<Callout type="note" title="Crashes y reinicios">
+El dinero y los objetos se anotan en el depósito antes de moverse, y cada jugador se guarda antes de
+teletransportarlo a la arena. Un crash devuelve lo retenido en el siguiente arranque y devuelve a cada
+jugador su estado guardado cuando vuelve a entrar; el inventario de un duelo a riesgo es del depósito, así
+que nunca se devuelve dos veces. Al desactivar el plugin, los duelos en curso se descartan igual, y los
+jugadores que sigan conectados van al spawn del mundo principal.
+</Callout>
+
+## Espectadores
+
+`/duel spectate <player>` permite ver un duelo que se está jugando en este servidor, desde dentro de la
+arena, en modo espectador. Autocompleta a los jugadores que luchan aquí. Se guarda al espectador y se le lleva
+entre los dos spawns, un poco por encima; se avisa a los dos luchadores de quién está mirando.
+
+Un espectador no puede salir de la caja de la arena y solo puede usar los comandos de `allowed-commands`.
+`/duel leave` lo devuelve exactamente como vino, y el final del duelo también. Se desactiva con
+`spectators.enabled: false`.
+
+## Estadísticas
+
+Cada jugador tiene sus estadísticas: victorias, derrotas, racha actual de victorias, mejor racha y dinero
+ganado. `/duel stats` muestra las tuyas, `/duel stats <player>` las de cualquiera que el servidor conozca.
+
+El dinero ganado solo cuenta los pagos en la moneda configurada (`bets.money.currency`, o la del servidor
+por defecto): cantidades en monedas distintas no se suman.
+
+`/duel toggle` deja de recibir retos o vuelve a recibirlos; se guarda con las estadísticas, así que sigue al
+jugador entre servidores que comparten la base de datos.

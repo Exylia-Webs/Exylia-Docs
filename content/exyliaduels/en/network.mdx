@@ -1,0 +1,65 @@
+---
+title: "Network"
+description: "Challenging players on other servers, server-kit duels on an arena server, what a network needs, and what never crosses servers."
+---
+
+With `network.enabled: true` players can challenge anyone on the network, and server-kit duels are fought on
+one **arena server**. Both players are sent there, fight, and are sent back to their own server afterwards.
+
+## What a network needs
+
+<Steps>
+  <Step title="One database">
+    The same database on every server in `plugins/ExyliaDuels/database.yml` (MySQL, MariaDB, PostgreSQL or
+    MongoDB), so kits, records and the escrow are shared.
+  </Step>
+  <Step title="Redis">
+    Redis enabled in that same `database.yml` on every server, with the same Redis and `key-prefix`, and a
+    **different `server-id` on each server**. See [ExyliaLib's database](/docs/exylialib/database).
+  </Step>
+  <Step title="ExyliaProxyUtils">
+    [ExyliaProxyUtils](/docs/exyliaproxyutils/introduction) on the proxy, with the proxy's server names
+    **equal to the backends' `server-id`s**: that name is where messages and players are sent.
+  </Step>
+  <Step title="One arena server">
+    The arenas built on it, its `server-id` written in `network.arena-server` on every server, and
+    `network.enabled: true` there too.
+  </Step>
+  <Step title="Shared economy, if any">
+    `network.shared-economy: true` only when every server reads the same balances (a shared ExyliaEconomy,
+    or a Vault economy on the shared database). Otherwise players on different servers cannot bet money.
+  </Step>
+</Steps>
+
+## How a network duel goes
+
+- `/duel <player>` finds the player wherever they are and tab-completes every name on the network. The
+  request, the answer and its expiry travel between the two servers; the challenged player gets the same
+  clickable block as on one server.
+- **Server-kit duels** may span the network. On accept, both players are held where they are, the arena
+  server is told who is coming, and both are sent there. Once both have arrived it reads the kit fresh from
+  the database, holds the money bets, runs the countdown, the kit and the fight, and sends each player back
+  to their own server.
+- If somebody does not arrive within **30 seconds**, the duel is called off and whoever did arrive is sent
+  back; nothing was taken. A player who still turns up within two minutes after that is sent straight home.
+- A held player who is never sent is let go after 30 seconds.
+- A server-kit duel between two players on the **same** server that has no arena for it (no ready arena
+  for that kit, or the chosen arena is not ready here) is also sent to the arena server.
+
+## What never crosses servers
+
+| Term | Across servers |
+|---|---|
+| Own inventory, keep or risk | No: a player's inventory lives on their server. "Fighting with your own inventory needs both players on the same server." |
+| Item bets | No: "Item bets need both players on the same server." |
+| Money bets | Only with `network.shared-economy: true`, and never in a currency of items or experience, which stay on the server the player carries them on. |
+| Server kit | Yes. |
+
+When the players are on different servers the challenge screen opens on a server kit and refuses to switch
+to own inventory or turn on an item bet. The arena picker then lists every enabled arena, since the duel is
+fought on the arena server.
+
+## Spectating
+
+Arenas, spectators and their schematics are local to the server that built them: spectate a network duel
+from the arena server.

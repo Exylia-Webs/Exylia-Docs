@@ -1,0 +1,102 @@
+---
+title: "Generators"
+description: "Areas that keep mobs alive while players are near: creating one, its area, its mobs and their weights, the numbers, how a wave spawns, WorldGuard and networks."
+---
+
+A generator is an area of the map that keeps a number of mobs alive while somebody is near it. Nobody
+near, nothing spawns; the mobs already out stay.
+
+## The generator list
+
+`/mobsadmin` → **GENERATORS** lists this server's generators: their status, world, mobs, and how many are
+alive out of the maximum.
+
+| Click | What it does |
+|---|---|
+| Left-click a generator | Opens its screen. |
+| Shift-click a generator | Teleports you to the middle of its area. |
+| Right-click a generator | Deletes it, after a confirmation. Its live mobs are removed. |
+| **CREATE GENERATOR** | Asks for an id (up to 64 characters, unique across the network) and opens it. |
+
+A status reads **No area** until the area is selected, **No mobs** until it has one, then **Enabled** or
+**Disabled**.
+
+## Setting one up
+
+<Steps>
+  <Step title="Create it">
+    **CREATE GENERATOR**, and type its id.
+  </Step>
+  <Step title="Select the area">
+    **AREA** → left-click. ExyliaLib's shared selector hands you the wand: mark two corners. The box between
+    them, floor to ceiling, is the area. See [Walking somebody through a setup](/docs/exylialib/input-and-editors#walking-somebody-through-a-setup).
+  </Step>
+  <Step title="Give it mobs">
+    **MOBS** opens a list: add mobs from the ones that exist, and click one to set its weight.
+  </Step>
+  <Step title="Tune the numbers">
+    Max alive, per wave, interval, activation radius and per player. A new generator is already enabled.
+  </Step>
+</Steps>
+
+## The generator screen
+
+Every edit applies on the next pass of the generator timer.
+
+| Button | Default | What it sets |
+|---|---|---|
+| **STATUS** | Enabled | Toggles it. A disabled generator spawns nothing; its live mobs stay. |
+| **AREA** | — | Left-click selects it again; right-click teleports you there. |
+| **ACTIVATION** | 24 blocks | How close a player has to be to the area for it to spawn, `0` to `256`. `0` means inside the area. Distance is measured to the nearest block of the area; spectators do not count. |
+| **PER PLAYER** | None | Each player near beyond the first adds this many to the max alive and to each wave, `0` to `100`. |
+| **MOBS** | None | Which mobs it spawns, each with a weight. |
+| **MAX ALIVE** | 6 | It stops spawning once this many of its mobs are alive, `1` to `500`. |
+| **INTERVAL** | 20 s | How often a wave spawns, typed as `10s`, `30s` or `1m`. At least one second. |
+| **PER WAVE** | 2 | How many appear in each wave, up to the max alive, `1` to `100`. |
+| **REMOVE ITS MOBS** | — | Removes the mobs it keeps alive. It refills on its next wave. |
+| **BACK** | — | The generator list. |
+| **DELETE GENERATOR** | — | Deletes it, after a confirmation, and removes its live mobs. |
+
+### Weights
+
+Each mob in the list has a weight; a mob's chance per spawn is its weight over the total, shown in its
+lore. A weight of `0` never spawns it, and a list where every weight is `0` spawns nothing. A mob that was
+deleted is skipped.
+
+## How a wave spawns
+
+Every `tick-seconds` (2 s by default) one timer walks this server's generators. A generator spawns when it
+is enabled, has an area, its interval has passed, and at least one player is within its activation radius.
+Then, with N players near:
+
+- **room** is its max alive plus `N − 1` times its per-player number, less its mobs already alive;
+- the **wave** is its per-wave number plus the same per-player extra, cut to that room and to what is left
+  of the server-wide cap, `max-alive` in `config.yml` (200 by default, every generator together).
+
+For each mob in the wave it picks a mob by weight and a random column of the area. The spot is the highest
+solid floor in that column, inside the area's height, with two open, dry blocks above it. A column in an
+unloaded chunk, or with no such floor, is tried again elsewhere, up to four times, before that mob is
+skipped until the next wave. Generators **never load a chunk**, and each spawn runs on the thread that owns
+its spot, so the same code runs on Folia.
+
+## WorldGuard
+
+A spawn the server cancels is nearly always WorldGuard: with `mobs.block-plugin-spawning` on (its default),
+the `mob-spawning` and `deny-spawn` flags cancel plugin spawns too. ExyliaMobs leaves that decision to the
+region owner and says so in the console, once per generator:
+
+```text
+Mob generator crypt could not spawn at 120, 64, -40: … If a WorldGuard region there has mob-spawning
+or deny-spawn set, allow it for this area or set mobs.block-plugin-spawning: false in WorldGuard's world
+config. Logged once per generator.
+```
+
+## On a network
+
+Point several servers at the same database and:
+
+| What | How |
+|---|---|
+| **Mobs** | Shared. Every server spawns from the same templates, and an id is unique across all of them. |
+| **Generators** | Each belongs to the server it was created on — named by the proxy when ExyliaLib's bridge is up, or by `server-id` in the Redis block of `database.yml` otherwise — and only that server loads and runs it. Its id is still unique across the network. |
+| **Changes** | With Redis on, a mob or generator saved on one server is read again on the others at once. Without Redis, other servers pick a change up on their next restart: `/mobsadmin reload` does not read mobs or generators again. See [Redis](/docs/exylialib/database#redis). |

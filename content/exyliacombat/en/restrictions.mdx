@@ -1,0 +1,123 @@
+---
+title: "Restrictions"
+description: "Everything a tagged player cannot do, the safe zones the plugin reads from WorldGuard, ExyliaLib regions and claim plugins, and the PvP barrier."
+---
+
+The `combat-restrictions` and `pvp-barrier` modules only apply with the built-in provider, and never to a
+player with `exyliacombat.bypass` (or the old `exyliaspecials.combat.bypass`).
+
+## Combat restrictions
+
+`modules/combat-restrictions/config.yml`. Every rule has its own `enabled` switch and a `notify` switch that
+sends the rule's refusal, at most once every 1.5 seconds. Refusals for commands, inventories, teleports,
+safe zones, flight and elytra live in `messages.yml` under `combat`; the rest in
+`lang/<language>/modules/combat-restrictions/messages.yml`.
+
+### Commands, inventories and teleports
+
+| Key | Default | What it does |
+|---|---|---|
+| `commands.enabled` | `true` | Filters the commands a tagged player runs. |
+| `commands.mode` | `ALLOW` | `ALLOW`: only the listed commands work. `BLOCK`: the listed commands are refused. |
+| `commands.list` | `[/msg, /tell, /w, /r, /reply, /discord]` | Matched by exact label: `/msg` covers `/msg` and `/minecraft:msg`, not `/msgtoggle`. |
+| `inventories.enabled`, `inventories.blocked` | `true`, `[ENDER_CHEST]` | Inventory types a tagged player cannot open, such as `ENDER_CHEST`, `SHULKER_BOX` or `BARREL`. |
+| `teleports.enabled`, `teleports.blocked-causes` | `true`, `[COMMAND]` | Teleport causes refused while tagged: `COMMAND` (`/tpa`, `/home`), `PLUGIN`, `NETHER_PORTAL`... |
+
+### Movement
+
+| Key | Default | What it does |
+|---|---|---|
+| `flight.enabled` | `true` | Flight is taken away on tag and given back when the tag ends. Ignored in Creative and Spectator. |
+| `elytra.enabled` | `true` | Gliding is stopped and refused while tagged. Ignored in Creative and Spectator. |
+| `elytra.remove-worn` | `true` | Worn elytra are moved to the inventory when combat starts, and again if put back on (dropped at the player's feet, for them only, when the inventory is full). |
+| `riptide.enabled` | `false` | Riptide tridents cannot be used. |
+| `gamemode-change.enabled` | `true` | Game mode changes are refused. |
+
+A plugin that granted flight for a while and took it back during the fight calls `Combat.forgetFlight`, so
+the end of the tag does not hand that flight back.
+
+### Safe-zone rules
+
+| Key | Default | What it does |
+|---|---|---|
+| `safe-zones.enabled` | `true` | Keeps tagged players out of safe zones. |
+| `safe-zones.walking` | `true` | Walking into a safe zone is refused: the player is put back where they were. |
+| `safe-zones.teleports` | `true` | Teleporting into one, or within a hitbox of its edge, is refused. |
+| `safe-zones.ender-pearls` | `true` | A pearl that would land in one is removed in flight; one that lands anyway sends the player back to where they threw it. |
+| `safe-zones.chorus-fruit` | `true` | Chorus fruit cannot be eaten while tagged. |
+
+Safe zones come from the sources switched on under `safe-zones` in `config.yml`, see [Safe zones](#safe-zones).
+Without any of those plugins installed, these rules have nothing to check and do nothing.
+
+### Blocks and items
+
+| Key | Default | What it does |
+|---|---|---|
+| `block-break.enabled` | `false` | Breaking blocks while tagged. |
+| `block-break.mode`, `block-break.materials` | `BLACKLIST`, `[]` | `BLACKLIST`: the listed materials cannot be broken, and an empty list means none can. `WHITELIST`: only the listed ones can. |
+| `block-place.enabled`, `mode`, `materials` | `false`, `BLACKLIST`, `[]` | Placing blocks, with the same modes. |
+| `item-drop.enabled` | `false` | Dropping items. |
+| `item-pickup.enabled` | `false` | Picking items up. Its `notify` is off by default. |
+| `blocked-items.enabled` | `false` | Items that cannot be used: right-click, eat, throw or shoot. |
+| `blocked-items.items` | `[ENDER_PEARL, CHORUS_FRUIT]` | `MATERIAL`, or `MATERIAL:<custom model data>` for one model only. |
+| `blocked-potions.enabled` | `false` | Potions carrying any of the listed effects. |
+| `blocked-potions.effects` | `[INVISIBILITY]` | Effect names. |
+| `blocked-potions.drink`, `blocked-potions.splash` | `true`, `true` | Refuse drinking them, and throwing them as splash or lingering potions. |
+
+### On entering combat
+
+| Key | Default | What it does |
+|---|---|---|
+| `on-tag.disable-god-mode` | `true` | Turns god mode off: EssentialsX, CMI, or Bukkit invulnerability, through ExyliaLib. |
+| `on-tag.disable-vanish` | `false` | Makes a vanished player visible (EssentialsX, CMI). |
+| `on-tag.force-gamemode` | empty | Puts the player in this game mode, such as `SURVIVAL`. Empty leaves it alone. |
+| `on-tag.notify` | `true` | Tells the player what was turned off. |
+
+## Safe zones
+
+Wherever the plugin asks whether PvP is refused at a place (the `safe-zones` rules above, the PvP barrier
+and its `block-entry`) it asks every source switched on under `safe-zones` in `config.yml`, each only when
+its plugin is installed. All are on by default.
+
+| Key | Refuses PvP where |
+|---|---|
+| `worldguard` | A WorldGuard region, or `__global__`, sets `pvp deny`. |
+| `exylia-regions` | An ExyliaLib region declares `pvp: false`: arenas and spawns other Exylia plugins create. |
+| `lands` | A Lands area where the player's role may not attack players. |
+| `grief-prevention` | A GriefPrevention claim its config protects from PvP (`PvP.ProtectPlayersInLandClaims`). |
+| `towny` | A Towny town block, or wilderness, with PvP off. |
+| `superior-skyblock` | A SuperiorSkyblock2 island without the `PVP` island flag. |
+
+The non-WorldGuard sources are read through ExyliaLib's `PvpZones`. Region filters elsewhere
+(`disabled-regions` of kill rewards, the region values of item cooldowns) match WorldGuard and ExyliaLib
+region ids, when those two sources are on. `safe-zones` is read again on `/combatadmin reload`.
+
+## The PvP barrier
+
+While a player is tagged, the `pvp-barrier` module draws a wall along the edge of every safe zone near them,
+seen only by them, and shoves them back when they get close. Players with `exyliacombat.bypass` see no wall.
+The wall is recalculated only when the player changes block, and it is not drawn while they stand inside a
+safe zone.
+
+`modules/pvp-barrier/config.yml`:
+
+| Key | Default | What it does |
+|---|---|---|
+| `block-entry` | `true` | The wall is solid: a tagged player cannot walk through it, even with `combat-restrictions` off. |
+| `style` | `DISPLAY` | `DISPLAY`: a grid of translucent tiles on the border. `BLOCKS`: a wall of fake blocks. `DISPLAY` falls back to `BLOCKS` without PacketEvents or for clients older than 1.19.4. |
+| `material` | `RED_STAINED_GLASS` | `BLOCKS` only: the block the wall is drawn with. |
+| `color` | `F0FF1010` | `DISPLAY` only: the tile colour at the base of the wall, ARGB hex without the hash (the first two digits are the opacity). Tiles fade out upwards and towards the edges. |
+| `height` | `6` | Wall height in blocks, from the ground under each part of the border. |
+| `preview-distance` | `10` | Radius in blocks scanned for borders. The cost grows with its square. |
+| `update-interval-ticks` | `3` | Ticks between two checks of the player's position. |
+| `air-only` | `true` | `true`: only replaces invisible blocks (air, barrier, light). `false`: replaces any block. |
+| `push-back.enabled` | `true` | Shoves a tagged player away from the border. |
+| `push-back.trigger-distance` | `2.5` | Distance in blocks from the border that triggers the push. |
+| `push-back.strength` | `0.55` | Horizontal velocity applied away from the border. |
+| `push-back.cooldown-ticks` | `2` | Minimum ticks between two pushes. |
+
+<Callout type="tip" title="What the barrier costs">
+WorldGuard is asked once per set of overlapping regions. Every other source is asked once per column
+scanned, about `(2 × preview-distance + 3)²` lookups for each source, and only when a tagged player changes
+block. Keep `preview-distance` modest on a server with many claim sources.
+</Callout>

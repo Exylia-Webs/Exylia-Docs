@@ -1,0 +1,159 @@
+---
+title: "Votos"
+description: "Votos a través de NuVotifier: votes.yml, cómo se paga un voto una sola vez, rachas de votos, recordatorios, la fiesta de votos de red y sus piñatas de ExyliaMobs."
+---
+
+El módulo de votos paga a los jugadores por votar por el servidor. Los votos llegan a través de
+**NuVotifier** (o el Votifier original), lo que pagan está en `votes.yml`, y la fiesta de votos se edita en
+el juego con `/voteadmin` (`exyliarewards.votes.admin`).
+
+Sin NuVotifier el módulo sigue funcionando: la consola lo avisa, y los votos solo llegan con
+`/voteadmin fake <player> [service]`, que envía un voto de prueba por todo el camino, recompensas y fiesta
+incluidas.
+
+## votes.yml
+
+```yaml
+sites:
+  minecraft-mp:
+    name: '{primary}&lMINECRAFT-MP'
+    url: 'https://minecraft-mp.com/server/000000/vote/'
+    icon: PAPER
+
+vote:
+  rewards:
+    - type: ECONOMY
+      value: '30'
+  message: '%prefix% {success}Thanks for voting on {highlight}%service%{success}! ...'
+
+streaks:
+  '7':
+    rewards:
+      - type: ECONOMY
+        value: '150'
+    message: '%prefix% {letters}A {highlight}7-day {letters}vote streak ...'
+
+party:
+  rewards:
+    - type: ECONOMY
+      value: '20'
+  message: '%prefix% {letters}Vote party reward {letters_black}» {highlight}%rewards%'
+  commands: []
+```
+
+| Sección | Qué es |
+|---|---|
+| `sites` | Las páginas que lista `/vote`: `name`, `url` e `icon` de cada una. Cambia las URL por las páginas de tu servidor. |
+| `vote` | Se paga por cada voto. |
+| `streaks` | Se paga una vez cuando la racha de votos diarios del jugador llega exactamente a ese número de días. El archivo incluido trae 3, 7 y 30. |
+| `party` | Se paga a todos los conectados en todos los servidores cuando empieza la fiesta de votos. Los `commands` se ejecutan **una vez para toda la red**, desde la consola de un servidor. |
+
+Cada bloque acepta `rewards`, una lista de recompensas de ExyliaLib (consulta
+[Recompensas en ExyliaLib](/docs/exylialib/recompensas#en-un-archivo-de-config)), y `message`, que se envía
+cuando el bloque se ha pagado (vacío para ninguno). En los mensajes: `%player%`, `%rewards%` (lo pagado, por
+nombre), `%money%` (el dinero que incluye), y en `vote` y `streaks` también `%service%`, `%streak%` y
+`%total%`. Los comandos de la lista reciben los mismos valores. Un archivo de una versión anterior con
+`money: 30` en un bloque lo sigue pagando: se lee como una entrada de dinero al principio de la lista.
+
+El archivo es tuyo: lo que cambias nunca se sobrescribe. Recárgalo con `/rewardsadmin reload`.
+
+## Un voto, de principio a fin
+
+1. NuVotifier entrega el voto a un servidor, que lo guarda. Cualquier copia posterior del mismo voto, por
+   tarde que llegue (un servidor con retraso, Votifier reenviando su caché), se rechaza durante
+   `votes.remember-votes-days` (por defecto 14 días).
+2. Todos los servidores lo anuncian en el canal **Votos**, que los jugadores pueden silenciar en
+   `/settings`.
+3. Lo paga el servidor en el que está su jugador. A un jugador desconectado se le paga cuando vuelve a entrar
+   en cualquier servidor; un voto para un nombre que nunca entra se descarta tras `votes.pending-vote-days`
+   (por defecto 30, `0` lo guarda para siempre).
+4. El voto cuenta para la fiesta de votos, en toda la red, incluidos los jugadores desconectados.
+
+Los votos se asocian a los jugadores por nombre, sin importar mayúsculas. Todo lo que pagan se potencia con
+la fuente `votes` y se entrega por id.
+
+## Rachas de votos
+
+Un voto el día después del último alarga la racha; un día sin votar la reinicia. Los días son los del reloj
+del plugin, así que la racha cambia a la misma hora de reinicio que cualquier recompensa diaria. Un segundo
+voto el mismo día vuelve a pagar `vote` pero deja la racha donde está. Una racha a punto de reiniciarse se
+salva con [congelaciones de racha](/docs/exyliarewards/recompensas#congelaciones-de-racha), una por día
+perdido, si el jugador las tiene.
+
+## Recordatorios
+
+A los jugadores que no han votado hoy se les recuerda cada `votes.reminder-minutes` (por defecto 30, `0`
+nunca), y al entrar cuando `votes.remind-on-join` está activado. El recordatorio es un bloque centrado con un
+`[➥ VOTAR]` clicable.
+
+## La fiesta de votos
+
+Cada voto de la red llena la fiesta. Cuando llega a `votes.party.target` (por defecto 50, `0` desactiva la
+fiesta):
+
+1. Un servidor se queda la fiesta, decide qué hace y avisa a la red.
+2. Todos los servidores reproducen la **cuenta atrás**: una melodía, una barra de jefe y un sonido de tic
+   cada segundo, durante `votes.party.countdown.seconds` (por defecto 10, `0` empieza al momento).
+3. Después, según `votes.party.mode`, cada servidor paga a sus jugadores conectados el bloque `party`
+   (`REWARDS`), aparece una piñata en un servidor (`PINATA`), o las dos cosas (`BOTH`). Los
+   `party.commands` se ejecutan una vez.
+
+Mientras tanto, todos los servidores anuncian lo cerca que está la fiesta cuando los votos que faltan llegan
+a uno de `votes.party.milestones` (por defecto 10, 5 y 1). La barra de progreso se muestra
+`bossbar-seconds` después de cada voto (`bar-mode: AFTER_VOTE`) o se queda en pantalla para todos
+(`ALWAYS`).
+
+`/voteadmin party` inicia ahora la fiesta que se está llenando, tenga los votos que tenga.
+
+<Callout type="note" title="Una fiesta que debía enviar una piñata paga cuando no puede">
+Sin una piñata activada cuyo mob pueda aparecer, o sin un punto de aparición activado, una fiesta `PINATA` o
+`BOTH` paga las recompensas en su lugar, y la consola dice por qué.
+</Callout>
+
+## Piñatas
+
+Una piñata es un mob de ExyliaMobs en modo golpes: los jugadores la golpean hasta romperla. Su aspecto,
+trucos, tiempo de vida y listas de recompensas (por golpe, último golpe y todos los que la golpearon) son los
+del propio mob, editados en `/mobsadmin`; consulta [ExyliaMobs](/docs/exyliamobs/introduccion). ExyliaRewards
+añade lo que pertenece a la fiesta:
+
+| Ajuste | Por defecto | Qué hace |
+|---|---|---|
+| Mob | — | El mob de ExyliaMobs con el que aparece. |
+| Estado | activada | Una piñata desactivada nunca se envía. |
+| Peso | `10` | Lo probable que es que una fiesta la envíe frente a las demás piñatas activadas. |
+| Golpes | los del mob | Los golpes de su mob, más **por jugador conectado** (`5`), hasta un **tope** (`300`, `0` para ninguno). |
+
+Los **puntos de aparición** son donde puede caer la piñata de una fiesta, en cualquier servidor de la red:
+colócate ahí y pulsa **Añadir uno aquí**. El servidor que se queda la fiesta elige la piñata y el punto para
+todos, y solo el servidor al que pertenece el punto la hace aparecer. La red recibe aviso cuando una va de
+camino, cuando aparece y de quién la rompió, o de que se marchó cuando se acabó su tiempo de vida. Mientras
+está en pie, su chunk se mantiene cargado y los jugadores de ese servidor ven una barra de jefe con los
+golpes que faltan.
+
+| Comando | Hace |
+|---|---|
+| `/voteadmin pinata [id]` | Envía una piñata ahora, elegida por peso o por ID, a uno de los puntos de aparición de este servidor o a donde estás. |
+| `/voteadmin pinata stop` | Quita todas las piñatas de este servidor, sin pagar nada. |
+
+## El editor de la fiesta de votos
+
+`/voteadmin` abre la fiesta de un vistazo y una tarjeta por apartado:
+
+| Tarjeta | Contiene |
+|---|---|
+| Fiesta | Objetivo, modo de fiesta e hitos. |
+| Cuenta atrás y barra | La duración y la melodía de la cuenta atrás, el modo de la barra y cuánto se queda tras un voto. |
+| Recompensas de la fiesta | Clic izquierdo edita las recompensas de `party`, clic derecho los comandos. Las dos cosas se escriben en `votes.yml`. |
+| Piñatas | Cada piñata, la más pesada primero, con su probabilidad; crea una a partir de un mob de ExyliaMobs, edítala o elimínala, abre su mob en `/mobsadmin`, envía una aquí, y los puntos de aparición. |
+| Iniciarla ahora | Como `/voteadmin party`. |
+| Quitar las piñatas | Como `/voteadmin pinata stop`, tras preguntar. |
+
+El objetivo, el modo, los hitos, la cuenta atrás y la barra se escriben de vuelta en `config.yml`, en
+`votes.party`.
+
+## Lo que ven los jugadores
+
+`/vote` (o `/votes`) lista las webs de votación; al hacer clic en una se envía su enlace al chat. Al lado,
+los votos del jugador de hoy, el total, la racha y la mejor racha, y el progreso de la fiesta. La tarjeta
+**Votos** de `/rewards` abre la misma pantalla.

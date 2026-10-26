@@ -1,0 +1,145 @@
+---
+title: "Combat tag"
+description: "How a player is tagged and untagged, the providers, /combat, and how the tag is shown: action bar, client HUD, boss bar, titles, sounds and nametags."
+---
+
+## How a player is tagged
+
+With the built-in provider, a player is tagged whenever another player hurts them, and the attacker is
+tagged too. What counts as a hit:
+
+- any damage whose culprit is a player: melee, arrows and other projectiles, and whatever else ExyliaLib
+  traces back to a player;
+- a splash potion with a harmful effect that reaches the player;
+- a lingering cloud with a harmful effect a player left behind.
+
+Both players are tagged for `combat.duration` (default `15s`). A new hit renews the tag, but never shortens
+one already running. Hitting yourself tags nobody, and nobody is tagged when either player stands in a world
+listed in `combat.blacklisted-worlds`.
+
+Hitting a [logout NPC](/docs/exyliacombat/logging-out#the-logout-npc) also tags the attacker, when the
+module's `tag-attackers` is on.
+
+## How the tag ends
+
+| Reason | When |
+|---|---|
+| It runs out | `combat.duration` after the last hit. |
+| The player dies | Always. |
+| The player kills their opponent | With `combat.untag-on-kill` (default `true`): the killer is untagged when the player they killed was the one they were fighting, or when no opponent was on record. A killer still fighting someone else stays tagged. |
+| A blacklisted world | Moving into a world listed in `combat.blacklisted-worlds` untags the player. |
+| Logging out | See [Logging out](/docs/exyliacombat/logging-out). |
+| Staff or a plugin | `/combatadmin untag`, the admin panel, or `Combat.untag` from another plugin. |
+
+With `combat.notifications.on-tag` and `on-untag` (both `true`), the player is told in chat when they enter
+and leave combat: `combat.tagged` and `combat.untagged` in `messages.yml`.
+
+`exyliacombat.bypass` does not stop a player from being tagged. It frees them from every
+[restriction](/docs/exyliacombat/restrictions) and from the barrier, but they still show as in combat
+to other plugins and are still punished for logging out unless they also have `exyliacombat.bypass.logout`.
+
+## Providers
+
+`combat.provider` in `config.yml` picks who decides the tag:
+
+| Value | Who tags |
+|---|---|
+| `AUTO` (default) | The first one installed of DeluxeCombat, CelestCombat and PvPManager, in that order; the built-in tag when none is. |
+| `BUILTIN` | ExyliaCombat itself, with every rule on this site. |
+| `MANUAL` | Nobody tags on hits: players are only tagged by `/combatadmin settag`, the admin panel or another plugin through the API. |
+| `DELUXECOMBAT`, `CELESTCOMBAT`, `PVPMANAGER` | That plugin. When it is missing or cannot be hooked, the built-in tag is used and the console says so. |
+
+The console names the provider on every start, and `%exyliacombat_provider%` shows it. `/combatadmin reload`
+switches provider when `combat.provider` changed, or when `AUTO` would now pick another one.
+
+What each provider covers:
+
+| | Built-in | Manual | External plugin |
+|---|---|---|---|
+| Tagged by hits | yes | no | by that plugin |
+| Logout punishment, logout NPC | yes | no | by that plugin |
+| `combat-restrictions`, `pvp-barrier` | yes | no | no |
+| `/combatadmin settag`, `untag` | yes | yes | no: "Another combat plugin decides who is in combat." |
+| `%exyliacombat_opponent%` | yes | no | CelestCombat only |
+| Action bar, boss bar, titles, sounds, nametags | yes | yes | yes |
+| PvP switch, newbie and respawn protection, stats, rewards | yes | yes | yes |
+
+The modules that refuse hits (PvP switch, newbie and respawn protection) and the ones that count kills work
+with any provider: they listen to the hits and deaths themselves.
+
+## `/combat`
+
+`/combat`, also `/ct`, tells a player how long their tag still lasts and who they are fighting:
+`timer.tagged` in `messages.yml`, with `%time%` and `%opponent%` (`timer.no-opponent` when nobody is named),
+or `timer.not-tagged`. The names come from `commands.combat-time` in `config.yml`.
+
+## Showing the tag
+
+Every mode below can be combined with the others. They follow the tag whichever provider decides it.
+
+### Action bar
+
+The `action-bar` module draws the combat timer and the [item cooldowns](/docs/exyliacombat/cooldowns) above
+the hotbar, through ExyliaLib's shared action bar (other plugins' segments sit after this one). Its text is
+in `messages.yml` under `actionbar`:
+
+| Key | Default |
+|---|---|
+| `actionbar.combat-format` | `{error}⚔ Combat %time% ⌚` |
+| `actionbar.format` | `%item%&r {info}%time% ⌚`, an item on cooldown |
+| `actionbar.format-limited` | `%item% {success}%actual%{muted}/{error}%max% {warning}⚠`, an item with a per-region use limit. Also `%remaining%` and `%usage%`. |
+| `actionbar.separator` | `&r {muted}\| &r`, between two entries |
+
+The combat timer is left out of the action bar when `action-bar` in `modules/combat-display/config.yml` is
+`false`.
+
+<Callout type="note" title="Lunar players see it on the HUD instead">
+The tag is also sent to the client as a HUD cooldown with a diamond sword icon, and item cooldowns with
+their item. A player whose client draws HUD cooldowns (Lunar through Apollo, or the SurvivalCore mod) gets
+no combat action bar from this plugin, since it would show the same thing twice. Feather draws no HUD
+cooldowns, so Feather players keep the action bar. See ExyliaLib's
+[client integration](/docs/exylialib/client-integration).
+</Callout>
+
+### Boss bar, titles and sounds
+
+The `combat-display` module, `modules/combat-display/config.yml`. Text in `lang/<language>/modules/combat-display/messages.yml`, where
+`%time%` is the tag left and `%opponent%` the player last fought.
+
+| Key | Default | What it does |
+|---|---|---|
+| `action-bar` | `true` | Whether the `action-bar` module shows the combat timer. |
+| `boss-bar.enabled` | `false` | A boss bar that drains as the tag runs out, and grows back when a hit renews it. |
+| `boss-bar.colour` | `RED` | `PINK`, `BLUE`, `RED`, `GREEN`, `YELLOW`, `PURPLE` or `WHITE`. |
+| `boss-bar.overlay` | `PROGRESS` | `PROGRESS`, `NOTCHED_6`, `NOTCHED_10`, `NOTCHED_12` or `NOTCHED_20`. |
+| `titles.on-tag`, `titles.on-untag` | `false`, `false` | A title when the tag starts and when it ends. |
+| `titles.fade-in`, `stay`, `fade-out` | `0s`, `1500ms`, `500ms` | Title timings. |
+| `sounds.on-tag` | `ITEM_ARMOR_EQUIP_IRON\|1.0\|0.8` | Played when the tag starts. `NAME\|volume\|pitch`; empty for none. |
+| `sounds.on-untag` | `BLOCK_NOTE_BLOCK_PLING\|1.0\|1.4` | Played when it ends. |
+| `sounds.countdown` | `BLOCK_NOTE_BLOCK_HAT\|0.8\|1.2` | Played once a second during the last seconds of the tag. |
+| `sounds.countdown-seconds` | `3` | How many last seconds play it. |
+
+| Message | Default |
+|---|---|
+| `boss-bar` | `{error}&lIN COMBAT {letters_black}» {info}%time% ⌚` |
+| `tag-title`, `tag-subtitle` | `{error}&lIN COMBAT`, `{letters}Do not log out for {info}%time% ⌚` |
+| `untag-title`, `untag-subtitle` | `{success}&lSAFE`, `{letters}You are out of combat` |
+
+### Nametags
+
+The `combat-nametag` module is off by default. While a player is tagged, their name above the head changes for others, and goes back when
+the tag ends. Needs PacketEvents; without it the module warns once and does nothing.
+
+| Key | Default | What it does |
+|---|---|---|
+| `colour` | `RED` | Name colour: `BLACK`, `DARK_BLUE`, `DARK_GREEN`, `DARK_AQUA`, `DARK_RED`, `DARK_PURPLE`, `GOLD`, `GRAY`, `DARK_GRAY`, `BLUE`, `GREEN`, `AQUA`, `RED`, `LIGHT_PURPLE`, `YELLOW` or `WHITE`. Empty leaves it alone. |
+| `glow` | `false` | Outlines the player through walls, in the name colour (white without one). |
+| `viewers` | `EVERYONE` | `EVERYONE`: every online player sees it. `OPPONENT`: only the player they are fighting. |
+
+The `prefix` (`{error}⚔ `) and `suffix` (empty) live in `lang/<language>/modules/combat-nametag/messages.yml`.
+
+<Callout type="warning" title="It takes the name out of TAB's team">
+A colour, prefix or suffix puts the player in a team of its own for the tag's length, so a TAB or nametag
+plugin's prefix is not shown meanwhile. A glow alone leaves the team untouched. This is why the module is
+off by default.
+</Callout>

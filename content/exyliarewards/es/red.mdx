@@ -1,0 +1,91 @@
+---
+title: "Red y datos"
+description: "ExyliaRewards en varios servidores: una base de datos, Redis, potenciadores, recompensas guardadas para después, Folia, las tablas y las estadísticas que cuentan otros plugins."
+---
+
+## Una base de datos para la red
+
+Cada módulo guarda sus datos en la base de datos a la que apunta `database.yml`: H2 en un archivo por
+defecto, o MySQL, MariaDB, PostgreSQL o MongoDB a través de ExyliaLib. Consulta
+[Base de datos](/docs/exylialib/base-de-datos). Apunta el `database.yml` de cada servidor a la misma base de
+datos y compartirán recompensas, reclamos, rachas, congelaciones, códigos, votos, la fiesta de votos,
+piñatas y referidos, y cada recompensa se pagará una vez en toda la red:
+
+- Un reclamo se escribe antes de pagarse, y solo mientras la fila sigue siendo la que leyó el servidor, así
+  que dos servidores o dos clics compitiendo por un reclamo lo pagan una vez.
+- El último uso de un código, un voto, la fiesta de votos y el cierre de un referido los toma exactamente un
+  servidor.
+- El tiempo de juego y el tiempo AFK pagado se suman desde todos los servidores.
+
+Las zonas AFK son la excepción: cada zona pertenece al servidor en el que se creó, y cada servidor carga
+solo las suyas. Los puntos de aparición de piñatas también indican su servidor.
+
+### Redis
+
+Con Redis activado en `database.yml` (el mismo Redis en todos los servidores, un `server-id` distinto en
+cada uno), los servidores además se hablan al momento: anuncios de votos, la fiesta de votos y su cuenta
+atrás, piñatas, avisos de referidos, y ediciones de recompensas o reinicios hechos en otro servidor que
+llegan al servidor donde está el jugador. Sin Redis estos mensajes se quedan en el servidor que los envió,
+que es todo lo que necesita un servidor único.
+
+## Potenciadores
+
+El dinero, los ítems y la experiencia que paga cada módulo pasan por los modificadores de ExyliaLib, así que
+los plugins de potenciadores los pueden multiplicar por fuente. Consulta
+[Modificadores](/docs/exylialib/economia#modificadores).
+
+| Fuente | Qué potencia |
+|---|---|
+| `rewards` | Todas las recompensas salvo las de tiempo de juego, y los códigos canjeables. |
+| `playtime-rewards` | Las recompensas de tiempo de juego. |
+| `afk-zones` | Los pagos de zonas AFK. |
+| `votes` | Los votos, las rachas de votos y la fiesta de votos. |
+| `referrals` | Los pagos e hitos de referidos. |
+
+## Recompensas guardadas para después
+
+Una recompensa que no cabe en un inventario lleno, o que llega a un jugador que no está conectado en ese
+servidor, se guarda y se entrega en su siguiente entrada, con una línea que dice cuántas llegaron. Esperan
+en la tabla de recompensas pendientes de ExyliaLib, `exylia_pending_rewards`, y el staff puede listarlas,
+darlas o cancelarlas con `/exylialib pendingrewards`. Consulta
+[Recompensas pendientes](/docs/exylialib/recompensas#recompensas-pendientes).
+
+## Folia
+
+El plugin declara `folia-supported: true`. Todo lo que un jugador ve o recibe se ejecuta en el hilo de ese
+jugador, y el trabajo de base de datos fuera de él.
+
+## Las tablas
+
+| Tabla | Guarda |
+|---|---|
+| `rewards` | Cada recompensa y sus ajustes, contenido, bonus y días de calendario. |
+| `rewards_claims` | Lo que reclamó cada jugador de cada recompensa: cuándo, cuántas veces, la racha, los días del calendario. Los códigos canjeados también son filas aquí, con `code:<code>`. |
+| `rewards_daily_claims` | Reclamos por recompensa y día, para las estadísticas. |
+| `rewards_codes` | Los códigos canjeables. |
+| `rewards_freezes` | Las congelaciones de racha de cada jugador. |
+| `sc_afk_zones` | Las zonas AFK. |
+| `rewards_afk_stats` | El tiempo AFK pagado de cada jugador. |
+| `sc_votes`, `sc_votes_seen`, `sc_voters`, `sc_vote_log`, `sc_vote_party` | Votos pendientes de pago, votos ya vistos, totales y rachas, los votos contados para la fiesta y el testigo de la fiesta. |
+| `sc_vote_pinatas`, `sc_vote_pinata_spawns` | Las piñatas y sus puntos de aparición. |
+| `sc_referrals` | Quién indicó a quién, y si se asentó. |
+
+Las tablas `sc_` conservan los nombres que tenían en ExyliaSurvivalCore, así que un servidor que tenía ahí
+sus zonas AFK, votos o referidos en la misma base de datos los encuentra aquí tal como estaban. El tiempo de
+juego en sí es la tabla `exylia_playtime` de ExyliaLib.
+
+## Estadísticas
+
+Si ExyliaSurvivalCore está instalado, sus misiones y temporadas pueden contar estas estadísticas. Sin él no
+se envía nada.
+
+| Estadística | Se cuenta cuando |
+|---|---|
+| `rewards.claimed` | Se reclama una recompensa que no es de tiempo de juego. |
+| `playtime.rewards` | Se reclama una recompensa de tiempo de juego. |
+| `rewards.codes` | Se canjea un código. |
+| `afkzones.rewards`, `afkzones.<zone>.rewards` | Paga una zona AFK. |
+| `votes.total`, `votes.<site>` | Se paga un voto. |
+| `votes.best_streak` | Crece la mejor racha de votos de un jugador. |
+| `votes.pinata_hits`, `votes.pinata_breaks` | Se golpea una piñata, o se rompe. |
+| `referrals.brought` | Se asienta un jugador que trajo quien invita. |

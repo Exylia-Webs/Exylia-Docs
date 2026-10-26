@@ -1,0 +1,107 @@
+---
+title: "Estadísticas"
+description: "Kills, muertes, KDR, rachas y puntos, /pvpstats y su menú, /combattop y las clasificaciones en caché, y los mensajes de muerte en PvP."
+---
+
+## Qué se cuenta
+
+El módulo `stats` cuenta kills, muertes, la racha actual, la mejor racha, puntos y desconexiones en combate.
+Solo cuentan las kills de un jugador: morir por un mob, una caída o la lava sin nadie detrás no cambia nada.
+Una kill que [kill-abuse](/docs/exyliacombat/recompensas#abuso-de-kills) deja fuera de las estadísticas no
+cuenta para ninguno de los dos, y tampoco cuentan las kills en `disabled-worlds`.
+
+Una kill que cuenta suma una kill y uno a la racha del asesino, y una muerte a la víctima, cuya racha vuelve
+a 0. El KDR es kills entre muertes, y un jugador que nunca ha muerto cuenta como si hubiera muerto una vez.
+Cada [desconexión](/docs/exyliacombat/desconexion) castigada suma una desconexión en combate.
+
+## Puntos
+
+Con `points.enabled`, cada jugador empieza con `points.starting` y una kill que cuenta mueve puntos con dos
+fórmulas. Variables: `%killer_points%`, `%victim_points%`, `%killer_streak%` y `%victim_streak%`, leídas
+antes de la kill. Funciones: `min`, `max`, `abs`, `floor`, `ceil`, `round`, `sqrt`. El resultado se
+redondea, y un jugador nunca baja de 0.
+
+```yaml
+points:
+  enabled: true
+  starting: 1000
+  gained: 'max(5, round(20 + (%victim_points% - %killer_points%) * 0.04))'
+  lost: 'max(3, round(15 + (%victim_points% - %killer_points%) * 0.03))'
+```
+
+Matar a alguien con más puntos que tú vale más. Al asesino se le envía `kill` y a la víctima `death`, de los
+mensajes del módulo, con `%points%`.
+
+## `/pvpstats` y `/combattop`
+
+| Comando | Qué hace |
+|---|---|
+| `/pvpstats [player]` | Abre la pantalla de estadísticas del jugador, o de cualquiera que haya entrado alguna vez. Desde la consola, o con `use-menu: false`, se escriben en el chat. |
+| `/combattop [stat] [page]`, también `/pvptop` | Abre la pantalla de clasificación, o escribe la página en el chat desde la consola o con `use-menu: false`. Estadísticas: `kills`, `deaths`, `kdr`, `streak`, `beststreak`, `points` (por defecto). |
+
+La pantalla de estadísticas (`lang/<language>/modules/stats/menu.yml`) muestra la cabeza del jugador y una
+tarjeta por estadística con su puesto; un clic en una tarjeta abre esa clasificación. La pantalla de
+clasificación (`leaderboard.yml`) lista la tabla en caché, con los tres primeros y el propio jugador
+dibujados con sus propias plantillas, un botón por estadística en la fila de abajo y la posición del jugador
+en el centro; un clic en una fila abre las estadísticas de ese jugador. Los dos archivos puedes
+rediseñarlos: una actualización solo añade lo que falta. Las acciones de menú que usan son
+`exyliacombat:leaderboard <stat>` y `exyliacombat:stats`.
+
+Las clasificaciones se leen de la base de datos cada `leaderboard.refresh-interval` (nunca más a menudo que
+cada 30 segundos), así que una kill aparece en la tabla en el siguiente refresco. `%rank%` y los valores
+`_rank` son el puesto de un jugador en esas tablas, o `sin clasificar`.
+
+## Configuración
+
+`modules/stats/config.yml`:
+
+| Clave | Por defecto | Qué hace |
+|---|---|---|
+| `stats-command` | `[pvpstats]` | Nombres de `/pvpstats`; el primero es el comando y el resto alias. `/stats` se deja a otros plugins: un archivo que aún tenga el valor por defecto antiguo `[stats, pvpstats]` pasa una vez a `[pvpstats]`, cualquier otra lista se respeta. Se lee al arrancar. |
+| `top-command` | `[combattop, pvptop]` | Nombres de `/combattop`. Se lee al arrancar. |
+| `use-menu` | `true` | `/pvpstats` y `/combattop` abren menús para los jugadores. `false`: chat. |
+| `disabled-worlds` | `[]` | Mundos donde no se cuentan kills ni muertes. |
+| `points.enabled` | `true` | Si se cuentan puntos. `false`: los puntos se quedan como están. |
+| `points.starting` | `1000` | Puntos con los que empieza un jugador. |
+| `points.gained`, `points.lost` | ver arriba | Las dos fórmulas. |
+| `leaderboard.refresh-interval` | `5m` | Cada cuánto se vuelven a leer las clasificaciones de la base de datos. |
+| `leaderboard.size` | `100` | Jugadores que se guardan por clasificación. |
+| `leaderboard.page-size` | `10` | Entradas por página de `/combattop` en el chat. |
+| `commands-on-kill` | `[]` | Comandos que se ejecutan para el asesino de una kill que cuenta: `%player_name%`, `%victim%`, `%points%`. Prefijos `console:` (por defecto), `player:`, `player-proxy:` o `console-proxy:`. |
+| `commands-on-death` | `[]` | Comandos que se ejecutan para la víctima: `%player_name%`, `%killer%`, `%points%`. |
+
+Los textos están en `lang/<language>/modules/stats/messages.yml`: el bloque `stats` del chat, `no-data`,
+`kill`, `death`, `top-header`, `top-entry`, `top-footer`, `top-empty`, `unranked`, los `names` de cada
+estadística, las líneas `leaderboard-showing` y `leaderboard-switch` de la clasificación, y `admin-reset`.
+
+`/combatadmin stats reset <player>` pone a cero las estadísticas de un jugador conectado y sus puntos en
+`points.starting`. El panel de administración hace lo mismo tras una confirmación.
+
+## Mensajes de muerte
+
+El módulo `death-messages` sustituye el mensaje vanilla de una muerte causada por un jugador por una línea
+por cada causa de daño. Las demás muertes conservan el mensaje vanilla.
+
+`modules/death-messages/config.yml`:
+
+| Clave | Por defecto | Qué hace |
+|---|---|---|
+| `scope` | `GLOBAL` | Quién lo lee. `GLOBAL`: todos. `WORLD`: los jugadores del mundo de la víctima. `RADIUS`: los jugadores a menos de `radius` bloques de la muerte. `INVOLVED`: el asesino y la víctima. `HIDDEN`: nadie, ningún mensaje. |
+| `radius` | `100` | Para `RADIUS`: distancia en bloques. |
+| `console` | `true` | También lo escribe en la consola. |
+| `disabled-worlds` | `[]` | Mundos donde el mensaje vanilla se deja como está. |
+
+`lang/<language>/modules/death-messages/messages.yml` tiene una línea por causa del golpe final bajo
+`causes`, con claves como `entity-attack`, `entity-sweep-attack`, `projectile`, `entity-explosion`,
+`block-explosion`, `fall`, `void`, `lava`, `fire`, `fire-tick`, `magic`, `poison`, `wither`, `thorns`,
+`drowning`, `lightning` o `contact`. Una causa que no está en la lista usa `fallback`. Valores: `%killer%`,
+`%victim%`, `%weapon%` (el nombre del ítem, o `fists` si tenía la mano vacía), `%killer_health%` (corazones
+que le quedan) y `%killer_max_health%`. Una línea vacía no envía nada.
+
+```yaml
+causes:
+  entity-attack: '{error}⚔ {highlight}%victim% {letters}fue abatido por {highlight}%killer% {letters}con {info}%weapon% {letters_black}({error}%killer_health%❤{letters_black})'
+  fall: '{error}☠ {highlight}%victim% {letters}cayó hacia su muerte por culpa de {highlight}%killer%'
+fallback: '{error}☠ {highlight}%victim% {letters}fue asesinado por {highlight}%killer% {letters_black}({error}%killer_health%❤{letters_black})'
+fists: 'sus puños'
+```

@@ -1,0 +1,125 @@
+---
+title: "Restricciones"
+description: "Todo lo que no puede hacer un jugador en combate, las zonas seguras que el plugin lee de WorldGuard, las regiones de ExyliaLib y los plugins de claims, y la barrera PvP."
+---
+
+Los módulos `combat-restrictions` y `pvp-barrier` solo se aplican con el proveedor integrado, y nunca a un
+jugador con `exyliacombat.bypass` (o el antiguo `exyliaspecials.combat.bypass`).
+
+## Restricciones de combate
+
+`modules/combat-restrictions/config.yml`. Cada regla tiene su propio interruptor `enabled` y un interruptor
+`notify` que envía el rechazo de la regla, como mucho una vez cada 1,5 segundos. Los rechazos de comandos,
+inventarios, teletransportes, zonas seguras, vuelo y élitros están en `messages.yml`, bajo `combat`; el
+resto en `lang/<language>/modules/combat-restrictions/messages.yml`.
+
+### Comandos, inventarios y teletransportes
+
+| Clave | Por defecto | Qué hace |
+|---|---|---|
+| `commands.enabled` | `true` | Filtra los comandos que ejecuta un jugador en combate. |
+| `commands.mode` | `ALLOW` | `ALLOW`: solo funcionan los comandos de la lista. `BLOCK`: se rechazan los de la lista. |
+| `commands.list` | `[/msg, /tell, /w, /r, /reply, /discord]` | Se comparan por etiqueta exacta: `/msg` cubre `/msg` y `/minecraft:msg`, no `/msgtoggle`. |
+| `inventories.enabled`, `inventories.blocked` | `true`, `[ENDER_CHEST]` | Tipos de inventario que no puede abrir, como `ENDER_CHEST`, `SHULKER_BOX` o `BARREL`. |
+| `teleports.enabled`, `teleports.blocked-causes` | `true`, `[COMMAND]` | Causas de teletransporte rechazadas en combate: `COMMAND` (`/tpa`, `/home`), `PLUGIN`, `NETHER_PORTAL`... |
+
+### Movimiento
+
+| Clave | Por defecto | Qué hace |
+|---|---|---|
+| `flight.enabled` | `true` | Se quita el vuelo al entrar en combate y se devuelve al terminar. No se aplica en Creativo ni Espectador. |
+| `elytra.enabled` | `true` | Se detiene y se rechaza el planeo en combate. No se aplica en Creativo ni Espectador. |
+| `elytra.remove-worn` | `true` | Los élitros puestos pasan al inventario al empezar el combate, y otra vez si se los vuelve a poner (caen a sus pies, solo para él, si el inventario está lleno). |
+| `riptide.enabled` | `false` | No se pueden usar tridentes con Propulsión acuática. |
+| `gamemode-change.enabled` | `true` | Se rechazan los cambios de modo de juego. |
+
+Un plugin que dio vuelo durante un tiempo y lo retiró durante la pelea llama a `Combat.forgetFlight`, para
+que el final del combate no devuelva ese vuelo.
+
+### Reglas de zonas seguras
+
+| Clave | Por defecto | Qué hace |
+|---|---|---|
+| `safe-zones.enabled` | `true` | Mantiene a los jugadores en combate fuera de las zonas seguras. |
+| `safe-zones.walking` | `true` | Se rechaza entrar caminando en una zona segura: el jugador vuelve a donde estaba. |
+| `safe-zones.teleports` | `true` | Se rechaza teletransportarse a una, o a menos de un hitbox de su borde. |
+| `safe-zones.ender-pearls` | `true` | Una perla que iba a caer en una se elimina en el aire; si cae de todos modos, el jugador vuelve a donde la lanzó. |
+| `safe-zones.chorus-fruit` | `true` | No se puede comer fruta coral en combate. |
+
+Las zonas seguras salen de las fuentes activadas bajo `safe-zones` en `config.yml`, consulta
+[Zonas seguras](#zonas-seguras). Sin ninguno de esos plugins instalado, estas reglas no tienen nada que
+comprobar y no hacen nada.
+
+### Bloques e ítems
+
+| Clave | Por defecto | Qué hace |
+|---|---|---|
+| `block-break.enabled` | `false` | Romper bloques en combate. |
+| `block-break.mode`, `block-break.materials` | `BLACKLIST`, `[]` | `BLACKLIST`: no se pueden romper los materiales de la lista, y una lista vacía significa que no se puede romper ninguno. `WHITELIST`: solo se pueden romper los de la lista. |
+| `block-place.enabled`, `mode`, `materials` | `false`, `BLACKLIST`, `[]` | Colocar bloques, con los mismos modos. |
+| `item-drop.enabled` | `false` | Tirar ítems. |
+| `item-pickup.enabled` | `false` | Recoger ítems. Su `notify` viene desactivado. |
+| `blocked-items.enabled` | `false` | Ítems que no se pueden usar: clic derecho, comer, lanzar o disparar. |
+| `blocked-items.items` | `[ENDER_PEARL, CHORUS_FRUIT]` | `MATERIAL`, o `MATERIAL:<custom model data>` para un solo modelo. |
+| `blocked-potions.enabled` | `false` | Pociones que llevan alguno de los efectos de la lista. |
+| `blocked-potions.effects` | `[INVISIBILITY]` | Nombres de efecto. |
+| `blocked-potions.drink`, `blocked-potions.splash` | `true`, `true` | Rechazar beberlas, y lanzarlas como arrojadizas o persistentes. |
+
+### Al entrar en combate
+
+| Clave | Por defecto | Qué hace |
+|---|---|---|
+| `on-tag.disable-god-mode` | `true` | Quita el modo dios: EssentialsX, CMI, o la invulnerabilidad de Bukkit, a través de ExyliaLib. |
+| `on-tag.disable-vanish` | `false` | Hace visible a un jugador en vanish (EssentialsX, CMI). |
+| `on-tag.force-gamemode` | vacío | Pone al jugador en este modo de juego, como `SURVIVAL`. Vacío lo deja como está. |
+| `on-tag.notify` | `true` | Le dice al jugador qué se le ha quitado. |
+
+## Zonas seguras
+
+Cada vez que el plugin pregunta si el PvP está prohibido en un sitio (las reglas `safe-zones` de arriba, la
+barrera PvP y su `block-entry`), pregunta a todas las fuentes activadas bajo `safe-zones` en `config.yml`,
+cada una solo si su plugin está instalado. Todas vienen activadas.
+
+| Clave | Prohíbe el PvP donde |
+|---|---|
+| `worldguard` | Una región de WorldGuard, o `__global__`, tiene `pvp deny`. |
+| `exylia-regions` | Una región de ExyliaLib declara `pvp: false`: arenas y spawns que crean otros plugins de Exylia. |
+| `lands` | Una zona de Lands donde el rol del jugador no puede atacar a jugadores. |
+| `grief-prevention` | Un claim de GriefPrevention que su configuración protege del PvP (`PvP.ProtectPlayersInLandClaims`). |
+| `towny` | Un town block de Towny, o la naturaleza, con el PvP desactivado. |
+| `superior-skyblock` | Una isla de SuperiorSkyblock2 sin la flag de isla `PVP`. |
+
+Las fuentes que no son WorldGuard se leen a través de `PvpZones` de ExyliaLib. Los filtros por región de
+otras partes (`disabled-regions` de las recompensas, los valores por región de los cooldowns) comparan ids
+de región de WorldGuard y de ExyliaLib, cuando esas dos fuentes están activas. `safe-zones` se vuelve a leer
+con `/combatadmin reload`.
+
+## La barrera PvP
+
+Mientras un jugador está en combate, el módulo `pvp-barrier` dibuja un muro a lo largo del borde de cada zona
+segura cercana, visible solo para él, y lo empuja hacia atrás cuando se acerca. Los jugadores con
+`exyliacombat.bypass` no ven muro. El muro solo se recalcula cuando el jugador cambia de bloque, y no se
+dibuja mientras está dentro de una zona segura.
+
+`modules/pvp-barrier/config.yml`:
+
+| Clave | Por defecto | Qué hace |
+|---|---|---|
+| `block-entry` | `true` | El muro es sólido: un jugador en combate no puede atravesarlo, aunque `combat-restrictions` esté desactivado. |
+| `style` | `DISPLAY` | `DISPLAY`: una cuadrícula de paneles translúcidos en el borde. `BLOCKS`: un muro de bloques falsos. `DISPLAY` pasa a `BLOCKS` sin PacketEvents o con clientes anteriores a la 1.19.4. |
+| `material` | `RED_STAINED_GLASS` | Solo `BLOCKS`: el bloque con el que se dibuja el muro. |
+| `color` | `F0FF1010` | Solo `DISPLAY`: el color de los paneles en la base del muro, en hex ARGB sin almohadilla (los dos primeros dígitos son la opacidad). Los paneles se desvanecen hacia arriba y hacia los lados. |
+| `height` | `6` | Altura del muro en bloques, desde el suelo bajo cada parte del borde. |
+| `preview-distance` | `10` | Radio en bloques en el que se buscan bordes. El coste crece con su cuadrado. |
+| `update-interval-ticks` | `3` | Ticks entre dos comprobaciones de la posición del jugador. |
+| `air-only` | `true` | `true`: solo sustituye bloques invisibles (aire, barrera, luz). `false`: sustituye cualquier bloque. |
+| `push-back.enabled` | `true` | Empuja al jugador en combate lejos del borde. |
+| `push-back.trigger-distance` | `2.5` | Distancia al borde, en bloques, que activa el empujón. |
+| `push-back.strength` | `0.55` | Velocidad horizontal que se aplica alejándolo del borde. |
+| `push-back.cooldown-ticks` | `2` | Ticks mínimos entre dos empujones. |
+
+<Callout type="tip" title="Lo que cuesta la barrera">
+A WorldGuard se le pregunta una vez por cada conjunto de regiones superpuestas. A las demás fuentes, una vez
+por columna recorrida, unas `(2 × preview-distance + 3)²` consultas por fuente, y solo cuando un jugador en
+combate cambia de bloque. Mantén `preview-distance` moderado en un servidor con muchas fuentes de claims.
+</Callout>

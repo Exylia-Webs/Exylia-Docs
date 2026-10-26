@@ -1,0 +1,148 @@
+---
+title: "Etiqueta de combate"
+description: "Cómo se marca y desmarca a un jugador, los proveedores, /combat, y cómo se muestra el combate: barra de acción, HUD del cliente, barra de jefe, títulos, sonidos y nametags."
+---
+
+## Cómo se marca a un jugador
+
+Con el proveedor integrado, un jugador queda en combate cada vez que otro jugador le hace daño, y el
+atacante también. Lo que cuenta como golpe:
+
+- cualquier daño cuyo culpable sea un jugador: cuerpo a cuerpo, flechas y otros proyectiles, y todo lo que
+  ExyliaLib rastrea hasta un jugador;
+- una poción arrojadiza con un efecto dañino que alcanza al jugador;
+- una nube persistente con un efecto dañino que dejó un jugador.
+
+Los dos quedan en combate durante `combat.duration` (por defecto `15s`). Un golpe nuevo renueva el combate,
+pero nunca acorta uno que ya está en marcha. Golpearse a uno mismo no marca a nadie, y no se marca a nadie
+cuando cualquiera de los dos está en un mundo de `combat.blacklisted-worlds`.
+
+Golpear un [NPC de desconexión](/docs/exyliacombat/desconexion#el-npc-de-desconexión) también marca al
+atacante, si el `tag-attackers` del módulo está activo.
+
+## Cómo termina
+
+| Motivo | Cuándo |
+|---|---|
+| Se agota | `combat.duration` después del último golpe. |
+| El jugador muere | Siempre. |
+| El jugador mata a su rival | Con `combat.untag-on-kill` (por defecto `true`): el asesino sale de combate cuando el jugador que ha matado era contra quien luchaba, o cuando no tenía rival registrado. Un asesino que sigue luchando contra otro sigue en combate. |
+| Un mundo excluido | Entrar en un mundo de `combat.blacklisted-worlds` saca al jugador de combate. |
+| Desconectarse | Consulta [Desconexión](/docs/exyliacombat/desconexion). |
+| El staff o un plugin | `/combatadmin untag`, el panel de administración, o `Combat.untag` desde otro plugin. |
+
+Con `combat.notifications.on-tag` y `on-untag` (los dos `true`), al jugador se le avisa en el chat al entrar
+y al salir de combate: `combat.tagged` y `combat.untagged` en `messages.yml`.
+
+`exyliacombat.bypass` no impide que un jugador entre en combate. Lo libra de todas las
+[restricciones](/docs/exyliacombat/restricciones) y de la barrera, pero sigue apareciendo en combate para
+los demás plugins y se le sigue castigando por desconectarse, salvo que también tenga
+`exyliacombat.bypass.logout`.
+
+## Proveedores
+
+`combat.provider` en `config.yml` elige quién decide el combate:
+
+| Valor | Quién marca |
+|---|---|
+| `AUTO` (por defecto) | El primero instalado de DeluxeCombat, CelestCombat y PvPManager, en ese orden; el integrado si no hay ninguno. |
+| `BUILTIN` | El propio ExyliaCombat, con todas las reglas de esta documentación. |
+| `MANUAL` | Nadie marca por golpes: solo se entra en combate con `/combatadmin settag`, el panel de administración u otro plugin a través de la API. |
+| `DELUXECOMBAT`, `CELESTCOMBAT`, `PVPMANAGER` | Ese plugin. Si falta o no se puede enganchar, se usa el integrado y la consola lo avisa. |
+
+La consola indica el proveedor en cada arranque, y `%exyliacombat_provider%` lo muestra. `/combatadmin reload`
+cambia de proveedor si `combat.provider` cambió, o si `AUTO` elegiría ahora otro.
+
+Lo que cubre cada proveedor:
+
+| | Integrado | Manual | Plugin externo |
+|---|---|---|---|
+| Combate por golpes | sí | no | lo hace ese plugin |
+| Castigo por desconexión, NPC de desconexión | sí | no | lo hace ese plugin |
+| `combat-restrictions`, `pvp-barrier` | sí | no | no |
+| `/combatadmin settag`, `untag` | sí | sí | no: "Otro plugin de combate decide quién está en combate." |
+| `%exyliacombat_opponent%` | sí | no | solo CelestCombat |
+| Barra de acción, barra de jefe, títulos, sonidos, nametags | sí | sí | sí |
+| Interruptor de PvP, protección de novatos y al reaparecer, estadísticas, recompensas | sí | sí | sí |
+
+Los módulos que rechazan golpes (interruptor de PvP, protección de novatos y al reaparecer) y los que
+cuentan kills funcionan con cualquier proveedor: escuchan ellos mismos los golpes y las muertes.
+
+## `/combat`
+
+`/combat`, también `/ct`, le dice a un jugador cuánto le queda de combate y contra quién lucha:
+`timer.tagged` en `messages.yml`, con `%time%` y `%opponent%` (`timer.no-opponent` si no hay nadie), o
+`timer.not-tagged`. Los nombres salen de `commands.combat-time` en `config.yml`.
+
+## Mostrar el combate
+
+Todos los modos de abajo se pueden combinar. Siguen al combate sea cual sea el proveedor que lo decide.
+
+### Barra de acción
+
+El módulo `action-bar` dibuja el temporizador de combate y los [cooldowns de ítems](/docs/exyliacombat/cooldowns)
+sobre la barra rápida, en la barra de acción compartida de ExyliaLib (los segmentos de otros plugins van
+detrás de este). Sus textos están en `messages.yml`, bajo `actionbar`:
+
+| Clave | Por defecto en `es` |
+|---|---|
+| `actionbar.combat-format` | `{error}⚔ Combate %time% ⌚` |
+| `actionbar.format` | `%item%&r {info}%time% ⌚`, un ítem en cooldown |
+| `actionbar.format-limited` | `%item% {success}%actual%{muted}/{error}%max% {warning}⚠`, un ítem con límite de usos por región. También `%remaining%` y `%usage%`. |
+| `actionbar.separator` | `&r {muted}\| &r`, entre dos entradas |
+
+El temporizador de combate no aparece en la barra de acción si `action-bar` de
+`modules/combat-display/config.yml` es `false`.
+
+<Callout type="note" title="Los jugadores de Lunar lo ven en el HUD">
+El combate también se envía al cliente como un cooldown del HUD con el icono de una espada de diamante, y
+los cooldowns de ítems con su ítem. Un jugador cuyo cliente dibuja cooldowns en el HUD (Lunar a través de
+Apollo, o el mod SurvivalCore) no recibe de este plugin la barra de acción de combate, porque mostraría lo
+mismo dos veces. Feather no dibuja cooldowns en el HUD, así que los jugadores de Feather conservan la barra
+de acción. Consulta la [integración de clientes](/docs/exylialib/integracion-de-cliente) de ExyliaLib.
+</Callout>
+
+### Barra de jefe, títulos y sonidos
+
+El módulo `combat-display`, `modules/combat-display/config.yml`. Los textos están en
+`lang/<language>/modules/combat-display/messages.yml`, donde `%time%` es el combate que queda y
+`%opponent%` el último rival.
+
+| Clave | Por defecto | Qué hace |
+|---|---|---|
+| `action-bar` | `true` | Si el módulo `action-bar` muestra el temporizador de combate. |
+| `boss-bar.enabled` | `false` | Una barra de jefe que se vacía a medida que se agota el combate, y vuelve a crecer cuando un golpe lo renueva. |
+| `boss-bar.colour` | `RED` | `PINK`, `BLUE`, `RED`, `GREEN`, `YELLOW`, `PURPLE` o `WHITE`. |
+| `boss-bar.overlay` | `PROGRESS` | `PROGRESS`, `NOTCHED_6`, `NOTCHED_10`, `NOTCHED_12` o `NOTCHED_20`. |
+| `titles.on-tag`, `titles.on-untag` | `false`, `false` | Un título al empezar y al terminar el combate. |
+| `titles.fade-in`, `stay`, `fade-out` | `0s`, `1500ms`, `500ms` | Los tiempos del título. |
+| `sounds.on-tag` | `ITEM_ARMOR_EQUIP_IRON\|1.0\|0.8` | Suena al empezar el combate. `NOMBRE\|volumen\|tono`; vacío para ninguno. |
+| `sounds.on-untag` | `BLOCK_NOTE_BLOCK_PLING\|1.0\|1.4` | Suena al terminar. |
+| `sounds.countdown` | `BLOCK_NOTE_BLOCK_HAT\|0.8\|1.2` | Suena una vez por segundo durante los últimos segundos del combate. |
+| `sounds.countdown-seconds` | `3` | Cuántos segundos finales lo hacen sonar. |
+
+| Mensaje | Por defecto en `es` |
+|---|---|
+| `boss-bar` | `{error}&lEN COMBATE {letters_black}» {info}%time% ⌚` |
+| `tag-title`, `tag-subtitle` | `{error}&lEN COMBATE`, `{letters}No te desconectes en {info}%time% ⌚` |
+| `untag-title`, `untag-subtitle` | `{success}&lA SALVO`, `{letters}Ya no estás en combate` |
+
+### Nametags
+
+El módulo `combat-nametag` está desactivado por defecto. Mientras un jugador está en combate, su nombre
+sobre la cabeza cambia para los demás, y vuelve a ser el de antes cuando termina. Necesita PacketEvents; sin
+él, el módulo avisa una vez y no hace nada.
+
+| Clave | Por defecto | Qué hace |
+|---|---|---|
+| `colour` | `RED` | Color del nombre: `BLACK`, `DARK_BLUE`, `DARK_GREEN`, `DARK_AQUA`, `DARK_RED`, `DARK_PURPLE`, `GOLD`, `GRAY`, `DARK_GRAY`, `BLUE`, `GREEN`, `AQUA`, `RED`, `LIGHT_PURPLE`, `YELLOW` o `WHITE`. Vacío lo deja como está. |
+| `glow` | `false` | Contornea al jugador a través de las paredes, en el color del nombre (blanco si no hay). |
+| `viewers` | `EVERYONE` | `EVERYONE`: lo ven todos los jugadores conectados. `OPPONENT`: solo el jugador contra el que lucha. |
+
+El `prefix` (`{error}⚔ `) y el `suffix` (vacío) están en `lang/<language>/modules/combat-nametag/messages.yml`.
+
+<Callout type="warning" title="Saca el nombre del equipo de TAB">
+Un color, prefijo o sufijo mete al jugador en un equipo propio mientras dura el combate, así que el prefijo
+de TAB o de un plugin de nametags no se ve mientras tanto. Un brillo solo no toca el equipo. Por eso el
+módulo viene desactivado.
+</Callout>

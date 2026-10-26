@@ -1,0 +1,140 @@
+---
+title: "Protección"
+description: "El interruptor de PvP, la protección de novatos, la protección al reaparecer y la del botín: a quién se puede golpear, durante cuánto tiempo y quién puede recoger el botín."
+---
+
+## Golpes rechazados
+
+El interruptor de PvP, la protección de novatos y la protección al reaparecer añaden cada uno una regla a
+una misma comprobación que se hace en cada golpe entre dos jugadores, sea cual sea el proveedor del combate.
+Un golpe rechazado no hace nada, y abarca:
+
+- cuerpo a cuerpo y proyectiles;
+- pociones arrojadizas con un efecto dañino (el jugador protegido queda fuera de la salpicadura);
+- nubes persistentes con un efecto dañino;
+- cañas de pescar que enganchan a un jugador.
+
+Al atacante se le dice por qué, como mucho una vez cada 1,5 segundos, si el `notify-attacker` del módulo está
+activo. Los demás plugins hacen la misma comprobación con `Combat.canAttack`, consulta
+[API](/docs/exyliacombat/api).
+
+## Interruptor de PvP
+
+El módulo `pvp-toggle` añade `/pvp`, con el que cada jugador puede desactivar su propio PvP. Un jugador con
+el PvP desactivado no puede golpear a jugadores ni recibir golpes de ellos. El estado se guarda en el
+[registro del jugador](/docs/exyliacombat/instalacion#la-base-de-datos).
+
+| Comando | Qué hace |
+|---|---|
+| `/pvp`, `/pvp toggle` | Lo cambia. |
+| `/pvp on`, `/pvp off` | Lo fija. |
+| `/pvp status` | Dice si está activado. |
+
+`modules/pvp-toggle/config.yml`:
+
+| Clave | Por defecto | Qué hace |
+|---|---|---|
+| `command-labels` | `[pvp, togglepvp]` | Los nombres del comando: el primero es el comando, el resto alias. Se lee al arrancar. Vacío: sin comando; el staff y otros plugins siguen pudiendo cambiar el PvP. |
+| `permission` | vacío | Permiso para cambiarlo. Vacío: cualquiera puede. |
+| `cooldown` | `30s` | Tiempo entre dos cambios. `0s`: sin espera. |
+| `block-while-tagged` | `true` | Rechaza el cambio mientras el jugador está en combate. |
+| `default-state` | `true` | El estado del PvP de un jugador que entra por primera vez. |
+| `forced-on-worlds` | `[]` | Mundos donde el PvP está siempre activado, elija lo que elija el jugador. |
+| `forced-off-worlds` | `[]` | Mundos donde el PvP está siempre desactivado: ahí nadie lucha. |
+| `notify-attacker` | `true` | Le dice al jugador cuyo golpe se rechazó por qué. |
+| `commands-on-enable`, `commands-on-disable` | `[]` | Comandos que se ejecutan cuando un jugador activa o desactiva su PvP, con `%player_name%`. Prefijos `console:` (por defecto), `player:`, `player-proxy:` o `console-proxy:`. |
+
+Los textos están en `lang/<language>/modules/pvp-toggle/messages.yml`: `state-on` y `state-off` (`%state%` en
+las demás líneas), `enabled`, `disabled`, `already-enabled`, `already-disabled`, `status`, `cooldown`,
+`tagged`, `no-permission`, `forced-world`, `attacker-disabled`, `defender-disabled` y `admin-set`.
+
+Con la protección de novatos activa, `/pvp on` de un jugador protegido primero le pide renunciar a su
+protección.
+
+## Protección de novatos
+
+Con el módulo `newbie-protection`, los jugadores que entran por primera vez no pueden golpear a jugadores ni
+recibir golpes durante un rato. Pueden renunciar a ella con `/newbie disable`, tras una confirmación; solo el
+staff puede devolvérsela.
+
+| Comando | Qué hace |
+|---|---|
+| `/newbie`, también `/protection` | Muestra la protección que queda. |
+| `/newbie disable` | Pide renunciar a ella: `RENUNCIAR` o `CONSERVARLA`. |
+
+Quién cuenta como nuevo lo decide `new-players`: `FIRST_JOIN` (nunca ha entrado en este servidor) o
+`FIRST_PLAYED_AFTER` (entró por primera vez en `first-played-after` o después). A un jugador que ya tiene
+registro no se le vuelve a dar, así que activar el módulo más tarde no protege a todos los que ya habían
+jugado.
+
+`modules/newbie-protection/config.yml`:
+
+| Clave | Por defecto | Qué hace |
+|---|---|---|
+| `duration` | `30m` | Cuánto tiempo se protege a un jugador nuevo. |
+| `mode` | `PLAYTIME` | `PLAYTIME`: el tiempo solo corre mientras el jugador está conectado. `REAL_TIME`: corre desde la primera entrada. |
+| `new-players` | `FIRST_JOIN` | `FIRST_JOIN` o `FIRST_PLAYED_AFTER`. |
+| `first-played-after` | vacío | Para `FIRST_PLAYED_AFTER`: una fecha (`2026-10-21`) o fecha y hora (`2026-10-21T18:00`), en la zona horaria del servidor. |
+| `command-labels` | `[newbie, protection]` | Los nombres del comando. Se lee al arrancar. Vacío: sin comando. |
+| `drop-with-pvp-command` | `true` | `/pvp on` (o `/pvp`) pide a un jugador protegido que renuncie a su protección, como `/newbie disable`. |
+| `display` | `BOSS_BAR` | Cómo se muestra el tiempo restante: `BOSS_BAR`, `ACTION_BAR` o `NONE`. |
+| `boss-bar-colour`, `boss-bar-overlay` | `GREEN`, `PROGRESS` | El aspecto de la barra de jefe. |
+| `remind-on-join` | `true` | Le recuerda a un jugador protegido cuánto le queda cada vez que entra. |
+| `disabled-worlds` | `[]` | Mundos donde la protección no se aplica. El tiempo sigue corriendo ahí. |
+| `blocked-actions` | `[ENDER_PEARL]` | Lo que no puede hacer un jugador protegido: `ITEM_PICKUP`, `ITEM_DROP`, `ENDER_PEARL`, `ELYTRA`. |
+| `blocked-commands` | `[]` | Comandos que no puede ejecutar, comparados por etiqueta: `/warp` bloquea `/warp pvp`. |
+| `notify-attacker` | `true` | Le dice al jugador cuyo golpe se rechazó por qué. |
+| `commands-on-start` | `[]` | Comandos que se ejecutan al dar la protección a un jugador, con `%player_name%`. |
+| `commands-on-end` | `[]` | Comandos que se ejecutan cuando se agota o se renuncia a ella. |
+
+El staff la da y la quita con `/combatadmin newbie give <player> [time]` y `/combatadmin newbie remove <player>`,
+o desde el panel de administración. Un tiempo se escribe `30m`, `1h30m` o `2d`; si se omite, es `duration`.
+Los textos están en `lang/<language>/modules/newbie-protection/messages.yml`.
+
+## Protección al reaparecer
+
+El módulo `respawn-protection` está desactivado por defecto. Durante unos segundos tras reaparecer, los demás
+jugadores no pueden golpear al jugador, con una barra de jefe que se vacía.
+
+`modules/respawn-protection/config.yml`:
+
+| Clave | Por defecto | Qué hace |
+|---|---|---|
+| `duration` | `5s` | Cuánto dura. `0s` la desactiva. |
+| `cancel-on-attack` | `true` | `true`: golpear a otro jugador termina la protección. `false`: un jugador protegido no puede golpear a nadie. |
+| `only-after-pvp-death` | `false` | Solo tras una muerte causada por otro jugador. |
+| `notify-attacker` | `true` | Le dice al atacante por qué su golpe no ha hecho nada. |
+| `boss-bar.enabled`, `colour`, `overlay` | `true`, `GREEN`, `PROGRESS` | La barra de jefe. |
+| `disabled-worlds` | `[]` | Mundos donde no se protege a nadie al reaparecer. |
+
+Los textos están en `lang/<language>/modules/respawn-protection/messages.yml`: `started`, `ended`,
+`cancelled`, `attacker-protected`, `defender-protected` y `boss-bar`.
+
+Las dos protecciones responden a `Combat.isProtected`, para que otros plugins sepan distinguir a un jugador
+protegido.
+
+## Protección del botín
+
+El módulo `loot-protection` está desactivado por defecto. Tras una kill de PvP, solo el asesino puede recoger
+el botín de la víctima durante un rato, y a quien lo intente se le dice de quién es. Cubre el botín de una
+muerte en PvP, los ítems de una desconexión con `DROP_INVENTORY` (reservados para el rival) y el equipo que
+cae cuando alguien mata a un NPC de desconexión (reservado para quien lo mató). Los ítems protegidos no se
+juntan con otros montones.
+
+`modules/loot-protection/config.yml`:
+
+| Clave | Por defecto | Qué hace |
+|---|---|---|
+| `duration` | `30s` | Cuánto tiempo queda reservado el botín. `0s` la desactiva. |
+| `share-with-clan` | `true` | Los miembros del clan del asesino también pueden recogerlo, mediante el soporte de clanes de ExyliaLib. |
+| `share-with-allies` | `false` | Los miembros de clanes aliados del asesino también pueden recogerlo. |
+| `glow` | `true` | Los ítems protegidos brillan para todos. |
+| `timer` | `true` | Los ítems protegidos muestran encima de quién son y el tiempo que queda. |
+| `block-other-pickups` | `true` | Los mobs y las tolvas tampoco pueden llevarse los ítems protegidos. |
+| `disabled-worlds` | `[]` | Mundos donde el botín nunca se protege. |
+
+| Mensaje | Por defecto en `es` |
+|---|---|
+| `protected-for-killer` | `%prefix% {success}El botín es tuyo durante {info}%time% ⌚{success}.` |
+| `pickup-denied` | `Este botín pertenece a {highlight}%owner%{error} durante {info}%time% ⌚`, como mucho una vez cada 1,5 s |
+| `item-label` | `{highlight}%owner% {letters_black}» {info}%time% ⌚`, sobre el ítem |

@@ -1153,6 +1153,171 @@ const CASINO_NAV: NavGroup[] = [
   },
 ];
 
+const DUELS_NAV: NavGroup[] = [
+  {
+    label: { en: "Getting started", es: "Empezar" },
+    pages: [
+      page("introduction", "introduction", "introduccion"),
+      page("installation", "installation", "instalacion"),
+    ],
+  },
+  {
+    label: { en: "Duels", es: "Duelos" },
+    pages: [
+      page("dueling", "dueling", "duelos"),
+      page("arenas-and-kits", "arenas-and-kits", "arenas-y-kits"),
+      page("network", "network", "red"),
+    ],
+  },
+  {
+    label: { en: "Reference", es: "Referencia" },
+    pages: [
+      page("commands", "commands", "comandos"),
+      page("permissions", "permissions", "permisos"),
+      page("placeholders", "placeholders", "placeholders"),
+      page("configuration", "configuration", "configuracion"),
+      page("faq", "faq", "faq"),
+    ],
+  },
+];
+
+const MOBS_NAV: NavGroup[] = [
+  {
+    label: { en: "Getting started", es: "Empezar" },
+    pages: [
+      page("introduction", "introduction", "introduccion"),
+      page("installation", "installation", "instalacion"),
+    ],
+  },
+  {
+    label: { en: "Systems", es: "Sistemas" },
+    pages: [
+      page("building-mobs", "building-mobs", "crear-mobs"),
+      page("models", "models", "modelos"),
+      page("rewards", "rewards", "recompensas"),
+      page("generators", "generators", "generadores"),
+    ],
+  },
+  {
+    label: { en: "Reference", es: "Referencia" },
+    pages: [
+      page("commands", "commands", "comandos"),
+      page("permissions", "permissions", "permisos"),
+      page("configuration", "configuration", "configuracion"),
+      page("api", "api", "api"),
+      page("faq", "faq", "faq"),
+    ],
+  },
+];
+
+const REWARDS_NAV: NavGroup[] = [
+  {
+    label: { en: "Getting started", es: "Empezar" },
+    pages: [
+      page("introduction", "introduction", "introduccion"),
+      page("installation", "installation", "instalacion"),
+    ],
+  },
+  {
+    label: { en: "Rewards", es: "Recompensas" },
+    pages: [
+      page("rewards", "rewards", "recompensas"),
+      page("calendar", "calendar", "calendario"),
+      page("codes", "codes", "codigos"),
+    ],
+  },
+  {
+    label: { en: "Modules", es: "Módulos" },
+    pages: [
+      page("afk-zones", "afk-zones", "zonas-afk"),
+      page("votes", "votes", "votos"),
+      page("referrals", "referrals", "referidos"),
+    ],
+  },
+  {
+    label: { en: "Reference", es: "Referencia" },
+    pages: [
+      page("commands", "commands", "comandos"),
+      page("permissions", "permissions", "permisos"),
+      page("placeholders", "placeholders", "placeholders"),
+      page("configuration", "configuration", "configuracion"),
+      page("network", "network", "red"),
+      page("faq", "faq", "faq"),
+    ],
+  },
+];
+
+const TABLETOP_NAV: NavGroup[] = [
+  {
+    label: { en: "Getting started", es: "Empezar" },
+    pages: [
+      page("introduction", "introduction", "introduccion"),
+      page("installation", "installation", "instalacion"),
+      page("playing", "playing", "jugar"),
+    ],
+  },
+  {
+    label: { en: "Games", es: "Juegos" },
+    pages: [page("games", "games", "juegos")],
+  },
+  {
+    label: { en: "Reference", es: "Referencia" },
+    pages: [
+      page("commands", "commands", "comandos"),
+      page("permissions", "permissions", "permisos"),
+      page("placeholders", "placeholders", "placeholders"),
+      page("configuration", "configuration", "configuracion"),
+      page("api", "api", "api"),
+      page("faq", "faq", "faq"),
+    ],
+  },
+];
+
+const COMBAT_NAV: NavGroup[] = [
+  {
+    label: { en: "Getting started", es: "Empezar" },
+    pages: [
+      page("introduction", "introduction", "introduccion"),
+      page("installation", "installation", "instalacion"),
+    ],
+  },
+  {
+    label: { en: "Combat", es: "Combate" },
+    pages: [
+      page("combat-tag", "combat-tag", "etiqueta-de-combate"),
+      page("logging-out", "logging-out", "desconexion"),
+      page("restrictions", "restrictions", "restricciones"),
+      page("protection", "protection", "proteccion"),
+      page("cooldowns", "cooldowns", "cooldowns"),
+    ],
+  },
+  {
+    label: { en: "Kills", es: "Kills" },
+    pages: [
+      page("stats", "stats", "estadisticas"),
+      page("kill-rewards", "kill-rewards", "recompensas"),
+    ],
+  },
+  {
+    label: { en: "Network", es: "Red" },
+    pages: [
+      page("cross-server", "cross-server", "multiservidor"),
+      page("integrations", "integrations", "integraciones"),
+    ],
+  },
+  {
+    label: { en: "Reference", es: "Referencia" },
+    pages: [
+      page("commands", "commands", "comandos"),
+      page("permissions", "permissions", "permisos"),
+      page("placeholders", "placeholders", "placeholders"),
+      page("configuration", "configuration", "configuracion"),
+      page("api", "api", "api"),
+      page("faq", "faq", "faq"),
+    ],
+  },
+];
+
 const CRATES_NAV: NavGroup[] = [
   {
     label: { en: "Getting started", es: "Empezar" },
@@ -1811,6 +1976,112 @@ export const plugins: Plugin[] = [
       { en: "Folia", es: "Folia" },
     ],
     nav: CASINO_NAV,
+  },
+  {
+    id: "exyliatabletop",
+    name: "ExyliaTabletop",
+    tagline: { en: "Eighteen board, card and dice games played player against player", es: "Dieciocho juegos de tablero, cartas y dados entre jugadores" },
+    summary: {
+      en: "Tic-tac-toe, four in a row, gomoku, reversi, checkers, dots and boxes, battleship, memory, ludo, pick a card, high card, twenty-one, poker, liar's dice, dice duel, rock paper scissors, reflexes and hot potato, played player against player on 3D boards drawn in front of each player where they stand, from open tables in a live lobby or direct invitations, for a stake in the server's currencies held by an escrow that survives a restart, with the winner taking the pot less a configurable server fee, per-game records and a public API.",
+      es: "Tres en raya, cuatro en línea, gomoku, reversi, damas, puntos y cajas, hundir la flota, memoria, ludo, pick a card, carta alta, veintiuno, póker, dados del mentiroso, duelo de dados, piedra papel tijera, reflejos y patata caliente, jugados jugador contra jugador en tableros 3D dibujados delante de cada jugador allí donde está, desde mesas abiertas en un lobby en directo o invitaciones directas, por un importe en las monedas del servidor retenido por un depósito que sobrevive a un reinicio, con el ganador llevándose el bote menos una comisión del servidor configurable, historial por juego y una API pública.",
+    },
+    version: "1.0.0",
+    status: "beta",
+    category: { en: "Survival", es: "Survival" },
+    minecraft: "1.21+",
+    banner: "https://s3.exylia.net/exylia-plugins/public/static/images/plugins/tabletop/ExyliaTabletopBanner.webp",
+    purchase: "https://builtbybit.com/resources/exylia-tabletop-18-board-card-duels.134403/",
+    tags: [
+      { en: "Minigames", es: "Minijuegos" },
+      { en: "Duels", es: "Duelos" },
+      { en: "Economy", es: "Economía" },
+      { en: "Folia", es: "Folia" },
+    ],
+    nav: TABLETOP_NAV,
+  },
+  {
+    id: "exyliaduels",
+    name: "ExyliaDuels",
+    tagline: { en: "Survival 1v1 duels with stakes paid exactly once", es: "Duelos 1v1 de survival con apuestas pagadas exactamente una vez" },
+    summary: {
+      en: "Survival 1v1 duels started with /duel and set up on one screen, fought with the players' own inventory (kept or at risk) or a server kit, in arenas that save, copy and regenerate themselves and can be bound to one kit, with money bets taxed as a sink and item bets in a two-player trade window, every stake held by an escrow that survives crashes, quits and restarts, spectators, records, and server-kit duels across a network on an arena server.",
+      es: "Duelos 1v1 de survival que se inician con /duel y se configuran en una sola pantalla, con el inventario propio de los jugadores (sin riesgo o a riesgo) o con un kit del servidor, en arenas que se guardan, se copian y se regeneran solas y pueden ligarse a un kit, con apuestas de dinero con impuesto como sumidero y apuestas de objetos en una ventana de intercambio entre los dos, cada apuesta retenida por un depósito que sobrevive a crashes, desconexiones y reinicios, espectadores, estadísticas, y duelos con kit del servidor en red en un servidor de arenas.",
+    },
+    version: "1.0.0",
+    status: "beta",
+    category: { en: "PvP", es: "PvP" },
+    minecraft: "1.21.4+",
+    banner: "https://s3.exylia.net/exylia-plugins/public/static/images/plugins/duels/ExyliaDuelsBanner.webp",
+    tags: [
+      { en: "Duels", es: "Duelos" },
+      { en: "Arenas", es: "Arenas" },
+      { en: "Network", es: "Red" },
+      { en: "Folia", es: "Folia" },
+    ],
+    nav: DUELS_NAV,
+  },
+  {
+    id: "exyliamobs",
+    name: "ExyliaMobs",
+    tagline: { en: "Custom mobs built in game, and the areas that keep them alive", es: "Mobs personalizados creados en el juego, y las zonas que los mantienen vivos" },
+    summary: {
+      en: "Custom mobs built entirely in game — name, type, equipment, attributes, flags, effects, staged skills from a library, fight phases, looks, reactions and Blockbench models worn without a resource pack — with ten reward lists from the top damager to the death loot, boosters and a queue for absent players, generators that spawn waves in an area while players are near, templates shared across a network, and a shared store other plugins such as ExyliaRewards spawn them from.",
+      es: "Mobs personalizados creados por completo en el juego — nombre, tipo, equipo, atributos, flags, efectos, habilidades escenificadas de una biblioteca, fases de combate, aspecto, reacciones y modelos de Blockbench sin resource pack — con diez listas de recompensas desde el que más daño hizo hasta el botín de muerte, potenciadores y una cola para jugadores ausentes, generadores que lanzan oleadas en una zona mientras hay jugadores cerca, plantillas compartidas en toda una red, y un almacén compartido desde el que otros plugins como ExyliaRewards las generan.",
+    },
+    version: "1.0.0",
+    status: "beta",
+    category: { en: "Survival", es: "Survival" },
+    minecraft: "1.21.4+",
+    banner: "https://s3.exylia.net/exylia-plugins/public/static/images/plugins/mobs/ExyliaMobsBanner.webp",
+    tags: [
+      { en: "Mobs", es: "Mobs" },
+      { en: "Displays", es: "Displays" },
+      { en: "Network", es: "Red" },
+      { en: "Folia", es: "Folia" },
+    ],
+    nav: MOBS_NAV,
+  },
+  {
+    id: "exyliarewards",
+    name: "ExyliaRewards",
+    tagline: { en: "Rewards players come back for, built in game", es: "Recompensas por las que los jugadores vuelven, creadas en el juego" },
+    summary: {
+      en: "Daily, weekly and monthly rewards with streaks and streak freezes, timed, one-time, playtime and condition rewards, login calendars with paid catch-up, /redeem codes, AFK zones that pay more the longer players stay, NuVotifier votes with daily streaks and a network vote party that can send an ExyliaMobs piñata, and referrals paid once the new player settles in, all built and edited in game and stored in one database so every reward is paid once across the network.",
+      es: "Recompensas diarias, semanales y mensuales con rachas y congelaciones de racha, recompensas con espera, de una vez, de tiempo de juego y de condición, calendarios de conexión con recuperación pagada, códigos de /redeem, zonas AFK que pagan más cuanto más se quedan los jugadores, votos de NuVotifier con rachas diarias y una fiesta de votos de red que puede enviar una piñata de ExyliaMobs, y referidos que se pagan cuando el jugador nuevo se asienta, todo creado y editado en el juego y guardado en una base de datos para que cada recompensa se pague una vez en toda la red.",
+    },
+    version: "1.0.0",
+    status: "beta",
+    category: { en: "Survival", es: "Survival" },
+    minecraft: "1.21.4+",
+    banner: "https://s3.exylia.net/exylia-plugins/public/static/images/plugins/rewards/ExyliaRewardsBanner.webp",
+    tags: [
+      { en: "Rewards", es: "Recompensas" },
+      { en: "Economy", es: "Economía" },
+      { en: "Network", es: "Red" },
+      { en: "Folia", es: "Folia" },
+    ],
+    nav: REWARDS_NAV,
+  },
+  {
+    id: "exyliacombat",
+    name: "ExyliaCombat",
+    tagline: { en: "A combat tag and the PvP server built round it", es: "Un combat tag y el servidor de PvP construido a su alrededor" },
+    summary: {
+      en: "A combat tag decided by itself or by DeluxeCombat, CelestCombat or PvPManager, with logout punishment and logout NPCs, every restriction a tagged player needs, a PvP barrier at the edge of WorldGuard, Lands, GriefPrevention, Towny and SuperiorSkyblock2 safe zones, vanilla item cooldowns per world and region, a PvP switch, newbie, respawn and loot protection, stats and leaderboards, anti kill-farming, kill rewards, streaks and bounties, death messages, nametags and a tag that follows players across a proxy, in sixteen modules that switch on and off on their own.",
+      es: "Un combat tag que decide él mismo o DeluxeCombat, CelestCombat o PvPManager, con castigo y NPCs por desconexión, todas las restricciones que necesita un jugador en combate, una barrera PvP en el borde de las zonas seguras de WorldGuard, Lands, GriefPrevention, Towny y SuperiorSkyblock2, cooldowns de ítems por mundo y región, un interruptor de PvP, protección de novatos, al reaparecer y del botín, estadísticas y clasificaciones, anti farmeo de kills, recompensas, rachas y recompensas por cabeza, mensajes de muerte, nametags y un combate que sigue al jugador por todo un proxy, en dieciséis módulos que se activan por separado.",
+    },
+    version: "1.0.0",
+    status: "beta",
+    category: { en: "PvP", es: "PvP" },
+    minecraft: "1.21+",
+    banner: "https://s3.exylia.net/exylia-plugins/public/static/images/plugins/combat/ExyliaCombatBanner.webp",
+    tags: [
+      { en: "PvP", es: "PvP" },
+      { en: "Combat", es: "Combate" },
+      { en: "Stats", es: "Estadísticas" },
+      { en: "Folia", es: "Folia" },
+    ],
+    nav: COMBAT_NAV,
   },
   {
     id: "exyliamarket",

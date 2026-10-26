@@ -1,0 +1,152 @@
+---
+title: "Votes"
+description: "Votes through NuVotifier: votes.yml, how a vote is paid once, vote streaks, reminders, the network vote party and its ExyliaMobs piñatas."
+---
+
+The votes module pays players for voting for the server. Votes arrive through **NuVotifier** (or the
+original Votifier), what they pay is in `votes.yml`, and the vote party is edited in game with `/voteadmin`
+(`exyliarewards.votes.admin`).
+
+Without NuVotifier the module still runs: the console says so, and votes only arrive through
+`/voteadmin fake <player> [service]`, which sends a test vote down the whole path, rewards and party
+included.
+
+## votes.yml
+
+```yaml
+sites:
+  minecraft-mp:
+    name: '{primary}&lMINECRAFT-MP'
+    url: 'https://minecraft-mp.com/server/000000/vote/'
+    icon: PAPER
+
+vote:
+  rewards:
+    - type: ECONOMY
+      value: '30'
+  message: '%prefix% {success}Thanks for voting on {highlight}%service%{success}! ...'
+
+streaks:
+  '7':
+    rewards:
+      - type: ECONOMY
+        value: '150'
+    message: '%prefix% {letters}A {highlight}7-day {letters}vote streak ...'
+
+party:
+  rewards:
+    - type: ECONOMY
+      value: '20'
+  message: '%prefix% {letters}Vote party reward {letters_black}» {highlight}%rewards%'
+  commands: []
+```
+
+| Section | What it is |
+|---|---|
+| `sites` | The pages `/vote` lists: `name`, `url` and `icon` for each. Replace the URLs with your server's pages. |
+| `vote` | Paid for every vote. |
+| `streaks` | Paid once when a player's streak of daily votes reaches exactly that many days. The bundled file has 3, 7 and 30. |
+| `party` | Paid to everybody online on every server when the vote party starts. `commands` run **once for the whole network**, from the console of one server. |
+
+Every block takes `rewards`, an ExyliaLib reward list (see
+[Rewards in ExyliaLib](/docs/exylialib/rewards#in-a-config-file)), and `message`, sent once the block is
+paid (empty for none). In messages: `%player%`, `%rewards%` (what was paid, named), `%money%` (the money in
+it), and for `vote` and `streaks` also `%service%`, `%streak%` and `%total%`. Commands in the list get the
+same values. A file from an older version with `money: 30` in a block still pays it: it is read as a money
+entry at the head of the list.
+
+The file is yours: what you change is never overwritten. Reload it with `/rewardsadmin reload`.
+
+## A vote, start to finish
+
+1. NuVotifier hands the vote to one server, which stores it. Every later copy of the same vote, however late
+   (a lagging server, Votifier replaying its cache), is turned away for `votes.remember-votes-days` (default
+   14 days).
+2. Every server announces it on the **Votes** channel, which players can mute in `/settings`.
+3. The server its player is on pays it. A player who is offline is paid when they next join any server; a
+   vote for a name that never joins is dropped after `votes.pending-vote-days` (default 30, `0` keeps it for
+   ever).
+4. The vote counts towards the vote party, network-wide, offline players included.
+
+Votes are matched to players by name, case aside. Everything they pay is boosted for the `votes` source and
+delivered by id.
+
+## Vote streaks
+
+A vote on the day after the last one extends the streak; a day without a vote starts it over. Days are the
+plugin's clock days, so the streak turns at the same reset hour as every daily reward. A second vote on the
+same day pays `vote` again but leaves the streak where it is. A streak about to start over is kept by
+[streak freezes](/docs/exyliarewards/rewards#streak-freezes), one per day missed, when the player has them.
+
+## Reminders
+
+Players who have not voted today are reminded every `votes.reminder-minutes` (default 30, `0` never), and
+as they join when `votes.remind-on-join` is on. The reminder is a centred block with a clickable
+`[➥ VOTE]`.
+
+## The vote party
+
+Every vote on the network fills the party. When it reaches `votes.party.target` (default 50, `0` turns the
+party off):
+
+1. One server takes the party, decides what it does, and tells the network.
+2. Every server plays the **countdown**: a melody, a boss bar and a tick sound each second, for
+   `votes.party.countdown.seconds` (default 10, `0` starts at once).
+3. Then, depending on `votes.party.mode`, every server pays its online players the `party` block
+   (`REWARDS`), a piñata appears on one server (`PINATA`), or both (`BOTH`). The `party.commands` run once.
+
+Along the way, every server announces how close the party is when the votes left reach a number of
+`votes.party.milestones` (default 10, 5 and 1). The progress bar shows for `bossbar-seconds` after each vote
+(`bar-mode: AFTER_VOTE`) or stays on screen for everybody (`ALWAYS`).
+
+`/voteadmin party` starts the party being filled now, whatever its count.
+
+<Callout type="note" title="A party set to send a piñata pays when it cannot">
+Without an enabled piñata whose mob can spawn, or without an enabled spawn point, a `PINATA` or `BOTH` party
+pays the rewards instead, and the console says why.
+</Callout>
+
+## Piñatas
+
+A piñata is an ExyliaMobs mob in hits mode: players hit it until it breaks. Its look, tricks, lifetime and
+reward lists (per hit, last hit and everyone who hit it) are the mob's own, edited in `/mobsadmin`; see
+[ExyliaMobs](/docs/exyliamobs/introduction). ExyliaRewards adds what belongs to the party:
+
+| Setting | Default | What it does |
+|---|---|---|
+| Mob | — | The ExyliaMobs mob it spawns as. |
+| Status | enabled | A disabled piñata is never sent. |
+| Weight | `10` | How likely a party sends it against the other enabled piñatas. |
+| Hits | the mob's | Its mob's hits, plus **per player online** (`5`), up to a **cap** (`300`, `0` for none). |
+
+**Spawn points** are where a party's piñata may land, on any server of the network: stand there and **Add
+one here**. The server that takes the party picks the piñata and the point for everybody, and only the
+server the point belongs to spawns it. The network is told when one is on its way, when it appears, and who
+broke it, or that it wandered off when its lifetime ran out. While one stands, its chunk is held loaded and
+the players of that server see a boss bar with the hits left.
+
+| Command | Does |
+|---|---|
+| `/voteadmin pinata [id]` | Sends a piñata now, picked by weight or by ID, to one of this server's spawn points or where you stand. |
+| `/voteadmin pinata stop` | Takes every piñata on this server away, paying nothing. |
+
+## The vote party editor
+
+`/voteadmin` opens the party at a glance and a card for each part:
+
+| Card | Holds |
+|---|---|
+| Party | Target, party mode and milestones. |
+| Countdown & bar | The countdown's length and melody, the bar mode and how long it stays after a vote. |
+| Party rewards | Left-click edits the `party` rewards, right-click the commands. Both are written to `votes.yml`. |
+| Piñatas | Every piñata, heaviest first, with its chance; create one from an ExyliaMobs mob, edit or delete it, open its mob in `/mobsadmin`, send one here, and the spawn points. |
+| Start it now | As `/voteadmin party`. |
+| Remove the piñatas | As `/voteadmin pinata stop`, after asking. |
+
+The target, mode, milestones, countdown and bar are written back to `config.yml` under `votes.party`.
+
+## What players see
+
+`/vote` (or `/votes`) lists the vote sites; clicking one sends its link in chat. Beside them, the player's
+votes today, total, streak and best streak, and the party's progress. The **Votes** card of `/rewards`
+opens the same screen.

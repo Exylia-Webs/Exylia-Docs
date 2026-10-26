@@ -1,0 +1,106 @@
+---
+title: "Stats"
+description: "Kills, deaths, KDR, streaks and points, /pvpstats and its menu, /combattop and the cached leaderboards, and the PvP death messages."
+---
+
+## What is counted
+
+The `stats` module counts kills, deaths, the current kill streak, the best streak, points and combat logs.
+Only kills by a player count: a death to a mob, a fall or lava with nobody behind it changes nothing. A
+kill that [kill-abuse](/docs/exyliacombat/kill-rewards#kill-abuse) keeps out of the stats is not counted for
+either player, and kills in `disabled-worlds` are not counted.
+
+A counted kill adds one kill and one to the killer's streak, and one death to the victim, whose streak goes
+back to 0. KDR is kills over deaths, and a player who never died counts as having died once. Every punished
+[logout](/docs/exyliacombat/logging-out) adds one combat log.
+
+## Points
+
+With `points.enabled`, every player starts at `points.starting` and a counted kill moves points with two
+formulas. Variables: `%killer_points%`, `%victim_points%`, `%killer_streak%` and `%victim_streak%`, read
+before the kill. Functions: `min`, `max`, `abs`, `floor`, `ceil`, `round`, `sqrt`. A result is rounded, and
+a player never drops below 0.
+
+```yaml
+points:
+  enabled: true
+  starting: 1000
+  gained: 'max(5, round(20 + (%victim_points% - %killer_points%) * 0.04))'
+  lost: 'max(3, round(15 + (%victim_points% - %killer_points%) * 0.03))'
+```
+
+Killing someone with more points than you is worth more. The killer is sent `kill` and the victim `death`
+from the module's messages, with `%points%`.
+
+## `/pvpstats` and `/combattop`
+
+| Command | What it does |
+|---|---|
+| `/pvpstats [player]` | Opens the stats screen of the player, or of anyone who ever joined. From the console, or with `use-menu: false`, the stats are written in chat. |
+| `/combattop [stat] [page]`, also `/pvptop` | Opens the leaderboard screen, or writes the page in chat from the console or with `use-menu: false`. Stats: `kills`, `deaths`, `kdr`, `streak`, `beststreak`, `points` (default). |
+
+The stats screen (`lang/<language>/modules/stats/menu.yml`) shows the player's head and one card per stat
+with its rank; a click on a card opens that leaderboard. The leaderboard screen (`leaderboard.yml`) lists
+the cached board, the top three and the viewer drawn with their own templates, with a button per stat along
+the bottom and the viewer's own position at the centre; a click on a row opens that player's stats. Both
+files are yours to restyle: an update only adds what is missing. The menu actions they use are
+`exyliacombat:leaderboard <stat>` and `exyliacombat:stats`.
+
+Leaderboards are read from the database every `leaderboard.refresh-interval` (never more often than every
+30 seconds), so a kill shows on the board at the next refresh. `%rank%` and the `_rank` values are a
+player's place on those boards, or `unranked`.
+
+## Settings
+
+`modules/stats/config.yml`:
+
+| Key | Default | What it does |
+|---|---|---|
+| `stats-command` | `[pvpstats]` | Names of `/pvpstats`; the first is the command, the rest aliases. `/stats` is left to other plugins: a file still holding the old default `[stats, pvpstats]` is changed to `[pvpstats]` once, any other list is kept. Read at startup. |
+| `top-command` | `[combattop, pvptop]` | Names of `/combattop`. Read at startup. |
+| `use-menu` | `true` | `/pvpstats` and `/combattop` open menus for players. `false`: chat. |
+| `disabled-worlds` | `[]` | Worlds where kills and deaths are not counted. |
+| `points.enabled` | `true` | Count points at all. `false`: points stay where they are. |
+| `points.starting` | `1000` | Points a player starts with. |
+| `points.gained`, `points.lost` | see above | The two formulas. |
+| `leaderboard.refresh-interval` | `5m` | How often the leaderboards are read again from the database. |
+| `leaderboard.size` | `100` | Players kept per leaderboard. |
+| `leaderboard.page-size` | `10` | Entries per page of `/combattop` in chat. |
+| `commands-on-kill` | `[]` | Commands run for the killer of a counted kill: `%player_name%`, `%victim%`, `%points%`. Prefixes `console:` (default), `player:`, `player-proxy:` or `console-proxy:`. |
+| `commands-on-death` | `[]` | Commands run for the victim: `%player_name%`, `%killer%`, `%points%`. |
+
+Text in `lang/<language>/modules/stats/messages.yml`: the chat `stats` block, `no-data`, `kill`, `death`,
+`top-header`, `top-entry`, `top-footer`, `top-empty`, `unranked`, the stat `names`, the leaderboard's
+`leaderboard-showing` and `leaderboard-switch` lines and `admin-reset`.
+
+`/combatadmin stats reset <player>` sets an online player's stats back to zero and their points to
+`points.starting`. The admin panel does the same after a confirmation.
+
+## Death messages
+
+The `death-messages` module replaces the vanilla message of a death caused by a player with one line per
+damage cause. Other deaths keep the vanilla message.
+
+`modules/death-messages/config.yml`:
+
+| Key | Default | What it does |
+|---|---|---|
+| `scope` | `GLOBAL` | Who reads it. `GLOBAL`: everyone. `WORLD`: players in the victim's world. `RADIUS`: players within `radius` blocks of the death. `INVOLVED`: the killer and the victim. `HIDDEN`: nobody, no message at all. |
+| `radius` | `100` | For `RADIUS`: distance in blocks. |
+| `console` | `true` | Also writes it to the console. |
+| `disabled-worlds` | `[]` | Worlds where the vanilla message is left alone. |
+
+`lang/<language>/modules/death-messages/messages.yml` has one line per cause of the killing blow under
+`causes`, keyed like `entity-attack`, `entity-sweep-attack`, `projectile`, `entity-explosion`,
+`block-explosion`, `fall`, `void`, `lava`, `fire`, `fire-tick`, `magic`, `poison`, `wither`, `thorns`,
+`drowning`, `lightning` or `contact`. A cause not listed uses `fallback`. Values: `%killer%`, `%victim%`,
+`%weapon%` (the item's name, or `fists` when the hand was empty), `%killer_health%` (hearts left) and
+`%killer_max_health%`. An empty line sends nothing.
+
+```yaml
+causes:
+  entity-attack: '{error}⚔ {highlight}%victim% {letters}was slain by {highlight}%killer% {letters}using {info}%weapon% {letters_black}({error}%killer_health%❤{letters_black})'
+  fall: '{error}☠ {highlight}%victim% {letters}was knocked to their death by {highlight}%killer%'
+fallback: '{error}☠ {highlight}%victim% {letters}was killed by {highlight}%killer% {letters_black}({error}%killer_health%❤{letters_black})'
+fists: 'their fists'
+```

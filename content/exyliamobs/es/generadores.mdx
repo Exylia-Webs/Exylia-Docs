@@ -1,0 +1,105 @@
+---
+title: "Generadores"
+description: "Zonas que mantienen mobs vivos mientras hay jugadores cerca: crear uno, su zona, sus mobs y sus pesos, los números, cómo aparece una oleada, WorldGuard y las redes."
+---
+
+Un generador es una zona del mapa que mantiene vivos varios mobs mientras alguien está cerca. Sin nadie
+cerca no aparece nada; los mobs que ya están fuera se quedan.
+
+## La lista de generadores
+
+`/mobsadmin` → **GENERADORES** lista los generadores de este servidor: su estado, su mundo, sus mobs, y
+cuántos hay vivos sobre el máximo.
+
+| Clic | Qué hace |
+|---|---|
+| Clic izquierdo en un generador | Abre su pantalla. |
+| Shift-clic en un generador | Te teletransporta al centro de su zona. |
+| Clic derecho en un generador | Lo elimina, tras una confirmación. Sus mobs vivos se quitan. |
+| **CREAR GENERADOR** | Pide un id (hasta 64 caracteres, único en toda la red) y lo abre. |
+
+Su estado dice **Sin área** hasta que se selecciona la zona, **Sin mobs** hasta que tiene uno, y después
+**Activado** o **Desactivado**.
+
+## Prepararlo
+
+<Steps>
+  <Step title="Créalo">
+    **CREAR GENERADOR**, y escribe su id.
+  </Step>
+  <Step title="Selecciona la zona">
+    **ÁREA** → clic izquierdo. El selector compartido de ExyliaLib te da la varita: marca dos esquinas. La caja
+    entre ellas, de suelo a techo, es la zona. Consulta
+    [Guiar a alguien por una configuración](/docs/exylialib/entrada-y-editores#guiar-a-alguien-por-una-configuración).
+  </Step>
+  <Step title="Dale mobs">
+    **MOBS** abre una lista: añade mobs de los que existen, y pulsa uno para ajustar su peso.
+  </Step>
+  <Step title="Ajusta los números">
+    Máximo de vivos, por oleada, intervalo, radio de activación y por jugador. Un generador nuevo ya está
+    activado.
+  </Step>
+</Steps>
+
+## La pantalla del generador
+
+Cada cambio se aplica en la siguiente pasada del temporizador de generadores.
+
+| Botón | Por defecto | Qué ajusta |
+|---|---|---|
+| **ESTADO** | Activado | Lo activa o desactiva. Un generador desactivado no genera nada; sus mobs vivos se quedan. |
+| **ÁREA** | — | Clic izquierdo la vuelve a seleccionar; clic derecho te teletransporta allí. |
+| **ACTIVACIÓN** | 24 bloques | Lo cerca que tiene que estar un jugador de la zona para que genere, de `0` a `256`. `0` significa dentro de la zona. La distancia se mide al bloque más cercano de la zona; los espectadores no cuentan. |
+| **POR JUGADOR** | Ninguno | Cada jugador cercano a partir del primero suma esta cantidad al máximo de vivos y a cada oleada, de `0` a `100`. |
+| **MOBS** | Ninguno | Qué mobs genera, cada uno con un peso. |
+| **MÁXIMO DE VIVOS** | 6 | Deja de generar cuando hay vivos tantos de sus mobs, de `1` a `500`. |
+| **INTERVALO** | 20 s | Cada cuánto aparece una oleada, escrito como `10s`, `30s` o `1m`. Al menos un segundo. |
+| **POR OLEADA** | 2 | Cuántos aparecen en cada oleada, hasta el máximo de vivos, de `1` a `100`. |
+| **ELIMINAR SUS MOBS** | — | Quita los mobs que mantiene vivos. Se rellena en su siguiente oleada. |
+| **VOLVER** | — | La lista de generadores. |
+| **ELIMINAR GENERADOR** | — | Lo elimina, tras una confirmación, y quita sus mobs vivos. |
+
+### Pesos
+
+Cada mob de la lista tiene un peso; la probabilidad de un mob en cada aparición es su peso sobre el total, y
+se muestra en su descripción. Un peso de `0` no lo genera nunca, y una lista en la que todos los pesos son
+`0` no genera nada. Un mob eliminado se salta.
+
+## Cómo aparece una oleada
+
+Cada `tick-seconds` (2 s por defecto) un temporizador recorre los generadores de este servidor. Un generador
+genera cuando está activado, tiene zona, ha pasado su intervalo y hay al menos un jugador dentro de su radio
+de activación. Entonces, con N jugadores cerca:
+
+- el **hueco** es su máximo de vivos más `N − 1` veces su número por jugador, menos sus mobs ya vivos;
+- la **oleada** es su número por oleada más ese mismo extra por jugador, recortada a ese hueco y a lo que
+  queda del tope de todo el servidor, `max-alive` en `config.yml` (200 por defecto, todos los generadores
+  juntos).
+
+Para cada mob de la oleada elige un mob por peso y una columna al azar de la zona. El sitio es el suelo
+sólido más alto de esa columna, dentro de la altura de la zona, con dos bloques libres y sin líquido encima.
+Una columna en un chunk sin cargar, o sin ese suelo, se prueba en otro sitio, hasta cuatro veces, antes de
+saltar ese mob hasta la siguiente oleada. Los generadores **nunca cargan un chunk**, y cada aparición se
+ejecuta en el hilo dueño de su sitio, así que el mismo código funciona en Folia.
+
+## WorldGuard
+
+Una aparición que el servidor cancela es casi siempre WorldGuard: con `mobs.block-plugin-spawning` activado
+(su valor por defecto), los flags `mob-spawning` y `deny-spawn` cancelan también las apariciones de plugins.
+ExyliaMobs deja esa decisión al dueño de la región y lo avisa en consola, una vez por generador:
+
+```text
+Mob generator crypt could not spawn at 120, 64, -40: … If a WorldGuard region there has mob-spawning
+or deny-spawn set, allow it for this area or set mobs.block-plugin-spawning: false in WorldGuard's world
+config. Logged once per generator.
+```
+
+## En una red
+
+Apunta varios servidores a la misma base de datos y:
+
+| Qué | Cómo |
+|---|---|
+| **Mobs** | Compartidos. Todos los servidores generan a partir de las mismas plantillas, y un id es único entre todos ellos. |
+| **Generadores** | Cada uno pertenece al servidor en el que se creó — con el nombre que le da el proxy cuando el puente de ExyliaLib está activo, o el `server-id` del bloque de Redis de `database.yml` si no — y solo ese servidor lo carga y lo ejecuta. Su id sigue siendo único en toda la red. |
+| **Cambios** | Con Redis activado, un mob o un generador guardado en un servidor se vuelve a leer en los demás al instante. Sin Redis, los demás servidores recogen el cambio en su siguiente reinicio: `/mobsadmin reload` no vuelve a leer mobs ni generadores. Consulta [Redis](/docs/exylialib/base-de-datos#redis). |

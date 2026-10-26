@@ -1,0 +1,89 @@
+---
+title: "API"
+description: "Reading and driving the combat tag from another plugin through ExyliaLib's Combat facade, and the tag, untag and combat log events."
+---
+
+ExyliaCombat has no API of its own to depend on. Other plugins use ExyliaLib's `Combat` facade
+(`net.exylia.lib.util.combat`), and ExyliaCombat registers itself behind it. Code written that way keeps
+working, and keeps compiling, on a server where DeluxeCombat or PvPManager answers instead, or where no
+combat plugin is installed at all.
+
+```java
+if (Combat.isTagged(player)) {
+    Text.of("{error}You cannot warp while in combat.").send(player);
+    return;
+}
+
+Combat.tag(target, attacker, Duration.ofSeconds(20));
+```
+
+<Callout type="note" title="Adding it to your project">
+The artifact, the repository and the `plugin.yml` line are the same for every Exylia plugin and live on
+the [public API page](/docs/exylialib/api). The facade itself is described with
+[ExyliaLib's players](/docs/exylialib/players#combat).
+</Callout>
+
+## What ExyliaCombat answers
+
+| Method | Answered by |
+|---|---|
+| `boolean isTagged(Player)` | The active provider. |
+| `Duration remaining(Player)` | Time left, `Duration.ZERO` when not tagged. |
+| `Optional<Player> opponentOf(Player)` | The opponent, with the built-in provider and CelestCombat. |
+| `void tag(Player target, Player attacker)` | Tags for `combat.duration` (cause `API`). Built-in and manual providers only. |
+| `void tag(Player target, Player attacker, Duration)` | Tags for that long. A running tag that lasts longer is kept. |
+| `void untag(Player)` | Ends the tag (reason `API`). Built-in and manual providers only. |
+| `void forgetFlight(Player)` | The flight taken away on tag is not given back when it ends. For a plugin that granted flight for a while and took it back meanwhile. |
+| `boolean isProtected(Player)` | `true` under newbie or respawn protection. |
+| `boolean isPvpEnabled(Player)` | The PvP switch; `true` with `pvp-toggle` off. |
+| `void setPvpEnabled(Player, boolean)` | Sets it, running the module's command hooks. Does nothing with `pvp-toggle` off. |
+| `boolean canAttack(Player attacker, Player defender)` | Every refusal rule at once: PvP switch, newbie and respawn protection. |
+| `Optional<CombatStats> statsOf(Player)` | Kills, deaths, streak, best streak, combat logs and points of an online player, with `stats` on; empty otherwise. `ratio()` is the KDR. |
+| `String providerName()` | `ExyliaCombat (BuiltIn)`, `ExyliaCombat (CelestCombat)`... |
+
+ExyliaCombat registers with priority `100`. Under DeluxeCombat or PvPManager with none of `pvp-toggle`,
+`newbie-protection`, `stats` and `respawn-protection` on, it does not register at all, and ExyliaLib reads
+that plugin directly.
+
+## Events
+
+Fired by the built-in and manual providers on the tagged player's own thread (their region thread on
+Folia; `isAsynchronous()` says so). An external provider fires its own events instead.
+
+| Event | When |
+|---|---|
+| `CombatTagEvent` | Before every tag or renewal. Cancellable: the player stays exactly as they were. `setDuration` changes how long it lasts; `isRefresh()` is `true` when they were already tagged; `getAttacker()` may be `null`. |
+| `CombatUntagEvent` | After the tag is gone. |
+| `CombatLogEvent` | A punished logout, while the player is still online and before the punishment. Cancellable: no punishment, commands, broadcast or webhook. `getOpponent()`, `getRemaining()`. `CombatUntagEvent` with `LOGOUT` follows either way. |
+
+`CombatTagEvent.getCause()`:
+
+| Cause | When |
+|---|---|
+| `DAMAGED` | The player was hit. |
+| `ATTACKED` | The player hit somebody, or hit a logout NPC. |
+| `ADMIN` | `/combatadmin settag` or the admin panel. |
+| `API` | `Combat.tag`. |
+| `OTHER` | A logger coming back while their NPC stood, or a tag carried from another server. |
+
+`CombatUntagEvent.getReason()`:
+
+| Reason | When |
+|---|---|
+| `EXPIRED` | The tag ran out. |
+| `KILLED` | The player killed their opponent, with `combat.untag-on-kill`. |
+| `DIED` | The player died. |
+| `LOGOUT` | They left while tagged; for a punished logout a `CombatLogEvent` came first. |
+| `KICKED` | They were kicked and spared, without `combat.punish-on-kick`. |
+| `ADMIN` | `/combatadmin untag` or the admin panel. |
+| `API` | `Combat.untag`. |
+| `OTHER` | Moved to a blacklisted world, switched server under `cross-server`, or the provider was reloaded. |
+
+```java
+@EventHandler
+public void onTag(CombatTagEvent event) {
+    if (arenas.isInArena(event.getPlayer())) {
+        event.setCancelled(true);
+    }
+}
+```
