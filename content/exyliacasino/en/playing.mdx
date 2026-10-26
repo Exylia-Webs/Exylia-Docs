@@ -1,0 +1,107 @@
+---
+title: "Playing a round"
+description: "How a round starts, the stake and its currency, the options a game asks for, the room and the guide, AGAIN and CHANGE BET, and every way a round ends."
+---
+
+## Starting a round
+
+There are three ways in, and they all lead to the same flow:
+
+| Way | What it does |
+|---|---|
+| `/casino` | Opens the casino category of the games screen: every game the server has on, with its RTP and how many are playing. Clicking one starts it. |
+| `/<game> [stake] [option]` | Starts that game: `/mines 500 5`, `/roulette 100 red`, `/coinflip 50 heads`. |
+| `casino:play <game>` | A menu action, the same as typing `/<game>` alone. For a server's own menus and NPCs. |
+
+Whatever is left out is asked:
+
+1. **The currency**, only when the player may bet in more than one and typed no amount. A choice dialog
+   lists them.
+2. **The stake**, in an amount dialog that states the minimum. A stake typed in the command is used as it
+   is.
+3. **The game's option**, when the game has one: the mines on the board, the bet on the wheel, the side of
+   the coin. Some games ask with a dialog, others with a screen of their own. See
+   [Games](/docs/exyliacasino/games).
+
+A stake typed in the command uses the server's default currency when the player may bet in it, and the
+first currency offered otherwise. Amounts accept the short forms of ExyliaLib's economy, such as `1.5k`.
+
+### When a stake is refused
+
+| Refused because | The player reads |
+|---|---|
+| No currency they may use is offered | There is no currency you can bet with. |
+| Not a positive amount | That is not an amount you can bet. |
+| Under `wager.minimum` or over `wager.maximum` | The smallest bet is … / The largest bet is … |
+| They cannot afford it | You need … to place that bet. |
+| They are combat tagged | You can't bet while in combat. |
+| They are already in a round | You already have a bet going. |
+| Another plugin holds them, such as an ExyliaTabletop match | You are busy in … |
+| Another plugin advises against taking them | You can't right now: … |
+| Two rounds started inside `wager.cooldown` | Slow down. Try again in … |
+| The game is switched off | … is not available on this server. |
+
+Every check runs **before** anything is charged.
+
+## At the table
+
+The stake is held by ExyliaLib's escrow, the player is claimed so every other plugin sees them busy, and
+the round starts where they stand:
+
+- **The room.** A closed dark room is drawn round them, only for them, and other players are hidden from
+  them meanwhile. It is styled by `booth` in `config.yml`.
+- **The table.** The board is drawn in front of their eyes, on felt with a neon frame and casino bulbs
+  chasing round it, with the game's name and a line of figures over it: the stake and the RTP.
+- **The guide.** A turn of the head away, how the game is played on their left and what it pays on their
+  right, never over the board. Switched off with `guide.enabled: false`.
+- **Held still.** With `arena.freeze` on, they cannot walk off their table.
+
+The crosshair plays the game: what can be clicked lights up under it with a soft sound, and a left or right
+click presses it. While a round is up the player cannot be hurt, does not get hungry, cannot drop, pick up,
+break or place anything, and cannot move items in their inventory.
+
+Commands are blocked during a round, except the game's own command (so `/mines leave` works) and those
+listed in `arena.allowed-commands` (`msg`, `r`, `tell` by default). A blocked command answers "Leave the
+game with /mines leave first."
+
+## The result
+
+The verdict lands on a plaque over the table: **YOU WON** with the prize and the multiplier, **EVEN** when
+the stake comes back, **YOU LOST** with the stake. A win flashes the bulbs, rains gold nuggets over the
+board and sets off fireworks only the winner sees; a loss puffs smoke. The same result goes to chat.
+
+A round's multiplier is of the stake: ×2 pays back twice the stake, ×1 gives it back, ×0 loses it. A double
+or a split in blackjack puts in a second stake, held by the escrow like the first, and the result pays both
+hands.
+
+## AGAIN, CHANGE BET and LEAVE
+
+When a money round ends, after `again.delay` the buttons come up under the finished board:
+
+| Button | What it does |
+|---|---|
+| **AGAIN** | Plays again at the same stake and the same option, without leaving the table. |
+| **CHANGE BET** | Asks the option again before playing: shown only in games that ask for one (Mines, Tower, Roulette, Live Roulette, Coinflip, Plinko, Horse Race). |
+| **LEAVE** | Takes the room down and gives the player their view back. |
+
+Games whose board has a play button of its own (SPIN, DROP, CASH OUT) lend it to AGAIN. The buttons wait
+`again.timeout` for an answer. With `again.enabled: false` the player is sent away when a round ends.
+Double or Nothing, staked with an item, never offers AGAIN.
+
+## How a round ends
+
+| What happens | What it costs |
+|---|---|
+| The round plays out | Paid as the result says. |
+| `/<game> leave`, quitting, dying, a teleport not made by a plugin, changing world | The round is forfeited and the stake lost. A round not yet started is refunded. |
+| Left untouched for the game's `idle` time | Treated as leaving: the round under way is forfeited. |
+| The server stops | Settled as it stands, never forfeited: a result already decided is paid, a cash-out game is cashed out, blackjack and video poker are played out, and a bet not placed yet is refunded. |
+
+Dying in a round keeps the inventory and the levels. `/casinoadmin reload` does not touch rounds under way:
+they are left to finish, and a game switched off only refuses new rounds.
+
+<Callout type="warning" title="Idle means forfeit">
+The comments of several module files say a game left idle is cashed out or refunded. The plugin treats an
+idle player as one who left: the round under way is lost. Slots and the Wheel spin on their own after
+`auto-spin`, well before that.
+</Callout>

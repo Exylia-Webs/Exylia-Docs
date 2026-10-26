@@ -1,0 +1,109 @@
+---
+title: "Jugar una ronda"
+description: "Cómo empieza una ronda, la apuesta y su moneda, las opciones que pide un juego, la sala y la guía, OTRA VEZ y CAMBIAR APUESTA, y todas las formas en que termina una ronda."
+---
+
+## Empezar una ronda
+
+Hay tres formas de entrar, y todas llevan al mismo flujo:
+
+| Forma | Qué hace |
+|---|---|
+| `/casino` | Abre la categoría casino de la pantalla de juegos: cada juego que el servidor tiene activado, con su RTP y cuántos están jugando. Al pulsar uno, empieza. |
+| `/<game> [apuesta] [opción]` | Empieza ese juego: `/mines 500 5`, `/roulette 100 red`, `/coinflip 50 heads`. |
+| `casino:play <game>` | Una acción de menú, igual que escribir `/<game>` a secas. Para los menús y NPCs propios del servidor. |
+
+Lo que falte se pregunta:
+
+1. **La moneda**, solo cuando el jugador puede apostar en más de una y no escribió cantidad. Un diálogo de
+   elección las lista.
+2. **La apuesta**, en un diálogo de cantidad que indica el mínimo. Una apuesta escrita en el comando se usa
+   tal cual.
+3. **La opción del juego**, cuando el juego tiene una: las minas del tablero, la apuesta de la ruleta, la
+   cara de la moneda. Unos juegos preguntan con un diálogo, otros con una pantalla propia. Consulta
+   [Juegos](/docs/exyliacasino/juegos).
+
+Una apuesta escrita en el comando usa la moneda por defecto del servidor cuando el jugador puede apostar en
+ella, y si no, la primera moneda ofrecida. Las cantidades aceptan las formas cortas de la economía de
+ExyliaLib, como `1.5k`.
+
+### Cuándo se rechaza una apuesta
+
+| Se rechaza porque | El jugador lee |
+|---|---|
+| No se ofrece ninguna moneda que pueda usar | No hay ninguna moneda con la que puedas apostar. |
+| No es una cantidad positiva | Esa no es una cantidad válida. |
+| Está por debajo de `wager.minimum` o por encima de `wager.maximum` | La apuesta mínima es … / La apuesta máxima es … |
+| No le alcanza | Necesitas … para esa apuesta. |
+| Está en combate | No puedes apostar en combate. |
+| Ya está en una ronda | Ya tienes una apuesta en curso. |
+| Otro plugin lo tiene ocupado, como una partida de ExyliaTabletop | Estás ocupado en … |
+| Otro plugin desaconseja tomarlo | Ahora no puedes: … |
+| Dos rondas empezadas dentro de `wager.cooldown` | Más despacio. Inténtalo en … |
+| El juego está desactivado | … no está disponible en este servidor. |
+
+Todas las comprobaciones se hacen **antes** de cobrar nada.
+
+## En la mesa
+
+El depósito de ExyliaLib retiene la apuesta, el jugador queda reservado para que cualquier otro plugin lo
+vea ocupado, y la ronda empieza donde está:
+
+- **La sala.** Se dibuja una sala oscura y cerrada a su alrededor, solo para él, y mientras tanto los demás
+  jugadores quedan ocultos. Su estilo lo define `booth` en `config.yml`.
+- **La mesa.** El tablero se dibuja delante de sus ojos, sobre un tapete con marco de neón y bombillas de
+  casino que corren a su alrededor, con el nombre del juego y una línea de cifras encima: la apuesta y el RTP.
+- **La guía.** A un giro de cabeza, cómo se juega a su izquierda y cuánto paga a su derecha, nunca encima
+  del tablero. Se desactiva con `guide.enabled: false`.
+- **Quieto.** Con `arena.freeze` activado, no puede alejarse de su mesa.
+
+Se juega con la mira: lo que se puede pulsar se ilumina bajo ella con un sonido suave, y un clic izquierdo o
+derecho lo pulsa. Mientras hay una ronda en marcha el jugador no recibe daño, no pasa hambre, no puede
+tirar, recoger, romper ni colocar nada, y no puede mover ítems en su inventario.
+
+Los comandos están bloqueados durante una ronda, salvo el propio comando del juego (así `/mines leave`
+funciona) y los de `arena.allowed-commands` (`msg`, `r`, `tell` por defecto). Un comando bloqueado responde
+"Sal del juego con /mines leave primero."
+
+## El resultado
+
+El veredicto aparece en una placa sobre la mesa: **GANASTE** con el premio y el multiplicador, **EMPATE**
+cuando se recupera la apuesta, **PERDISTE** con la apuesta. Una victoria hace parpadear las bombillas, deja
+caer pepitas de oro sobre el tablero y lanza fuegos artificiales que solo ve el ganador; una derrota suelta
+humo. El mismo resultado llega al chat.
+
+El multiplicador de una ronda es sobre la apuesta: ×2 devuelve el doble de la apuesta, ×1 la devuelve, ×0 la
+pierde. Doblar o dividir en blackjack pone una segunda apuesta, retenida por el depósito como la primera, y
+el resultado paga las dos manos.
+
+## OTRA VEZ, CAMBIAR APUESTA y SALIR
+
+Cuando termina una ronda con dinero, tras `again.delay` aparecen los botones bajo el tablero terminado:
+
+| Botón | Qué hace |
+|---|---|
+| **OTRA VEZ** | Vuelve a jugar con la misma apuesta y la misma opción, sin dejar la mesa. |
+| **CAMBIAR APUESTA** | Vuelve a preguntar la opción antes de jugar: solo aparece en los juegos que piden una (Mines, Tower, Roulette, Live Roulette, Coinflip, Plinko, Horse Race). |
+| **SALIR** | Quita la sala y le devuelve la vista al jugador. |
+
+Los juegos cuyo tablero tiene un botón de juego propio (GIRAR, SOLTAR LA BOLA, RETIRAR) se lo prestan a OTRA
+VEZ. Los botones esperan una respuesta durante `again.timeout`. Con `again.enabled: false` el jugador sale
+al terminar la ronda. Double or Nothing, que se apuesta con un ítem, nunca ofrece OTRA VEZ.
+
+## Cómo termina una ronda
+
+| Qué pasa | Lo que cuesta |
+|---|---|
+| La ronda se juega hasta el final | Se paga lo que diga el resultado. |
+| `/<game> leave`, desconectarse, morir, un teletransporte que no hace un plugin, cambiar de mundo | La ronda se abandona y la apuesta se pierde. Una ronda que aún no ha empezado se devuelve. |
+| Quedarse sin tocar nada durante el `idle` del juego | Cuenta como salir: la ronda en marcha se pierde. |
+| El servidor se apaga | Se liquida tal como está, nunca se pierde por abandono: un resultado ya decidido se paga, un juego con retirada se retira, blackjack y video poker se juegan hasta el final, y una apuesta aún sin colocar se devuelve. |
+
+Morir en una ronda conserva el inventario y los niveles. `/casinoadmin reload` no toca las rondas en marcha:
+se dejan terminar, y un juego desactivado solo rechaza rondas nuevas.
+
+<Callout type="warning" title="Inactivo significa perder">
+Los comentarios de varios archivos de módulo dicen que un juego inactivo se retira o se devuelve. El plugin
+trata a un jugador inactivo como uno que se ha ido: la ronda en marcha se pierde. Slots y la Wheel giran
+solas tras `auto-spin`, mucho antes de eso.
+</Callout>

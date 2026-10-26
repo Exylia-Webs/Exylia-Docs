@@ -1128,6 +1128,31 @@ const MARKET_NAV: NavGroup[] = [
   },
 ];
 
+const CASINO_NAV: NavGroup[] = [
+  {
+    label: { en: "Getting started", es: "Empezar" },
+    pages: [
+      page("introduction", "introduction", "introduccion"),
+      page("installation", "installation", "instalacion"),
+      page("playing", "playing", "jugar"),
+    ],
+  },
+  {
+    label: { en: "Games", es: "Juegos" },
+    pages: [page("games", "games", "juegos")],
+  },
+  {
+    label: { en: "Reference", es: "Referencia" },
+    pages: [
+      page("commands", "commands", "comandos"),
+      page("permissions", "permissions", "permisos"),
+      page("placeholders", "placeholders", "placeholders"),
+      page("configuration", "configuration", "configuracion"),
+      page("faq", "faq", "faq"),
+    ],
+  },
+];
+
 const CRATES_NAV: NavGroup[] = [
   {
     label: { en: "Getting started", es: "Empezar" },
@@ -1765,6 +1790,27 @@ export const plugins: Plugin[] = [
       { en: "Folia", es: "Folia" },
     ],
     nav: CRATES_NAV,
+  },
+  {
+    id: "exyliacasino",
+    name: "ExyliaCasino",
+    tagline: { en: "Seventeen casino games against the house, drawn in 3D", es: "Diecisiete juegos de casino contra la casa, dibujados en 3D" },
+    summary: {
+      en: "Mines, tower, crash, hi-lo, double or nothing, blackjack, baccarat, video poker, roulette, live roulette, a wheel of fortune, coinflip, slots, plinko, keno, scratch cards and horse races, played against the house in the server's currencies on 3D tables drawn in front of each player, each with its RTP shown, every stake held by an escrow that survives a restart, and one games catalogue and busy state shared with ExyliaTabletop.",
+      es: "Mines, tower, crash, hi-lo, double or nothing, blackjack, baccarat, video poker, ruleta, ruleta en directo, una rueda de la fortuna, cara o cruz, tragaperras, plinko, keno, rasca y gana y carreras de caballos, jugados contra la casa con las monedas del servidor en mesas 3D dibujadas delante de cada jugador, cada uno con su RTP a la vista, cada apuesta retenida por un depósito que sobrevive a un reinicio, y un catálogo de juegos y un estado de ocupado compartidos con ExyliaTabletop.",
+    },
+    version: "1.0.0",
+    status: "beta",
+    category: { en: "Survival", es: "Survival" },
+    minecraft: "1.21+",
+    banner: "https://s3.exylia.net/exylia-plugins/public/static/images/plugins/casino/ExyliaCasinoBanner.webp",
+    tags: [
+      { en: "Casino", es: "Casino" },
+      { en: "Minigames", es: "Minijuegos" },
+      { en: "Economy", es: "Economía" },
+      { en: "Folia", es: "Folia" },
+    ],
+    nav: CASINO_NAV,
   },
   {
     id: "exyliamarket",
