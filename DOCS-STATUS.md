@@ -70,7 +70,7 @@ ExyliaLib `befa514` — release tag `v1.113.0`, the tag JitPack builds and the o
 | Updated | `exyliaevents` on 2026-09-20 for `registerMinigame` and the `net.exylia.lib.api.events.custom` package, naming `v1.7.0`. The hub's service table notes the sub-package; the page's "What it does not expose" no longer claims per-minigame settings are out of reach. |
 | Pending | `MinesService` (exylia-api `v1.8.0`) is documented on `exyliamines` but not yet listed in the hub's service table. The ExyliaSurvivalCore pages still describe the mines module and the stored economy that moved to ExyliaMines and ExyliaEconomy (`10d082c`, `896a57b`). |
 | Added later | `SpecialsService` (ExyliaSpecials 4.0.0) listed in the hub's service table on 2026-10-18; its javadoc no longer names ExyliaSpecialsV3 (ExyliaLib `v1.311.3`). |
-| Not documented | ExyliaBetCore, ExyliaPearls and ExyliaTotems all publish a service, but have no documentation set on this site at all. They are absent from the hub's service table for that reason. |
+| Not documented | ExyliaTabletop, ExyliaPearls and ExyliaTotems all publish a service, but have no documentation set on this site at all. They are absent from the hub's service table for that reason. |
 | Separate artifact | `exyliaanalytics` has an API page of its own that is **not** part of `exylia-api`: `net.exylia.analytics.api.ExyliaAnalytics` (`track`, `economy`, `supply`, `available`) ships inside `Exylia-Analytics-Loader.jar`, is published to no Maven repository, and is compiled against as a local `compileOnly` file. It is absent from the hub's service table for that reason. |
 
 The source of truth for these pages is
