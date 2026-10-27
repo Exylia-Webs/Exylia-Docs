@@ -14,7 +14,7 @@ ExyliaAPI.get(TableService.class).ifPresent(tables -> tables.openLobby(player, "
 <Callout type="note" title="Añadirla a tu proyecto">
 El artefacto, el repositorio y la línea de `plugin.yml` son los mismos para todos los plugins de Exylia y
 están en la [página de la API pública](/docs/exylialib/api). El contrato de Tabletop llegó en la API pública
-**3.0.0**, en el paquete `net.exylia.lib.api.tabletop`.
+**3.0.0**, en el paquete `net.exylia.lib.api.tabletop`; la **3.1.0** añadió las invitaciones a varios jugadores.
 </Callout>
 
 Un `Optional` vacío significa que el servidor no tiene ExyliaTabletop, no que algo haya fallado. El servicio
@@ -44,8 +44,8 @@ buenos.
 | Método | Qué hace |
 |---|---|
 | `openLobby(Player player, String gameId)` | Abre el lobby de un juego, para un NPC o el menú de otro plugin. |
-| `createOffer(Player host, String gameId, String currency, BigDecimal stake)` | Abre una mesa, como hace `/<game> create <importe> <moneda>`. |
-| `duel(Player host, Player target, String gameId, String currency, BigDecimal stake)` | Invita a un jugador, como hace `/<game> duel <jugador> <importe> <moneda>`. |
+| `createOffer(Player host, String gameId, String currency, BigDecimal stake)` | Abre una mesa, como hace `/<game> create <importe> <moneda>`, con tantos asientos como admite el juego; no se preguntan los asientos. Se niega con `tables.only` activado. |
+| `duel(Player host, Player target, String gameId, String currency, BigDecimal stake)` | Invita a un jugador a una mesa de dos, como hace `/<game> duel <jugador> <importe> <moneda>`. Se niega con `tables.only` activado. |
 | `join(Player player, String matchId)` | Ocupa un asiento en una mesa abierta, o acepta una invitación enviada a este jugador. No pide confirmación. |
 | `forfeit(Player player)` | Saca al jugador de donde esté: un asiento en espera se reembolsa, una mesa que tiene abierta se cierra, una partida en juego se pierde. |
 
@@ -60,7 +60,7 @@ buenos.
 | Tipo | Contiene |
 |---|---|
 | `TableGameInfo` | `id`, `displayName` (con tokens de la paleta), `minPlayers`, `maxPlayers`, `playable` (si el servidor acepta mesas de él ahora mismo) y `commands` (el primero es el comando). |
-| `TableMatch` | Una copia de la partida tal como estaba al leerla: `id` (como lo admite `/tabletopadmin cancel`), `gameId`, `state`, `currency`, `stake` (lo que paga cada asiento), `pot` (todo lo retenido hasta ahora), `seats` (el anfitrión primero), `invitee` (`null` en una mesa abierta), `createdAt` y `startedAt` (milisegundos epoch, `0` antes de empezar). `host()`, `isDuel()` y `seatOf(uuid)` la leen. |
+| `TableMatch` | Una copia de la partida tal como estaba al leerla: `id` (como lo admite `/tabletopadmin cancel`), `gameId`, `state`, `currency`, `stake` (lo que paga cada asiento), `pot` (todo lo retenido hasta ahora), `seats` (el anfitrión primero), `invitee` (`null` en una mesa abierta; el primer invitado cuando se invitó a varios), `createdAt` y `startedAt` (milisegundos epoch, `0` antes de empezar). `host()`, `isDuel()` y `seatOf(uuid)` la leen. |
 | `TableSeat` | `player` y `name`. El asiento 0 es el anfitrión. |
 | `MatchState` | `CREATING`, `OPEN`, `STARTING`, `PLAYING`, `ENDED`, en ese orden. |
 | `TableStats` | `wins`, `losses`, `draws`, `played()` y `winRate()`. |
@@ -71,10 +71,10 @@ buenos.
 
 | Evento | Cancelable | Cuándo |
 |---|---|---|
-| `TableMatchCreateEvent` | sí | Un jugador está a punto de abrir una mesa o enviar una invitación, antes de cobrar su importe. `getHost()`, `getInvitee()` (`null` en una mesa abierta), `getGame()`, `getCurrency()`, `getStake()`. |
+| `TableMatchCreateEvent` | sí | Un jugador está a punto de abrir una mesa o enviar una invitación, antes de cobrar su importe; también en una mesa del mundo, cuando se sienta su primer jugador. `getHost()`, `getInvitees()` (cada jugador invitado, vacío en una mesa abierta; desde la 3.1.0), `getInvitee()` (el primero de ellos, o `null`), `getGame()`, `getCurrency()`, `getStake()`. |
 | `TableMatchJoinEvent` | sí | Un jugador está a punto de ocupar un asiento, antes de cobrar su importe. No se lanza para el asiento del anfitrión. `getMatch()`, `getPlayer()`. |
 | `TableMatchStartEvent` | no | Todos los jugadores están sentados y se está jugando el primer turno. `getMatch()`. |
-| `TableMatchEndEvent` | no | Una vez por partida, incluidas las mesas que expiraron, se rechazaron o se cancelaron. `getMatch()`, `getWinner()` (`null` en un reembolso), `getReason()`, `getPrize()` y `getFee()` (cero en un reembolso). |
+| `TableMatchEndEvent` | no | Una vez por partida, incluidas las mesas que expiraron, se rechazaron o se cancelaron. `getMatch()`, `getWinner()` (`null` en un reembolso; el primer compañero cuando gana una pareja de Truco), `getReason()`, `getPrize()` (lo que se pagó a los ganadores en total) y `getFee()` (cero en un reembolso). |
 
 `EndReason` es `WIN`, `DRAW`, `FORFEIT` (los demás se fueron) o `CANCELLED`; `isRefund()` es verdadero en un
 empate o una cancelación. Un evento de creación o de unión cancelado no le envía nada al jugador: el plugin

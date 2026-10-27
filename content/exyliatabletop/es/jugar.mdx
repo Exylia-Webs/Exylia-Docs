@@ -1,6 +1,6 @@
 ---
 title: "Jugar una partida"
-description: "El lobby, abrir una mesa e invitar a un jugador, elegir el importe, la partida en sí, el pago y todas las formas en que termina una partida."
+description: "El lobby, abrir una mesa e invitar a jugadores, las mesas en el mundo, elegir el importe, la partida en sí, el pago y todas las formas en que termina una partida."
 ---
 
 ## Encontrar una partida
@@ -10,15 +10,17 @@ Todas las formas de entrar llevan a las mismas mesas:
 | Forma | Qué hace |
 |---|---|
 | `/games` | Abre el catálogo de juegos de ExyliaLib. Bajo **Tabletop**, cada juego que el servidor tiene activado tiene una tarjeta con sus asientos y los jugadores que hay en él ahora mismo; al pulsar una se abre su lobby. |
+| `/tabletop` | La misma pantalla, solo con los juegos de este plugin. |
 | `/<game>` | Abre el lobby de ese juego: `/ttt`, `/poker`, `/battleship`. |
 | `/<game> create [importe] [moneda]` | Abre una mesa que puede ocupar cualquiera. |
-| `/<game> duel <jugador> [importe] [moneda]` | Invita a un jugador. |
+| `/<game> duel <jugador> [jugador...] [importe] [moneda]` | Invita a uno o varios jugadores. |
+| Una mesa en el mundo | Púlsala para sentarte. Consulta [Mesas en el mundo](#mesas-en-el-mundo). |
 
 ### El lobby
 
 El lobby lista las mesas abiertas del juego, de la más antigua a la más reciente, y las sigue en directo:
 una mesa que alguien abre o llena aparece o desaparece con la pantalla abierta, y su antigüedad va
-subiendo. También aparecen las invitaciones que se abrieron a todos.
+subiendo. Las mesas en el mundo no aparecen: se ocupan allí donde están.
 
 | Elemento | Qué hace |
 |---|---|
@@ -26,15 +28,18 @@ subiendo. También aparecen las invitaciones que se abrieron a todos.
 | **TU MESA** | Tu propia mesa, mientras espera. Al pulsarla se cierra y se te reembolsa el importe. |
 | **ABRIR UNA MESA** | Pide el importe y abre una mesa. Mientras tienes una abierta, la sustituye **CERRAR TU MESA**. |
 | **TU HISTORIAL** | Tus victorias, derrotas, empates y porcentaje de victorias en este juego, las mesas abiertas, las partidas en juego y la comisión del servidor. |
-| **RETAR A UN JUGADOR** | Cómo invitar a un jugador: `/<game> duel <jugador> <importe>`. |
+| **RETAR A UN JUGADOR** | Cómo invitar a jugadores: `/<game> duel <jugador> [jugador...] <importe>`. |
 
 ## Elegir el importe
 
 Lo que falte en el comando se pregunta:
 
-1. **La moneda**, solo cuando el jugador puede jugar con más de una y no escribió importe. Un diálogo de
+1. **Los asientos**, solo cuando un anfitrión abre una mesa de un juego de más de dos: un diálogo de elección
+   lista cada número de 2 hasta los `players` del juego (2 o 4 en Truco). A un `duel` nunca se le pregunta:
+   tiene asiento para los invitados y el anfitrión.
+2. **La moneda**, solo cuando el jugador puede jugar con más de una y no escribió importe. Un diálogo de
    elección las lista.
-2. **El importe**, en un diálogo de cantidad que indica el mínimo (y el máximo, cuando lo hay).
+3. **El importe**, en un diálogo de cantidad que indica el mínimo (y el máximo, cuando lo hay).
 
 Un importe escrito en el comando usa la moneda por defecto del servidor cuando el jugador puede usarla, y si
 no, la primera moneda ofrecida. Los importes aceptan las formas cortas de la economía de ExyliaLib, como
@@ -53,6 +58,8 @@ mesa, el de cada invitado al sentarse.
 | Está por debajo de `wager.minimum` o por encima de `wager.maximum` | El importe mínimo es … / El importe máximo es … |
 | No le alcanza | Necesitas … para ocupar ese asiento. |
 | Ya está en una mesa | Ya estás en una mesa. |
+| Un duelo invita a más jugadores de los que admite el juego | … admite como máximo … jugadores. |
+| `tables.only` está activado y abre una mesa por comando | Las partidas se juegan en las mesas: acércate a una y haz click. |
 | Otro plugin lo tiene ocupado | Ahora mismo estás ocupado en … |
 | Otro plugin desaconseja sentarlo | El motivo que da ese plugin. |
 | Dos intentos dentro de `matches.join-cooldown` | Más despacio. Inténtalo en … |
@@ -66,32 +73,63 @@ tu importe. No se te cobró nada."
 
 - **Una mesa a la vez.** Un jugador tiene una sola mesa, abierta, de invitación o en juego, en todo el
   servidor.
-- **Una mesa abierta** espera en el lobby durante `matches.open-expiry` (10 minutos). Si nadie la llena, se
-  cierra y se reembolsa todo lo puesto en juego.
-- **Una invitación** le llega al jugador como un bloque centrado en el chat, con el juego, el importe, el
-  bote y los botones **ACEPTAR** y **RECHAZAR**. Espera `matches.invite-expiry` (60 segundos).
-  `/<game> accept [jugador]` y `/<game> deny [jugador]` también la responden; sin nombre, responden la más
-  reciente. Un rechazo o una expiración reembolsa al anfitrión.
+- **Una mesa abierta** tiene tantos asientos como eligió su anfitrión. Espera en el lobby durante
+  `matches.open-expiry` (10 minutos). Si nadie la llena, se cierra y se reembolsa todo lo puesto en juego.
+  Al abrirse, todo el servidor lee "… abrió una mesa de … por …" con un **[UNIRSE]** que abre el lobby del
+  juego. El anuncio sale por el canal `tabletop-tables` de ExyliaLib, que cada jugador puede silenciar en
+  `/settings`. Las invitaciones y las mesas en el mundo no se anuncian.
+- **Una invitación** va a uno o varios jugadores, y tiene asiento exactamente para ellos y el anfitrión: sus
+  asientos se les guardan, nadie más puede ocupar uno. Le llega a cada uno como un bloque centrado en el
+  chat, con el juego, el importe, el bote y los botones **ACEPTAR** y **RECHAZAR**, y espera
+  `matches.invite-expiry` (60 segundos). `/<game> accept [jugador]` y `/<game> deny [jugador]` también la
+  responden; sin nombre, responden la más reciente. Si todos los invitados la rechazan, se reembolsa al
+  anfitrión; si algunos la rechazan y el resto se sentó, el anfitrión puede empezar con ellos.
 - **Las mesas de más de dos** empiezan cuando se ocupan todos los asientos. Cada jugador nuevo se anuncia a
-  la mesa con los asientos que faltan y el comando con el que se unen los demás. Cuando hay sentado el
-  mínimo del juego, el anfitrión recibe un botón **EMPEZAR** y también puede escribir `/<game> start` para
-  empezar sin esperar. Una invitación a una de estas mesas se abre a todos en cuanto el invitado se sienta,
-  y desde entonces espera lo mismo que una mesa abierta.
+  la mesa con los asientos que faltan y el comando con el que se unen los demás. Cuando hay suficientes
+  sentados, el anfitrión recibe un botón **EMPEZAR** y también puede escribir `/<game> start` para empezar
+  sin esperar. Suficientes son dos, salvo donde el juego no se puede jugar con menos: una mesa de Truco de
+  cuatro solo empieza llena.
 - **Antes de empezar**, un invitado que se va recupera su asiento y su importe; un anfitrión que se va o
   escribe `/<game> cancel` cierra la mesa y se reembolsa todo lo puesto en juego.
 
+## Mesas en el mundo
+
+Un administrador coloca una mesa para un juego con `/tabletopadmin table create <game>`, pulsando las sillas
+que la rodean (consulta [Comandos](/docs/exyliatabletop/comandos#colocar-una-mesa)). Un holograma encima
+dice si está libre, cuántos se han sentado y por qué importe, o quién está jugando; cada silla libre queda
+marcada.
+
+1. **El primer jugador** que pulsa una mesa libre pone el importe, lo paga y se sienta como anfitrión. La
+   mesa tiene tantos asientos como sillas, hasta lo que admite su juego.
+2. **Los siguientes** la pulsan, confirman "¿Sentarte en la mesa de … de … por …? El ganador se lleva …",
+   pagan el mismo importe y se sientan en la siguiente silla libre.
+3. **Empieza** cuando se ocupan todas las sillas, o cuando el anfitrión vuelve a pulsar la mesa con al menos
+   dos sentados. Una mesa que no se llena en `tables.fill-time` (90 segundos) se cierra, se reembolsa todo lo
+   puesto en juego y se levanta a todos.
+
+Los jugadores se llevan a su silla y se sientan en ella (`tables.sit`). Agacharse levanta a un jugador antes
+de empezar, lo que le devuelve su asiento y su importe; cuando la partida empieza, el asiento se mantiene. La
+partida se juega allí, sin sala: quien esté a menos de `tables.watch-radius` (12 bloques) ve los tableros,
+mientras que las manos, los dados bajo el cubilete, las flotas y las elecciones ocultas siguen ocultos para
+él. Con `tables.only` activado, estas mesas son la única forma de jugar.
+
 ## La partida
 
-Cuando la mesa se llena, cada jugador se sienta **donde está**: a nadie se le teletransporta y su inventario
-sigue siendo suyo. Un título con cuenta atrás (`matches.start-delay`, 3 segundos) nombra a los rivales, y
-después:
+Cuando la mesa se llena, cada jugador se sienta **donde está** (o en su silla, en una mesa del mundo): a
+nadie se le manda a otro sitio y su inventario sigue siendo suyo. Un título con cuenta atrás
+(`matches.start-delay`, 3 segundos) nombra a los rivales, y después:
 
-- **La sala.** Se dibuja una sala oscura y cerrada alrededor de cada jugador, solo para él, y los demás
-  jugadores quedan ocultos para él mientras tanto. Se configura con `room` en `config.yml`.
+- **La sala.** Con la cuenta atrás se levanta una sala oscura y cerrada alrededor de cada jugador, solo para
+  él, y los demás jugadores quedan ocultos para él mientras tanto. Se configura con `room` en `config.yml`.
+  Las mesas en el mundo no tienen.
 - **El tablero.** El juego se dibuja delante de sus ojos, sobre un tablero oscuro con un marco suavemente
   iluminado, bajo un encabezado con el juego y el bote.
+- **Los paneles laterales.** Cómo se juega a su izquierda, cómo se gana a su derecha, a un giro de cabeza
+  (`guide` en `config.yml`).
 - **El reloj.** Una barra de jefe indica de quién es el turno y cuánto queda.
-- **Quieto.** Con `arena.freeze` activado, no puede alejarse de su tablero.
+- **Dentro de la sala.** Con `arena.freeze` activado, puede andar por su sala, nunca salir de ella.
+- **La barra rápida.** Sus objetos quedan fuera de la vista; la última casilla tiene un botón **ABANDONAR
+  PARTIDA**, y un clic derecho en él pide confirmar y abandona.
 
 La mira juega: lo que se puede pulsar brilla bajo ella con un sonido suave, y un clic izquierdo o derecho lo
 pulsa. En los juegos por turnos quién mueve primero se sortea, así que ser anfitrión nunca es una ventaja. Un
@@ -108,6 +146,7 @@ comando bloqueado responde "Sal de la partida con /ttt leave primero."
 | Resultado | Qué pasa |
 |---|---|
 | Una victoria | El ganador se lleva el bote menos la comisión del servidor: "¡Ganaste …! (comisión del servidor …)" y un título **VICTORIA**. Cada uno de los demás lee "Perdiste …" y un título **DERROTA**. |
+| Una victoria de una pareja (Truco de cuatro) | El bote menos la comisión del servidor se reparte a partes iguales entre los dos compañeros; cada uno lee su parte. |
 | Un empate | Se reembolsa todo lo puesto en juego, con un título **EMPATE**. |
 
 El veredicto también aparece en cada tablero, y se queda tres segundos antes de que se retire la sala.
@@ -116,8 +155,8 @@ La **comisión del servidor** es `wager.fee-percent` (5 % por defecto) del bote,
 decimales de la moneda para que el redondeo favorezca al ganador. La comisión no se le paga a nadie: sale de
 la economía. Un ganador con `exyliatabletop.bypass.fee` se queda el bote entero.
 
-Cada partida terminada cuenta para cada asiento: una victoria para el ganador, una derrota para los demás, un
-empate para todos. Las partidas canceladas no cuentan.
+Cada partida terminada cuenta para cada asiento: una victoria para el ganador (para cada compañero de una
+pareja ganadora), una derrota para los demás, un empate para todos. Las partidas canceladas no cuentan.
 
 ## Cómo termina una partida
 
@@ -126,7 +165,7 @@ empate para todos. Las partidas canceladas no cuentan.
 | El juego llega a su final | Se paga o se reembolsa según el resultado. |
 | `/<game> leave` (pide confirmar), salir del servidor, morir, un teletransporte que no hace un plugin, cambiar de mundo | El jugador abandona. En un juego de dos, el rival gana el bote. En uno de más, el jugador queda fuera, su importe se queda en el bote y los demás siguen jugando; el último que queda gana. |
 | Un jugador se va durante la cuenta atrás del inicio | La partida se cancela y se reembolsa todo lo puesto en juego. |
-| La partida supera el límite de tiempo de su juego | Se cancela y se reembolsa todo lo puesto en juego. El límite se calcula a partir del tiempo de turno y la duración del juego (Ludo tiene su propio `max-duration`). |
+| La partida supera el límite de tiempo de su juego | Se cancela y se reembolsa todo lo puesto en juego. El límite se calcula a partir del tiempo de turno y la duración del juego (Ludo tiene su propio `max-duration`; Truco y Escoba permiten una hora). |
 | Un administrador la cancela | Se reembolsa todo: "La partida se canceló. Se reembolsó todo lo puesto en juego." |
 | El servidor se detiene o el plugin se desactiva | Todas las mesas, esperando o en juego, se cancelan y se reembolsan. |
 
