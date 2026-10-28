@@ -35,11 +35,11 @@ steps:
 | `objective` | — | Obligatorio. Ver abajo. Un paso sin un objetivo legible se reporta y se omite. |
 | `guidance` | todo activado | Cómo se muestra el camino. Consulta [Guía](/docs/exyliajourney/guia). |
 | `on-start`, `on-complete` | ninguna | [Líneas de efectos](/docs/exyliajourney/recorridos#líneas-de-efectos). |
-| `rewards` | ninguna | Se dan al completar el paso; un paso saltado no da nada. |
+| `rewards` | ninguna | Se dan al completar el paso; un paso saltado no da nada, y esa partida pierde las recompensas de finalización del recorrido (consulta [Saltar](/docs/exyliajourney/recorridos#saltar)). |
 | `hint-after` | `hint-after` de `config.yml` (45 s) | Tiempo sin avanzar en el paso antes de enviar la pista. `0s` la desactiva en este paso. |
 | `hint` | una línea que señala `/journey` | La pista. Se envía una vez por paso; con ella el faro late y suena un sonido. |
-| `skippable` | `true` | Si los jugadores pueden saltar este paso. |
-| `timeout` | ninguno | Un límite de tiempo. Agotarlo **detiene el recorrido entero**, avisa al jugador de que se le acabó el tiempo y cuenta el paso como abandonado. Los disparadores del recorrido pueden volver a iniciarlo. |
+| `skippable` | `true` | Si los jugadores pueden saltar este paso. Saltarlo pide confirmación; un paso que no se puede saltar responde con un rechazo. |
+| `timeout` | ninguno | Un límite de tiempo. Agotarlo hace fallar el paso: el **recorrido entero se detiene**, se avisa al jugador de que se le acabó el tiempo y el paso cuenta como abandonado. Los disparadores del recorrido pueden volver a iniciarlo, desde el primer paso. |
 
 ## Claves del objetivo
 
@@ -62,15 +62,15 @@ Todo objetivo tiene un `type`; las demás claves dependen de él.
 | `REACH` | `location` + `radius`, o `region` | El jugador está dentro del radio o dentro de la región. Se comprueba en cada movimiento y una vez por segundo, así que los teletransportes cuentan. | `{ type: REACH, location: 'world,0,64,0', radius: 4 }` |
 | `INTERACT_NPC` | `npc` | El jugador hace clic en ese NPC: el id solo para los NPCs del plugin y de ExyliaDisplays, `<plugin>:<id>` para los de otro plugin. El NPC brilla para él. | `{ type: INTERACT_NPC, npc: guide }` |
 | `INTERACT_BLOCK` | `filter`, opcional `location` + `radius` | El jugador hace clic derecho con la mano principal en un bloque que coincide. | `{ type: INTERACT_BLOCK, filter: [LECTERN] }` |
-| `BREAK_BLOCK` | `amount`, `filter`, `worlds`, opcional `location` + `radius` | El jugador rompe bloques que coinciden. | `{ type: BREAK_BLOCK, amount: 10, filter: [STONE, DEEPSLATE] }` |
-| `PLACE_BLOCK` | igual | El jugador coloca bloques que coinciden. | `{ type: PLACE_BLOCK, amount: 4, filter: [TORCH] }` |
+| `BREAK_BLOCK` | `amount`, `filter`, `worlds`, opcional `location` + `radius` | El jugador rompe bloques que coinciden. Los bloques que colocó un jugador no cuentan, para los materiales que nombra el filtro; un paso sin filtro no lo comprueba. | `{ type: BREAK_BLOCK, amount: 10, filter: [STONE, DEEPSLATE] }` |
+| `PLACE_BLOCK` | igual | El jugador coloca bloques que coinciden. Cada sitio cuenta una vez por sesión, así que colocar y romper el mismo bloque otra vez no cuenta dos veces. | `{ type: PLACE_BLOCK, amount: 4, filter: [TORCH] }` |
 | `CRAFT` | igual | El jugador craftea un objeto que coincide; cuenta la cantidad que da la receta por crafteo. Un shift-clic que craftea una pila entera cuenta como un crafteo. | `{ type: CRAFT, filter: [WOODEN_PICKAXE] }` |
 | `SMELT` | igual | El jugador saca objetos fundidos de un horno; cuenta los objetos sacados. | `{ type: SMELT, amount: 8, filter: [IRON_INGOT] }` |
 | `ENCHANT` | igual | El jugador encanta un objeto que coincide en una mesa de encantamientos. | `{ type: ENCHANT, filter: [DIAMOND_SWORD] }` |
 | `FISH` | igual | El jugador pesca objetos que coinciden; cuenta la pila pescada. | `{ type: FISH, amount: 3, filter: [COD, SALMON] }` |
-| `KILL_MOB` | igual, `filter` con tipos de entidad | El jugador mata mobs que coinciden. | `{ type: KILL_MOB, amount: 5, filter: [ZOMBIE] }` |
+| `KILL_MOB` | igual, `filter` con tipos de entidad | El jugador mata mobs que coinciden. No cuentan los mobs de spawners, huevos de spawn y huevos dispensados, ni los gólems de hierro y de nieve construidos. | `{ type: KILL_MOB, amount: 5, filter: [ZOMBIE] }` |
 | `KILL_PLAYER` | `amount`, `worlds`, opcional `location` + `radius` | El jugador mata a otros jugadores. | `{ type: KILL_PLAYER, amount: 1, worlds: [pvp] }` |
-| `PICKUP_ITEM` | igual que `BREAK_BLOCK` | El jugador recoge objetos que coinciden; cuenta la pila recogida. | `{ type: PICKUP_ITEM, amount: 16, filter: [OAK_LOG] }` |
+| `PICKUP_ITEM` | igual que `BREAK_BLOCK` | El jugador recoge objetos que coinciden; cuenta la pila recogida. No cuentan los objetos que soltó cualquier jugador. | `{ type: PICKUP_ITEM, amount: 16, filter: [OAK_LOG] }` |
 | `CONSUME` | igual | El jugador come o bebe un objeto que coincide. | `{ type: CONSUME, filter: [BREAD] }` |
 | `EQUIP` | `filter` | El jugador lleva puesto, o tiene en cualquiera de las manos, un objeto que coincide. Se comprueba una vez por segundo. | `{ type: EQUIP, filter: [IRON_CHESTPLATE] }` |
 | `RUN_COMMAND` | `command` | El jugador ejecuta el comando. Se compara por prefijo, sin distinguir mayúsculas, con barra opcional: `/spawn` cuenta `/spawn now`. Se cuenta después de que el comando se ejecute. | `{ type: RUN_COMMAND, command: /kit starter }` |
@@ -84,7 +84,7 @@ Todo objetivo tiene un `type`; las demás claves dependen de él.
 
 Todo tipo que cuenta una acción respeta `worlds` y un `location` + `radius` opcionales, así que "rompe diez
 de piedra **en la mina del tutorial**" es `BREAK_BLOCK` con un lugar y un radio. Un `filter` vacío acepta
-cualquier cosa.
+cualquier cosa. Qué farmeo no se cubre está en las [FAQ](/docs/exyliajourney/faq#preguntas-habituales).
 
 Las claves CUSTOM que disparan otros plugins de Exylia están en
 [Integraciones](/docs/exyliajourney/integraciones).
