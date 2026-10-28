@@ -46,7 +46,9 @@ ones can read:
 | `%chain_length%` | `target_chain` |
 | `%last_damage%` | `damage`: the total dealt |
 | `%stacks%`, `%stack_level%`, `%stack_full%` | `stack` |
-| `%filled%` | `refill` with `fill` |
+| `%filled%` | `refill`: how many items it handed out |
+| `%repaired%` | `repair`: how many pieces it mended |
+| `%cleared%` | `blocks` with `mode: clear`: how many blocks it removed |
 | `%summons%` | `summon` |
 | `%repeat_index%` | `repeat`: 0, 1, 2... |
 | `%item_id%` | always: the item's id |
@@ -212,6 +214,7 @@ Seconds default to 10; `infinite` or `-1` never ends; lengths like `1m30s` work.
 | `seconds` | 5 | Negative: until removed, death or quit. |
 | `value` | 0 | Used by `LIFESTEAL` and `UNDYING`. |
 | `only` | `[]` | Narrows `NO_BUILD`, `NO_ITEM_USE` and `EFFECT_IMMUNITY`. |
+| `self-bar` | none | A boss bar shown to the user while the state lasts on its player targets, written as in [`bar`](#bar). It closes when the state ends on every one of them. |
 
 `unflag` takes `flag` and removes it. Both act on players only.
 
@@ -220,6 +223,8 @@ Seconds default to 10; `infinite` or `-1` never ends; lengths like `1m30s` work.
 ### repair
 
 `percent` (1 = full) of each piece's damage, on `armor` (`true`) and the main `hand` (`true`).
+Sets `%repaired%`: the bundled **Repair** follows it with a `require` on `%repaired% >= 1`, so a use with
+nothing damaged is refunded.
 
 ### refill
 
@@ -238,8 +243,8 @@ Two forms:
     - 'GOLDEN_APPLE|8'
 ```
 
-The first fills empty slots and sets `%filled%`. The second gives what is missing to reach each amount (16 when
-omitted); what does not fit waits for the next join.
+Both set `%filled%`. The first fills empty slots. The second gives what is missing to reach each amount (16 when
+omitted); what does not fit is not given.
 
 ### give
 
@@ -302,7 +307,7 @@ may break; `false` stops at 1 durability left.
 Placed blocks respect WorldGuard and other plugins' build checks, drop nothing, resist explosions and pistons, and
 are put back if the server stops first.
 
-`clear` removes for good, with no drops, every block of `materials` in a sphere, block by block through the
+`clear` sets `%cleared%` and removes for good, with no drops, every block of `materials` in a sphere, block by block through the
 break checks. Without `materials` it removes a built-in debris list: cobblestone, **stone, deepslate, dirt,
 gravel, sand, netherrack, end stone, obsidian**, glass, ice, snow, cobweb, scaffolding, ladders, planks, magma,
 slime, honey and powder snow. That list includes natural terrain — write `materials` when that is not what you
@@ -328,7 +333,43 @@ A visual: it runs no steps when it lands.
 
 `effects:` — ExyliaLib effect lines (`[SOUND]`, `[PARTICLE]`, `[CIRCLE]`, `[RING_PULSE]`, `[DISPLAY]`,
 `[LIGHTNING]`, `[DELAY]`...). `at`: `self` (heard around the user), `targets`, `anchor` or `only_self` (only the
-user sees and hears it). `radius`: how far it is seen.
+user sees and hears it). `radius`: how far it is seen. `follow: true` makes the effect move with the player it
+is played on (each target, or the user), so a lingering cue stays on them.
+
+### bar
+
+```yaml
+- action: bar
+  seconds: 5
+  until-potion: BLINDNESS
+  victim:
+    text: '${text.blinded_bar}'
+    colour: YELLOW
+  self:
+    text: '${text.flashed_bar}'
+```
+
+A live boss bar for as long as the effect lasts. `victim` is shown to every player target, `self` to the user.
+With no targets, only `self` opens, as a bar the user alone sees.
+
+| Key | Default | |
+|---|---|---|
+| `seconds` | 5 | How long it shows. |
+| `victim`, `self` | none | Each `text`, `colour`, `overlay`, `progress` (1), `count-up` (0) and `time-style`. `%player%` is the user, `%target%` the targets' names, `%targets%` how many; `%time_precise%` counts down. |
+| `until` | none | `summon`: also closes when this item's summon ends. |
+| `until-potion` | none | Also closes when that potion effect leaves the targets. |
+| `id` | the item's id | Which bar `unbar` closes. A new bar with the same id replaces the old one. |
+
+A bar closes early when every target it names dies or leaves, or the user leaves.
+
+### unbar
+
+Closes the bar of `id` (the item's id by default) for the user and the current targets.
+
+### flash
+
+Blacks out each player target's screen at once (the end credits screen, closed with Escape). Purely visual: the
+**Flashbang** uses it.
 
 ### message
 

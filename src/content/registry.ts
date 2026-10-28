@@ -1920,7 +1920,7 @@ export const plugins: Plugin[] = [
       en: "Special items built from YAML: abilities written in a 37-step action language, fifteen tool behaviours, limits by uses or time, cooldowns and region rules, with 70 items included and every number editable in game. Plus stat trackers, a built-in combat tag with logout NPCs and a safe-zone barrier (or DeluxeCombat, CelestCombat, PvPManager), cooldowns for vanilla items, and 1v1 duel arenas played on copies.",
       es: "Ítems especiales hechos en YAML: habilidades escritas en un lenguaje de 37 acciones, quince comportamientos de herramienta, límites por usos o tiempo, cooldowns y reglas por región, con 70 ítems incluidos y cada número editable en el juego. Además contadores de estadísticas, un sistema de combate propio con NPCs de desconexión y una barrera en las zonas seguras (o DeluxeCombat, CelestCombat, PvPManager), cooldowns para ítems vanilla y arenas de duelos 1v1 jugadas en copias.",
     },
-    version: "4.1.0",
+    version: "4.1.1",
     status: "stable",
     category: { en: "Gamemode", es: "Modo de juego" },
     minecraft: "1.21+",
