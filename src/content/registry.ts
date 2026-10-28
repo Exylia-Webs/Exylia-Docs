@@ -1578,6 +1578,34 @@ const PLAYERVAULTS_NAV: NavGroup[] = [
   },
 ];
 
+const KILLCAM_NAV: NavGroup[] = [
+  {
+    label: { en: "Getting started", es: "Empezar" },
+    pages: [
+      page("introduction", "introduction", "introduccion"),
+      page("installation", "installation", "instalacion"),
+      page("first-steps", "first-steps", "primeros-pasos"),
+    ],
+  },
+  {
+    label: { en: "Killcam", es: "Killcam" },
+    pages: [
+      page("killcam", "killcam", "killcam"),
+      page("modes", "modes", "modos"),
+      page("compatibility", "compatibility", "compatibilidad"),
+    ],
+  },
+  {
+    label: { en: "Reference", es: "Referencia" },
+    pages: [
+      page("commands", "commands", "comandos"),
+      page("permissions", "permissions", "permisos"),
+      page("configuration", "configuration", "configuracion"),
+      page("faq", "faq", "faq"),
+    ],
+  },
+];
+
 export const plugins: Plugin[] = [
   {
     id: "exyliaffa",
@@ -2281,6 +2309,27 @@ export const plugins: Plugin[] = [
       { en: "Folia", es: "Folia" },
     ],
     nav: PLAYERVAULTS_NAV,
+  },
+  {
+    id: "exyliakillcam",
+    name: "ExyliaKillCam",
+    tagline: { en: "Watch your death again, through your killer's eyes", es: "Vuelve a ver tu muerte, a través de los ojos de tu asesino" },
+    summary: {
+      en: "The seconds before a death, replayed to the victim after the respawn through the killer's eyes: slow motion before the blow, a cut to the falling body, the killer's kill effect once more and a summary of who, with what and from how far — no resource pack, no client mod, and duels and events left alone. Free and open source.",
+      es: "Los segundos antes de una muerte, reproducidos a la víctima tras reaparecer a través de los ojos del asesino: cámara lenta antes del golpe, un corte al cuerpo que cae, el efecto de kill del asesino otra vez y un resumen de quién, con qué y desde qué distancia — sin resource pack, sin mod de cliente, y sin tocar duelos ni eventos. Gratis y de código abierto.",
+    },
+    version: "1.0.0",
+    status: "stable",
+    category: { en: "PvP", es: "PvP" },
+    minecraft: "1.21.4+",
+    banner: "https://s3.exylia.net/exylia-plugins/public/static/images/plugins/killcam/ExyliaKillCamBanner.webp",
+    download: "https://github.com/Exylia-Plugins/ExyliaKillCam/releases",
+    tags: [
+      { en: "Killcam", es: "Killcam" },
+      { en: "Replays", es: "Repeticiones" },
+      { en: "Folia", es: "Folia" },
+    ],
+    nav: KILLCAM_NAV,
   },
   {
     id: "exyliasandbox",
