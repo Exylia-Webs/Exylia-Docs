@@ -1181,6 +1181,49 @@ const DUELS_NAV: NavGroup[] = [
   },
 ];
 
+const RANDOMKITS_NAV: NavGroup[] = [
+  {
+    label: { en: "Getting started", es: "Empezar" },
+    pages: [
+      page("introduction", "introduction", "introduccion"),
+      page("installation", "installation", "instalacion"),
+    ],
+  },
+  {
+    label: { en: "RandomKits", es: "RandomKits" },
+    pages: [
+      page("playing", "playing", "jugar"),
+      page("arenas", "arenas", "arenas"),
+      page("kits", "kits", "kits"),
+    ],
+  },
+  {
+    label: { en: "Progression", es: "Progresión" },
+    pages: [
+      page("progression", "progression", "progresion"),
+      page("events-and-seasons", "events-and-seasons", "eventos-y-temporadas"),
+      page("kit-balance", "kit-balance", "balance-de-kits"),
+    ],
+  },
+  {
+    label: { en: "Integrations", es: "Integraciones" },
+    pages: [
+      page("network", "network", "red"),
+      page("web-editor-and-import", "web-editor-and-import", "editor-web-e-importacion"),
+    ],
+  },
+  {
+    label: { en: "Reference", es: "Referencia" },
+    pages: [
+      page("commands", "commands", "comandos"),
+      page("permissions", "permissions", "permisos"),
+      page("placeholders", "placeholders", "placeholders"),
+      page("configuration", "configuration", "configuracion"),
+      page("faq", "faq", "faq"),
+    ],
+  },
+];
+
 const MOBS_NAV: NavGroup[] = [
   {
     label: { en: "Getting started", es: "Empezar" },
@@ -2022,6 +2065,27 @@ export const plugins: Plugin[] = [
     nav: DUELS_NAV,
   },
   {
+    id: "exyliarandomkits",
+    name: "ExyliaRandomKitsCore",
+    tagline: { en: "Drop-in PvP arenas where every life rolls a new kit", es: "Arenas PvP listas para usar donde cada vida tira un kit nuevo" },
+    summary: {
+      en: "Drop-in PvP arenas where every life starts with a random kit rolled by rarity, procedural kits whose slots roll their own variants, amounts and enchantments, random or draft arenas with rerolls and saved hotbar layouts, streaks that evolve the kit, levels, prestige, upgrades, kit mastery, perks and missions, events and seasons, kit balance from real K/D, servers of a network run as one pool, a Random kit in ExyliaDuels, the web editor and kits imported from EssentialsX and the Exylia plugins.",
+      es: "Arenas PvP listas para usar donde cada vida empieza con un kit aleatorio tirado por rareza, kits procedurales cuyas ranuras tiran sus propias variantes, cantidades y encantamientos, arenas aleatorias o de draft con rerolls y distribuciones de la barra guardadas, rachas que hacen evolucionar el kit, niveles, prestigio, mejoras, maestría de kits, perks y misiones, eventos y temporadas, balance de kits a partir del K/D real, servidores de una red funcionando como uno solo, un kit aleatorio en ExyliaDuels, el editor web y kits importados de EssentialsX y de los plugins de Exylia.",
+    },
+    version: "1.0.0",
+    status: "beta",
+    category: { en: "Gamemode", es: "Modo de juego" },
+    minecraft: "1.21.4+",
+    banner: "https://s3.exylia.net/exylia-plugins/public/static/images/plugins/randomkits/ExyliaRandomKitsBanner.webp",
+    tags: [
+      { en: "PvP", es: "PvP" },
+      { en: "Kits", es: "Kits" },
+      { en: "Network", es: "Red" },
+      { en: "Folia", es: "Folia" },
+    ],
+    nav: RANDOMKITS_NAV,
+  },
+  {
     id: "exyliamobs",
     name: "ExyliaMobs",
     tagline: { en: "Custom mobs built in game, and the areas that keep them alive", es: "Mobs personalizados creados en el juego, y las zonas que los mantienen vivos" },
@@ -2051,6 +2115,7 @@ export const plugins: Plugin[] = [
       es: "Recompensas diarias, semanales y mensuales con rachas y congelaciones de racha, recompensas con espera, de una vez, de tiempo de juego y de condición, calendarios de conexión con recuperación pagada, códigos de /redeem, zonas AFK que pagan más cuanto más se quedan los jugadores, votos de NuVotifier con rachas diarias y una fiesta de votos de red que puede enviar una piñata de ExyliaMobs, y referidos que se pagan cuando el jugador nuevo se asienta, todo creado y editado en el juego y guardado en una base de datos para que cada recompensa se pague una vez en toda la red.",
     },
     version: "1.0.0",
+    purchase: "https://builtbybit.com/resources/exylia-rewards.134729/",
     status: "beta",
     category: { en: "Survival", es: "Survival" },
     minecraft: "1.21.4+",
