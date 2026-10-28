@@ -1,0 +1,200 @@
+---
+title: "Progression"
+description: "Levels, XP and prestige, account upgrades, kit upgrades and Ascended kits, mastery, perks and missions, with every key of progression.yml, perks.yml and missions.yml."
+---
+
+Players keep everything here across lives, arenas and the servers of a group. It is all bought and read
+from `/rk progress` (needs `exyliarandomkits.progress`): **Level**, **Upgrades**, **Kit upgrades**,
+**Perks**, **Missions** and **Prestige**.
+
+Formulas in `progression.yml` and `perks.yml` understand `+ - * / % ^`, parentheses, `min`, `max`,
+`floor`, `ceil`, `round` and `sqrt`, with `%level%` filled in. Costs are paid in an ExyliaLib currency:
+`currency` is its id, blank for the server's default.
+
+<Callout type="note" title="Pure arenas">
+In an arena with **Upgrades** off, account upgrades, kit levels, mastery and the rewards bonus count for
+nothing; with **Perks** off, perks do not fire. XP and levels are earned everywhere. See
+[Arenas](/docs/exyliarandomkits/arenas#pure-arenas).
+</Callout>
+
+## Levels and XP
+
+| Key | Default | What it does |
+|---|---|---|
+| `levels.curve` | `100 + 40 * %level% + 2 * %level% ^ 2` | XP needed to go from `%level%` to the next one. |
+| `levels.max-level` | `50` | The highest level. Reaching it opens prestige. |
+| `levels.xp.kill` | `25` | XP for a kill. |
+| `levels.xp.assist` | `10` | XP for an assist. |
+| `levels.xp.streaks` | `{5: 50, 10: 120, 15: 200, 25: 400}` | Extra XP for reaching a kill streak, by streak. |
+
+Missions pay XP too. Every level-up runs `on-level-up` and `on-level-<n>` (`%level%`).
+
+## Prestige
+
+At the top level, `/rk prestige` (or **Prestige**) asks to confirm, then resets level to 1 and XP to 0 and
+adds one prestige.
+Everything bought is kept. It is announced to the server and runs `on-prestige` (`%prestige%`).
+
+| Key | Default | What it does |
+|---|---|---|
+| `prestige.max` | `10` | How many times a player can prestige. `0` turns prestige off. |
+| `prestige.perk-slots-per-prestige` | `1` | Perk slots each prestige adds. |
+| `prestige.max-perk-slots` | `2` | The most perk slots prestige can add in total. |
+| `prestige.reward-bonus` | `0.02` | Permanent payout and XP multiplier each prestige adds (+2%). |
+| `prestige.max-reward-bonus` | `0.2` | Its cap. |
+
+How a prestige is written (`%exyliarandomkits_prestige_display%`) is `progression.prestige-display` in
+`messages.yml`, one line per prestige from 0, the last one repeating.
+
+## Account upgrades
+
+Bought once for the whole account from `/rk upgrades`, one level at a time. Five ids are understood by the
+game; `effect` is the value at the level owned:
+
+| Id | Max | Cost | Effect | Requires |
+|---|---|---|---|---|
+| `luck` | 10 | `400 * %level% ^ 1.4` | `0.03 * %level%`: extra rarity weight per rank (+3% per rank per level), and the share bad luck thresholds shrink by. | level 1 |
+| `rerolls` | 3 | `1500 * %level% ^ 1.6` | `%level%` rerolls per life. | level 5 |
+| `perk-slots` | 2 | `5000 * %level% ^ 2` | `%level%` extra perk slots. | level 10 |
+| `rewards` | 10 | `500 * %level% ^ 1.5` | `0.03 * %level%`: extra payout and XP multiplier (+3% per level). | level 3 |
+| `spawn-protection` | 4 | `800 * %level% ^ 1.5` | `0.5 * %level%` extra seconds of spawn protection. | level 2 |
+
+Each entry of `upgrades` has `id`, `name`, `icon`, `description`, `max-level`, `cost` (the price of reaching
+`%level%`), `currency`, `effect`, `requires` (minimum `level`, `prestige` or `kills` to buy the next level),
+`display` (how the effect is shown, `%value%` being the effect times `scale`) and `scale`.
+
+The rewards multiplier applies to this plugin's payouts and XP only, through ExyliaLib's modifier pipeline.
+
+### The ceiling
+
+`ceiling` is the most any combination of upgrades, prestige and mastery can give:
+
+| Key | Default | Caps |
+|---|---|---|
+| `ceiling.luck-shift` | `0.3` | Extra rarity weight per rank. |
+| `ceiling.pity-cut` | `0.5` | How much bad luck thresholds can shrink (half). |
+| `ceiling.enchant-bonus` | `3` | Enchantment levels from a kit's level. |
+| `ceiling.reward-multiplier` | `1.6` | The payout and XP multiplier from upgrades and prestige together. |
+| `ceiling.mastery-bonus` | `0.1` | The extra share of its rarity a kit gets from mastery. |
+| `ceiling.spawn-protection` | `3` | Extra seconds of spawn protection. |
+| `ceiling.rerolls` | `3` | Rerolls per life. |
+| `ceiling.perk-slots` | `5` | Perk slots in total. |
+
+## Kit upgrades
+
+Bought per kit from **Kit upgrades**. A kit's level makes that kit better whenever this player rolls it:
+
+| Key | Default | What it does |
+|---|---|---|
+| `kit-upgrades.max-level` | `5` | The highest kit level, which is **Ascended**. |
+| `kit-upgrades.cost` | `750 * %level% ^ 1.6` | The price of reaching `%level%`. |
+| `kit-upgrades.currency` | `""` | The currency; blank is the server's default. |
+| `kit-upgrades.requires` | `{level: 3, prestige: 0}` | What a player needs to buy the next level. |
+| `kit-upgrades.enchant-bonus` | `floor(%level% / 2)` | Levels added to every enchantment of the kit's gear. |
+| `kit-upgrades.variant-shift` | `0.25 * %level%` | Extra weight per tier for better variants: a variant of tier `t` weighs `weight * (1 + shift * t)`. |
+| `kit-upgrades.ascended.feedback` | a ring of end rods | ExyliaLib sequence lines played on every spawn with an Ascended kit. |
+| `kit-upgrades.ascended.effects` | `[]` | Potion effects worn with an Ascended kit, as `NAME\|LEVEL\|SECONDS` (`GLOWING\|1\|infinite`). |
+
+Variants with a **minimum kit level** only roll for players at that level or above. An Ascended kit's name
+gets `progression.ascended-suffix` from `messages.yml`.
+
+## Mastery
+
+Kills with a kit raise its **mastery** for the player:
+
+| Key | Default | What it does |
+|---|---|---|
+| `mastery.thresholds` | `[25, 100, 250, 500, 1000]` | Kills with a kit needed for each mastery level. `on-mastery-<n>` runs when one is reached (`%kit%`, `%level%`). |
+| `mastery.weight-bonus` | `0.02` | Extra share of its rarity a kit rolls with per mastery level (+2%). |
+
+Mastery titles, by mastery level from 0, are `progression.mastery-titles` in `messages.yml`: Novice, Adept,
+Veteran, Expert, Master, Grandmaster.
+
+## Rerolls
+
+| Key | Default | What it does |
+|---|---|---|
+| `rerolls.window` | `10s` | How long after spawning a reroll can still be used. Dealing damage ends it too. |
+
+## Perks
+
+Perks are unlocked and levelled from `/rk perks`, equipped into perk slots, and fired by what happens in a
+fight. In the screen, right-click unlocks or levels up a perk, left-click equips or unequips it.
+
+**Slots**: `base-slots` in `perks.yml` (1), plus the `perk-slots` upgrade, plus prestige, under
+`ceiling.perk-slots`.
+
+| Perk | Trigger | Effect | Max | Requires |
+|---|---|---|---|---|
+| Vampire | `KILL` | Heals 3, 4, 6 half hearts. | 3 | level 2 |
+| Last Stand | `LOW_HEALTH` at 6 | 4, 6, 8 half hearts of absorption, once per life. | 3 | level 5 |
+| Quiver | `KILL` | Refills 35%, 60%, 100% of the rolled arrows. | 3 | level 3 |
+| Second Opinion | `SPAWN` | One extra reroll every life. | 1 | level 8 |
+| Adrenaline | `KILL` | Speed I for 4s, 6s, then Speed II for 6s. | 3 | level 4 |
+| Scavenger | `KILL`, 35%, 50%, 65% | A golden apple into the food slot. | 3 | level 6 |
+| Bulwark | `SPAWN` | Resistance I for 5s, 8s, then II for 8s. | 3 | level 7 |
+| Executioner | `DAMAGE_DEALT`, target below 6 | Hits ×1.1, ×1.15, ×1.2. | 3 | level 10 |
+| Momentum | `STREAK` at 5 | Strength I for 8s, 12s, 16s. | 3 | level 12 |
+| Thick Skin | `SPAWN` | Takes ×0.85, ×0.8, ×0.75 damage for 5s, 6s, 7s. | 3 | level 1 |
+
+### A perk in `perks.yml`
+
+| Key | What it does |
+|---|---|
+| `id`, `name`, `icon`, `description` | How it is known and shown. |
+| `max-level` | Its highest level. |
+| `requires`, `permission`, `cost`, `currency` | Unlocking: `requires` (`level`, `prestige`), then the permission, then the cost per level (`%level%` is the level bought). |
+| `trigger` | `KILL`, `ASSIST`, `SPAWN`, `LOW_HEALTH` (health drops to `threshold` or below, in half hearts), `STREAK` (reaching streak `threshold`), `DAMAGE_TAKEN`, `DAMAGE_DEALT`, or `ROLL` (a kit of `rarity` or rarer). |
+| `threshold`, `rarity` | What `LOW_HEALTH`, `STREAK` and `ROLL` compare with. |
+| `chance` | Percent per level. |
+| `cooldown` | Time between two firings. |
+| `once-per-life` | Fires at most once each life. |
+| `target-health-below` | Only against a target below this many half hearts. |
+| `effects` | What it does, each with values per level; the last one repeats for higher levels. |
+
+| Effect | Fields |
+|---|---|
+| `POTION` | `potion`, `levels`, `seconds`. |
+| `HEAL`, `ABSORPTION`, `SATURATION` | `values`, in half hearts or points. |
+| `ITEM` | `item`, `values` as the amount, `roles[0]` as the layout role. |
+| `REFILL` | `roles`, `values` as the share of the rolled amount restored. |
+| `DAMAGE` | `values` as the dealt multiplier, `seconds`; `0` seconds is the triggering hit only. |
+| `DAMAGE_TAKEN` | `values` as the taken multiplier, `seconds`. |
+| `REROLL` | `values` as extra rerolls. |
+| `SPEED` | `levels`, `seconds`. |
+| `COMMAND` | `command`, run by the console; `%player%` and `%level%` are filled in. |
+
+## Missions
+
+Each player gets their own random set of missions every day and every week, the same on every server of the
+network, drawn from the missions of that pool. `/rk missions` shows them with their progress.
+
+| Key | Default | What it does |
+|---|---|---|
+| `timezone` | `""` | The zone periods are worked out in (`Europe/Madrid`). Blank is the server's. |
+| `reset-hour` | `0` | The hour, 0-23, a day starts at. |
+| `weekly-reset-day` | `MONDAY` | The day a week starts on. |
+| `daily` | `3` | Missions each player gets per day. |
+| `weekly` | `3` | Missions each player gets per week. |
+| `missions` | twelve missions | The pools. |
+
+A mission has `id`, `pool` (`DAILY` or `WEEKLY`), `type`, `name`, `icon`, `amount`, `rarity`, `kit`,
+`arena`, `xp` (paid on completion) and `rewards` (the same rewards as `triggers.yml`, any currency).
+`on-mission-complete` runs for every mission completed (`%mission%`, `%pool%`).
+
+| Type | Counts |
+|---|---|
+| `KILLS` | Kills. |
+| `ASSISTS` | Assists. |
+| `RARITY_KILLS` | Kills wearing a kit of `rarity` or rarer. |
+| `KIT_KILLS` | Kills wearing `kit`. |
+| `STREAK` | Reaching a streak of `amount`. |
+| `ROLL` | Rolling a kit of `rarity` or rarer. |
+| `PLAY_MINUTES` | Minutes in an arena, only `arena` when set. |
+| `LEVEL_UP` | Levels gained. |
+| `PRESTIGE` | Prestiges. |
+
+The defaults: Hunter (15 kills), Wingman (8 assists), Rare Hunter (5 kills with a rare kit or rarer), On a
+Roll (a 5 streak), Lucky Draw (roll an epic), Regular (30 minutes) daily; Warlord (150 kills), Unstoppable (a
+15 streak), Golden Touch (roll a legendary), Epic Slayer (25 kills with an epic or rarer), Climber (5 levels)
+and Veteran (240 minutes) weekly. Each pays XP and money.

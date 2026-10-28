@@ -1,0 +1,138 @@
+---
+title: "Jugar"
+description: "Entrar y salir, tiradas y drafts, rerolls, la distribución de la barra, muertes y drops, asistencias, rachas y evolución del kit, antiabuso y el némesis."
+---
+
+Todo lo que hace un jugador empieza en `/rk` (también `/randomkits`), el hub: **Jugar**, **Salir de la arena**,
+**Perfil**, **Kits**, **Distribución de la barra**, **Clasificaciones**, **Progreso**, **Cambiar kit**, el
+**Evento** en curso o el siguiente, y la **Temporada**.
+
+## Entrar y salir
+
+`/rk play` entra en cualquier arena lista, `/rk play <arena>` en esa. El botón **Jugar** abre la lista de
+arenas.
+
+- Las estancias de ExyliaLib guardan las cosas del jugador, que pasa a un spawn, se vacía allí y queda en
+  supervivencia. Un jugador que ya está en una arena, o en combate, no puede entrar.
+- `/rk leave` lo saca y le devuelve todo **exactamente** como entró.
+- Desconectarse nunca cuenta como combat log: sus cosas vuelven al volver a entrar. Un crash hace lo mismo.
+- Dentro de una arena solo funcionan los comandos de `allowed-commands` (por defecto `rk`, `randomkits` y los
+  de mensajes privados), así que `/rk leave` siempre funciona.
+- No se puede salir andando de las cajas de la arena, ni teletransportarse fuera. No se pueden abrir
+  contenedores (una mesa de crafteo sí), los objetos del kit no se tiran a mano, y nadie de fuera de una arena
+  recoge un objeto de kit que haya quedado en el suelo.
+
+En una red, `/rk play` puede enviar antes al jugador a otro servidor del grupo. Consulta
+[Red y ExyliaDuels](/docs/exyliarandomkits/red).
+
+## La tirada
+
+Una tirada elige primero una **rareza** por su peso y luego un **kit** de esa rareza por el peso del propio
+kit. Solo se pueden tirar los kits del pool de la arena, activados, y cuyo permiso tenga el jugador (si el kit
+pide uno); una rareza sin ningún kit así se salta y su peso se reparte entre las demás.
+
+| Regla | Por defecto | Qué hace |
+|---|---|---|
+| Antirrepetición | `roll.anti-repeat: 3` | Un jugador nunca vuelve a recibir uno de sus últimos 3 kits mientras se puedan tirar otros. |
+| Protección contra la mala suerte | `roll.pity: {epic: 10, legendary: 40}` | Tras 10 tiradas seguidas por debajo de épico, la siguiente es al menos épica; tras 40 por debajo de legendario, al menos legendaria. |
+
+El título del kit tirado muestra su nombre y su rareza, y suenan el `announce` y el `feedback` de la rareza
+(consulta [Rarezas](/docs/exyliarandomkits/kits#rarezas)). Cada kit que un jugador ha tirado cuenta como
+**descubierto**: `/rk kits` muestra el catálogo con la probabilidad de cada kit para ese jugador.
+
+### Random y Draft
+
+Cada arena tiene un modo de tirada:
+
+- **Random** (*Aleatorio* en los menús en español) da el kit tirado al momento.
+- **Draft** ofrece `roll.draft-size` (3) kits distintos para elegir, en un menú o como botones clicables en
+  el chat (`roll.draft.display`: `MENU` o `CHAT`). Nadie puede herir a un jugador mientras elige. Pasado
+  `roll.draft-timeout` (10s) se queda el primero. `/rk draft` vuelve a abrir el menú si se cerró.
+
+Durante un evento **Kit of the Hour** todos reciben el kit del evento: sin tirada y sin draft. Consulta
+[Eventos y temporadas](/docs/exyliarandomkits/eventos-y-temporadas).
+
+### Rerolls
+
+`/rk reroll` (o **Cambiar kit** en el hub) vuelve a tirar el kit, gastando uno de los rerolls de la vida,
+mientras la vida es reciente: dentro de `rerolls.window` en `progression.yml` (10s) desde el spawn, y antes de
+hacer daño. Los rerolls salen de la mejora de cuenta `rerolls` y del perk **Second Opinion**; un jugador sin
+ellos no tiene ninguno. En una arena Random se le dice cuántos le quedan tras cada spawn.
+
+## El kit puesto
+
+Cada ranura del kit tira en cada vida: si aparece, qué variante, cuántos y qué encantamientos. Consulta
+[Kits](/docs/exyliarandomkits/kits).
+
+**Distribuciones.** La armadura y la mano secundaria van siempre a su propia ranura. Todo lo demás va donde la
+distribución del jugador pone su **rol** (`WEAPON`, `BOW`, `PEARLS`, `POTIONS`, `FOOD`, `BLOCKS`, `ARROWS` o
+cualquier rol propio). Un jugador la ordena una vez y todos los kits caen así, tire lo que tire:
+
+- `/rk layout` abre el editor: pulsa un rol para cogerlo, pulsa una ranura para dejarlo allí, y luego
+  **Guardar**.
+- `/rk layout save` toma como distribución dónde están ahora los objetos del kit actual, dentro de una arena.
+- `/rk layout reset` la olvida.
+
+Sin distribución guardada se usa el mapa `layout` de `config.yml` (arma 0, arco 1, perlas 2, pociones 3,
+comida 7, bloques 8, flechas 9); los roles que no aparecen ocupan la primera ranura libre.
+
+**Protección de spawn.** Una vida nueva no puede recibir daño durante la protección de spawn de la arena (3s
+en una arena nueva), más la mejora `spawn-protection` donde cuentan las mejoras. Atacar la termina. Las vidas
+empiezan en un spawn al azar entre la mitad más alejada de los demás jugadores.
+
+## Muertes
+
+En una arena nunca se muere de verdad: el daño letal se cancela, la kill se acredita y el jugador se cura y va
+a un spawn con un kit nuevo. Una muerte real que se cuele (`/kill`, otro plugin) cuenta igual, sin soltar nada.
+
+- **El asesino** es quien dio el último golpe, o el último jugador que hirió a la víctima dentro de
+  `assists.window` (15s). Caer por debajo de la caja más baja de la arena más de `death.void-margin` (2
+  bloques) también es una muerte, acreditada a ese último atacante.
+- **Los drops** siguen `death.drops`: `NONE`, `CONSUMABLES` (los roles de `death.consumable-roles`: comida,
+  pociones, perlas, flechas y bloques) o `ALL`. Se retiran pasado `death.drop-lifetime` (10s).
+- **Las asistencias** son para cada otro jugador que hizo al menos `assists.minimum-percent` (25%) del daño
+  que recibió la víctima dentro de la ventana.
+
+## Rachas y evolución
+
+Cada kill suma uno a la racha de la vida; una muerte la termina.
+
+- Las rachas de `streaks.milestones` (5, 10, 15, 20, 25, 30, 50) se anuncian a la arena.
+- Cortar una racha de al menos `streaks.end-minimum` (5) se anuncia y ejecuta `on-streak-end` para el asesino.
+- **Evolución**: en las rachas de `evolution.steps` el kit que lleva el jugador mejora sobre la marcha. Cada
+  paso se aplica una vez, en la kill que lo alcanza, y dura hasta la siguiente muerte.
+
+| Racha | Paso por defecto |
+|---|---|
+| 3 | Una manzana dorada. |
+| 5 | +1 nivel en cada encantamiento del equipo puesto y en mano. |
+| 10 | Otro +1 nivel de encantamiento, y Velocidad hasta la siguiente muerte. |
+
+Un paso tiene `streak`, `enchant-bonus`, `items` (`item`, `amount`, `role`), `effects` (`NAME|LEVEL|SECONDS`)
+y `feedback` (líneas de secuencia de ExyliaLib). `evolution.kits` da a un kit sus propios pasos, por id de kit.
+
+## Antiabuso
+
+Una kill que rompe una de estas reglas no da **ni recompensas ni estadísticas** a ninguno de los dos. Se avisa
+al asesino y la kill queda en el registro de auditoría del staff (`/exylialib logs`).
+
+| Clave | Por defecto | Regla |
+|---|---|---|
+| `anti-abuse.same-address` | `true` | Asesino y víctima comparten dirección o cuenta. Una base de datos que no responde cuenta como lo mismo. |
+| `anti-abuse.repeat-limit` | `3` | Un asesino mató a la misma víctima más de estas veces dentro de `repeat-window` (10m). `0` lo desactiva. |
+| `anti-abuse.fresh-spawn` | `3s` | La víctima apareció hace menos de esto. |
+| `anti-abuse.afk` | `60s` | La víctima llevaba esto sin moverse. `0s` lo desactiva. |
+
+## El némesis
+
+Un jugador que te mata al menos `nemesis.min-kills` (2) veces se convierte en tu **némesis**: gana el que más
+kills tiene, y en un empate el más reciente. Cada jugador sigue a `nemesis.tracked` (5) rivales. Matar a tu
+némesis es **venganza**: ejecuta `on-revenge` y salda la cuenta. Conseguir un némesis nuevo ejecuta
+`on-nemesis-new` para la víctima.
+
+## Bloques de la arena
+
+Dentro de la caja PvP los jugadores pueden poner bloques, que desaparecen pasado `arenas.placed-blocks` (30s;
+`0s` los deja hasta el siguiente reinicio), y solo se pueden romper los bloques que pusieron los jugadores. El
+reinicio de la arena vuelve a poner cada bloque desde su schematic. Consulta
+[Arenas](/docs/exyliarandomkits/arenas#reinicios).

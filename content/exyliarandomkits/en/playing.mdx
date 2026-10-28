@@ -1,0 +1,137 @@
+---
+title: "Playing"
+description: "Joining and leaving, rolls and drafts, rerolls, the hotbar layout, deaths and drops, assists, streaks and kit evolution, anti-abuse and the nemesis."
+---
+
+Everything a player does starts from `/rk` (also `/randomkits`), the hub: **Play**, **Leave arena**,
+**Profile**, **Kits**, **Hotbar layout**, **Leaderboards**, **Progression**, **Reroll kit**, the running or
+next **Event** and the **Season**.
+
+## Joining and leaving
+
+`/rk play` joins any ready arena, `/rk play <arena>` that one. The **Play** button opens the arena list.
+
+- The player's things are saved by ExyliaLib's stays, they are moved to a spawn, emptied there and put in
+  survival. A player already in an arena, or combat tagged, is refused.
+- `/rk leave` takes them out and gives everything back **exactly** as they came in.
+- Quitting is never a combat log: their things come back on their next join. A crash does the same.
+- While in an arena only the commands in `allowed-commands` run (by default `rk`, `randomkits` and the
+  private message commands), so `/rk leave` always works.
+- Walking out of the arena's boxes is not allowed, and neither is a teleport out of them. Containers cannot
+  be opened (a crafting table can), kit items cannot be thrown away by hand, and nobody outside an
+  arena picks up a kit item left on the floor.
+
+On a network, `/rk play` may send the player to another server of the group first. See
+[Network and ExyliaDuels](/docs/exyliarandomkits/network).
+
+## The roll
+
+A roll first picks a **rarity** by its weight, then a **kit** of that rarity by the kit's own weight. Only
+the kits in the arena's pool, enabled, and whose permission the player has (if the kit asks for one) can be
+rolled; a rarity with no such kit is skipped and its weight shared among the others.
+
+| Rule | Default | What it does |
+|---|---|---|
+| Anti-repeat | `roll.anti-repeat: 3` | A player never gets one of their last 3 kits again while other kits can be rolled. |
+| Bad luck protection | `roll.pity: {epic: 10, legendary: 40}` | After 10 rolls in a row below epic the next roll is at least epic; after 40 below legendary, at least legendary. |
+
+The rolled kit's title shows its name and rarity, and the rarity's `announce` and `feedback` play (see
+[Rarities](/docs/exyliarandomkits/kits#rarities)). Every kit a player has rolled counts as **discovered**:
+`/rk kits` shows the catalogue with each kit's chance for that player.
+
+### Random and Draft
+
+Each arena has a roll mode:
+
+- **Random** gives the rolled kit at once.
+- **Draft** offers `roll.draft-size` (3) different kits to pick from, in a menu or as clickable chat buttons
+  (`roll.draft.display`: `MENU` or `CHAT`). Nobody can hurt a player while they pick. After
+  `roll.draft-timeout` (10s) the first kit is taken. `/rk draft` reopens the menu after closing it.
+
+During a **Kit of the Hour** event everyone gets the event's kit: no roll and no draft. See
+[Events and seasons](/docs/exyliarandomkits/events-and-seasons).
+
+### Rerolls
+
+`/rk reroll` (or the hub's **Reroll kit**) rolls the kit again, for one of the life's rerolls, while the
+life is fresh: within `rerolls.window` in `progression.yml` (10s) after spawning, and before dealing any
+damage. Rerolls come from the `rerolls` account upgrade and the **Second Opinion** perk; a player without any
+has none. In a Random arena the player is told how many they have left after each spawn.
+
+## The kit on the body
+
+Every slot of the kit rolls on every life: whether it appears, which variant, how many, and which
+enchantments. See [Kits](/docs/exyliarandomkits/kits).
+
+**Layouts.** Armour and the offhand always go to their own slot. Every other item goes where the player's
+layout puts its **role** (`WEAPON`, `BOW`, `PEARLS`, `POTIONS`, `FOOD`, `BLOCKS`, `ARROWS` or any custom
+role). A player arranges it once and every kit lands that way, whatever it rolled:
+
+- `/rk layout` opens the editor: click a role to pick it up, click a slot to put it there, then **Save**.
+- `/rk layout save` takes where the current kit's items are now, in an arena, as the layout.
+- `/rk layout reset` forgets it.
+
+Without a saved layout, the `layout` map of `config.yml` is used (weapon 0, bow 1, pearls 2, potions 3, food
+7, blocks 8, arrows 9); roles not listed fill the first free slot.
+
+**Spawn protection.** A new life cannot be hurt for the arena's spawn protection (3s for a new arena), plus
+the `spawn-protection` upgrade where upgrades count. Attacking ends it. Lives start at a random spawn among
+the half farthest from the other players.
+
+## Deaths
+
+A death in an arena never really happens: lethal damage is cancelled, the kill is credited, and the player
+is healed and sent to a spawn with a new kit. A real death that gets past it (`/kill`, another plugin) is
+counted the same, with nothing dropped.
+
+- **The killer** is whoever struck the last blow, or the last player who hurt the victim within
+  `assists.window` (15s). Falling below the arena's lowest box by more than `death.void-margin` (2 blocks)
+  is a death too, credited to that last attacker.
+- **Drops** follow `death.drops`: `NONE`, `CONSUMABLES` (the roles in `death.consumable-roles`: food,
+  potions, pearls, arrows and blocks) or `ALL`. They are removed after `death.drop-lifetime` (10s).
+- **Assists** go to every other player who dealt at least `assists.minimum-percent` (25%) of the damage the
+  victim took within the window.
+
+## Streaks and evolution
+
+Each kill adds one to the life's streak; a death ends it.
+
+- Streaks in `streaks.milestones` (5, 10, 15, 20, 25, 30, 50) are announced to the arena.
+- Ending a streak of at least `streaks.end-minimum` (5) is announced and runs `on-streak-end` for the
+  killer.
+- **Evolution**: at the streaks of `evolution.steps` the kit the player wears is upgraded in place. Each step
+  is applied once, on the kill that reaches it, and lasts until the next death.
+
+| Streak | Default step |
+|---|---|
+| 3 | A golden apple. |
+| 5 | +1 level on every enchantment of the gear worn and held. |
+| 10 | Another +1 enchantment level, and Speed until the next death. |
+
+A step has `streak`, `enchant-bonus`, `items` (`item`, `amount`, `role`), `effects` (`NAME|LEVEL|SECONDS`)
+and `feedback` (ExyliaLib sequence lines). `evolution.kits` gives a kit its own steps by kit id.
+
+## Anti-abuse
+
+A kill that breaks one of these rules earns **no rewards and no stats** for either player. The killer is
+told, and the kill is written to the staff audit log (`/exylialib logs`).
+
+| Key | Default | Rule |
+|---|---|---|
+| `anti-abuse.same-address` | `true` | Killer and victim share an address or account. A database that cannot answer counts as the same. |
+| `anti-abuse.repeat-limit` | `3` | One killer killed the same victim more than this many times within `repeat-window` (10m). `0` turns it off. |
+| `anti-abuse.fresh-spawn` | `3s` | The victim spawned less than this long ago. |
+| `anti-abuse.afk` | `60s` | The victim had not moved for this long. `0s` turns it off. |
+
+## The nemesis
+
+A player who kills you at least `nemesis.min-kills` (2) times becomes your **nemesis**: the most kills wins,
+the most recent a tie. Each player keeps track of `nemesis.tracked` (5) rivals. Killing your nemesis is
+**revenge**: it runs `on-revenge` and settles the score. Getting a new nemesis runs `on-nemesis-new` for the
+victim.
+
+## Arena blocks
+
+Inside the PvP box players may place blocks, which disappear after `arenas.placed-blocks` (30s; `0s` keeps
+them until the next reset), and only blocks players placed can be broken. The arena's reset puts every
+block back from its schematic. See [Arenas](/docs/exyliarandomkits/arenas#resets).

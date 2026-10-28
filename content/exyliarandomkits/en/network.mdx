@@ -1,0 +1,82 @@
+---
+title: "Network and ExyliaDuels"
+description: "Several servers sharing kits, arenas, profiles, leaderboards, events and seasons, players sent to the best server, a lobby that only routes, and the Random kit in ExyliaDuels."
+---
+
+## A network group
+
+Servers of one network share kits, arenas, profiles, leaderboards, events and seasons when they write the
+same `network-group`. One event runs at a time on the whole group, one server closes each season, and every
+reward is paid once wherever the player is.
+
+<Steps>
+  <Step title="One group">
+    The same `network-group` in `config.yml` on every server: lower case letters, digits and underscores, at
+    most 24. Blank, the default, keeps the plain tables.
+  </Step>
+  <Step title="One database">
+    `database.yml` on every server points at **one** MySQL, MariaDB, PostgreSQL or MongoDB database. The
+    group prefixes the tables (`<group>_exyliarandomkits_kits`), so several groups can share one database.
+  </Step>
+  <Step title="Redis">
+    Redis enabled in that same `database.yml` on every server, with the same Redis and `key-prefix`, and a
+    **different `server-id` on each server**, so an edit on one server reaches the others at once. See
+    [ExyliaLib's database](/docs/exylialib/database).
+  </Step>
+</Steps>
+
+Arenas are built on each server that runs them: their schematics are local. A player's arena stay never
+travels either: what they carried is given back on the server they left it on.
+
+<Callout type="warning" title="Rows written before the group">
+Setting a group on a server that already has kits and profiles in the plain tables starts the group from
+empty tables. The old rows stay where they are.
+</Callout>
+
+## Balancing players
+
+With balancing, `/rk play [arena]` sends a player to the best server of the group for the arena they asked
+for, and they join it on arrival. Each server publishes its players per arena on a heartbeat.
+
+<Steps>
+  <Step title="ExyliaProxyUtils">
+    [ExyliaProxyUtils](/docs/exyliaproxyutils/introduction) on the proxy, with the proxy's server names
+    **equal to the backends' `server-id`s**.
+  </Step>
+  <Step title="balancing in config.yml">
+    `balancing.enabled` (on by default), a `mode` and a `capacity`.
+  </Step>
+</Steps>
+
+| Key | Default | What it does |
+|---|---|---|
+| `balancing.enabled` | `true` | Sends players between the servers of the group. Off: `/rk play` always plays here. |
+| `balancing.mode` | `FILL_FIRST` | `FILL_FIRST` puts a player on the fullest server still below its capacity, so fights stay dense; `LEAST_PLAYERS` on the emptiest. |
+| `balancing.capacity` | `60` | Players this server takes in all its arenas before others are preferred. `0` for no limit. |
+| `balancing.arena-capacity` | `{}` | The same per arena, by arena id. Arenas not listed have no limit of their own. |
+| `balancing.router-only` | `false` | A lobby that has the plugin but no arenas: it never takes players and sends every `/rk play` to a server of the group. |
+
+- Capacity is a preference, not a wall: when no server has room, the player joins here (a router-only lobby
+  says no server is available instead).
+- A player already in an arena, or combat tagged, is not sent.
+- The profile is saved before the move, so the server they land on reads it current.
+- `/rk play` suggests every arena ready on some server of the group.
+- `%exyliarandomkits_network_players%`, `%exyliarandomkits_network_players_<arena>%` and
+  `%exyliarandomkits_instances%` read the group from the last heartbeats. See
+  [Placeholders](/docs/exyliarandomkits/placeholders#the-network-group).
+
+## ExyliaDuels
+
+With [ExyliaDuels](/docs/exyliaduels/introduction) on the same server, its challenge screen offers a
+**Random kit**: both players get the same kit, rolled once from the duel's seed, each in their own saved
+layout, **without upgrades, perks or luck**.
+
+| Key | Default | What it does |
+|---|---|---|
+| `duels.enabled` | `true` | Offers the Random kit in the challenge screen. |
+| `duels.kits` | `[]` | Kit ids a duel may roll. Empty rolls from every enabled kit. |
+| `duels.count-stats` | `false` | Counts the winner's kill and the loser's death in the kit's stats and mastery. |
+
+The roll is a kit by its rarity and weight, then its slots, with no anti-repeat or bad luck protection. The
+option is not shown when there is no kit to roll. For network duels RandomKits must also run on the duel
+arena server, in the same group; where it does not, the option is not shown.

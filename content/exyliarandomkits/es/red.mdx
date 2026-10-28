@@ -1,0 +1,83 @@
+---
+title: "Red y ExyliaDuels"
+description: "Varios servidores compartiendo kits, arenas, perfiles, clasificaciones, eventos y temporadas, jugadores enviados al mejor servidor, un lobby que solo reparte, y el kit aleatorio en ExyliaDuels."
+---
+
+## Un grupo de red
+
+Los servidores de una red comparten kits, arenas, perfiles, clasificaciones, eventos y temporadas cuando
+escriben el mismo `network-group`. Hay un solo evento a la vez en todo el grupo, un servidor cierra cada
+temporada, y cada premio se paga una vez esté donde esté el jugador.
+
+<Steps>
+  <Step title="Un grupo">
+    El mismo `network-group` en `config.yml` en todos los servidores: minúsculas, dígitos y guiones bajos,
+    como mucho 24. Vacío, por defecto, mantiene las tablas normales.
+  </Step>
+  <Step title="Una base de datos">
+    `database.yml` apunta en todos los servidores a **una** base de datos MySQL, MariaDB, PostgreSQL o
+    MongoDB. El grupo va delante del nombre de las tablas (`<grupo>_exyliarandomkits_kits`), así que varios
+    grupos pueden compartir una base de datos.
+  </Step>
+  <Step title="Redis">
+    Redis activado en ese mismo `database.yml` en todos los servidores, con el mismo Redis y `key-prefix`, y
+    un **`server-id` distinto en cada servidor**, para que un cambio en un servidor llegue a los demás al
+    momento. Consulta [la base de datos de ExyliaLib](/docs/exylialib/base-de-datos).
+  </Step>
+</Steps>
+
+Las arenas se construyen en cada servidor que las tiene: sus schematics son locales. La estancia de un
+jugador en una arena tampoco viaja: lo que llevaba se le devuelve en el servidor donde lo dejó.
+
+<Callout type="warning" title="Filas escritas antes del grupo">
+Poner un grupo en un servidor que ya tiene kits y perfiles en las tablas normales empieza el grupo con tablas
+vacías. Las filas antiguas se quedan donde están.
+</Callout>
+
+## Repartir jugadores
+
+Con el balanceo, `/rk play [arena]` envía al jugador al mejor servidor del grupo para la arena que pidió, y
+entra en ella al llegar. Cada servidor publica sus jugadores por arena con un latido.
+
+<Steps>
+  <Step title="ExyliaProxyUtils">
+    [ExyliaProxyUtils](/docs/exyliaproxyutils/introduccion) en el proxy, con los nombres de servidor del proxy
+    **iguales a los `server-id` de los backends**.
+  </Step>
+  <Step title="balancing en config.yml">
+    `balancing.enabled` (activado por defecto), un `mode` y una `capacity`.
+  </Step>
+</Steps>
+
+| Clave | Por defecto | Qué hace |
+|---|---|---|
+| `balancing.enabled` | `true` | Envía jugadores entre los servidores del grupo. Desactivado: `/rk play` siempre juega aquí. |
+| `balancing.mode` | `FILL_FIRST` | `FILL_FIRST` pone al jugador en el servidor más lleno que siga por debajo de su capacidad, para que las peleas sigan densas; `LEAST_PLAYERS` en el más vacío. |
+| `balancing.capacity` | `60` | Jugadores que acepta este servidor entre todas sus arenas antes de preferir otros. `0` sin límite. |
+| `balancing.arena-capacity` | `{}` | Lo mismo por arena, por id de arena. Las arenas que no aparecen no tienen límite propio. |
+| `balancing.router-only` | `false` | Un lobby que tiene el plugin pero ninguna arena: nunca acepta jugadores y envía cada `/rk play` a un servidor del grupo. |
+
+- La capacidad es una preferencia, no un muro: si ningún servidor tiene sitio, el jugador entra aquí (un lobby
+  router-only dice en cambio que no hay servidor disponible).
+- No se envía a un jugador que ya está en una arena, o en combate.
+- El perfil se guarda antes del cambio, así que el servidor al que llega lo lee al día.
+- `/rk play` sugiere cada arena lista en algún servidor del grupo.
+- `%exyliarandomkits_network_players%`, `%exyliarandomkits_network_players_<arena>%` y
+  `%exyliarandomkits_instances%` leen el grupo de los últimos latidos. Consulta
+  [Placeholders](/docs/exyliarandomkits/placeholders#el-grupo-de-red).
+
+## ExyliaDuels
+
+Con [ExyliaDuels](/docs/exyliaduels/introduccion) en el mismo servidor, su pantalla de reto ofrece un **kit
+aleatorio**: los dos jugadores reciben el mismo kit, tirado una vez a partir de la semilla del duelo, cada uno
+en su propia distribución guardada, **sin mejoras, perks ni suerte**.
+
+| Clave | Por defecto | Qué hace |
+|---|---|---|
+| `duels.enabled` | `true` | Ofrece el kit aleatorio en la pantalla de reto. |
+| `duels.kits` | `[]` | Ids de kit que puede tirar un duelo. Vacío tira de todos los kits activados. |
+| `duels.count-stats` | `false` | Cuenta la kill del ganador y la muerte del perdedor en las estadísticas y la maestría del kit. |
+
+La tirada es un kit por su rareza y su peso, luego sus ranuras, sin antirrepetición ni protección contra la
+mala suerte. La opción no aparece cuando no hay ningún kit que tirar. Para duelos en red, RandomKits tiene que
+estar también en el servidor de arenas de duelos, en el mismo grupo; donde no está, la opción no aparece.

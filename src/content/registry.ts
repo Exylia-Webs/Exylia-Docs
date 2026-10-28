@@ -2073,6 +2073,7 @@ export const plugins: Plugin[] = [
       es: "Arenas PvP listas para usar donde cada vida empieza con un kit aleatorio tirado por rareza, kits procedurales cuyas ranuras tiran sus propias variantes, cantidades y encantamientos, arenas aleatorias o de draft con rerolls y distribuciones de la barra guardadas, rachas que hacen evolucionar el kit, niveles, prestigio, mejoras, maestría de kits, perks y misiones, eventos y temporadas, balance de kits a partir del K/D real, servidores de una red funcionando como uno solo, un kit aleatorio en ExyliaDuels, el editor web y kits importados de EssentialsX y de los plugins de Exylia.",
     },
     version: "1.0.0",
+    purchase: "https://builtbybit.com/resources/exylia-randomkitscore.134730/",
     status: "beta",
     category: { en: "Gamemode", es: "Modo de juego" },
     minecraft: "1.21.4+",
