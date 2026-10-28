@@ -1,0 +1,102 @@
+---
+title: "API"
+description: "JourneyService en la API de Exylia: iniciar, detener y reiniciar recorridos, leer el progreso, disparar claves CUSTOM y reproducir cinemáticas, más los cuatro eventos de recorrido."
+badge: "dev"
+---
+
+ExyliaJourney registra `net.exylia.lib.api.journey.JourneyService` (API de Exylia 3.4.0, incluida en
+ExyliaLib) al activarse. Se obtiene con `ExyliaAPI.get(JourneyService.class)`; está vacío en un servidor sin
+ExyliaJourney, así que el mismo código funciona en todas partes.
+
+<Callout type="note" title="Añadirla a tu proyecto">
+El artefacto, el repositorio y la línea de `plugin.yml` son los mismos para todos los plugins de Exylia y
+están en la [página de la API pública](/docs/exylialib/api). Añade `ExyliaJourney` en `softdepend` para que
+se active antes.
+</Callout>
+
+```java
+// una función tuya avisa a los recorridos de que se ha usado
+ExyliaAPI.get(JourneyService.class).ifPresent(journeys -> journeys.trigger(player, "shop:opened", 1));
+
+// iniciar el tutorial de la tienda la primera vez que alguien la abre
+ExyliaAPI.get(JourneyService.class).ifPresent(journeys -> {
+    StartResult result = journeys.start(player, "shop-tutorial");
+    if (result == StartResult.REQUIREMENTS_NOT_MET) { /* ... */ }
+});
+
+// mostrar dónde está el jugador
+ExyliaAPI.get(JourneyService.class)
+        .flatMap(journeys -> journeys.activeJourney(player))
+        .ifPresent(p -> player.sendMessage("Step " + (p.stepIndex() + 1) + " of " + p.stepCount()));
+```
+
+## JourneyService
+
+Todos los métodos son seguros desde cualquier hilo. Lo que cambia el progreso se ejecuta en el hilo del propio
+jugador (su hilo de región en Folia) y puede completarse un tick después. El progreso se lee de memoria y solo
+se conoce para jugadores conectados.
+
+| Método | Qué hace |
+|---|---|
+| `List<String> journeyIds()` | Todos los recorridos que conoce el servidor, activados o no. |
+| `boolean exists(String journeyId)` | Si un recorrido existe. |
+| `StartResult start(Player, String journeyId)` | Inicia un recorrido como lo haría un disparador: se comprueban requisitos, grupo y reglas de repetición, y se dispara `JourneyStartEvent` con la causa `API`. |
+| `boolean stop(Player, String journeyId)` | Detiene un recorrido en curso sin completarlo. Sin recompensas; puede volver a empezar. `true` si estaba en curso. |
+| `boolean complete(Player, String journeyId)` | Completa ya un recorrido en curso, dando sus recompensas de finalización y disparando `JourneyCompleteEvent`. Los pasos que faltan no se pagan. |
+| `boolean reset(UUID player, String journeyId)` | Olvida progreso, finalización y cooldown. Funciona con jugadores desconectados. `true` si el recorrido existe. |
+| `Optional<JourneyProgress> activeJourney(Player)` | El recorrido seguido: el que muestra la guía. |
+| `List<JourneyProgress> activeJourneys(Player)` | Todos los recorridos en curso, como mucho uno por grupo. |
+| `JourneyState state(Player, String journeyId)` | `NOT_STARTED`, `ACTIVE`, `COMPLETED` o `SKIPPED`. Un recorrido detenido se lee como `NOT_STARTED`, o `COMPLETED` si una vez anterior se terminó. |
+| `int trigger(Player, String key, int amount)` | Dispara una clave CUSTOM: cuenta para cada paso `CUSTOM` en curso que la espera (o espera una clave menos específica) e inicia los recorridos con un disparador `CUSTOM` que coincide. Devuelve cuántos pasos avanzó. |
+| `List<String> cinematicIds()` | Todas las cinemáticas. |
+| `boolean playCinematic(Player, String cinematicId)` | Reproduce una cinemática. Se rechaza (`false`) en combate, viendo otra, en otro mundo, o para un jugador de Java en un servidor sin PacketEvents. Un jugador de Bedrock recibe los subtítulos en el chat y devuelve `true`. |
+
+`JourneyProgress` es un record: `journeyId`, `stepIndex` (desde 0), `stepCount`, `stepId`, `progress` y
+`goal` (`1` para un objetivo que se cumple o no).
+
+### StartResult
+
+| Valor | Significado |
+|---|---|
+| `STARTED` | Está en curso. |
+| `UNKNOWN_JOURNEY` | Ningún recorrido tiene ese id. |
+| `DISABLED` | `enabled: false`. |
+| `ALREADY_ACTIVE` | Ya está en curso para este jugador. |
+| `ALREADY_COMPLETED` | No es repetible y se completó — o el jugador lo saltó. |
+| `ON_COOLDOWN` | Repetible, pero todavía no. |
+| `REQUIREMENTS_NOT_MET` | Al jugador le falta su permiso o su condición. |
+| `GROUP_BUSY` | Otro recorrido del mismo grupo está en curso. |
+| `CANCELLED` | Un listener canceló `JourneyStartEvent`. |
+| `NOT_LOADED` | El progreso del jugador aún no ha terminado de cargarse. |
+
+Llamado desde un hilo que no es el del jugador, `start` responde desde memoria y los requisitos se comprueban
+un tick después en el hilo del jugador, así que un inicio respondido como `STARTED` todavía puede rechazarse
+allí.
+
+## Eventos
+
+Todos en `net.exylia.lib.api.journey.event`, todos eventos de jugador disparados en el hilo del propio
+jugador.
+
+| Evento | Cuándo | Campos |
+|---|---|---|
+| `JourneyStartEvent` | Un recorrido va a empezar, después de pasar todas las reglas y antes de escribir o mostrar nada. **Cancelable**: un inicio cancelado no deja nada detrás. | `getJourneyId()`, `getCause()`: `FIRST_JOIN`, `JOIN`, `COMMAND`, `REGION_ENTER`, `NPC_CLICK`, `JOURNEY_COMPLETE`, `PERMISSION`, `CUSTOM` o `API` |
+| `JourneyStepCompleteEvent` | Se completó un paso, después de sus recompensas y antes de que empiece el siguiente. | `getJourneyId()`, `getStepIndex()`, `getStepId()`, `isLastStep()` |
+| `JourneyCompleteEvent` | Se completó un recorrido entero, después de sus recompensas. | `getJourneyId()`, `getCompletions()` (incluida esta), `getDurationMillis()` |
+| `JourneySkipEvent` | Se saltó un paso o un recorrido entero. | `getJourneyId()`, `isWholeJourney()`, `getStepId()` (`null` para un recorrido entero), `getStepIndex()` |
+
+```java
+@EventHandler
+public void onJourneyStart(JourneyStartEvent event) {
+    // nada de tutoriales dentro del mundo de la arena
+    if (event.getPlayer().getWorld().getName().equals("arena")) event.setCancelled(true);
+}
+
+@EventHandler
+public void onJourneyComplete(JourneyCompleteEvent event) {
+    if (event.getJourneyId().equals("welcome") && event.getCompletions() == 1) {
+        getLogger().info(event.getPlayer().getName() + " finished onboarding in "
+                + event.getDurationMillis() / 1000 + "s");
+    }
+}
+```

@@ -1,0 +1,192 @@
+---
+title: "Recorridos"
+description: "El archivo de un recorrido: nombre e icono, disparadores, requisitos, grupos y prioridad, recorridos repetibles y cooldowns, saltar, recompensas y líneas de efectos."
+---
+
+Un recorrido es un archivo, `journeys/<id>.yml`; el nombre del archivo es su id. Es una lista ordenada de
+[pasos](/docs/exyliajourney/pasos) más las reglas de cuándo empieza, quién puede hacerlo y qué da
+terminarlo. Todo esto se puede editar en el juego con `/journeyadmin` (consulta
+[El editor](/docs/exyliajourney/editor)); el archivo es el mismo de una forma u otra.
+
+```yaml
+name: '{primary}&lWELCOME'
+icon: COMPASS
+description: ['{letters}Your first minutes on the server.']
+enabled: true
+priority: 10            # el más alto empieza primero cuando varios se disparan a la vez
+group: main             # un recorrido activo por grupo
+repeatable: false
+cooldown: 0s
+skippable: true
+triggers:
+  - FIRST_JOIN
+requirements:
+  permission: ''
+  condition: '%player_level% >= 5'
+steps:
+  - id: spawn
+    title: '{highlight}Find the fountain'
+    objective: { type: REACH, location: 'world,0,64,0', radius: 4 }
+rewards:
+  - { type: EXPERIENCE, value: '100' }
+  - 'give %player_name% bread 8'
+on-start: []
+on-complete: ['[MESSAGE] {success}Welcome aboard!']
+```
+
+## Claves
+
+| Clave | Por defecto | Qué hace |
+|---|---|---|
+| `name` | el id | Se muestra en mensajes, menús, el panel y `%journey_current%`. |
+| `icon` | `COMPASS` | El material en los menús. |
+| `description` | ninguna | Líneas bajo el nombre en `/journey`. |
+| `enabled` | `true` | Un recorrido desactivado nunca empieza por un disparador. Un admin sí puede iniciarlo. |
+| `priority` | `0` | Cuando varios recorridos se disparan a la vez, el más alto empieza primero. Si comparten grupo, es el que gana. |
+| `group` | `main` | Un jugador tiene como mucho un recorrido activo por grupo. |
+| `repeatable` | `false` | Si puede volver a empezar después de completarse. |
+| `cooldown` | `0s` | En un recorrido repetible, cuánto tiempo tras completarlo puede volver a empezar. |
+| `skippable` | `true` | Si los jugadores pueden saltar el recorrido entero. |
+| `triggers` | ninguno | Qué lo inicia. Ver abajo. |
+| `requirements` | ninguno | `permission` y `condition` que debe cumplir el jugador. Ver abajo. |
+| `steps` | — | Al menos uno. Un recorrido sin ningún paso legible se reporta y no se carga. |
+| `rewards` | ninguna | Se dan al completar el recorrido. |
+| `on-start`, `on-complete` | ninguna | Líneas de efectos al empezar y al completarlo. |
+
+## Disparadores
+
+Un disparador se escribe con su nombre solo cuando no necesita nada más, o como sección.
+
+```yaml
+triggers:
+  - FIRST_JOIN
+  - type: REGION_ENTER
+    region: spawn
+  - type: REGION_ENTER
+    location: world,0,64,0
+    radius: 6
+  - type: NPC_CLICK
+    npc: guide
+  - type: JOURNEY_COMPLETE
+    journey: tutorial
+  - type: PERMISSION
+    permission: rank.member
+  - type: CUSTOM
+    key: exylia:crates:open
+```
+
+| Disparador | Claves | Empieza cuando |
+|---|---|---|
+| `FIRST_JOIN` | — | Un jugador entra al servidor por primera vez, `first-join-delay` (3 s) después de entrar. |
+| `JOIN` | — | Un jugador entra, cada vez. |
+| `COMMAND` | — | Nada automático: solo `/journeyadmin start`, el botón de prueba del editor u otro plugin lo inician. Marca un recorrido pensado para iniciarse a mano. |
+| `REGION_ENTER` | `region`, o `location` + `radius` (5) | El jugador entra en una región de ExyliaLib (por su id completo o su nombre), o en una esfera. |
+| `NPC_CLICK` | `npc` | El jugador hace clic en ese NPC. Consulta [Clics en NPCs](/docs/exyliajourney/integraciones#clics-en-npcs). |
+| `JOURNEY_COMPLETE` | `journey` | El jugador completa ese recorrido. Así se construyen las cadenas de misiones. |
+| `PERMISSION` | `permission` | El jugador tiene el permiso. Se comprueba cada `permission-check` (5 s) para los jugadores conectados, y solo para quien nunca tuvo este recorrido. |
+| `CUSTOM` | `key` | Se dispara una clave CUSTOM para el jugador: desde otro plugin de Exylia, el código de otro plugin o `/journeyadmin trigger`. Un disparador que pide `exylia:crates:open` también salta con `exylia:crates:open:vote`. Consulta [Integraciones](/docs/exyliajourney/integraciones). |
+
+Un disparador al que le falta su clave (un `NPC_CLICK` sin `npc`) se reporta y se omite; el resto del
+recorrido se carga.
+
+## Quién puede iniciarlo
+
+Cuando salta un disparador, el recorrido solo empieza si pasan todas las reglas, en este orden:
+
+| Regla | Se rechaza cuando |
+|---|---|
+| Ya activo | El jugador está ahora en este recorrido. |
+| Activado | `enabled: false`. |
+| Saltado | El jugador ya saltó este recorrido. Un recorrido saltado nunca vuelve a empezar por un disparador. |
+| Hecho | El jugador lo completó y no es `repeatable`. |
+| Cooldown | Es repetible y su `cooldown` desde la última vez no ha terminado. |
+| Grupo | Otro recorrido del mismo `group` está activo para el jugador. |
+| Requisitos | Al jugador le falta `requirements.permission`, o `requirements.condition` es falsa. |
+| Otros plugins | Un listener canceló `JourneyStartEvent`. Consulta [API](/docs/exyliajourney/api). |
+
+`requirements.condition` es una comparación de placeholders como `%player_level% >= 5`. **Falla cerrada**:
+una condición que el plugin no puede leer se reporta al cargar el recorrido y nadie la cumple, y un
+placeholder que no se resuelve en un número nunca pasa una comparación numérica.
+
+`/journeyadmin start` y **TEST ON YOURSELF** del editor ignoran todas las reglas salvo *ya activo*.
+
+Un recorrido **detenido** (por un admin, por el límite de tiempo de un paso o desde la API) es como si nunca
+hubiera empezado, y sus disparadores pueden volver a iniciarlo.
+
+## Varios recorridos a la vez
+
+Un jugador puede llevar varios recorridos a la vez, uno por grupo. Solo uno se **sigue**: aquel cuyo paso
+muestra la guía y describen los placeholders. Un recorrido recién iniciado pasa a ser el seguido; cuando
+termina, toma el relevo el seguido más recientemente de los demás. Los jugadores cambian con
+`/journey track <id>`, o pasan de uno a otro haciendo clic en la tarjeta del recorrido en `/journey`.
+
+El progreso cuenta en todos los recorridos activos, seguidos o no.
+
+## Saltar
+
+Con `skippable: true`, un jugador puede saltar el recorrido entero desde `/journey` o con
+`/journey skip journey`. Un recorrido saltado no da nada, queda registrado como saltado y nunca vuelve a
+empezar por un disparador. Un admin puede borrarlo con `/journeyadmin reset`.
+
+Saltar pasos sueltos depende del `skippable` del propio paso (consulta
+[Pasos](/docs/exyliajourney/pasos#claves-del-paso)). Un paso saltado no da nada y empieza el siguiente.
+Saltar el **último** paso completa el recorrido, con sus recompensas.
+
+## Recompensas
+
+`rewards` son recompensas de ExyliaLib, que se dan al completar el recorrido. Cada entrada es una sección con
+un `type` (`ITEM`, `ECONOMY`, `EXPERIENCE`, `COMMAND`, `MESSAGE`, `POTION`...) o un texto suelto, que se
+ejecuta como comando de consola:
+
+```yaml
+rewards:
+  - type: EXPERIENCE
+    value: '100'
+  - type: ITEM
+    itemSnapshot: TORCH
+    minAmount: 8
+    maxAmount: 8
+  - 'give %player_name% bread 8'
+```
+
+Los pasos tienen sus propias `rewards`, que se dan al completar ese paso. El editor construye ambas listas
+con el editor de recompensas de ExyliaLib.
+
+## Líneas de efectos
+
+`on-start` y `on-complete`, en el recorrido y en cada paso, son líneas de interacción de ExyliaLib: comandos
+de consola o del jugador (`console:`, `player:`), `[ACTION] namespace:id`, `[TELEPORT]` y cada token de
+secuencia (`[MESSAGE]`, `[SOUND]`, `[TOAST]`, `[PARTICLE]`, `[FIREWORK]`, `[DELAY]`...).
+
+```yaml
+on-start:
+  - '[SOUND] BLOCK_NOTE_BLOCK_CHIME;1;1.4'
+on-complete:
+  - 'console: give %player_name% bread 4'
+  - '[MESSAGE] {success}Welcome aboard, {highlight}%player_name%{success}!'
+```
+
+Pueden usar estos placeholders, además de cualquier placeholder del jugador:
+
+| Placeholder | Valor |
+|---|---|
+| `%journey%`, `%journey_id%` | El nombre y el id del recorrido. |
+| `%steps%` | Cuántos pasos tiene. |
+| `%step%`, `%step_id%` | El título y el id del paso (líneas de paso). |
+| `%number%` | El número del paso actual, desde 1. |
+| `%progress%`, `%percent%` | El conteo del paso actual (`3/10`) y su porcentaje. |
+| `%time%` | Cuánto tardó el recorrido (el `on-complete` del recorrido). |
+
+## Feedback
+
+Además de las líneas propias de cada archivo, cada paso completado reproduce el feedback de `config.yml`: un
+sonido, un toast y una ráfaga corta de partículas; cada recorrido completado lanza una celebración de fuegos
+artificiales y un anillo de partículas y envía un bloque centrado *JOURNEY COMPLETE*. Consulta
+[Configuración](/docs/exyliajourney/configuracion#feedback).
+
+## Un archivo con errores
+
+Nada en un archivo de recorrido detiene el servidor. Un disparador, paso o recompensa incorrectos se reportan
+en la consola indicando el archivo y la ruta (`steps[2].objective`), y se omiten; un recorrido sin ningún
+paso no se carga. `/journeyadmin reload` dice cuántos problemas encontró, y el editor los muestra en el
+recorrido y marca los pasos rotos.

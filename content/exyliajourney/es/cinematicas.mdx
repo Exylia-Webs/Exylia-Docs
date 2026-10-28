@@ -1,0 +1,146 @@
+---
+title: "Cinemáticas"
+description: "Grabar una cinemática en el juego, el formato del archivo, fotogramas clave y easing, subtítulos con quien habla, franjas, fundidos y sonidos, reproducción, espectadores lejanos, saltar y Bedrock."
+---
+
+Una cinemática es un vuelo de cámara por el mundo: fotogramas clave grabados en el juego, con subtítulos y el
+nombre de quien habla, franjas de cine, un fundido de entrada y de salida, y sonidos — todo solo para quien la
+ve. Cada cinemática es un archivo, `cinematics/<id>.yml`.
+
+Un recorrido la reproduce de dos formas:
+
+- `guidance.cinematic: <id>` en un paso la reproduce al empezar el paso; el paso no la espera.
+- Un objetivo `WATCH_CINEMATIC` la reproduce al empezar el paso, y el paso se cumple cuando termina.
+
+`/journeyadmin cinematic play <id> [player]` reproduce una fuera de cualquier recorrido, y otros plugins
+pueden reproducirla mediante la [API](/docs/exyliajourney/api).
+
+## Grabar
+
+<Steps>
+  <Step title="Empieza">
+    `/journeyadmin cinematic record <id>`, o **RECORD CINEMATIC** en la lista de cinemáticas del editor. Una
+    barra sustituye a la tuya mientras grabas; solo se dibuja, así que no se pierde nada si el servidor se
+    para.
+  </Step>
+  <Step title="Vuela a cada plano">
+    Mira hacia donde debe mirar la cámara y usa **MARK KEYFRAME**: guarda dónde están tus ojos y hacia dónde
+    miras. **UNDO** quita el último, **PREVIEW** reproduce lo que llevas.
+  </Step>
+  <Step title="Guarda">
+    **SAVE** escribe el archivo, con los fotogramas clave separados tres segundos. **CANCEL** para sin
+    guardar.
+  </Step>
+  <Step title="Termínala en el editor">
+    Tiempos, easing, subtítulos, sonidos, fundidos y franjas se editan desde la pantalla de la cinemática en
+    `/journeyadmin`, o en el archivo.
+  </Step>
+</Steps>
+
+Volver a grabar sobre una cinemática existente sustituye sus fotogramas clave y conserva sus subtítulos,
+sonidos y ajustes.
+
+## El archivo
+
+```yaml
+skippable: true
+letterbox: true
+fade-in: 0.5
+fade-out: 0.5
+keyframes:
+  - { at: 'world,10.00,70.00,0.00', yaw: 90.0, pitch: 25.0, time: 0.0, easing: SMOOTH }
+  - { at: 'world,0.00,70.00,10.00', yaw: 180.0, pitch: 25.0, time: 3.0, easing: LINEAR }
+subtitles:
+  - { start: 0.5, duration: 4.0, speaker: Guide, text: '{letters}Welcome to the server.' }
+sounds:
+  - { time: 0.0, sound: BLOCK_AMETHYST_BLOCK_CHIME, volume: 1.0, pitch: 0.8 }
+```
+
+| Clave | Por defecto | Qué hace |
+|---|---|---|
+| `skippable` | `true` | Si quien la ve puede saltarla. |
+| `letterbox` | `true` | Dos franjas negras, arriba y abajo. |
+| `fade-in`, `fade-out` | `0.5` | Segundos de fundido desde y hacia negro. `0` para ninguno. |
+| `keyframes` | — | Al menos dos. Ver abajo. |
+| `subtitles` | ninguno | Líneas en la parte baja de la vista. |
+| `sounds` | ninguno | Sonidos a su hora, solo para quien la ve. |
+
+Los tiempos son segundos desde el inicio. Una cinemática dura hasta su último fotograma clave o su último
+subtítulo, lo que llegue después, hasta **tres minutos**; los fotogramas clave posteriores se descartan.
+
+### Fotogramas clave
+
+| Clave | Por defecto | Qué es |
+|---|---|---|
+| `at` | — | `world,x,y,z`: dónde está la cámara. Todos deben estar en el mundo del primero; uno en otro mundo se reporta y se omite. |
+| `yaw`, `pitch` | `0` | Hacia dónde mira. Un barrido que cruza el norte gira por el camino corto. |
+| `time` | tres segundos por fotograma | Cuándo está la cámara ahí. Se ordenan por tiempo. |
+| `easing` | `SMOOTH` | Cómo llega la cámara a este fotograma. |
+
+| Easing | Movimiento |
+|---|---|
+| `SMOOTH` | Una curva a través de los fotogramas vecinos en lugar de pararse en cada uno: lo adecuado para un recorrido grabado. Cualquier valor desconocido se lee como `SMOOTH`. |
+| `LINEAR` | Velocidad constante. |
+| `EASE_IN` | Empieza lento y acelera. |
+| `EASE_OUT` | Empieza rápido y frena. |
+| `EASE_IN_OUT` | Lento en ambos extremos. |
+
+La cámara se queda en el primer fotograma hasta su hora y en el último hasta que termina la cinemática.
+
+### Subtítulos
+
+| Clave | Por defecto | Qué es |
+|---|---|---|
+| `start` | `0` | Cuándo aparece. |
+| `duration` | `3` | Cuánto dura, al menos medio segundo. |
+| `speaker` | ninguno | Un nombre en su propia línea encima del texto. |
+| `text` | — | La línea, en notación de texto de Exylia. Un subtítulo sin texto se omite. |
+
+Se dibujan sobre un panel translúcido en la parte baja de la vista. Si dos se solapan, se ve el que empezó
+más tarde. Su aspecto está en `messages.yml` (`cinematic.subtitle-speaker`, `cinematic.subtitle-line`).
+
+### Sonidos
+
+| Clave | Por defecto |
+|---|---|
+| `time` | `0` |
+| `sound` | — (un nombre de sonido, `BLOCK_NOTE_BLOCK_CHIME` o `minecraft:block.note_block.chime`) |
+| `volume` | `1` |
+| `pitch` | `1` |
+
+## Reproducción
+
+Mientras se reproduce una cinemática, quien la ve queda inmóvil, se dibuja como espectador y no puede recibir
+daño. Los subtítulos, las franjas y el fundido van montados en la cámara, así que se mueven con la vista en
+el mismo fotograma por rápido que gire.
+
+Una cinemática se **rechaza** — al jugador se le dice que ahora no puede ver una — cuando el jugador:
+
+- está en combate (según la comprobación de combate de ExyliaLib);
+- ya está viendo una;
+- está en otro mundo que la cinemática.
+
+Una cinemática rechazada también termina un paso `WATCH_CINEMATIC`, así que un recorrido nunca se queda
+atascado detrás de una.
+
+### Espectadores lejanos
+
+Un cliente solo dibuja los chunks alrededor del cuerpo del jugador, así que una cámara lejana filmaría el
+vacío. Quien esté a más de `cinematics.move-viewer-beyond` bloques (96) del primer fotograma clave se lleva
+antes junto a él y se devuelve exactamente donde estaba cuando termina. Salir del servidor a mitad de una
+cinemática lo devuelve antes de irse, así que entra donde estaba. `0` nunca mueve a nadie.
+
+### Saltar
+
+Una cinemática que se puede saltar envía una línea clicable al empezar; hacer clic en ella, o
+`/journey skip`, la termina. Un salto cuenta como final para un paso `WATCH_CINEMATIC`. Morir o cambiar de
+mundo también termina una cinemática.
+
+## Bedrock y servidores sin PacketEvents
+
+- **Los jugadores de Bedrock** no pueden dibujar la cámara. Reciben los subtítulos de la cinemática en el
+  chat bajo una cabecera corta, y cuenta como vista.
+- **Sin PacketEvents**, las cinemáticas de los recorridos conservan sus subtítulos y sonidos: la cámara no se
+  mueve, los subtítulos llegan al chat a su hora y suenan los sonidos.
+- `JourneyService.playCinematic` rechaza a los jugadores de Java en un servidor sin PacketEvents. Consulta
+  [API](/docs/exyliajourney/api).

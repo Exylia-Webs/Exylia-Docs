@@ -1606,6 +1606,45 @@ const KILLCAM_NAV: NavGroup[] = [
   },
 ];
 
+const JOURNEY_NAV: NavGroup[] = [
+  {
+    label: { en: "Getting started", es: "Empezar" },
+    pages: [
+      page("introduction", "introduction", "introduccion"),
+      page("installation", "installation", "instalacion"),
+      page("first-steps", "first-steps", "primeros-pasos"),
+    ],
+  },
+  {
+    label: { en: "Journeys", es: "Recorridos" },
+    pages: [
+      page("journeys", "journeys", "recorridos"),
+      page("steps", "steps", "pasos"),
+      page("guidance", "guidance", "guia"),
+      page("cinematics", "cinematics", "cinematicas"),
+      page("editor", "editor", "editor"),
+    ],
+  },
+  {
+    label: { en: "Insights", es: "Datos" },
+    pages: [
+      page("analytics", "analytics", "analitica"),
+      page("integrations", "integrations", "integraciones"),
+    ],
+  },
+  {
+    label: { en: "Reference", es: "Referencia" },
+    pages: [
+      page("commands", "commands", "comandos"),
+      page("permissions", "permissions", "permisos"),
+      page("placeholders", "placeholders", "placeholders"),
+      page("configuration", "configuration", "configuracion"),
+      page("api", "api", "api"),
+      page("faq", "faq", "faq"),
+    ],
+  },
+];
+
 export const plugins: Plugin[] = [
   {
     id: "exyliaffa",
@@ -2178,6 +2217,27 @@ export const plugins: Plugin[] = [
       { en: "Folia", es: "Folia" },
     ],
     nav: COMBAT_NAV,
+  },
+  {
+    id: "exyliajourney",
+    name: "ExyliaJourney",
+    tagline: { en: "Guided journeys that show new players the way, with cinematics", es: "Recorridos guiados que muestran el camino a los jugadores nuevos, con cinemáticas" },
+    summary: {
+      en: "Onboarding, tutorials and quest chains as journeys of steps that react to what players actually do — twenty-two objective types, from reaching a place or talking to an NPC to crafting, mining or another Exylia plugin's events — shown in the world for each player alone with a floating panel, a beacon, footprints along recorded routes, a locator-bar waypoint and glow, opened by in-game recorded cinematics with subtitles, built in an in-game editor that goes live without a reload, and measured by a retention funnel that names the step losing the most players.",
+      es: "Bienvenidas, tutoriales y cadenas de misiones como recorridos de pasos que reaccionan a lo que los jugadores hacen de verdad — veintidós tipos de objetivo, desde llegar a un lugar o hablar con un NPC hasta craftear, minar o los eventos de otro plugin de Exylia — mostrados en el mundo solo para cada jugador con un panel flotante, un faro, huellas por rutas grabadas, un waypoint en la barra localizadora y brillo, abiertos con cinemáticas grabadas en el juego con subtítulos, creados en un editor en el juego que se aplica sin recargar, y medidos con un embudo de retención que señala el paso que pierde más jugadores.",
+    },
+    version: "1.0.0",
+    status: "beta",
+    category: { en: "Utility", es: "Utilidad" },
+    minecraft: "1.21.4+",
+    banner: "https://s3.exylia.net/exylia-plugins/public/static/images/plugins/journey/ExyliaJourneyBanner.webp",
+    tags: [
+      { en: "Onboarding", es: "Bienvenida" },
+      { en: "Quests", es: "Misiones" },
+      { en: "Cinematics", es: "Cinemáticas" },
+      { en: "Folia", es: "Folia" },
+    ],
+    nav: JOURNEY_NAV,
   },
   {
     id: "exyliamarket",

@@ -1,0 +1,109 @@
+---
+title: "Pasos y objetivos"
+description: "Cada clave de un paso, los veintidós tipos de objetivo con sus parámetros y un ejemplo de cada uno, filtros, pistas y límites de tiempo."
+---
+
+Un paso es una cosa que hacer. Tiene un objetivo que el plugin vigila, la guía que muestra el camino, y
+opcionalmente texto, recompensas, efectos, una pista y un límite de tiempo.
+
+```yaml
+steps:
+  - id: tools
+    title: '{highlight}Craft a wooden pickaxe'
+    description: ['Open a crafting table and make one.']
+    objective:
+      type: CRAFT
+      filter: [WOODEN_PICKAXE]
+    guidance:
+      beacon: false
+    on-start: ['[SOUND] BLOCK_NOTE_BLOCK_CHIME;1;1.4']
+    on-complete: ['console: give %player_name% torch 8']
+    rewards: [ { type: EXPERIENCE, value: '20' } ]
+    hint-after: 40s
+    hint: 'Right-click a crafting table.'
+    skippable: true
+    timeout: 10m
+```
+
+## Claves del paso
+
+| Clave | Por defecto | Qué hace |
+|---|---|---|
+| `id` | `step-<n>` | Único dentro del recorrido, en minúsculas. El progreso, las estadísticas y los placeholders lo siguen, así que mantenlo cuando cambies el texto de un paso. |
+| `title` | el id | El nombre del paso en el panel, el toast y `/journey`. |
+| `description` | ninguna | Líneas bajo el título en el panel y en `/journey`. |
+| `objective` | — | Obligatorio. Ver abajo. Un paso sin un objetivo legible se reporta y se omite. |
+| `guidance` | todo activado | Cómo se muestra el camino. Consulta [Guía](/docs/exyliajourney/guia). |
+| `on-start`, `on-complete` | ninguna | [Líneas de efectos](/docs/exyliajourney/recorridos#líneas-de-efectos). |
+| `rewards` | ninguna | Se dan al completar el paso; un paso saltado no da nada. |
+| `hint-after` | `hint-after` de `config.yml` (45 s) | Tiempo sin avanzar en el paso antes de enviar la pista. `0s` la desactiva en este paso. |
+| `hint` | una línea que señala `/journey` | La pista. Se envía una vez por paso; con ella el faro late y suena un sonido. |
+| `skippable` | `true` | Si los jugadores pueden saltar este paso. |
+| `timeout` | ninguno | Un límite de tiempo. Agotarlo **detiene el recorrido entero**, avisa al jugador de que se le acabó el tiempo y cuenta el paso como abandonado. Los disparadores del recorrido pueden volver a iniciarlo. |
+
+## Claves del objetivo
+
+Todo objetivo tiene un `type`; las demás claves dependen de él.
+
+| Clave | Por defecto | La usa |
+|---|---|---|
+| `amount` | `1` | Cuántas veces, o el valor objetivo para `LEVEL` (nivel), `PLAYTIME` (minutos) y `WAIT` (segundos). |
+| `filter` | cualquiera | Nombres de materiales o de entidades, en mayúsculas. `materials`, `blocks`, `items` y `entities` se leen como alias. |
+| `worlds` | cualquiera | Mundos en los que debe ocurrir la acción. |
+| `location` | ninguna | `world,x,y,z`. En `REACH`, el lugar al que llegar; en los demás, la acción debe ocurrir dentro de `radius`. |
+| `radius` | `3` en `REACH`, `4` en el resto | Bloques alrededor de `location`. |
+| `region` | ninguna | Un id de región de ExyliaLib, para `REACH`. |
+| `npc`, `command`, `text`, `cinematic`, `condition`, `key`, `duration` | — | Una por tipo, según la tabla de abajo. |
+
+## Tipos de objetivo
+
+| Tipo | Parámetros | Se cumple cuando | Ejemplo |
+|---|---|---|---|
+| `REACH` | `location` + `radius`, o `region` | El jugador está dentro del radio o dentro de la región. Se comprueba en cada movimiento y una vez por segundo, así que los teletransportes cuentan. | `{ type: REACH, location: 'world,0,64,0', radius: 4 }` |
+| `INTERACT_NPC` | `npc` | El jugador hace clic en ese NPC: el id solo para los NPCs del plugin y de ExyliaDisplays, `<plugin>:<id>` para los de otro plugin. El NPC brilla para él. | `{ type: INTERACT_NPC, npc: guide }` |
+| `INTERACT_BLOCK` | `filter`, opcional `location` + `radius` | El jugador hace clic derecho con la mano principal en un bloque que coincide. | `{ type: INTERACT_BLOCK, filter: [LECTERN] }` |
+| `BREAK_BLOCK` | `amount`, `filter`, `worlds`, opcional `location` + `radius` | El jugador rompe bloques que coinciden. | `{ type: BREAK_BLOCK, amount: 10, filter: [STONE, DEEPSLATE] }` |
+| `PLACE_BLOCK` | igual | El jugador coloca bloques que coinciden. | `{ type: PLACE_BLOCK, amount: 4, filter: [TORCH] }` |
+| `CRAFT` | igual | El jugador craftea un objeto que coincide; cuenta la cantidad que da la receta por crafteo. Un shift-clic que craftea una pila entera cuenta como un crafteo. | `{ type: CRAFT, filter: [WOODEN_PICKAXE] }` |
+| `SMELT` | igual | El jugador saca objetos fundidos de un horno; cuenta los objetos sacados. | `{ type: SMELT, amount: 8, filter: [IRON_INGOT] }` |
+| `ENCHANT` | igual | El jugador encanta un objeto que coincide en una mesa de encantamientos. | `{ type: ENCHANT, filter: [DIAMOND_SWORD] }` |
+| `FISH` | igual | El jugador pesca objetos que coinciden; cuenta la pila pescada. | `{ type: FISH, amount: 3, filter: [COD, SALMON] }` |
+| `KILL_MOB` | igual, `filter` con tipos de entidad | El jugador mata mobs que coinciden. | `{ type: KILL_MOB, amount: 5, filter: [ZOMBIE] }` |
+| `KILL_PLAYER` | `amount`, `worlds`, opcional `location` + `radius` | El jugador mata a otros jugadores. | `{ type: KILL_PLAYER, amount: 1, worlds: [pvp] }` |
+| `PICKUP_ITEM` | igual que `BREAK_BLOCK` | El jugador recoge objetos que coinciden; cuenta la pila recogida. | `{ type: PICKUP_ITEM, amount: 16, filter: [OAK_LOG] }` |
+| `CONSUME` | igual | El jugador come o bebe un objeto que coincide. | `{ type: CONSUME, filter: [BREAD] }` |
+| `EQUIP` | `filter` | El jugador lleva puesto, o tiene en cualquiera de las manos, un objeto que coincide. Se comprueba una vez por segundo. | `{ type: EQUIP, filter: [IRON_CHESTPLATE] }` |
+| `RUN_COMMAND` | `command` | El jugador ejecuta el comando. Se compara por prefijo, sin distinguir mayúsculas, con barra opcional: `/spawn` cuenta `/spawn now`. Se cuenta después de que el comando se ejecute. | `{ type: RUN_COMMAND, command: /kit starter }` |
+| `CHAT` | `text` | El jugador envía una línea de chat que contiene el texto, sin distinguir mayúsculas. | `{ type: CHAT, text: hello }` |
+| `LEVEL` | `amount` | El nivel de experiencia del jugador llega a `amount`. Se comprueba una vez por segundo. | `{ type: LEVEL, amount: 10 }` |
+| `PLAYTIME` | `amount` | El tiempo de juego llega a `amount` minutos, según el seguimiento de tiempo de juego de ExyliaLib (de toda la red, sin contar el tiempo inactivo). Se comprueba una vez por segundo. | `{ type: PLAYTIME, amount: 60 }` |
+| `WAIT` | `duration` | Ha pasado ese tiempo desde que empezó el paso. Un número solo son segundos. | `{ type: WAIT, duration: 30s }` |
+| `WATCH_CINEMATIC` | `cinematic` | La cinemática, que se reproduce al empezar el paso, termina — vista, saltada o rechazada por igual, así que una cinemática que no se puede reproducir nunca bloquea un recorrido. | `{ type: WATCH_CINEMATIC, cinematic: intro }` |
+| `PLACEHOLDER` | `condition` | La condición es verdadera. Se comprueba una vez por segundo; falla cerrada. | `{ type: PLACEHOLDER, condition: '%vault_eco_balance% >= 100' }` |
+| `CUSTOM` | `key`, `amount` | La clave se dispara para el jugador esas veces. Un paso que pide `exylia:mines:break` cuenta también `exylia:mines:break:gold`, nunca al revés. | `{ type: CUSTOM, key: exylia:crates:open, amount: 3 }` |
+
+Todo tipo que cuenta una acción respeta `worlds` y un `location` + `radius` opcionales, así que "rompe diez
+de piedra **en la mina del tutorial**" es `BREAK_BLOCK` con un lugar y un radio. Un `filter` vacío acepta
+cualquier cosa.
+
+Las claves CUSTOM que disparan otros plugins de Exylia están en
+[Integraciones](/docs/exyliajourney/integraciones).
+
+## Un paso que el plugin no puede leer
+
+Un paso cuyo objetivo no tiene lo que necesita — un `REACH` sin lugar, un `INTERACT_NPC` sin NPC, un
+`PLACEHOLDER` cuya condición no se entiende — se reporta indicando el archivo y la ruta, y se omite hasta
+que se arregle. El resto del recorrido sigue funcionando. El editor conserva ese paso en el archivo y lo
+marca, así que un paso puede estar a medio hacer en el juego sin romper el recorrido.
+
+## Progreso y finalización
+
+El progreso solo cuenta para el paso en el que está el jugador. Cuando se cumple el objetivo de un paso:
+
+1. se dan sus recompensas y se ejecutan sus líneas `on-complete`;
+2. suena el feedback del paso (sonido, toast, partículas);
+3. se dispara `JourneyStepCompleteEvent`;
+4. empieza el paso siguiente, o se completa el recorrido.
+
+El panel y `/journey` muestran un conteo (`3/10`) en cada paso cuya cantidad es mayor que uno, y en
+`LEVEL`, `PLAYTIME` y `WAIT`.

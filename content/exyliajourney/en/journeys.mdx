@@ -1,0 +1,192 @@
+---
+title: "Journeys"
+description: "The journey file: name and icon, triggers, requirements, groups and priority, repeatable journeys and cooldowns, skipping, rewards and effect lines."
+---
+
+A journey is one file, `journeys/<id>.yml`; the file name is its id. It is an ordered list of
+[steps](/docs/exyliajourney/steps) plus the rules for when it starts, who may take it and what finishing
+it gives. Everything here can be edited in game with `/journeyadmin` (see
+[The editor](/docs/exyliajourney/editor)); the file is the same either way.
+
+```yaml
+name: '{primary}&lWELCOME'
+icon: COMPASS
+description: ['{letters}Your first minutes on the server.']
+enabled: true
+priority: 10            # higher starts first when several trigger at once
+group: main             # one active journey per group
+repeatable: false
+cooldown: 0s
+skippable: true
+triggers:
+  - FIRST_JOIN
+requirements:
+  permission: ''
+  condition: '%player_level% >= 5'
+steps:
+  - id: spawn
+    title: '{highlight}Find the fountain'
+    objective: { type: REACH, location: 'world,0,64,0', radius: 4 }
+rewards:
+  - { type: EXPERIENCE, value: '100' }
+  - 'give %player_name% bread 8'
+on-start: []
+on-complete: ['[MESSAGE] {success}Welcome aboard!']
+```
+
+## Keys
+
+| Key | Default | What it does |
+|---|---|---|
+| `name` | the id | Shown in messages, menus, the panel and `%journey_current%`. |
+| `icon` | `COMPASS` | The material in menus. |
+| `description` | none | Lines under the name in `/journey`. |
+| `enabled` | `true` | A disabled journey never starts from a trigger. An admin can still start it. |
+| `priority` | `0` | When several journeys trigger at once, the higher one starts first. With a shared group, it is the one that wins. |
+| `group` | `main` | A player has at most one active journey per group. |
+| `repeatable` | `false` | Whether it can start again after it was completed. |
+| `cooldown` | `0s` | For a repeatable journey, how long after a completion it may start again. |
+| `skippable` | `true` | Whether players may skip the whole journey. |
+| `triggers` | none | What starts it. See below. |
+| `requirements` | none | `permission` and `condition` a player must meet. See below. |
+| `steps` | — | At least one. A journey with no readable step is reported and not loaded. |
+| `rewards` | none | Paid when the journey is completed. |
+| `on-start`, `on-complete` | none | Effect lines run when it starts and when it is completed. |
+
+## Triggers
+
+A trigger is written as its bare name when it needs nothing else, or as a section.
+
+```yaml
+triggers:
+  - FIRST_JOIN
+  - type: REGION_ENTER
+    region: spawn
+  - type: REGION_ENTER
+    location: world,0,64,0
+    radius: 6
+  - type: NPC_CLICK
+    npc: guide
+  - type: JOURNEY_COMPLETE
+    journey: tutorial
+  - type: PERMISSION
+    permission: rank.member
+  - type: CUSTOM
+    key: exylia:crates:open
+```
+
+| Trigger | Keys | Starts when |
+|---|---|---|
+| `FIRST_JOIN` | — | A player joins the server for the very first time, `first-join-delay` (3 s) after joining. |
+| `JOIN` | — | A player joins, every time. |
+| `COMMAND` | — | Nothing automatic: only `/journeyadmin start`, the editor's test button or another plugin starts it. Marks a journey meant to be started by hand. |
+| `REGION_ENTER` | `region`, or `location` + `radius` (5) | The player walks into an ExyliaLib region (by its full id or its bare name), or into a sphere. |
+| `NPC_CLICK` | `npc` | The player clicks that NPC. See [NPC clicks](/docs/exyliajourney/integrations#npc-clicks). |
+| `JOURNEY_COMPLETE` | `journey` | The player completes that journey. This is how quest chains are built. |
+| `PERMISSION` | `permission` | The player has the permission. Checked every `permission-check` (5 s) for online players, and only for a player who never had this journey. |
+| `CUSTOM` | `key` | A CUSTOM key is fired for the player: by another Exylia plugin, another plugin's code or `/journeyadmin trigger`. A trigger asking for `exylia:crates:open` also fires on `exylia:crates:open:vote`. See [Integrations](/docs/exyliajourney/integrations). |
+
+A trigger that misses its key (an `NPC_CLICK` with no `npc`) is reported and skipped; the rest of the
+journey loads.
+
+## Who may start it
+
+When a trigger fires, the journey starts only if every rule passes, in this order:
+
+| Rule | Refused when |
+|---|---|
+| Already active | The player is on this journey now. |
+| Enabled | `enabled: false`. |
+| Skipped | The player skipped this journey before. A skipped journey never starts again from a trigger. |
+| Done | The player completed it and it is not `repeatable`. |
+| Cooldown | It is repeatable and its `cooldown` since the last completion has not run out. |
+| Group | Another journey of the same `group` is active for the player. |
+| Requirements | The player lacks `requirements.permission`, or `requirements.condition` is false. |
+| Other plugins | A listener cancelled `JourneyStartEvent`. See [API](/docs/exyliajourney/api). |
+
+`requirements.condition` is a placeholder comparison such as `%player_level% >= 5`. It **fails closed**: a
+condition the plugin cannot read is reported when the journey loads and nobody meets it, and a placeholder
+that does not resolve to a number never passes a numeric comparison.
+
+`/journeyadmin start` and the editor's **TEST ON YOURSELF** ignore every rule except *already active*.
+
+A journey that was **stopped** (by an admin, by a step's time limit, or through the API) is as if it never
+started, and its triggers may start it again.
+
+## Several journeys at once
+
+A player can run several journeys at once, one per group. Only one is **tracked**: the one whose step the
+guidance shows and the placeholders describe. A newly started journey becomes the tracked one; when it
+ends, the most recently tracked of the others takes over. Players switch with `/journey track <id>`, or
+cycle through their journeys by clicking the journey card in `/journey`.
+
+Progress is counted on every active journey, tracked or not.
+
+## Skipping
+
+With `skippable: true`, a player can skip the whole journey from `/journey` or `/journey skip journey`. A
+skipped journey pays nothing, is recorded as skipped, and never starts again from a trigger. An admin can
+clear that with `/journeyadmin reset`.
+
+Skipping single steps is the step's own `skippable` (see [Steps](/docs/exyliajourney/steps#step-keys)). A
+skipped step pays nothing and the next one starts. Skipping the **last** step completes the journey, with
+its rewards.
+
+## Rewards
+
+`rewards` are ExyliaLib rewards, paid when the journey is completed. Each entry is a section with a `type`
+(`ITEM`, `ECONOMY`, `EXPERIENCE`, `COMMAND`, `MESSAGE`, `POTION`...) or a bare string, which runs as a
+console command:
+
+```yaml
+rewards:
+  - type: EXPERIENCE
+    value: '100'
+  - type: ITEM
+    itemSnapshot: TORCH
+    minAmount: 8
+    maxAmount: 8
+  - 'give %player_name% bread 8'
+```
+
+Steps have `rewards` of their own, paid when that step is completed. The editor builds both lists with
+ExyliaLib's reward editor.
+
+## Effect lines
+
+`on-start` and `on-complete`, on the journey and on each step, are ExyliaLib interaction lines: console or
+player commands (`console:`, `player:`), `[ACTION] namespace:id`, `[TELEPORT]` and every sequence token
+(`[MESSAGE]`, `[SOUND]`, `[TOAST]`, `[PARTICLE]`, `[FIREWORK]`, `[DELAY]`...).
+
+```yaml
+on-start:
+  - '[SOUND] BLOCK_NOTE_BLOCK_CHIME;1;1.4'
+on-complete:
+  - 'console: give %player_name% bread 4'
+  - '[MESSAGE] {success}Welcome aboard, {highlight}%player_name%{success}!'
+```
+
+They can use these placeholders, besides any player placeholder:
+
+| Placeholder | Value |
+|---|---|
+| `%journey%`, `%journey_id%` | The journey's name and id. |
+| `%steps%` | How many steps it has. |
+| `%step%`, `%step_id%` | The step's title and id (step lines). |
+| `%number%` | The current step's number, from 1. |
+| `%progress%`, `%percent%` | The current step's count (`3/10`) and its percentage. |
+| `%time%` | How long the journey took (the journey's `on-complete`). |
+
+## Feedback
+
+On top of each file's own lines, every completed step plays the feedback set in `config.yml`: a sound, a
+toast and a short particle burst; every completed journey plays a celebration of fireworks and a ring of
+particles and sends a centred *JOURNEY COMPLETE* block. See
+[Configuration](/docs/exyliajourney/configuration#feedback).
+
+## A bad file
+
+Nothing in a journey file stops the server. A bad trigger, step or reward is reported in the console
+naming the file and the path (`steps[2].objective`), and skipped; a journey left with no step is not
+loaded. `/journeyadmin reload` says how many problems it found, and the editor shows them on the journey
+and marks the broken steps.

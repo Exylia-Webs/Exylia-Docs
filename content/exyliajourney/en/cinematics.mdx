@@ -1,0 +1,141 @@
+---
+title: "Cinematics"
+description: "Recording a cinematic in game, the file format, keyframes and easing, subtitles with speakers, letterbox, fades and sounds, playback, far viewers, skipping and Bedrock."
+---
+
+A cinematic is a camera flight through the world: keyframes recorded in game, with subtitles and a speaker's
+name, letterbox bars, a fade in and out, and sounds — all for the viewer alone. Each cinematic is one file,
+`cinematics/<id>.yml`.
+
+A journey plays one in two ways:
+
+- `guidance.cinematic: <id>` on a step plays it when the step starts; the step does not wait for it.
+- A `WATCH_CINEMATIC` objective plays it when the step starts, and the step is done when it ends.
+
+`/journeyadmin cinematic play <id> [player]` plays one outside any journey, and other plugins can play one
+through the [API](/docs/exyliajourney/api).
+
+## Recording
+
+<Steps>
+  <Step title="Start">
+    `/journeyadmin cinematic record <id>`, or **RECORD CINEMATIC** in the editor's cinematic list. A hotbar
+    replaces yours while you record; it is only drawn, so nothing is lost if the server stops.
+  </Step>
+  <Step title="Fly to each shot">
+    Look where the camera should look and use **MARK KEYFRAME**: it saves where your eyes are and where you
+    are looking. **UNDO** removes the last one, **PREVIEW** plays what you have so far.
+  </Step>
+  <Step title="Save">
+    **SAVE** writes the file, with the keyframes three seconds apart. **CANCEL** stops without saving.
+  </Step>
+  <Step title="Finish it in the editor">
+    Times, easing, subtitles, sounds, fades and letterbox are edited from the cinematic's screen in
+    `/journeyadmin`, or in the file.
+  </Step>
+</Steps>
+
+Recording again over an existing cinematic replaces its keyframes and keeps its subtitles, sounds and
+settings.
+
+## The file
+
+```yaml
+skippable: true
+letterbox: true
+fade-in: 0.5
+fade-out: 0.5
+keyframes:
+  - { at: 'world,10.00,70.00,0.00', yaw: 90.0, pitch: 25.0, time: 0.0, easing: SMOOTH }
+  - { at: 'world,0.00,70.00,10.00', yaw: 180.0, pitch: 25.0, time: 3.0, easing: LINEAR }
+subtitles:
+  - { start: 0.5, duration: 4.0, speaker: Guide, text: '{letters}Welcome to the server.' }
+sounds:
+  - { time: 0.0, sound: BLOCK_AMETHYST_BLOCK_CHIME, volume: 1.0, pitch: 0.8 }
+```
+
+| Key | Default | What it does |
+|---|---|---|
+| `skippable` | `true` | Whether the viewer may skip it. |
+| `letterbox` | `true` | Two black bars, top and bottom. |
+| `fade-in`, `fade-out` | `0.5` | Seconds of fade from and to black. `0` for none. |
+| `keyframes` | — | At least two. See below. |
+| `subtitles` | none | Lines shown in the lower part of the view. |
+| `sounds` | none | Sounds played at their times, for the viewer alone. |
+
+Times are seconds from the start. A cinematic lasts until its last keyframe or its last subtitle, whichever
+is later, up to **three minutes**; keyframes past that are dropped.
+
+### Keyframes
+
+| Key | Default | What it is |
+|---|---|---|
+| `at` | — | `world,x,y,z`: where the camera is. Every keyframe must be in the first one's world; one in another world is reported and skipped. |
+| `yaw`, `pitch` | `0` | Where it looks. A pan across north turns the short way. |
+| `time` | three seconds per keyframe | When the camera is there. Keyframes are put in time order. |
+| `easing` | `SMOOTH` | How the camera arrives at this keyframe. |
+
+| Easing | Movement |
+|---|---|
+| `SMOOTH` | One curve through the neighbouring keyframes instead of stopping at each: the right choice for a recorded path. Anything unknown is read as `SMOOTH`. |
+| `LINEAR` | Constant speed. |
+| `EASE_IN` | Starts slow, speeds up. |
+| `EASE_OUT` | Starts fast, slows down. |
+| `EASE_IN_OUT` | Slow at both ends. |
+
+The camera holds the first keyframe until its time and the last one until the cinematic ends.
+
+### Subtitles
+
+| Key | Default | What it is |
+|---|---|---|
+| `start` | `0` | When it appears. |
+| `duration` | `3` | How long it stays, at least half a second. |
+| `speaker` | none | A name shown on its own line above the text. |
+| `text` | — | The line, in Exylia text notation. A subtitle with no text is skipped. |
+
+They are drawn on a translucent panel in the lower part of the view. When two overlap, the one that started
+last shows. Their look is in `messages.yml` (`cinematic.subtitle-speaker`, `cinematic.subtitle-line`).
+
+### Sounds
+
+| Key | Default |
+|---|---|
+| `time` | `0` |
+| `sound` | — (a sound name, `BLOCK_NOTE_BLOCK_CHIME` or `minecraft:block.note_block.chime`) |
+| `volume` | `1` |
+| `pitch` | `1` |
+
+## Playback
+
+While a cinematic plays, the viewer is frozen, drawn as a spectator and cannot be hurt. The subtitles, bars
+and fade ride the camera, so they move with the view on the same frame however fast it pans.
+
+A cinematic is **refused** — the player is told they can't watch one right now — when the player:
+
+- is in combat (through ExyliaLib's combat check);
+- is already watching one;
+- is in another world than the cinematic.
+
+A refused cinematic still ends a `WATCH_CINEMATIC` step, so a journey is never stuck behind one.
+
+### Far viewers
+
+A client only draws the chunks around the player's own body, so a camera far away would film the void. A
+viewer farther than `cinematics.move-viewer-beyond` blocks (96) from the first keyframe is moved next to it
+first and put back exactly where they stood when it ends. Leaving the server mid-cinematic puts them back
+before they go, so they log in where they were. `0` never moves anybody.
+
+### Skipping
+
+A skippable cinematic sends a clickable line when it starts; clicking it, or `/journey skip`, ends it. A
+skip counts as an ending for a `WATCH_CINEMATIC` step. Dying or changing world ends a cinematic too.
+
+## Bedrock and servers without PacketEvents
+
+- **Bedrock players** cannot draw the camera. They get the cinematic's subtitles in chat under a short
+  header, and it counts as watched.
+- **Without PacketEvents**, journey cinematics keep their subtitles and sounds: the camera does not move,
+  the subtitles arrive in chat at their times and the sounds play.
+- `JourneyService.playCinematic` refuses Java players on a server without PacketEvents. See
+  [API](/docs/exyliajourney/api).

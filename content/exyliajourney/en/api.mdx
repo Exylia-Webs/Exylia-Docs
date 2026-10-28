@@ -1,0 +1,99 @@
+---
+title: "API"
+description: "JourneyService in the Exylia API: starting, stopping and resetting journeys, reading progress, firing CUSTOM keys and playing cinematics, plus the four journey events."
+badge: "dev"
+---
+
+ExyliaJourney registers `net.exylia.lib.api.journey.JourneyService` (Exylia API 3.4.0, shipped inside
+ExyliaLib) when it enables. Reach it through `ExyliaAPI.get(JourneyService.class)`; it is empty on a
+server without ExyliaJourney, so the same code runs everywhere.
+
+<Callout type="note" title="Adding it to your project">
+The artifact, the repository and the `plugin.yml` line are the same for every Exylia plugin and live on
+the [public API page](/docs/exylialib/api). Add `ExyliaJourney` under `softdepend` so it enables first.
+</Callout>
+
+```java
+// a feature of yours tells journeys it was used
+ExyliaAPI.get(JourneyService.class).ifPresent(journeys -> journeys.trigger(player, "shop:opened", 1));
+
+// start the shop tutorial the first time someone opens the shop
+ExyliaAPI.get(JourneyService.class).ifPresent(journeys -> {
+    StartResult result = journeys.start(player, "shop-tutorial");
+    if (result == StartResult.REQUIREMENTS_NOT_MET) { /* ... */ }
+});
+
+// show where the player is
+ExyliaAPI.get(JourneyService.class)
+        .flatMap(journeys -> journeys.activeJourney(player))
+        .ifPresent(p -> player.sendMessage("Step " + (p.stepIndex() + 1) + " of " + p.stepCount()));
+```
+
+## JourneyService
+
+Every method is safe from any thread. Anything that changes progress runs on the player's own thread (their
+region thread on Folia) and may complete a tick later. Progress is read from memory and known only for
+online players.
+
+| Method | What it does |
+|---|---|
+| `List<String> journeyIds()` | Every journey the server knows, enabled or not. |
+| `boolean exists(String journeyId)` | Whether a journey exists. |
+| `StartResult start(Player, String journeyId)` | Starts a journey as a trigger would: requirements, group and repeat rules are checked, then `JourneyStartEvent` is fired with the cause `API`. |
+| `boolean stop(Player, String journeyId)` | Stops a running journey without completing it. No rewards; it may start again. `true` when it was running. |
+| `boolean complete(Player, String journeyId)` | Completes a running journey now, paying its completion rewards and firing `JourneyCompleteEvent`. The steps left are not paid. |
+| `boolean reset(UUID player, String journeyId)` | Forgets progress, completion and cooldown. Works for offline players. `true` when the journey exists. |
+| `Optional<JourneyProgress> activeJourney(Player)` | The tracked journey: the one the guidance shows. |
+| `List<JourneyProgress> activeJourneys(Player)` | Every running journey, one per group at most. |
+| `JourneyState state(Player, String journeyId)` | `NOT_STARTED`, `ACTIVE`, `COMPLETED` or `SKIPPED`. A stopped journey reads `NOT_STARTED`, or `COMPLETED` if an earlier run was finished. |
+| `int trigger(Player, String key, int amount)` | Fires a CUSTOM key: counts for every running `CUSTOM` step waiting for it (or for a less specific key) and starts journeys with a matching `CUSTOM` trigger. Returns how many steps it advanced. |
+| `List<String> cinematicIds()` | Every cinematic. |
+| `boolean playCinematic(Player, String cinematicId)` | Plays a cinematic. Refused (`false`) in combat, while watching one, in another world, or for a Java player on a server without PacketEvents. A Bedrock player gets the subtitles in chat and this answers `true`. |
+
+`JourneyProgress` is a record: `journeyId`, `stepIndex` (from 0), `stepCount`, `stepId`, `progress` and
+`goal` (`1` for an objective that is done or not).
+
+### StartResult
+
+| Value | Meaning |
+|---|---|
+| `STARTED` | It is running. |
+| `UNKNOWN_JOURNEY` | No journey has that id. |
+| `DISABLED` | `enabled: false`. |
+| `ALREADY_ACTIVE` | It is already running for this player. |
+| `ALREADY_COMPLETED` | It is not repeatable and was completed — or the player skipped it. |
+| `ON_COOLDOWN` | Repeatable, but not yet. |
+| `REQUIREMENTS_NOT_MET` | The player lacks its permission or condition. |
+| `GROUP_BUSY` | Another journey of the same group is running. |
+| `CANCELLED` | A listener cancelled `JourneyStartEvent`. |
+| `NOT_LOADED` | The player's progress has not finished loading. |
+
+Called from another thread than the player's, `start` answers from memory and the requirements are checked
+a tick later on the player's thread, so a start answered `STARTED` may still be refused there.
+
+## Events
+
+All in `net.exylia.lib.api.journey.event`, all player events fired on the player's own thread.
+
+| Event | When | Fields |
+|---|---|---|
+| `JourneyStartEvent` | A journey is about to start, after every rule passed and before anything is written or shown. **Cancellable**: a cancelled start leaves nothing behind. | `getJourneyId()`, `getCause()`: `FIRST_JOIN`, `JOIN`, `COMMAND`, `REGION_ENTER`, `NPC_CLICK`, `JOURNEY_COMPLETE`, `PERMISSION`, `CUSTOM` or `API` |
+| `JourneyStepCompleteEvent` | A step was completed, after its rewards and before the next step starts. | `getJourneyId()`, `getStepIndex()`, `getStepId()`, `isLastStep()` |
+| `JourneyCompleteEvent` | A whole journey was completed, after its rewards. | `getJourneyId()`, `getCompletions()` (this one included), `getDurationMillis()` |
+| `JourneySkipEvent` | A step or a whole journey was skipped. | `getJourneyId()`, `isWholeJourney()`, `getStepId()` (`null` for a whole journey), `getStepIndex()` |
+
+```java
+@EventHandler
+public void onJourneyStart(JourneyStartEvent event) {
+    // no tutorials inside the arena world
+    if (event.getPlayer().getWorld().getName().equals("arena")) event.setCancelled(true);
+}
+
+@EventHandler
+public void onJourneyComplete(JourneyCompleteEvent event) {
+    if (event.getJourneyId().equals("welcome") && event.getCompletions() == 1) {
+        getLogger().info(event.getPlayer().getName() + " finished onboarding in "
+                + event.getDurationMillis() / 1000 + "s");
+    }
+}
+```

@@ -1,0 +1,108 @@
+---
+title: "Steps and objectives"
+description: "Every key of a step, the twenty-two objective types with their parameters and an example each, filters, hints and time limits."
+---
+
+A step is one thing to do. It has an objective the plugin watches for, the guidance that shows the way,
+and optional text, rewards, effects, a hint and a time limit.
+
+```yaml
+steps:
+  - id: tools
+    title: '{highlight}Craft a wooden pickaxe'
+    description: ['Open a crafting table and make one.']
+    objective:
+      type: CRAFT
+      filter: [WOODEN_PICKAXE]
+    guidance:
+      beacon: false
+    on-start: ['[SOUND] BLOCK_NOTE_BLOCK_CHIME;1;1.4']
+    on-complete: ['console: give %player_name% torch 8']
+    rewards: [ { type: EXPERIENCE, value: '20' } ]
+    hint-after: 40s
+    hint: 'Right-click a crafting table.'
+    skippable: true
+    timeout: 10m
+```
+
+## Step keys
+
+| Key | Default | What it does |
+|---|---|---|
+| `id` | `step-<n>` | Unique within the journey, lower case. Progress, stats and placeholders follow it, so keep it when you reword a step. |
+| `title` | the id | The step's name on the panel, the toast and in `/journey`. |
+| `description` | none | Lines under the title on the panel and in `/journey`. |
+| `objective` | — | Required. See below. A step without a readable objective is reported and skipped. |
+| `guidance` | everything on | How the way is shown. See [Guidance](/docs/exyliajourney/guidance). |
+| `on-start`, `on-complete` | none | [Effect lines](/docs/exyliajourney/journeys#effect-lines). |
+| `rewards` | none | Paid when the step is completed; a skipped step pays nothing. |
+| `hint-after` | `hint-after` in `config.yml` (45 s) | Idle time on the step before the hint is sent. `0s` turns it off for this step. |
+| `hint` | a line pointing at `/journey` | The hint. Sent once per step; the beacon pulses and a sound plays with it. |
+| `skippable` | `true` | Whether players may skip this step. |
+| `timeout` | none | A time limit. Running out **stops the whole journey**, tells the player they ran out of time, and counts the step as abandoned. The journey's triggers can start it again. |
+
+## Objective keys
+
+Every objective has a `type`; the other keys depend on it.
+
+| Key | Default | Used by |
+|---|---|---|
+| `amount` | `1` | How many times, or the target value for `LEVEL` (level), `PLAYTIME` (minutes) and `WAIT` (seconds). |
+| `filter` | any | Material or entity names, upper case. `materials`, `blocks`, `items` and `entities` are read as aliases. |
+| `worlds` | any | World names the action must happen in. |
+| `location` | none | `world,x,y,z`. For `REACH`, the place to reach; for the others, the action must happen within `radius` of it. |
+| `radius` | `3` for `REACH`, `4` otherwise | Blocks around `location`. |
+| `region` | none | An ExyliaLib region id, for `REACH`. |
+| `npc`, `command`, `text`, `cinematic`, `condition`, `key`, `duration` | — | One per type, as the table below says. |
+
+## Objective types
+
+| Type | Parameters | Done when | Example |
+|---|---|---|---|
+| `REACH` | `location` + `radius`, or `region` | The player stands within the radius, or inside the region. Checked on every move and once a second, so teleports count. | `{ type: REACH, location: 'world,0,64,0', radius: 4 }` |
+| `INTERACT_NPC` | `npc` | The player clicks that NPC: the bare id for this plugin's and ExyliaDisplays' NPCs, `<plugin>:<id>` for another plugin's. The NPC glows for them. | `{ type: INTERACT_NPC, npc: guide }` |
+| `INTERACT_BLOCK` | `filter`, optional `location` + `radius` | The player right-clicks a matching block with the main hand. | `{ type: INTERACT_BLOCK, filter: [LECTERN] }` |
+| `BREAK_BLOCK` | `amount`, `filter`, `worlds`, optional `location` + `radius` | The player breaks matching blocks. | `{ type: BREAK_BLOCK, amount: 10, filter: [STONE, DEEPSLATE] }` |
+| `PLACE_BLOCK` | same | The player places matching blocks. | `{ type: PLACE_BLOCK, amount: 4, filter: [TORCH] }` |
+| `CRAFT` | same | The player crafts a matching item; counts the recipe's result amount per craft. A shift-click that crafts a whole stack counts as one craft. | `{ type: CRAFT, filter: [WOODEN_PICKAXE] }` |
+| `SMELT` | same | The player takes smelted items out of a furnace; counts the items taken. | `{ type: SMELT, amount: 8, filter: [IRON_INGOT] }` |
+| `ENCHANT` | same | The player enchants a matching item at an enchanting table. | `{ type: ENCHANT, filter: [DIAMOND_SWORD] }` |
+| `FISH` | same | The player catches matching items; counts the stack caught. | `{ type: FISH, amount: 3, filter: [COD, SALMON] }` |
+| `KILL_MOB` | same, `filter` holds entity types | The player kills matching mobs. | `{ type: KILL_MOB, amount: 5, filter: [ZOMBIE] }` |
+| `KILL_PLAYER` | `amount`, `worlds`, optional `location` + `radius` | The player kills other players. | `{ type: KILL_PLAYER, amount: 1, worlds: [pvp] }` |
+| `PICKUP_ITEM` | same as `BREAK_BLOCK` | The player picks up matching items; counts the stack picked up. | `{ type: PICKUP_ITEM, amount: 16, filter: [OAK_LOG] }` |
+| `CONSUME` | same | The player eats or drinks a matching item. | `{ type: CONSUME, filter: [BREAD] }` |
+| `EQUIP` | `filter` | The player wears, or holds in either hand, a matching item. Checked once a second. | `{ type: EQUIP, filter: [IRON_CHESTPLATE] }` |
+| `RUN_COMMAND` | `command` | The player runs the command. Compared by prefix, any case, slash optional: `/spawn` counts `/spawn now`. Counted after the command ran. | `{ type: RUN_COMMAND, command: /kit starter }` |
+| `CHAT` | `text` | The player sends a chat line containing the text, any case. | `{ type: CHAT, text: hello }` |
+| `LEVEL` | `amount` | The player's experience level reaches `amount`. Checked once a second. | `{ type: LEVEL, amount: 10 }` |
+| `PLAYTIME` | `amount` | The player's playtime reaches `amount` minutes, from ExyliaLib's playtime tracking (network-wide, idle time excluded). Checked once a second. | `{ type: PLAYTIME, amount: 60 }` |
+| `WAIT` | `duration` | That much time has passed since the step started. A bare number is seconds. | `{ type: WAIT, duration: 30s }` |
+| `WATCH_CINEMATIC` | `cinematic` | The cinematic, played when the step starts, ends — watched, skipped or refused alike, so a cinematic that cannot play never holds a journey. | `{ type: WATCH_CINEMATIC, cinematic: intro }` |
+| `PLACEHOLDER` | `condition` | The condition is true. Checked once a second; fails closed. | `{ type: PLACEHOLDER, condition: '%vault_eco_balance% >= 100' }` |
+| `CUSTOM` | `key`, `amount` | The key is fired for the player that many times. A step asking for `exylia:mines:break` counts `exylia:mines:break:gold` too, never the other way round. | `{ type: CUSTOM, key: exylia:crates:open, amount: 3 }` |
+
+Every type that counts an action respects `worlds` and an optional `location` + `radius`, so "break ten
+stone **in the tutorial mine**" is `BREAK_BLOCK` with a location and a radius. An empty `filter` accepts
+anything.
+
+The CUSTOM keys other Exylia plugins fire are listed on [Integrations](/docs/exyliajourney/integrations).
+
+## A step the plugin cannot read
+
+A step whose objective is missing what it needs — a `REACH` with no place, an `INTERACT_NPC` with no NPC,
+a `PLACEHOLDER` whose condition does not parse — is reported naming the file and the path, and skipped
+until it is fixed. The rest of the journey still runs. The editor keeps such a step in the file and marks
+it, so a step can be half-built in game without breaking the journey around it.
+
+## Progress and completion
+
+Progress counts only for the step a player is on. When a step's objective is met:
+
+1. its rewards are paid and its `on-complete` lines run;
+2. the step feedback plays (sound, toast, particles);
+3. `JourneyStepCompleteEvent` is fired;
+4. the next step starts, or the journey is completed.
+
+The panel and `/journey` show a count (`3/10`) for every step whose amount is above one, and for `LEVEL`,
+`PLAYTIME` and `WAIT`.

@@ -1,0 +1,160 @@
+---
+title: "Guía"
+description: "Cómo muestra un paso el camino: texto acompañante y anclado, el faro, rastros por rutas grabadas, el waypoint de la barra localizadora, el brillo, las pistas y los ajustes de cada jugador."
+---
+
+La guía es todo lo que muestra a un jugador adónde ir mientras dura un paso. Cada pieza se dibuja solo para
+ese jugador — cien jugadores nuevos cruzando la misma plaza ven cada uno solo su faro — y cada una se puede
+apagar por paso y por jugador.
+
+```yaml
+guidance:
+  text:
+    enabled: true
+    mode: COMPANION          # o ANCHORED
+    lines: ['{muted}It sits in the middle of the square.']
+    anchor: world,0,66,0     # dónde se coloca un panel ANCHORED
+  beacon:
+    enabled: true
+    color: '{accent}'
+    label: Fountain
+  trail:
+    route: spawn-path
+    ahead: 14
+  waypoint: true
+  glow: true
+  cinematic: intro           # se reproduce al empezar el paso
+  target: world,0,64,0       # adónde apuntan el faro, el waypoint y la distancia
+```
+
+Un paso sin sección `guidance` recibe lo de por defecto: texto acompañante, faro, waypoint y brillo
+activados, sin rastro ni cinemática. `text: false` y `beacon: false` apagan una pieza; `trail: spawn-path` es
+la forma corta de un rastro.
+
+## El objetivo de la guía
+
+El faro, el waypoint, el brillo y la distancia del panel apuntan todos al **destino** del paso:
+
+1. `guidance.target`, si está puesto;
+2. si no, el `location` del objetivo (un `REACH`, o cualquier objetivo limitado a un lugar);
+3. si no, en `INTERACT_NPC`, donde está ese NPC — y lo sigue si se mueve.
+
+Un paso sin ninguno de estos no tiene faro, waypoint ni distancia; su texto y su rastro sí se muestran.
+
+## Texto
+
+El panel muestra el nombre del recorrido y el número de paso, el título del paso, su descripción, las
+`lines` extra, el progreso (`3/10`) y la distancia al destino — o, si el destino está en otro mundo,
+*Head to `<world>`*. Se actualiza en su sitio cuando cambia el progreso; no se envía nada al chat.
+
+| Modo | Qué es |
+|---|---|
+| `COMPANION` (por defecto) | Un panel que flota un poco por delante de los ojos y por debajo de la línea de visión, deslizándose tras la vista en lugar de pegado a ella. Se aparta mientras el jugador corre saltando, monta, vuela, planea o está en combate, y vuelve tras un segundo de calma. |
+| `ANCHORED` | Un panel fijo en un lugar, siempre mirando al jugador, que crece con la distancia para seguir siendo legible desde el otro lado de una plaza. Se coloca en `anchor`, o sobre el destino si no hay anchor. |
+
+Tamaño, distancia, fondo, ancho de línea y la velocidad a la que se aparta están en
+[Configuración](/docs/exyliajourney/configuracion#guide); las líneas del panel están en `messages.yml`
+(`guide.panel-*`).
+
+## Faro
+
+Un haz de luz sobre el destino, contorneado con el `color` del paso (un token de paleta como `{accent}` o
+`#rrggbb`), con una etiqueta que muestra `label` — o el título del paso si está vacía — y la distancia en
+metros. Se dibuja a brillo máximo para que se lea de noche y a través del terreno.
+
+Más allá de la distancia de visión del jugador, el haz se sustituye por una marca corta unos bloques por
+delante en dirección al destino (`beacon-marker-distance`, 30), que se lee como una señal en el horizonte.
+No se dibuja nada mientras el destino está en otro mundo. Cuando se envía una pista, el haz late.
+
+## Rastro y rutas
+
+Un rastro es una línea de pequeños marcadores brillantes en el suelo a lo largo de una **ruta** grabada,
+dibujada solo desde el punto más cercano al jugador hasta `ahead` bloques por delante (14 por defecto, como
+mínimo 4). Caminar cuesta un marcador que aparece delante y otro que desaparece detrás. Un jugador que se
+aleja más de `trail-off-route` bloques (6) de la ruta ve una línea corta de marcadores de vuelta que apuntan
+de regreso a ella.
+
+```yaml
+trail:
+  route: spawn-path
+  ahead: 14
+```
+
+### Grabar una ruta
+
+<Steps>
+  <Step title="Empieza">
+    `/journeyadmin route record <id>`, o **RECORD ROUTE** en la lista de rutas del editor.
+  </Step>
+  <Step title="Recórrela">
+    Se graba un punto cada 1,5 bloques y el camino se dibuja detrás de ti mientras andas.
+  </Step>
+  <Step title="Para">
+    Agáchate dos veces seguidas, o `/journeyadmin route stop`. El camino se simplifica y se guarda en
+    `routes/<id>.yml`.
+  </Step>
+</Steps>
+
+`/journeyadmin route preview <id>` dibuja una ruta guardada durante diez segundos. Un archivo de ruta es un
+mundo y una lista de puntos; también se puede escribir a mano:
+
+```yaml
+world: world
+points:
+  - 0.5,64.0,0.5
+  - 6.2,64.0,3.1
+  - 12.0,65.0,4.8
+```
+
+Una ruta necesita al menos dos puntos. `route-simplify` en `config.yml` (0,4 bloques) la simplifica más antes
+de dibujarla.
+
+## Waypoint
+
+`waypoint: true` pone una marca en el destino:
+
+- en la **barra localizadora** vanilla, cuando el servidor y el cliente del jugador son ambos 1.21.6 o
+  superior y el PacketEvents instalado conoce el paquete;
+- como **waypoint de minimapa** para jugadores con Lunar o Feather.
+
+Solo se muestra mientras el jugador tiene el faro activado, y se quita mientras está en otro mundo que el
+destino.
+
+## Brillo
+
+`glow: true` contornea lo que hay que usar, solo para ese jugador, con `glow-color`:
+
+- el NPC de un paso `INTERACT_NPC` — del plugin, de ExyliaDisplays o de cualquier otro plugin;
+- el bloque destino de un paso `INTERACT_BLOCK` o `BREAK_BLOCK` que tiene lugar, a través del terreno.
+
+## Cinemática
+
+`cinematic: <id>` reproduce esa cinemática al empezar el paso. A diferencia de un objetivo
+`WATCH_CINEMATIC`, el paso no la espera. Consulta [Cinemáticas](/docs/exyliajourney/cinematicas).
+
+## Pistas
+
+Un jugador que pasa en un paso su `hint-after` (45 s por defecto) sin avanzar recibe la `hint` del paso en
+el chat, una vez por paso, con el faro latiendo y el sonido de pista. Un paso sin `hint` propia envía una
+línea que señala `/journey`.
+
+## Los ajustes de cada jugador
+
+Los jugadores eligen qué ven desde `/journey`, o desde `/settings` de ExyliaLib en **Journey guidance**:
+
+| Ajuste | Apaga |
+|---|---|
+| Companion text | El panel de texto. |
+| Beacon | El haz y el waypoint. |
+| Trail | El rastro. |
+| Journey sounds | El sonido de paso y el de pista. |
+
+`/journey hide` oculta toda la guía de golpe y la vuelve a mostrar. El progreso cuenta igual.
+
+## Sin PacketEvents, y en Bedrock
+
+Sin PacketEvents — y siempre para los jugadores de Bedrock, uno a uno — la guía se dibuja con lo que entiende
+cualquier cliente: el paso en el chat cuando empieza, un segmento de la barra de acción con título, progreso
+y distancia, una columna de partículas sobre el destino (o una marca de partículas hacia él cuando está
+lejos) y huellas de partículas a lo largo del rastro. No hay waypoint ni brillo. Consulta
+[Instalación](/docs/exyliajourney/instalacion#packetevents).

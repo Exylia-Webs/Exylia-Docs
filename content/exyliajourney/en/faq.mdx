@@ -1,0 +1,73 @@
+---
+title: "FAQ"
+description: "Bedrock players, performance, what players see without PacketEvents, editing journeys while players are on them, and other common questions."
+---
+
+## Bedrock
+
+**Do Bedrock players get journeys?** Yes, every journey, every objective and every reward. What changes is
+how the way is shown: a Bedrock client draws display entities poorly or not at all and has no locator bar,
+so Bedrock players get the step in chat when it starts, an action bar line with title, progress and
+distance, a particle column over the target and particle footprints along trails. Cinematics are sent as
+their subtitles in chat and count as watched. This is decided player by player, so Java players on the same
+server keep the full guidance.
+
+## Performance
+
+**What does it cost on a busy server?** Very little.
+
+- Every listener first asks whether anybody, then whether this player, waits for that kind of objective. On
+  a server where nobody is on a `BREAK_BLOCK` step, breaking a block costs one set lookup.
+- Polled objectives (`LEVEL`, `PLAYTIME`, `WAIT`, `EQUIP`, `PLACEHOLDER`, and `REACH` as a safety net for
+  teleports) are checked once a second, only for players whose current step is one of them.
+- Guidance is packets to one player. A still player costs nothing on the wire; a walking one costs a panel
+  glide every few steps and one trail marker in and out per marker spacing.
+- Progress writes are batched (`save-interval`), and placeholders are read from memory.
+- On Folia, everything about a player runs on that player's region thread.
+
+## Without PacketEvents
+
+**What do players see without PacketEvents?** The same journeys with simpler guidance: the step in chat when
+it starts, an action bar line, particle beams and footprints. There is no floating panel, no waypoint, no
+glow, no toasts and no NPCs of the plugin's own (ExyliaDisplays NPCs still work). Cinematics keep their
+subtitles, in chat at their times, and their sounds, but the camera does not move. See
+[Installation](/docs/exyliajourney/installation#packetevents).
+
+## Editing a live journey
+
+**What happens to players on a journey I edit?** They stay on it. An edit in the editor replaces the live
+journey at once and moves each player to the same step by its id, keeping their count. If their step was
+deleted, they continue on the step now in its place, started afresh. If an edit leaves the journey
+unreadable, the last working version stays live.
+
+A hand edit followed by `/journeyadmin reload` keeps each player on the same step **number** instead. Add,
+remove or reorder steps of a journey players are on from the editor.
+
+**I renamed a step's id. Why did its stats reset?** The funnel counts each step by its id. Change the
+`title` freely; keep the `id`.
+
+## Common questions
+
+**A `FIRST_JOIN` journey did not start for me.** It starts only for a player who has never played on the
+server before — players who joined before ExyliaJourney was installed never get it; give them a `JOIN` or
+`PERMISSION` journey instead. To test it, use the editor's **TEST ON YOURSELF**, `/journeyadmin start`, or a
+fresh account.
+
+**A journey does not start at all.** Turn on `debug: true`: the console says why each start was refused
+(disabled, skipped, already done, cooldown, group busy, requirements, cancelled). Also check the journey
+has a trigger: a journey created in the editor has none.
+
+**A player skipped the onboarding by mistake.** A skipped journey never starts again from a trigger.
+`/journeyadmin reset <player> <journey>` clears it, or `/journeyadmin start` starts it anyway.
+
+**Players run out of time and lose the journey.** A step's `timeout` stops the whole journey. Remove the
+time limit, or make the journey's triggers able to start it again.
+
+**My `PLACEHOLDER` step never completes.** Conditions fail closed: a placeholder that does not resolve to a
+number never passes a numeric comparison. Check the placeholder with PlaceholderAPI's parse command.
+
+**Can two journeys run at the same time?** Yes, if they are in different groups. Progress counts on all of
+them; the guidance shows the tracked one.
+
+**Does a cinematic hold a journey forever if it cannot play?** No. A `WATCH_CINEMATIC` step completes when the
+cinematic ends in any way, refused or skipped included.
