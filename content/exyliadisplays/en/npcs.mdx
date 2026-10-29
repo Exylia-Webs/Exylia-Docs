@@ -1,6 +1,6 @@
 ---
 title: "NPCs"
-description: "Creating NPCs, their skin, pose, size, outline and equipment, where they look, who sees them, their label, and a hologram that follows them."
+description: "Creating NPCs, their skin, pose, size, outline and equipment, where they look, who sees them, their label, a hologram that follows them, and their animations: continuous idles, groups, pause and stop, and Blockbench clips."
 ---
 
 An NPC is a player figure standing at a place, facing a way. Like holograms it is packets only: it
@@ -40,6 +40,7 @@ The shipped presets:
 | **EQUIPMENT** | Six slots. Left-click a slot to put the item in your hand there, right-click to empty it. |
 | **LABEL** | Left: the label lines and their height. Right: link a hologram. |
 | **INTERACTIONS** | The click lines, permission, cooldown, the two refusal messages and face-the-clicker. |
+| **ANIMATIONS** | Left: what a click plays. Right: the idle, the greeting, the looping idle and the group. Shift-left: the performance picker. Shift-right: pause or resume. |
 | **VISIBILITY** | Look mode and range, view distance, permission. |
 | **LOCATION** | Left: exact position and facing. Right: move here. Shift-left: centre on its block. Shift-right: turn to face me. |
 | **TELEPORT**, **DUPLICATE**, **FINE ADJUST**, **DELETE** | As for holograms. A duplicate stands in the same place and carries no linked hologram. |
@@ -163,11 +164,11 @@ tournament champion as a trophy.
    ```
 
 4. Give it a pose (`/npc top1 pose sneaking`), something to hold (`/npc top1 equip hand`), or make it
-   dance: an endless performance as its idle, played again as soon as it ends.
+   dance whenever somebody is near, with a [continuous idle](#continuous-idle):
 
    ```text
-   /npc top1 animation idle emote:<an endless emote>
-   /npc top1 animation idle-every 1s
+   /npc top1 animation idle anim:<a looping clip>
+   /npc top1 animation idle-continuous on
    ```
 
 Build the pedestal with real blocks and place the statue on top: players can stand on it and walk around
@@ -176,9 +177,124 @@ it.
 <Callout type="note" title="How the placeholder is read">
 On the main thread, for any player online, so it suits values that are the same for everybody (a
 leaderboard spot), not ones about the viewer. Whatever it gives that is not an account name ("None", an
-empty spot) wears the fallback. A looping performance plays for 8 seconds, stands up, and starts again;
-a player who walks up meanwhile sees the statue in its pose until the next one starts.
+empty spot) wears the fallback.
 </Callout>
+
+## Animations
+
+An NPC plays something on four triggers: a left click, a right click, on its own (`idle`) and to greet a
+player who walks up (`greet`, seen only by that player). Each holds either vanilla moves or one
+**performance**.
+
+| Written | What it plays |
+|---|---|
+| `wave`, `wave-offhand`, `nod`, `bow`, `flinch`, `punch`, `cheer` | A preset of vanilla moves. |
+| `swing, 250ms, hurt` | Moves joined by commas: `swing`, `offhand`, `hurt`, `crouch`, `stand`, and waits. |
+| `anim:<clip>` | A clip from `plugins/ExyliaDisplays/animations`: a Blockbench project (`.bbmodel`), or a Blockbench or Emotecraft export (`.json`). |
+| `emote:<id>` | A solo emote of ExyliaEmotes, when it is installed. |
+| `keys:<frames>` | Frames written in place, in the `[RAGDOLL]` frame format. |
+
+A performance is a whole body that takes the NPC's place for whoever is within `perform-range` (24
+blocks by default): it bows, dances or salutes instead of swinging an arm. Its hitbox stays, so clicks
+still reach the NPC. One plays at a time, and a sitting NPC never performs.
+
+```yaml
+npcs:
+  guide:
+    animations:
+      left-click: flinch
+      right-click: anim:wave
+      idle: anim:sway
+      idle-every: 20s           # how often the idle plays; 0 never
+      idle-continuous: false    # true: the idle loops while anyone is near
+      idle-group: ''            # NPCs of one group keep their idles in step
+      greet: bow
+      greet-range: 4.0
+      greet-cooldown: 30s
+      perform-range: 24.0
+```
+
+Set them with `/npc <name> animation <trigger> <value>` (`none` clears one), or from **ANIMATIONS** in
+the editor. `/npc <name> play <value>` tries one now and says when it was skipped. The performance
+picker (shift-left-click **ANIMATIONS**) lists every emote and clip: left-click one to put it on a
+trigger, right-click to try it.
+
+### The skin
+
+The body wears the NPC's own skin, an account or a texture. With `@mirror` a greeting (seen by one
+player) wears that player's skin, and anything everybody sees wears the default one, since one body is
+shared. It is drawn from real skin pieces (Exylia Skins), so nothing is uploaded to MineSkin and no
+resource pack is needed.
+
+### Continuous idle
+
+With `idle-continuous: true` the idle performance plays without end for as long as anybody is within
+`perform-range`, and nobody near means no body and no cost:
+
+```text
+/npc dancer animation idle anim:sway
+/npc dancer animation idle-continuous on
+```
+
+- A click, a greeting or `/npc <name> play` plays over it at once, and the idle comes back after.
+- Write the idle as a **loop** (a clip set to loop in Blockbench, or `loop:true;anim:<clip>`). A clip that does not
+  loop plays to its end and starts again with a short flash.
+- Somebody who walks up mid-loop sees the plain NPC until the end of the current cycle, then joins in.
+- It only applies to performances; vanilla idle moves keep `idle-every`.
+
+### Groups
+
+A group is a set of NPCs that move as one: a choir, a line of dancers, the three statues of a podium.
+
+```text
+/npc left group stage
+/npc middle group stage
+/npc right group stage
+/npcadmin group play stage anim:dance
+```
+
+- `/npc <name> group <key|none>` puts it in a group. The group is the NPC's `idle-group`, the same key as
+  `/npc <name> animation idle-group`: one setting, two names.
+- Continuous idles of one group share one clock: an NPC that starts later, or comes back after a click,
+  waits for the next cycle and plays in the same pose as the others. Give a group one idle clip.
+- `/npcadmin group play <group> <animation>` starts it on every member at the same instant and tempo, and
+  says how many started and how many were skipped (already performing, not in the world, or nobody near).
+- `/npcadmin group stop <group>`, `/npcadmin group pause <group>` and `/npcadmin group resume <group>`
+  act on every member. `/npcadmin group list` shows each group with its members.
+
+### Pause and stop
+
+| Command | Does |
+|---|---|
+| `/npc <name> stop` | Ends what it plays now: the body stands back up, then the NPC is back. A continuous idle comes back on its own. |
+| `/npc <name> pause` | No idle, no greeting, no click animation and no head turning. Click actions still run, and `play` still works. |
+| `/npc <name> resume` | Back to normal. |
+
+Paused is not saved: a restart resumes every NPC. `/npc <name> info`, the **ANIMATIONS** card and the
+**PLAYBACK** button of the performance picker show the state; the button pauses or resumes (left) and
+stops (right).
+
+### Blockbench
+
+`anim:` reads Blockbench projects directly. Save the `.bbmodel` into `plugins/ExyliaDisplays/animations`
+and its clips play at once: no export step, no reload, and a project saved again plays its new frames.
+
+1. On start the plugin writes two templates there, each only if it is missing:
+
+   | File | Rig |
+   |---|---|
+   | `player_classic.bbmodel` | 4-pixel arms (Steve) |
+   | `player_slim.bbmodel` | 3-pixel arms (Alex) |
+
+   Both have the bones `anim:` reads (`body`, `torso`, `head`, `right_arm`, `left_arm`, `right_leg`,
+   `left_leg`, each limb with a `_bend` bone for the elbow or knee) and one example clip, `wave`.
+2. Open one in Blockbench, add clips under **Animate**, and save. A copy under another name works too.
+3. `/npcadmin animations` lists every file with its clips, whether each loops and how long it is.
+   `/npcadmin animations <file>` shows one file. Click a clip to copy its `anim:` name.
+4. Play it: `/npc <name> play anim:<clip>`, or put it on a trigger.
+
+A clip is called by its name. A file with one clip also answers to the file's name. Drag a skin onto the
+model in Blockbench to see it; in game the body wears the NPC's skin.
 
 ## Commands at a glance
 

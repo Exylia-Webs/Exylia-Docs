@@ -1,6 +1,6 @@
 ---
 title: "NPCs"
-description: "Crear NPCs, su skin, pose, tamaño, contorno y equipo, hacia dónde miran, quién los ve, su etiqueta y un holograma que los sigue."
+description: "Crear NPCs, su skin, pose, tamaño, contorno y equipo, hacia dónde miran, quién los ve, su etiqueta, un holograma que los sigue y sus animaciones: idles continuos, grupos, pausa y parada, y clips de Blockbench."
 ---
 
 Un NPC es una figura de jugador en un sitio, mirando hacia un lado. Como los hologramas, son solo paquetes:
@@ -40,6 +40,7 @@ Los presets que trae:
 | **EQUIPAMIENTO** | Seis huecos. Clic izquierdo en un hueco pone ahí el ítem de tu mano, clic derecho lo vacía. |
 | **ETIQUETA** | Izquierdo: las líneas de la etiqueta y su altura. Derecho: enlazar un holograma. |
 | **INTERACCIONES** | Las líneas de clic, el permiso, el cooldown, los dos mensajes de rechazo y girarse hacia quien hace clic. |
+| **ANIMACIONES** | Izquierdo: lo que reproduce un clic. Derecho: el idle, el saludo, el idle en bucle y el grupo. Shift-izquierdo: el selector de actuaciones. Shift-derecho: pausar o reanudar. |
 | **VISIBILIDAD** | Modo y alcance de la mirada, distancia de visión, permiso. |
 | **UBICACIÓN** | Izquierdo: posición y orientación exactas. Derecho: traerlo aquí. Shift-izquierdo: centrarlo en su bloque. Shift-derecho: girarlo hacia mí. |
 | **TELETRANSPORTE**, **DUPLICAR**, **AJUSTE FINO**, **ELIMINAR** | Como en los hologramas. Una copia queda en el mismo sitio y sin holograma enlazado. |
@@ -163,12 +164,12 @@ en el spawn, el campeón de un torneo como trofeo.
    /npc top1 label add {letters_black}▎ {letters}Kills {letters_black}» {info}%ajlb_lb_statistic_player_kills_1_alltime_value%
    ```
 
-4. Dale una pose (`/npc top1 pose sneaking`), algo en la mano (`/npc top1 equip hand`) o ponlo a bailar:
-   una actuación sin fin como su idle, que vuelve a empezar en cuanto termina.
+4. Dale una pose (`/npc top1 pose sneaking`), algo en la mano (`/npc top1 equip hand`) o ponlo a bailar
+   siempre que haya alguien cerca, con un [idle continuo](#idle-continuo):
 
    ```text
-   /npc top1 animation idle emote:<un emote sin fin>
-   /npc top1 animation idle-every 1s
+   /npc top1 animation idle anim:<un clip en bucle>
+   /npc top1 animation idle-continuous on
    ```
 
 Construye el pedestal con bloques reales y coloca la estatua encima: los jugadores pueden subirse y
@@ -177,9 +178,128 @@ rodearla.
 <Callout type="note" title="Cómo se lee el placeholder">
 En el hilo principal, para cualquier jugador conectado, así que sirve para valores iguales para todos (un
 puesto de ranking), no para valores del que mira. Lo que no sea un nombre de cuenta ("None", un puesto
-vacío) lleva el respaldo. Una actuación en bucle dura 8 segundos, se levanta y vuelve a empezar; quien
-llegue mientras tanto ve la estatua en su pose hasta que empiece la siguiente.
+vacío) lleva el respaldo.
 </Callout>
+
+## Animaciones
+
+Un NPC reproduce algo en cuatro disparadores: un clic izquierdo, un clic derecho, por su cuenta (`idle`)
+y para saludar a quien se acerca (`greet`, que solo ve ese jugador). Cada uno lleva movimientos vanilla o
+una **actuación**.
+
+| Escrito | Qué reproduce |
+|---|---|
+| `wave`, `wave-offhand`, `nod`, `bow`, `flinch`, `punch`, `cheer` | Un preset de movimientos vanilla. |
+| `swing, 250ms, hurt` | Movimientos separados por comas: `swing`, `offhand`, `hurt`, `crouch`, `stand` y esperas. |
+| `anim:<clip>` | Un clip de `plugins/ExyliaDisplays/animations`: un proyecto de Blockbench (`.bbmodel`) o una exportación de Blockbench o Emotecraft (`.json`). |
+| `emote:<id>` | Un emote individual de ExyliaEmotes, si está instalado. |
+| `keys:<fotogramas>` | Fotogramas escritos en el sitio, en el formato de `[RAGDOLL]`. |
+
+Una actuación es un cuerpo entero que ocupa el lugar del NPC para quien esté a menos de `perform-range`
+(24 bloques por defecto): hace una reverencia, baila o saluda en vez de mover un brazo. Su hitbox sigue
+ahí, así que los clics siguen llegando al NPC. Se reproduce una a la vez, y un NPC sentado nunca actúa.
+
+```yaml
+npcs:
+  guide:
+    animations:
+      left-click: flinch
+      right-click: anim:wave
+      idle: anim:sway
+      idle-every: 20s           # cada cuánto se reproduce el idle; 0 nunca
+      idle-continuous: false    # true: el idle se repite mientras haya alguien cerca
+      idle-group: ''            # los NPCs de un grupo llevan sus idles sincronizados
+      greet: bow
+      greet-range: 4.0
+      greet-cooldown: 30s
+      perform-range: 24.0
+```
+
+Se configuran con `/npc <nombre> animation <disparador> <valor>` (`none` lo quita) o desde
+**ANIMACIONES** en el editor. `/npc <nombre> play <valor>` prueba una ahora y avisa si se omitió. El
+selector de actuaciones (shift-clic izquierdo en **ANIMACIONES**) muestra cada emote y cada clip: clic
+izquierdo para ponerlo en un disparador, clic derecho para probarlo.
+
+### La skin
+
+El cuerpo lleva la skin del propio NPC, una cuenta o una textura. Con `@mirror`, un saludo (que ve un
+solo jugador) lleva la skin de ese jugador, y lo que ven todos lleva la de por defecto, porque el cuerpo
+es uno solo. Se dibuja con piezas de skin reales (Exylia Skins), así que no se sube nada a MineSkin ni
+hace falta un resource pack.
+
+### Idle continuo
+
+Con `idle-continuous: true` el idle se reproduce sin fin mientras haya alguien a menos de
+`perform-range`; si no hay nadie cerca, no hay cuerpo ni coste:
+
+```text
+/npc dancer animation idle anim:sway
+/npc dancer animation idle-continuous on
+```
+
+- Un clic, un saludo o `/npc <nombre> play` se reproduce encima al momento, y el idle vuelve después.
+- Escribe el idle como un **bucle** (un clip en bucle en Blockbench, o `loop:true;anim:<clip>`). Un clip
+  que no se repite llega a su final y vuelve a empezar con un breve parpadeo.
+- Quien llega a mitad del bucle ve el NPC normal hasta que acaba el ciclo, y entonces se une.
+- Solo vale para actuaciones; los movimientos vanilla de idle siguen con `idle-every`.
+
+### Grupos
+
+Un grupo es un conjunto de NPCs que se mueven a la vez: un coro, una fila de bailarines, las tres
+estatuas de un podio.
+
+```text
+/npc left group stage
+/npc middle group stage
+/npc right group stage
+/npcadmin group play stage anim:dance
+```
+
+- `/npc <nombre> group <clave|none>` lo mete en un grupo. El grupo es el `idle-group` del NPC, la misma
+  clave que `/npc <nombre> animation idle-group`: un solo ajuste con dos nombres.
+- Los idles continuos de un grupo comparten un reloj: un NPC que empieza más tarde, o vuelve tras un
+  clic, espera al siguiente ciclo y va en la misma pose que los demás. Da a un grupo un solo clip de idle.
+- `/npcadmin group play <grupo> <animación>` la empieza en todos los miembros en el mismo instante y al
+  mismo tempo, y dice cuántos empezaron y cuántos se omitieron (ya actuando, fuera del mundo o sin nadie
+  cerca).
+- `/npcadmin group stop <grupo>`, `/npcadmin group pause <grupo>` y `/npcadmin group resume <grupo>`
+  actúan sobre todos los miembros. `/npcadmin group list` muestra cada grupo con sus miembros.
+
+### Pausa y parada
+
+| Comando | Hace |
+|---|---|
+| `/npc <nombre> stop` | Termina lo que reproduce ahora: el cuerpo se levanta y vuelve el NPC. Un idle continuo vuelve solo. |
+| `/npc <nombre> pause` | Sin idle, sin saludo, sin animaciones de clic y sin girar la cabeza. Las acciones de clic siguen y `play` sigue funcionando. |
+| `/npc <nombre> resume` | Vuelve a la normalidad. |
+
+La pausa no se guarda: un reinicio reanuda todos los NPCs. `/npc <nombre> info`, la tarjeta
+**ANIMACIONES** y el botón **REPRODUCCIÓN** del selector de actuaciones muestran el estado; el botón
+pausa o reanuda (izquierdo) y detiene (derecho).
+
+### Blockbench
+
+`anim:` lee los proyectos de Blockbench directamente. Guarda el `.bbmodel` en
+`plugins/ExyliaDisplays/animations` y sus clips se reproducen al momento: sin exportar, sin recargar, y un
+proyecto guardado de nuevo reproduce sus fotogramas nuevos.
+
+1. Al arrancar, el plugin escribe ahí dos plantillas, cada una solo si falta:
+
+   | Archivo | Modelo |
+   |---|---|
+   | `player_classic.bbmodel` | Brazos de 4 píxeles (Steve) |
+   | `player_slim.bbmodel` | Brazos de 3 píxeles (Alex) |
+
+   Las dos tienen los huesos que lee `anim:` (`body`, `torso`, `head`, `right_arm`, `left_arm`,
+   `right_leg`, `left_leg`, cada extremidad con un hueso `_bend` para el codo o la rodilla) y un clip de
+   ejemplo, `wave`.
+2. Abre una en Blockbench, añade clips en **Animate** y guarda. Una copia con otro nombre también sirve.
+3. `/npcadmin animations` lista cada archivo con sus clips, si se repiten y cuánto duran.
+   `/npcadmin animations <archivo>` muestra uno. Haz clic en un clip para copiar su nombre `anim:`.
+4. Reprodúcelo: `/npc <nombre> play anim:<clip>`, o ponlo en un disparador.
+
+Un clip se llama por su nombre. Un archivo con un solo clip también responde al nombre del archivo.
+Arrastra una skin al modelo en Blockbench para verla; en el juego el cuerpo lleva la skin del NPC.
 
 ## Comandos de un vistazo
 
