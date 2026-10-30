@@ -12,7 +12,7 @@ rewards for one event, and it is edited entirely from `/eventsadmin`.
 |---|---|
 | `id` | The key. What commands, menus and placeholders name. |
 | `displayName` | What players read. Defaults to the id. |
-| `eventType` | Which of the 51 games it is. Chosen at creation. |
+| `eventType` | Which of the 53 games it is. Chosen at creation. |
 | `markers` | The places the type asked to have marked: goals, flag stands, capture points. |
 | `enabled` | Whether it may be started at all. |
 | `iconMaterial` | The menu icon. Defaults to `NETHER_STAR`. |
@@ -20,7 +20,7 @@ rewards for one event, and it is edited entirely from `/eventsadmin`.
 | `spectatorSpawn` | Where spectators and eliminated players go. |
 | `spawnPoints` | Where players are dropped at the start. |
 | `bounds` | The cuboid the game happens inside. |
-| `copyBounds` | An optional second region, cloned instead of `bounds` by Brackets and Build Battle. |
+| `copyBounds` | An optional second region, cloned instead of `bounds` by Brackets, Sumo and Build Battle. |
 | `settings` | Everything the type itself reads. |
 | Kits, loot, rewards | Stored alongside, covered in their own pages. |
 
@@ -42,7 +42,7 @@ Four extra rules:
 
 ## Markers
 
-Thirteen types need specific places on the arena marked by hand: The Bridge's goal, Capture the Flag's
+Fourteen types need specific places on the arena marked by hand: The Bridge's goal, Capture the Flag's
 stand, Domination's points, KOTH's hill, Trivia's answer zones. Those places used to be found by
 scanning for materials; now the admin declares them.
 
@@ -72,6 +72,7 @@ Required rows that are not set show in red and appear in validation too.
 | Race | Checkpoint | Area | 1 to 32 |
 | Race | Finish line | Area | 1 |
 | Mace Roulette | Platform centre | Block | 1 |
+| Beep Test | Level finish | Area | 1 to 40 |
 
 A marker can be cleared or teleported to from the same screen. Per-team markers follow `team-count`:
 raising it to four adds two more rows that have to be marked.
@@ -86,8 +87,8 @@ configuration, so rebuilding the arena does not clear them — but moving it lea
 `bounds` does two jobs: it is what counts as "inside the arena", and it is what gets saved as a
 schematic named `event_bounds_<id>`.
 
-`copyBounds` is a second, optional region used **only by the two cloning types**: Brackets and Build
-Battle copy `copyBounds` when it is set and fall back to `bounds` when it is not. It exists for an
+`copyBounds` is a second, optional region used **only by the three cloning types**: Brackets, Sumo and
+Build Battle copy `copyBounds` when it is set and fall back to `bounds` when it is not. It exists for an
 arena whose playable area is smaller than what should travel with a clone — a duel ring inside a
 decorated hall, for instance. Restoring after a normal game always uses `bounds`.
 
@@ -108,10 +109,10 @@ guarded by the event's own bounds check. It hurts nobody and never tints the scr
 wall a player sees: pearls and modified clients ignore it, and leaving the bounds is still the game's
 call.
 
-`bounds-border`, on by default, is the per-event switch — **Arena border** on the setup screen. Four
+`bounds-border`, on by default, is the per-event switch — **Arena border** on the setup screen. Five
 types never draw one: Mace Roulette, where being knocked over the edge is the game; Thimble, whose
-jump platform may stand outside the bounds; and Brackets and Build Battle, which wall in each duel
-arena and each plot instead. The shrinking zone of Last Man Standing and Survival Games is drawn the
+jump platform may stand outside the bounds; and Brackets, Sumo and Build Battle, which wall in each
+duel arena and each plot instead. The shrinking zone of Last Man Standing and Survival Games is drawn the
 same way.
 
 `world-border.enabled` in `config.yml` is the server-wide switch above it: turned off, no event draws
@@ -138,6 +139,7 @@ one configuration can play differently from another of the same type.
 | `re_give_blocks` | A temporary block that disappears is handed back to whoever placed it. |
 | `water` | Water is harmless. Denied, touching it counts as a death in that game. |
 | `lava` | Lava burns as usual. Denied, touching it counts as a death in that game. |
+| `crafting` | Items can be crafted, at a crafting table or in the inventory grid. |
 
 A click cycles a flag through **Default**, **Allow** and **Deny**; a right click takes it back to
 Default. Default means whatever the game sets on its own, which the editor shows, so a configuration
@@ -146,15 +148,19 @@ screen counts the overrides.
 
 The rules hold only for the players of the game running in the arena, and only inside its bounds.
 
-Every type declares both hazards. Water is denied by default in TNT Run, Spleef, Splegg, Block Party
-and Anvil Running, and allowed everywhere else. Lava is denied by default everywhere except Brackets,
+Every type declares both hazards. Water is denied by default in TNT Run, Spleef, Splegg, Block Party,
+Anvil Running and Sumo, and allowed everywhere else. Lava is denied by default everywhere except Brackets,
 Tournament and Pillars of Fortune, where it burns as usual. Brackets and Tournament take their water
 default from the old `water-eliminates` setting, so a configuration that had it on keeps playing the
 same. Override either flag per configuration like any other.
 
+Crafting is denied by default everywhere except Pillars of Fortune and Simon Says. Survival Games
+always lets its players craft, whatever the flag says, and nobody crafts before a game starts.
+
 <Callout type="note" title="Some flags are the game's">
 A flag the game switches by itself during play cannot be overridden and shows why. PvP is locked in
-Block Party, Chairs, Simon Says and Tournament, which turn it on and off by phase.
+Block Party, Chairs, Simon Says and Tournament, which turn it on and off by phase. Crafting is locked
+on in Simon Says, where crafting something is one of the orders.
 </Callout>
 
 ## Spawn points
@@ -163,33 +169,31 @@ Most types put each player at a random spawn point. Some ask for a spawn far fro
 several spread-out points are better than one — a single point means everyone lands on top of each
 other.
 
-## The auto world
+## The temporary world
 
-Two types need more than one copy of the arena at a time, so the plugin generates a flat, empty world
-called `exyliaevents_autoworld` and pastes copies into it side by side:
+Three types need more than one copy of the arena at a time, so they paste copies into ExyliaLib's
+temporary world, `exylialib_temporary`, side by side:
 
 | Type | What is cloned |
 |---|---|
 | Brackets | One arena copy per simultaneous match |
+| Sumo | One arena copy per simultaneous match |
 | Build Battle | One plot per builder |
 
-```yaml title="config.yml"
-auto-world:
-  clone-spacing: 500
-  clone-paste-y: 64
-```
+The games are played in the copies, never in the original, so the arena flags are applied there too.
+Copies are pasted at the original's lowest Y, far enough apart that no copy sees another. A copy a game
+has finished with is regenerated and handed to the next one instead of being pasted again.
 
-| Key | Default | What it does |
-|---|---|---|
-| `clone-spacing` | `500` | Blocks of horizontal space allocated between cloned arenas. |
-| `clone-paste-y` | `64` | The Y level copies are pasted at. |
+There is nothing to configure: the old `auto-world` block of `config.yml` is no longer read. The world
+is a void one, never kept — ExyliaLib deletes its folder when it starts and stops — and it is created
+through Bukkit normally and through the **Worlds** plugin on Folia, where Bukkit's own world creation is
+not available. Other Exylia plugins paste their own copies into the same world.
 
-The world is created at startup: through Bukkit normally, and through the **Worlds** plugin on Folia,
-where Bukkit's own world creation is not available. If it already exists it is adopted rather than
-regenerated.
+When a copy cannot be made, the fighters play on the configuration's own spawns instead and the
+console says so.
 
 <Callout type="warning" title="Cloning needs the schematic">
-A Brackets or Build Battle arena with no saved schematic has nothing to clone. Save it before running
+A Brackets, Sumo or Build Battle arena with no saved schematic has nothing to clone. Save it before running
 either type.
 </Callout>
 
@@ -230,8 +234,8 @@ TNT Run, Block Party, Splatoon — is unplayable twice in a row without one.
 Types that never change their arena's blocks are not regenerated at all, which spares a full paste
 for nothing: Chairs, CS:GO, Dodgeball, Gem Crawler, Hide and Seek, Infection, King Kong, King of the
 Hill, Last Man Standing, Block Morph Hunt, Murder Mystery, OITC, Paintball, Parkour, Quake, Race,
-Red Light Green Light, Simon Says, Slap, TNT Tag, Top Killer, Tournament, Trivia, and the team
-variants of those. An admin who turns `build` or `break` on for one of them voids that promise, and
+Red Light Green Light, Simon Says, Slap, TNT Tag, Top Killer, Tournament, Trivia, Beep Test, and the
+team variants of those. An admin who turns `build` or `break` on for one of them voids that promise, and
 its runs are regenerated as usual. A Tournament in that case is also regenerated between matches, so
 the next pair does not fight among the blocks, water and lava the last one left.
 
