@@ -16,7 +16,7 @@ export function Pager({
   if (!previous && !next) return null;
 
   return (
-    <nav className="mt-16 grid gap-px border-t hair pt-px sm:grid-cols-2">
+    <nav className="mt-16 grid grid-cols-1 gap-px border-t hair pt-px sm:grid-cols-2">
       {previous ? (
         <Link
           href={`/${lang}/docs/${previous.plugin}/${previous.slug}`}

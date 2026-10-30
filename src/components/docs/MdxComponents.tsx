@@ -82,7 +82,7 @@ export function Callout({
 /* ---------------- Cards ---------------- */
 
 export function Cards({ children }: { children: ReactNode }) {
-  return <div className="not-prose my-7 grid gap-px border-l border-t hair sm:grid-cols-2">{children}</div>;
+  return <div className="not-prose my-7 grid grid-cols-1 gap-px border-l border-t hair sm:grid-cols-2">{children}</div>;
 }
 
 export function Card({

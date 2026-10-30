@@ -17,7 +17,7 @@ export function Ecosystem({ lang }: { lang: Lang }) {
       </div>
 
       <div className="relative mx-auto max-w-content px-6">
-        <div className="grid gap-14 lg:grid-cols-[0.85fr_1.15fr] lg:gap-20">
+        <div className="grid grid-cols-1 gap-14 lg:grid-cols-[0.85fr_1.15fr] lg:gap-20">
           <div className="lg:sticky lg:top-28 lg:self-start">
             <div className="flex items-center gap-3">
               <span className="h-px w-8 bg-white/20" />

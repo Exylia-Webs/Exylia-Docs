@@ -11,7 +11,7 @@ export function Footer({ lang }: { lang: Lang }) {
     <footer className="relative mt-24 overflow-hidden">
       <Beam />
       <div className="mx-auto max-w-docs px-6 py-16">
-        <div className="grid gap-12 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-12 sm:grid-cols-2 lg:grid-cols-4">
           <div className="lg:col-span-2">
             <Logo className="h-7" />
             <p className="mt-5 max-w-xs text-[14px] leading-relaxed text-white/40">{f.blurb[lang]}</p>

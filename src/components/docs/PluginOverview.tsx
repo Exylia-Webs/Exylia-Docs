@@ -152,7 +152,7 @@ export function PluginOverview({
               </span>
             </div>
 
-            <div className="mt-5 grid gap-px border-l border-t hair sm:grid-cols-2">
+            <div className="mt-5 grid grid-cols-1 gap-px border-l border-t hair sm:grid-cols-2">
               {section.pages.map((page) => (
                 <Link
                   key={page.slug}
