@@ -1,17 +1,11 @@
 import type { Metadata, Viewport } from "next";
-import { Inter, JetBrains_Mono, Space_Grotesk } from "next/font/google";
+import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { DEFAULT_LANG, SITE } from "@/content/registry";
 import { MotionProvider } from "@/components/motion/MotionProvider";
 
-const inter = Inter({ subsets: ["latin"], variable: "--font-sans", display: "swap" });
-const spaceGrotesk = Space_Grotesk({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-  variable: "--font-display",
-  display: "swap",
-});
-const jetbrains = JetBrains_Mono({ subsets: ["latin"], variable: "--font-mono", display: "swap" });
+const geist = Geist({ subsets: ["latin"], variable: "--font-geist", display: "swap" });
+const geistMono = Geist_Mono({ subsets: ["latin"], variable: "--font-geist-mono", display: "swap" });
 
 export const metadata: Metadata = {
   title: {
@@ -44,7 +38,7 @@ export const viewport: Viewport = {
  */
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang={DEFAULT_LANG} className={`${inter.variable} ${spaceGrotesk.variable} ${jetbrains.variable}`}>
+    <html lang={DEFAULT_LANG} className={`${geist.variable} ${geistMono.variable}`}>
       <body className="font-sans antialiased">
         <MotionProvider>{children}</MotionProvider>
       </body>
