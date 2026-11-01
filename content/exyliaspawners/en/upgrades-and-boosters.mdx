@@ -1,0 +1,106 @@
+---
+title: "Upgrades and boosters"
+description: "Buying levels of the speed, amount, storage and experience tracks, cost formulas, currencies and requirements, and timed booster items with global boosts."
+---
+
+## Upgrades
+
+The **Upgrades** screen of a spawner has one card per track: speed, amount, storage and experience. Each shows
+the current level and its highest, the value now, the value of the next level and its price, all live. A click
+buys the next level.
+
+- The player who clicks pays, whoever owns the spawner. Anyone who may open the spawner may upgrade it.
+- One purchase per spawner and track at a time: a second click while the first is still paying is told an
+  upgrade is already under way. A level is charged once; if the spawner changed meanwhile, or a plugin cancels
+  [`SpawnerUpgradeEvent`](/docs/exyliaspawners/api), the price goes back.
+- Levels belong to the stack: every spawner in it, including the ones stacked later, works at those levels.
+  Mining the last spawner loses them.
+
+The value shown already counts the stack: the amount card says the mobs the whole stack makes per cycle, the
+storage card the items the whole stack holds.
+
+### Costs
+
+Each tier writes, per track, what its levels cost under `upgrades` in `tiers.yml`:
+
+```yaml
+tiers:
+  '2':
+    # ...
+    upgrades:
+      speed:
+        cost: 5000 * (%level% - 1) ^ 2
+        currency: ''
+        permission: ''
+        requirements:
+          stack: 16
+        levels:
+          '5':
+            cost: '64'
+            currency: diamonds
+```
+
+| Key | What it does |
+|---|---|
+| `cost` | A formula for the price of the level being bought. `%level%` is that level: 2 for the first upgrade. The default `2500 * (%level% - 1) ^ 2` charges 2,500, 10,000, 22,500 and 40,000. |
+| `currency` | An ExyliaLib economy currency id, or an item currency; blank is the server's default currency. |
+| `permission` | Needed to buy any level of this track; blank for none. Without it the card says "Locked for your rank". |
+| `requirements` | Minimums to buy: `stack` (spawners in the stack) and `tier`. |
+| `levels` | Single levels written on their own, each with its own `cost`, `currency`, `permission` and `requirements`. |
+
+The highest level of a track is the number of values the tier lists for it. A formula the economy cannot read is
+reported in the console when the plugin loads. A track with no `upgrades` entry costs the built-in
+`1000 * (%level% - 1) ^ 2`.
+
+## Boosters
+
+A booster is an item a player inserts into a spawner from its **Boosters** screen. It multiplies one thing for a
+time:
+
+| Kind | Multiplies |
+|---|---|
+| `SPEED` | Cycles: a 2× speed booster halves the delay. |
+| `LOOT` | Items each produced mob drops. |
+| `XP` | Experience each produced mob gives. |
+| `MONEY` | What selling the storage pays. |
+
+One booster of each kind per spawner, so up to four at once. The screen has one card per kind with its live
+countdown. A click on an empty card inserts a booster of that kind from the main hand, else from anywhere in the
+inventory; a click on a running one takes it out and hands back an item with the time left. **A booster's time
+only runs while it is inside**, so it can be moved to another spawner without losing anything. When the whole
+stack leaves (mined, picked up), running boosters come back as items to whoever broke it.
+
+### `boosters.yml`
+
+The boosters staff can hand out, by id:
+
+```yaml
+boosters:
+  speed_2x_30m:
+    kind: SPEED
+    multiplier: 2.0
+    duration: 30m
+  loot_2x_30m:
+    kind: LOOT
+    multiplier: 2.0
+    duration: 30m
+  xp_2x_30m:
+    kind: XP
+    multiplier: 2.0
+    duration: 30m
+  money_1_5x_1h:
+    kind: MONEY
+    multiplier: 1.5
+    duration: 1h
+```
+
+`/spawnersadmin booster give <player> <id> [amount]` hands up to 64 at once. Shops and crates give them by
+running that command. The items look like `lang/<language>/booster-item.yml` says, one entry per kind, with the
+placeholders `%kind%`, `%kind_upper%`, `%multiplier%` and `%time%` (the time left on the item). Boosters are
+recognised by values stored on the item, not by their name.
+
+### Global and personal boosts
+
+Spawners are a source in ExyliaLib's modifiers, listed as `spawners` with the money, drops and experience kinds.
+A booster plugin, a rank perk or a server event that boosts that source multiplies, for the spawner's **owner**:
+the drops of every cycle, its experience, and what its sales pay. They stack with the spawner's own boosters.

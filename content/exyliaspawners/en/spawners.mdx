@@ -1,0 +1,111 @@
+---
+title: "Spawners"
+description: "The spawner item, placing, stacking, opening, mining, explosions, spawn eggs, converting vanilla spawners and the placement limits."
+---
+
+## The spawner item
+
+A spawner item holds a type, a tier and a number of spawners, plus a unique id. One item can hold many
+spawners: `/spawnersadmin give` with an amount of 500 hands over one item of 500. Items never merge with
+each other in the inventory (each stacks to 1), because each one is a single record.
+
+Its look comes from `lang/<language>/spawner-item.yml`, an ExyliaLib item with the placeholders `%type%`,
+`%type_upper%`, `%tier%`, `%stack%` and `%mode%`. Restyle it freely: spawners are recognised by the values
+stored on the item, never by their name. The material is always `SPAWNER`.
+
+<Callout type="note" title="Copies are refused">
+Every id is recorded when the item is made and spent when it is placed or stacked. An item whose id was
+already used, was never handed out, or whose type, tier or count no longer match the record is refused with
+"This spawner is not valid", and the attempt is written to the audit log as `spawner-item-rejected`. On a
+network, two servers racing to place the same copy end with one spawner: the second one is taken back off.
+</Callout>
+
+## Placing
+
+Placing the item makes a spawner block holding that many spawners, owned by the player. The checks, in
+order:
+
+1. The type still exists and is enabled in `types.yml`.
+2. The player has `exyliaspawners.use`, and `exyliaspawners.place.<type>` when
+   `placement.require-type-permission` is on.
+3. Every claim and region plugin allows building there. See
+   [Trust and protection](/docs/exyliaspawners/trust-and-protection#claims-and-regions).
+4. The chunk has fewer spawner blocks than `placement.chunk-limit`.
+5. The player owns fewer spawner blocks than their limit: `placement.player-limit`, or the highest
+   `exyliaspawners.limit.<n>` they hold. In [network mode](/docs/exyliaspawners/network) this counts the
+   player's spawner blocks on every server.
+
+An item holding more spawners than the stack limit places a full stack and hands the rest back as a new item.
+
+## Stacking
+
+Right-clicking a placed spawner with an item of the **same type and tier** adds one spawner; sneaking adds the
+whole item, up to the stack limit. The stack limit is the type's `stack-limit`, else the tier's, raised by the
+highest `exyliaspawners.stack.<n>` the player holds. Stacking needs the same rights as opening the spawner
+(owner or trusted, and the claim allowing building).
+
+Every spawner in a stack shares the stack's tier, its upgrade levels and its storage, and the storage cap grows
+with the stack.
+
+## Opening
+
+Right-clicking a spawner with anything else opens its hub: storage, upgrades, boosters, trusted players,
+corruption and **Sell all**. Sneaking with a block in hand places the block instead. Only the owner, their
+trusted players and staff can open a spawner. See [Storage and selling](/docs/exyliaspawners/storage-and-selling).
+
+## Mining
+
+| Rule | Default |
+|---|---|
+| The tool must match `mining.tools` | `*_PICKAXE` |
+| The tool must carry Silk Touch | `mining.require-silk-touch: true` |
+| Chance the spawner drops | `mining.chance: 100`, raised by `exyliaspawners.chance.<n>` |
+| The last spawner of a stack cannot be mined while its storage holds items or experience | `mining.require-empty-storage: true` |
+| Mined spawners go into the miner's inventory | `mining.to-inventory: true` |
+
+A mine takes **one** spawner off the stack; sneaking takes all of them. The block only disappears with the last
+one. With `mining.to-inventory` on, the item goes straight into the miner's inventory, and whatever does not
+fit drops at their feet, so nobody standing near the block can pick it up. A failed chance roll destroys the
+spawners mined with the message "The spawner shattered".
+
+Players in creative mode skip the tool and Silk Touch checks. Mining needs `exyliaspawners.use`,
+`exyliaspawners.mine.<type>` when `mining.require-type-permission` is on, ownership or trust, and the claim
+allowing breaking.
+
+The hub's **Pick up spawner** button (asks to confirm) takes the whole stack under the same rules, from up to
+six blocks away, with the item in the main hand counting as the tool. It always hands the item over to the
+inventory.
+
+<Callout type="warning" title="Upgrade levels belong to the block">
+A spawner item carries a type, a tier and a count, not upgrade levels. Mining spawners off a stack leaves the
+levels on the block; mining or picking up the last one loses them. Boosters running in it come back as items.
+</Callout>
+
+## Explosions
+
+With `explosions.enabled` on, an explosion that reaches a spawner takes **one** spawner off its stack, and
+`explosions.drop-chance` (50 by default) decides whether it drops as an item where the block was. A spawner whose
+storage holds anything is never blown up. Claim plugins that protect a block from a blast are respected. With
+`explosions.enabled` off, explosions leave spawners alone.
+
+## Spawn eggs
+
+With `egg-change.enabled` on, right-clicking a spawner with a spawn egg changes its type to the type of that
+mob, for one egg per spawner in the stack (none in creative). It needs `exyliaspawners.egg`, the right to stack
+the spawner, and `exyliaspawners.place.<type>` when `placement.require-type-permission` is on. The vanilla egg
+change never happens on a plugin spawner, so stacks and storage cannot be bypassed.
+
+## Vanilla spawners
+
+With `conversion.enabled` on (the default), a vanilla spawner (a dungeon's, or one another plugin set) becomes an
+ExyliaSpawners spawner of tier `conversion.tier` the first time a player clicks or mines it, when a type for its
+mob exists. Trial spawners are never touched. A converted spawner has no owner: the first player to stack onto it
+or change it with an egg becomes its owner. Until then anyone the claims allow can use it. See
+[Trust and protection](/docs/exyliaspawners/trust-and-protection#ownerless-spawners).
+
+## What protects the block
+
+- Vanilla spawning never runs on a plugin spawner: production goes through the plugin only.
+- The block is registered with ExyliaLib's block protection, so pistons cannot push or pull it.
+- A spawner whose block was replaced behind the plugin's back (WorldEdit, another plugin) is removed from the
+  records the next time production looks at it, and the removal is written to the audit log.

@@ -1,0 +1,71 @@
+---
+title: "Importing"
+description: "/spawnersadmin import from SmartSpawner, WildStacker, RoseStacker, VirtualSpawner and LitSpawners: what each keeps, dry runs, and moving over safely."
+---
+
+`/spawnersadmin import <source> [-dry]` turns another plugin's spawners into ExyliaSpawners spawners, where they
+stand. The old plugin's data is only ever read, never changed. A spawner that is already ExyliaSpawners' is left
+alone, so running an import twice adds nothing.
+
+<Steps>
+  <Step title="Keep the old plugin's files">
+    Its folder must still be in `plugins/` (the plugin itself can stay installed for now).
+  </Step>
+  <Step title="Dry run">
+    `/spawnersadmin import smartspawner -dry` reads everything and says how many spawners it would import,
+    and why the others would not, without writing anything. `--dry` works too.
+  </Step>
+  <Step title="Import">
+    The same without `-dry`. The answer counts what was imported and what was skipped.
+  </Step>
+  <Step title="Remove the old plugin">
+    Before players use the spawners, so two plugins never run the same block. The import reminds you when the
+    old plugin is still enabled.
+  </Step>
+</Steps>
+
+## Sources
+
+| Source | Reads | Keeps |
+|---|---|---|
+| `smartspawner` | SmartSpawner 1.8+ (also 1.7's `smart_spawners`): `spawners.db`, or the MySQL in its `config.yml`, with its table prefix and server name. | Type (also item spawners), stack, stored experience and stored loot. No owner, no upgrades. |
+| `wildstacker` | `database.db`, or the MySQL or MariaDB in its `config.yml`: the `spawners` table. | Stack, and its upgrade id as the tier `upgrade + 1` when that tier exists. The type is the block's mob. No owner, no loot. |
+| `rosestacker` | The stacks RoseStacker keeps inside each chunk. | Stack. The type is the block's mob. No owner, no loot. |
+| `virtualspawner`, `litspawners` | Auto-detected: the first SQLite file in their folder with a table that looks like spawners, read by common column names. | Whatever those columns hold: location, type, stack, owner, experience, tier. |
+
+`smartspawner`, `wildstacker` and `rosestacker` are read from their published storage formats.
+
+<Callout type="warning" title="VirtualSpawner and LitSpawners are auto-detected">
+Their storage formats are closed, so these two importers detect the spawner table in the plugin's SQLite file by its
+column names, and they have not been tested against real data from either plugin. **Always run with `-dry` first**
+and check the table and columns the console logs, and that the counts match what the old plugin showed. Their
+MySQL and MongoDB storage is not read.
+</Callout>
+
+### RoseStacker
+
+RoseStacker has no database: each chunk carries its own stacks. An import converts the chunks loaded at that moment
+and leaves `imports/rosestacker.pending`; from then on every existing chunk is converted the first time it loads.
+Delete that file to stop. On Folia, where loaded chunks cannot be listed, every chunk converts as it loads.
+
+## What an imported spawner becomes
+
+- **Type**: one of your type ids, an entity name (old names such as `PIG_ZOMBIE` are understood), an item
+  spawner's material matched against your `ITEM` types' loot, or else the mob the block shows. A spawner whose type
+  matches none of `types.yml` is skipped, and the answer lists those names: add them and run it again.
+- **Tier**: the one the source kept when it exists, else `conversion.tier`.
+- **Stack**: as the source had it, even above your stack limit.
+- **Storage**: stored loot and experience are put into its storage.
+- **Owner**: the source's when it kept one, else none. See
+  [Ownerless spawners](/docs/exyliaspawners/trust-and-protection#ownerless-spawners).
+
+| Count in the answer | Means |
+|---|---|
+| Imported | Now an ExyliaSpawners spawner. |
+| Already here | Already ours: left alone. |
+| Block gone | The block at that place is no longer a spawner. |
+| Unknown type | No type of yours matches. |
+| World missing | Its world is not loaded on this server. |
+
+Chunks that were never generated are skipped rather than generated. One import runs at a time, and the command
+waits until the plugin has finished loading at start. Every run is written to the audit log.

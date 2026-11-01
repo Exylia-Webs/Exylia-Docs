@@ -1,0 +1,88 @@
+---
+title: "Corrupción"
+description: "Cómo se corrompen los spawners mientras funcionan, los efectos HALT, REDUCED y TAINTED por tier, purificar manteniendo agachado, costes, el periodo de gracia y el tope antiinflación."
+---
+
+La corrupción está **activada por defecto**. Un spawner que sigue produciendo se corrompe poco a poco; una vez
+corrompido sufre el efecto de su tier hasta que su dueño, o un jugador de confianza, va hasta él y lo purifica allí
+mismo. Convierte una granja de spawners en algo que los jugadores cuidan, en lugar de una máquina de dinero pasiva.
+
+## Los estados
+
+| Estado | Qué significa |
+|---|---|
+| **Sano** | Nunca se ha corrompido, o la gracia se ha acabado. El temporizador arranca la próxima vez que haya un jugador en rango. |
+| **Acumulando** | Cuenta atrás un temporizador aleatorio entre el `min` y el `max` del tier. |
+| **Corrompido** | Se aplica el efecto del tier hasta que se purifique. |
+| **Protegido** | Recién purificado: no puede corromperse durante `corruption.grace` (30 minutos). |
+
+El temporizador de acumulación solo avanza mientras haya un jugador dentro de `production.activation-range` del
+spawner, el mismo tiempo en que produce: sin nadie cerca no se acumula nada, así que un spawner que nadie visita
+nunca se corrompe. La protección tras purificar corre por reloj.
+
+## Efectos por tier
+
+Cada tier de `config.yml` bajo `corruption.tiers` elige su efecto y su temporizador. Un tier que no aparece usa
+`corruption.defaults`.
+
+| Efecto | Mientras está corrompido |
+|---|---|
+| `HALT` | Deja de producir. |
+| `REDUCED` | Produce a `multiplier` veces su velocidad (0.5 es la mitad de rápido). |
+| `TAINTED` | Produce `multiplier` veces el botín, y cada temporizador completo que pasa corrompido tiene un `loss-chance` por ciento de quitar un spawner de la pila, nunca el último. |
+| `NONE` | Este tier nunca se corrompe. |
+
+Los valores por defecto:
+
+| Tier | Efecto | Temporizador | Multiplicador | Probabilidad de pérdida |
+|---|---|---|---|---|
+| 1 | `HALT` | de 6h a 12h | | |
+| 2 | `REDUCED` | de 4h a 8h | 0.5 | |
+| 3 | `TAINTED` | de 3h a 6h | 1.5 | 10% |
+| cualquier otro | `HALT` | de 6h a 12h | | |
+
+Cuando un spawner se corrompe, su dueño recibe un aviso discreto con el tipo y el lugar, al momento o en su
+próxima conexión. Un spawner TAINTED que pierde un spawner envía otro. Mientras está corrompido,
+`corruption.particles` (partículas de bruja) se muestran a su alrededor a los jugadores cercanos, su holograma
+gana una línea de corrupción y el panel del spawner muestra una tarjeta **CORRUPCIÓN** con el estado, el efecto y
+lo que cuesta purificarlo.
+
+## Purificar
+
+El dueño o un jugador de confianza se sitúa a menos de `corruption.repair.range` bloques (4) de un spawner
+corrompido y mantiene **agachado** durante `corruption.repair.duration` (3 segundos). Sobre el spawner flota una
+barra de progreso, solo para él. Soltar, alejarse o que el spawner cambie lo interrumpe. La tarjeta
+**CORRUPCIÓN** del panel del spawner tiene un botón **PURIFICAR** que cierra la pantalla y le recuerda al jugador
+cómo hacerlo.
+
+| Clave de coste | Por defecto | Qué hace |
+|---|---|---|
+| `corruption.repair.cost` | `0` | Dinero cobrado por cada purificación; 0 es gratis. |
+| `corruption.repair.currency` | `''` | La moneda; en blanco es la moneda por defecto del servidor. |
+| `corruption.repair.cleanser-item` | `''` | Un material que se retira del inventario por cada purificación; en blanco para ninguno. |
+| `corruption.repair.cleanser-amount` | `1` | Cuántos de él. |
+| `corruption.repair.on-complete` | un tintineo | Líneas de interacción de ExyliaLib que se ejecutan al terminar la purificación (`[SOUND]`, `[MESSAGE]`, ...). |
+
+El coste se cobra cuando se completa la espera, nunca antes; a un jugador que no puede pagar se le dice cuánto
+cuesta y el spawner sigue corrompido. Purificar requiere `exyliaspawners.use` y el derecho a abrir el spawner. Los
+plugins pueden cancelarlo con [`SpawnerRepairEvent`](/docs/exyliaspawners/api).
+
+## El tope antiinflación
+
+`corruption.cap.money-per-hour` (desactivado con `0`) hace que los spawners que ganan demasiado se corrompan antes.
+Un spawner cuyas ventas pagaron más que eso en la última hora acumula corrupción más rápido en proporción: el doble
+del tope acumula el doble de rápido, hasta `corruption.cap.max-speed` veces (4). Las ganancias se cuentan en la
+moneda por defecto durante una hora móvil y empiezan vacías tras un reinicio.
+
+## Desactivarla
+
+| Para | Pon |
+|---|---|
+| Desactivar la corrupción en todas partes | `corruption.enabled: false` |
+| Librar algunos mundos | `corruption.disabled-worlds: [world_nether]`: un spawner corrompido allí produce como si estuviera sano. |
+| Librar un tier | `effect: NONE` para ese tier. |
+
+El staff puede corromper o purificar el spawner que está mirando con `/spawnersadmin corrupt` y
+`/spawnersadmin repair`, hasta a ocho bloques de distancia. Los contadores de corrupción (corrompidos ahora,
+corrupciones, purificaciones, pérdidas) se envían a las métricas de ExyliaLib, y cada corrupción, purificación y
+pérdida se escribe en el registro de auditoría.

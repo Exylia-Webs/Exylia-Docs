@@ -1,0 +1,85 @@
+---
+title: "Corruption"
+description: "How spawners corrupt while they run, the HALT, REDUCED and TAINTED effects per tier, cleansing by holding crouch, costs, the grace period and the anti-inflation cap."
+---
+
+Corruption is **on by default**. A spawner that keeps producing slowly corrupts; once corrupted it suffers its
+tier's effect until its owner, or a player they trust, comes and cleanses it on site. It turns a spawner farm into
+something players look after rather than an idle money printer.
+
+## The states
+
+| State | What it means |
+|---|---|
+| **Healthy** | Never corrupted, or the grace ran out. The timer starts the next time a player is in range. |
+| **Building** | A random timer between the tier's `min` and `max` counts down. |
+| **Corrupted** | The tier's effect applies until it is cleansed. |
+| **Protected** | Just cleansed: it cannot corrupt during `corruption.grace` (30 minutes). |
+
+The building timer only counts while a player is within `production.activation-range` of the spawner, the same
+time it produces: with nobody nearby nothing builds, so a spawner nobody visits never corrupts. The protection
+after a cleanse runs on the clock.
+
+## Effects per tier
+
+Each tier in `config.yml` under `corruption.tiers` chooses its effect and timer. A tier not listed uses
+`corruption.defaults`.
+
+| Effect | While corrupted |
+|---|---|
+| `HALT` | Stops producing. |
+| `REDUCED` | Produces at `multiplier` times its speed (0.5 is half as fast). |
+| `TAINTED` | Produces `multiplier` times the loot, and every full timer spent corrupted has `loss-chance` percent to take one spawner off the stack, never the last one. |
+| `NONE` | This tier never corrupts. |
+
+The defaults:
+
+| Tier | Effect | Timer | Multiplier | Loss chance |
+|---|---|---|---|---|
+| 1 | `HALT` | 6h to 12h | | |
+| 2 | `REDUCED` | 4h to 8h | 0.5 | |
+| 3 | `TAINTED` | 3h to 6h | 1.5 | 10% |
+| any other | `HALT` | 6h to 12h | | |
+
+When a spawner corrupts, its owner gets one quiet notice with the type and the place, at once or on their next
+join. A tainted spawner that loses a spawner sends another. While corrupted, `corruption.particles` (witch
+particles) show around it to players near it, its hologram gains a corruption line, and the hub shows a
+**Corruption** card with the state, the effect and what a cleanse costs.
+
+## Cleansing
+
+The owner or a trusted player stands within `corruption.repair.range` blocks (4) of a corrupted spawner and holds
+**crouch** for `corruption.repair.duration` (3 seconds). A progress bar floats over the spawner, for them alone.
+Letting go, walking away, or the spawner changing interrupts it. The hub's **Corruption** card has a
+**Cleanse** button that closes the screen and reminds the player how.
+
+| Cost key | Default | What it does |
+|---|---|---|
+| `corruption.repair.cost` | `0` | Money charged per cleanse; 0 is free. |
+| `corruption.repair.currency` | `''` | The currency; blank is the server's default. |
+| `corruption.repair.cleanser-item` | `''` | A material taken from the inventory per cleanse; blank for none. |
+| `corruption.repair.cleanser-amount` | `1` | How many of it. |
+| `corruption.repair.on-complete` | a chime | ExyliaLib interaction lines played when the cleanse finishes (`[SOUND]`, `[MESSAGE]`, ...). |
+
+The cost is taken when the hold completes, never before; a player who cannot pay is told what it costs and the
+spawner stays corrupted. Cleansing needs `exyliaspawners.use` and the right to open the spawner. Plugins can
+cancel it through [`SpawnerRepairEvent`](/docs/exyliaspawners/api).
+
+## The anti-inflation cap
+
+`corruption.cap.money-per-hour` (off at `0`) makes spawners that earn too much corrupt sooner. A spawner whose
+sales paid more than that in the last hour builds corruption faster in proportion: twice the cap builds twice as
+fast, up to `corruption.cap.max-speed` times (4). Earnings are counted in the default currency over a rolling hour
+and start empty after a restart.
+
+## Turning it off
+
+| To | Set |
+|---|---|
+| Switch corruption off everywhere | `corruption.enabled: false` |
+| Spare some worlds | `corruption.disabled-worlds: [world_nether]`: a corrupted spawner there produces as if healthy. |
+| Spare one tier | `effect: NONE` for that tier. |
+
+Staff can corrupt or cleanse the spawner they look at with `/spawnersadmin corrupt` and `/spawnersadmin repair`,
+up to eight blocks away. Corruption counts (corrupted now, corruptions, repairs, losses) are reported to
+ExyliaLib's metrics, and every corruption, cleanse and loss is written to the audit log.

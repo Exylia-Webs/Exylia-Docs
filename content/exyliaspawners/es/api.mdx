@@ -1,0 +1,64 @@
+---
+title: "API"
+description: "Los siete eventos de Bukkit que lanza ExyliaSpawners: colocar, apilar, romper, mejorar, vender, corromper y reparar."
+badge: "dev"
+---
+
+ExyliaSpawners no tiene ningún servicio en la API de Exylia. Otros plugins reaccionan a los spawners mediante siete
+eventos de Bukkit en `net.exylia.exyliaSpawners.event`. Compila contra el jar del plugin (`compileOnly`) y añade
+`ExyliaSpawners` en `softdepend`, para que se active antes.
+
+```java
+@EventHandler
+public void onSell(SpawnerSellEvent event) {
+    if (event.money().compareTo(new BigDecimal("1000000")) > 0) {
+        getLogger().info(event.spawner() + " sold " + event.items() + " for " + event.money());
+    }
+}
+
+@EventHandler(ignoreCancelled = true)
+public void onPlace(SpawnerPlaceEvent event) {
+    if (event.block().getWorld().getName().equals("spawn")) event.setCancelled(true);
+}
+```
+
+## Hilos
+
+Cada evento se lanza en el hilo que hizo la acción: el hilo de la región del bloque para las acciones en el mundo
+(colocar, apilar, romper), el hilo en el que se completa el pago para una mejora, un temporizador asíncrono para la
+corrupción, y un hilo de base de datos para una venta. Un evento lanzado fuera del hilo principal es asíncrono
+(`isAsynchronous()`), así que, tanto en Paper como en Folia, toca el mundo solo a través de un scheduler. Lee de
+memoria, nunca bloquees.
+
+## Eventos
+
+| Evento | Cancelable | Se lanza cuando | Accesores |
+|---|---|---|---|
+| `SpawnerPlaceEvent` | sí | Un jugador está colocando un objeto de spawner como un bloque de spawner nuevo. Cancelarlo conserva el objeto. | `player()`, `block()`, `item()` |
+| `SpawnerStackEvent` | sí | Un jugador está añadiendo spawners a una pila colocada. Cancelarlo conserva el objeto. | `player()`, `spawner()`, `added()` |
+| `SpawnerBreakEvent` | sí | Unos spawners salen de una pila: picados o recogidos por un jugador, o explotados (`player()` es `null`). `amount()` es cuántos salen; el bloque desaparece cuando no queda ninguno. Cancelarlo los conserva. | `player()`, `spawner()`, `amount()` |
+| `SpawnerUpgradeEvent` | sí | El nivel de una línea de mejora está a punto de cambiar después de pagar la compra. Cancelarlo devuelve el precio y conserva el nivel. | `player()`, `spawner()`, `track()`, `from()`, `to()` |
+| `SpawnerSellEvent` | no | Se ha vendido el almacén, después del pago. `player()` es `null` para una venta pedida desde otro servidor. `money()` es lo que pagó en la moneda por defecto. | `player()`, `spawner()`, `items()`, `money()` |
+| `SpawnerCorruptEvent` | sí | Un spawner está a punto de corromperse, por su temporizador o por `/spawnersadmin corrupt`. Cancelarlo lo mantiene sano; el temporizador vuelve a empezar. | `spawner()` |
+| `SpawnerRepairEvent` | sí | Un jugador está a punto de purificar un spawner corrompido. Cancelarlo lo mantiene corrompido, y se devuelve cualquier coste cobrado. | `player()`, `spawner()` |
+
+`items()` de `SpawnerSellEvent` asocia las claves del almacén (un nombre de material como `ROTTEN_FLESH`, o un objeto
+serializado) con las cantidades vendidas. `track()` es `SPEED`, `AMOUNT`, `STORAGE` o `XP`.
+
+## El spawner
+
+`Spawner` es una instantánea de un bloque de spawner:
+
+| Método | Valor |
+|---|---|
+| `id()` | Su `UUID`, estable durante toda la vida del bloque. |
+| `world()`, `x()`, `y()`, `z()`, `location()`, `center()` | Dónde está. |
+| `type()`, `tier()`, `stack()` | Id del tipo, tier, spawners en la pila. |
+| `owner()` | El `UUID` del dueño, o `null` para un spawner sin dueño. |
+| `level(Track)` | El nivel de una línea de mejora. |
+| `placedAt()` | Cuándo se colocó, en milisegundos desde epoch. |
+
+`SpawnerItem` (en `SpawnerPlaceEvent`) es el `id()`, `type()`, `tier()` y `stack()` del objeto.
+
+Los mobs que genera un spawner CLASSIC llevan la clave de datos persistentes `exyliaspawners:spawner` (un string, el
+id del spawner).

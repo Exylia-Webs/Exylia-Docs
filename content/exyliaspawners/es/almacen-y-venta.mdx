@@ -1,0 +1,102 @@
+---
+title: "Almacén y venta"
+description: "La pantalla del almacén, sacar objetos, reclamar experiencia con Reparación, Full-to-Collect, precios, venta, autoventa, /spawners sell, varitas de venta y quién cobra."
+---
+
+## El almacén
+
+Un spawner VIRTUAL guarda lo que genera como contadores: uno por cada clase de objeto, y otro para la experiencia.
+Se aplican dos topes, ambos para toda la pila: los objetos en total (el valor `storage` del tier × spawners de la
+pila) y la experiencia (el valor `xp` × spawners). Mejorar la línea de almacén o de experiencia, o apilar más
+spawners, los sube.
+
+La producción se guarda en memoria y se escribe en la base de datos cada `storage.flush-interval` (30 segundos),
+cuando se descarga su chunk y al apagar. Sacar, vender y reclamar se escriben al momento, como transacciones: el
+mismo clic dos veces, dos jugadores en la misma pantalla o un paquete repetido nunca sacan ni pagan dos veces. Los
+objetos solo se entregan cuando la transacción ha salido bien, y lo que no cabe en el inventario vuelve al almacén.
+
+## La pantalla del almacén
+
+Ábrela desde el panel del spawner (**ALMACÉN**). Una fila por cada objeto guardado, actualizándose mientras la
+pantalla está abierta.
+
+| Clic en un objeto | Hace |
+|---|---|
+| Clic izquierdo | Saca uno. |
+| Clic derecho | Saca una pila. |
+| Shift + clic izquierdo | Saca todo lo que cabe. |
+| Shift + clic derecho | Vende ese objeto. |
+
+| Botón | Hace |
+|---|---|
+| **VENDER TODO** | Vende todos los objetos que tienen precio. |
+| **SACAR TODO** | Mueve al inventario todo lo que cabe. |
+| **RECLAMAR EXPERIENCIA** | Da todos los puntos de experiencia guardados. |
+| **AUTOVENTA** | Activa o desactiva la autoventa de este spawner. |
+| **RECOGERLO TODO** | Solo jugadores de Bedrock (con Floodgate): todos los objetos que caben y toda la experiencia, de un toque, porque Bedrock no tiene shift-clic. |
+
+### Experiencia y Reparación
+
+Con `collecting.mending-repair` activado (lo predeterminado), la experiencia reclamada repara primero los objetos
+con Reparación del jugador, como haría un orbe de experiencia, y el resto va al jugador.
+
+### Full-to-Collect
+
+Con `collecting.full-to-collect` activado, los objetos solo se pueden sacar cuando el almacén está lleno; hasta
+entonces la pantalla responde con lo lleno que está. La venta no se ve afectada.
+
+## Precios
+
+El almacén se vende a través de los precios de ExyliaLib: lo que las tiendas y listas de valor del servidor marquen
+para cada objeto, en la moneda de ese precio. Con [ExyliaMarket](/docs/exyliamarket/precios) instalado, su lista de
+valor y su tienda los fijan. Un objeto sin precio se queda en el almacén, igual que el resto de un objeto con precio
+por lote (con precio por 64, de 100 guardados se venden 64 y se quedan 36).
+
+Lo que paga una venta se multiplica por el potenciador de **dinero** del spawner, por el factor de una varita de
+venta y por cualquier aumento de dinero global o personal que otros plugins concedan bajo la fuente `spawners` de los
+modificadores de ExyliaLib (una ventaja de rango, un evento de todo el servidor). Consulta
+[Mejoras y potenciadores](/docs/exyliaspawners/mejoras-y-potenciadores#potenciadores).
+
+## Quién cobra
+
+<Callout type="note" title="Las ventas siempre pagan al dueño">
+El dinero del almacén de un spawner va al **dueño** del spawner, también cuando vende un jugador de confianza desde
+su pantalla, cuando lo vende una varita de venta y cuando lo vende la autoventa. El recibo le llega a quien ha
+vendido. Solo un spawner sin dueño (un spawner de mazmorra convertido que nadie ha reclamado) le paga al jugador que
+vende.
+</Callout>
+
+A un dueño desconectado se le paga igualmente a través de la economía. Cada venta queda en el registro de auditoría
+y lanza [`SpawnerSellEvent`](/docs/exyliaspawners/api).
+
+## Formas de vender
+
+| Dónde | Requiere | Vende |
+|---|---|---|
+| **VENDER TODO** en el panel del spawner o en la pantalla del almacén | Poder abrir el spawner | Todo lo que tiene precio. |
+| Shift + clic derecho en un objeto del almacén | Poder abrir el spawner | Ese objeto. |
+| Una varita de venta sobre el spawner | Poder abrir el spawner | Todo lo que tiene precio, con el multiplicador de la varita. |
+| Autoventa | `exyliaspawners.autosell` | Todo lo que tiene precio, cada `selling.autosell-interval`. |
+| `/spawners sell` | `exyliaspawners.remote` | Todos los spawners que el jugador tiene en este servidor, con un solo recibo. |
+| Un clic en `/spawners` | `exyliaspawners.remote` | Ese spawner, aquí o en otro servidor de la red. |
+
+### Autoventa
+
+Se activa por spawner desde la pantalla del almacén; activarla exige `exyliaspawners.autosell` (no se concede por
+defecto), desactivarla no. Mientras está activa, el almacén se vende solo cada `selling.autosell-interval`
+(60 segundos), sin avisar, **solo mientras el dueño está conectado en este servidor y sigue teniendo el permiso**. La
+opción se guarda en la base de datos y sobrevive a los reinicios.
+
+### Varitas de venta
+
+Las varitas de venta de cualquier plugin que use los objetivos de venta de ExyliaLib funcionan sobre los spawners:
+hacer clic derecho en un spawner con una [varita de venta de ExyliaMarket](/docs/exyliamarket/varitas-de-venta)
+vende todo su almacén con el multiplicador de la varita. El jugador que la usa tiene que poder abrir el spawner; a
+cualquier otro se le dice "No puedes vender este generador". No hay una varita aparte para spawners.
+
+### Tus generadores y `/spawners sell`
+
+`/spawners` lista todos los spawners de los que el jugador es dueño, con su mundo, ubicación, tier, modo, estado,
+almacén y experiencia. Con `exyliaspawners.remote`, hacer clic en uno vende su almacén desde donde esté el jugador, y
+`/spawners sell` vende de una vez todos los de este servidor. Con el [modo red](/docs/exyliaspawners/red) la lista
+incluye los spawners del jugador en todos los servidores, y un clic vende en el servidor al que pertenece.

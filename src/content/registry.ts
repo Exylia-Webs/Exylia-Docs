@@ -1645,6 +1645,49 @@ const JOURNEY_NAV: NavGroup[] = [
   },
 ];
 
+const SPAWNERS_NAV: NavGroup[] = [
+  {
+    label: { en: "Getting started", es: "Empezar" },
+    pages: [
+      page("introduction", "introduction", "introduccion"),
+      page("installation", "installation", "instalacion"),
+      page("first-steps", "first-steps", "primeros-pasos"),
+    ],
+  },
+  {
+    label: { en: "Spawners", es: "Spawners" },
+    pages: [
+      page("spawners", "spawners", "spawners"),
+      page("types-and-tiers", "types-and-tiers", "tipos-y-tiers"),
+      page("storage-and-selling", "storage-and-selling", "almacen-y-venta"),
+      page("upgrades-and-boosters", "upgrades-and-boosters", "mejoras-y-potenciadores"),
+      page("corruption", "corruption", "corrupcion"),
+      page("trust-and-protection", "trust-and-protection", "confianza-y-proteccion"),
+      page("holograms-and-anti-esp", "holograms-and-anti-esp", "hologramas-y-anti-esp"),
+    ],
+  },
+  {
+    label: { en: "Server", es: "Servidor" },
+    pages: [
+      page("network", "network", "red"),
+      page("administration", "administration", "administracion"),
+      page("importing", "importing", "importar"),
+      page("integrations", "integrations", "integraciones"),
+    ],
+  },
+  {
+    label: { en: "Reference", es: "Referencia" },
+    pages: [
+      page("commands", "commands", "comandos"),
+      page("permissions", "permissions", "permisos"),
+      page("placeholders", "placeholders", "placeholders"),
+      page("configuration", "configuration", "configuracion"),
+      page("api", "api", "api"),
+      page("faq", "faq", "faq"),
+    ],
+  },
+];
+
 export const plugins: Plugin[] = [
   {
     id: "exyliaffa",
@@ -2259,6 +2302,27 @@ export const plugins: Plugin[] = [
       { en: "Folia", es: "Folia" },
     ],
     nav: MARKET_NAV,
+  },
+  {
+    id: "exyliaspawners",
+    name: "ExyliaSpawners",
+    tagline: { en: "Stackable spawners that cannot be duplicated", es: "Spawners apilables que no se pueden duplicar" },
+    summary: {
+      en: "Silk-touch spawners that go straight to the inventory and stack into one block, virtual storage with a cap instead of mobs on the floor, every vanilla mob plus item and ExyliaMobs types, tiers with four upgrade tracks, timed boosters, selling at the server's prices with autosell and ExyliaMarket sell wands (always paying the owner), corruption that has to be cleansed on site, trusted players, claim checks, holograms, anti-ESP, network-wide listing and selling, in-game editors, an economy dashboard with Discord alerts, and importers from SmartSpawner, WildStacker and RoseStacker.",
+      es: "Spawners con Toque de seda que van directos al inventario y se apilan en un solo bloque, almacén virtual con tope en vez de mobs en el suelo, todos los mobs vanilla más tipos de objeto y de ExyliaMobs, tiers con cuatro líneas de mejora, potenciadores temporales, venta a los precios del servidor con autoventa y varitas de venta de ExyliaMarket (siempre cobra el dueño), corrupción que se purifica en el sitio, jugadores de confianza, comprobación de protecciones, hologramas, anti-ESP, listado y venta en toda la red, editores en el juego, un panel de economía con alertas de Discord e importadores desde SmartSpawner, WildStacker y RoseStacker.",
+    },
+    version: "1.0.0",
+    status: "beta",
+    category: { en: "Survival", es: "Survival" },
+    minecraft: "1.21.4+",
+    banner: "https://s3.exylia.net/exylia-plugins/public/static/images/plugins/spawners/ExyliaSpawnersBanner.webp",
+    tags: [
+      { en: "Spawners", es: "Spawners" },
+      { en: "Economy", es: "Economía" },
+      { en: "Network", es: "Red" },
+      { en: "Folia", es: "Folia" },
+    ],
+    nav: SPAWNERS_NAV,
   },
   {
     id: "exyliadisplays",

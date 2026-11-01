@@ -1,0 +1,57 @@
+---
+title: "Red"
+description: "Varios servidores compartiendo una base de datos y Redis: los spawners de cada jugador listados y vendidos desde cualquier servidor, ids de objeto compartidos y un servidor dueño por spawner."
+---
+
+El modo red permite a un jugador ver y vender sus spawners desde cualquier servidor de una red: `/spawners` en el
+lobby lista la granja del servidor de supervivencia, y un clic vende su almacén allí.
+
+## Activarla
+
+<Steps>
+  <Step title="Una base de datos para todos">
+    Apunta el `database.yml` de ExyliaLib de cada servidor al mismo MySQL, MariaDB, PostgreSQL o MongoDB. El
+    archivo H2 integrado no se puede compartir: con él, el modo red sigue desactivado y la consola dice por qué.
+  </Step>
+  <Step title="Un Redis para todos">
+    Activa `database.redis` en cada servidor, cada uno con su **propio** `server-id`.
+  </Step>
+  <Step title="Actívalo">
+    `network.enabled: true` en el `config.yml` de cada servidor, y reinicia. Una recarga no lo aplica.
+  </Step>
+</Steps>
+
+## Cómo funciona
+
+- **Cada spawner pertenece a un servidor**: aquel en el que se colocó. Ese servidor es el único que lo carga, lo
+  hace producir y ejecuta las transacciones de su almacén. Cualquier otro servidor llega a él con un mensaje por
+  Redis.
+- **Listado**: `/spawners` muestra los spawners de este servidor al instante y los de los demás servidores según su
+  última respuesta, que se vuelve a pedir cada pocos segundos mientras la pantalla siga abierta. Los spawners de
+  otros servidores muestran su mundo con el servidor entre corchetes, y su almacén, su experiencia y su estado de
+  corrupción.
+- **Venta**: hacer clic en un spawner de otro servidor requiere `exyliaspawners.remote` y vende todo su almacén en
+  su propio servidor. El dinero va al dueño como siempre, y el jugador recibe una línea con lo vendido y por cuánto.
+  Un servidor que no responde en cinco segundos recibe "está tardando": la venta aún puede terminar allí, una sola
+  vez, así que volver a mirar en un momento la muestra.
+- **El límite por jugador es de toda la red**: `placement.player-limit` y `exyliaspawners.limit.<n>` cuentan los
+  bloques de spawner del jugador en todos los servidores. La parte de los demás servidores es su última respuesta,
+  pedida cuando el jugador entra y mantenida al día mientras juega, así que puede tener hasta unos 15 segundos de
+  antigüedad.
+- **Los objetos spawner se comparten**: un objeto creado en un servidor se puede colocar en cualquier otro, y un id
+  gastado en uno queda gastado en todos. Una copia colocada en dos servidores en el mismo instante conserva un solo
+  spawner; el otro servidor deshace su colocación y avisa al staff.
+
+<Callout type="warning" title="Un server-id por servidor">
+Cada servidor en marcha mantiene una concesión sobre su propio `server-id`. Un segundo servidor arrancado con el mismo
+id nunca la obtiene, lo dice en la consola cada minuto y rechaza toda venta remota hasta que el id quede libre, así
+que los mismos spawners nunca funcionan dos veces.
+</Callout>
+
+## Qué sigue siendo local
+
+- `/spawners sell` vende solo los spawners que el jugador posee en el servidor en el que está.
+- La autoventa se ejecuta en el servidor del spawner, y solo mientras su dueño esté conectado allí.
+- Abrir un spawner, sacar objetos y comprar mejoras se hace junto al bloque.
+
+Sin el modo red, `/spawners` lista solo los spawners de este servidor, y todo lo demás funciona igual.

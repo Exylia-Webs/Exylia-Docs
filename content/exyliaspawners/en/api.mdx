@@ -1,0 +1,62 @@
+---
+title: "API"
+description: "The seven Bukkit events ExyliaSpawners fires: place, stack, break, upgrade, sell, corrupt and repair."
+badge: "dev"
+---
+
+ExyliaSpawners has no service in the Exylia API. Other plugins react to spawners through seven Bukkit events in
+`net.exylia.exyliaSpawners.event`. Compile against the plugin jar (`compileOnly`) and add `ExyliaSpawners` under
+`softdepend`, so it enables first.
+
+```java
+@EventHandler
+public void onSell(SpawnerSellEvent event) {
+    if (event.money().compareTo(new BigDecimal("1000000")) > 0) {
+        getLogger().info(event.spawner() + " sold " + event.items() + " for " + event.money());
+    }
+}
+
+@EventHandler(ignoreCancelled = true)
+public void onPlace(SpawnerPlaceEvent event) {
+    if (event.block().getWorld().getName().equals("spawn")) event.setCancelled(true);
+}
+```
+
+## Threads
+
+Each event is fired on the thread that did it: the block's region thread for world actions (place, stack, break),
+the thread the payment completes on for an upgrade, an async timer for corruption, and a database thread for a sale. An event fired
+off the main thread is asynchronous (`isAsynchronous()`), so on Paper and Folia alike, touch the world only through
+a scheduler. Read memory, never block.
+
+## Events
+
+| Event | Cancellable | Fired when | Accessors |
+|---|---|---|---|
+| `SpawnerPlaceEvent` | yes | A player is placing a spawner item as a new spawner block. Cancelling keeps the item. | `player()`, `block()`, `item()` |
+| `SpawnerStackEvent` | yes | A player is adding spawners to a placed stack. Cancelling keeps the item. | `player()`, `spawner()`, `added()` |
+| `SpawnerBreakEvent` | yes | Spawners are leaving a stack: mined or picked up by a player, or blown up (`player()` is `null`). `amount()` is how many leave; the block goes when none are left. Cancelling keeps them. | `player()`, `spawner()`, `amount()` |
+| `SpawnerUpgradeEvent` | yes | A track's level is about to change after the purchase was paid. Cancelling refunds the price and keeps the level. | `player()`, `spawner()`, `track()`, `from()`, `to()` |
+| `SpawnerSellEvent` | no | Storage was sold, after payment. `player()` is `null` for a sale asked from another server. `money()` is what it paid in the default currency. | `player()`, `spawner()`, `items()`, `money()` |
+| `SpawnerCorruptEvent` | yes | A spawner is about to become corrupted, by its timer or `/spawnersadmin corrupt`. Cancelling keeps it healthy; a timer starts over. | `spawner()` |
+| `SpawnerRepairEvent` | yes | A player is about to cleanse a corrupted spawner. Cancelling keeps it corrupted, and any cost taken is refunded. | `player()`, `spawner()` |
+
+`items()` of `SpawnerSellEvent` maps storage keys (a material name such as `ROTTEN_FLESH`, or a serialised item) to
+the amounts sold. `track()` is `SPEED`, `AMOUNT`, `STORAGE` or `XP`.
+
+## The spawner
+
+`Spawner` is a snapshot of a spawner block:
+
+| Method | Value |
+|---|---|
+| `id()` | Its `UUID`, stable for the life of the block. |
+| `world()`, `x()`, `y()`, `z()`, `location()`, `center()` | Where it is. |
+| `type()`, `tier()`, `stack()` | Type id, tier, spawners in the stack. |
+| `owner()` | The owner's `UUID`, or `null` for an ownerless spawner. |
+| `level(Track)` | The level of a track. |
+| `placedAt()` | When it was placed, in epoch milliseconds. |
+
+`SpawnerItem` (in `SpawnerPlaceEvent`) is the item's `id()`, `type()`, `tier()` and `stack()`.
+
+Mobs a CLASSIC spawner spawns carry the persistent data key `exyliaspawners:spawner` (a string, the spawner's id).

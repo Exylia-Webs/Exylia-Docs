@@ -1,0 +1,73 @@
+---
+title: "Importar"
+description: "/spawnersadmin import desde SmartSpawner, WildStacker, RoseStacker, VirtualSpawner y LitSpawners: qué conserva cada uno, simulaciones y cómo migrar con seguridad."
+---
+
+`/spawnersadmin import <source> [-dry]` convierte los spawners de otro plugin en spawners de ExyliaSpawners, allí
+donde están. Los datos del plugin antiguo solo se leen, nunca se modifican. Un spawner que ya es de ExyliaSpawners se
+deja como está, así que ejecutar una importación dos veces no añade nada.
+
+<Steps>
+  <Step title="Conserva los archivos del plugin antiguo">
+    Su carpeta tiene que seguir en `plugins/` (el plugin en sí puede seguir instalado por ahora).
+  </Step>
+  <Step title="Simulación">
+    `/spawnersadmin import smartspawner -dry` lo lee todo y dice cuántos spawners importaría, y por qué no los
+    demás, sin escribir nada. `--dry` también funciona.
+  </Step>
+  <Step title="Importa">
+    Lo mismo sin `-dry`. La respuesta cuenta lo importado y lo omitido.
+  </Step>
+  <Step title="Quita el plugin antiguo">
+    Antes de que los jugadores usen los spawners, para que dos plugins nunca gestionen el mismo bloque. La
+    importación te lo recuerda si el plugin antiguo sigue activado.
+  </Step>
+</Steps>
+
+## Fuentes
+
+| Fuente | Lee | Conserva |
+|---|---|---|
+| `smartspawner` | SmartSpawner 1.8+ (también `smart_spawners` de la 1.7): `spawners.db`, o el MySQL de su `config.yml`, con su prefijo de tablas y su nombre de servidor. | Tipo (también spawners de objetos), pila, experiencia almacenada y botín almacenado. Sin dueño, sin mejoras. |
+| `wildstacker` | `database.db`, o el MySQL o MariaDB de su `config.yml`: la tabla `spawners`. | Pila, y su id de mejora como el tier `upgrade + 1` cuando ese tier existe. El tipo es el mob del bloque. Sin dueño, sin botín. |
+| `rosestacker` | Las pilas que RoseStacker guarda dentro de cada chunk. | Pila. El tipo es el mob del bloque. Sin dueño, sin botín. |
+| `virtualspawner`, `litspawners` | Detección automática: el primer archivo SQLite de su carpeta con una tabla que parezca de spawners, leída por nombres de columna comunes. | Lo que contengan esas columnas: ubicación, tipo, pila, dueño, experiencia, tier. |
+
+`smartspawner`, `wildstacker` y `rosestacker` se leen a partir de sus formatos de almacenamiento publicados.
+
+<Callout type="warning" title="VirtualSpawner y LitSpawners se detectan automáticamente">
+Sus formatos de almacenamiento son cerrados, así que estos dos importadores detectan la tabla de spawners en el
+archivo SQLite del plugin por los nombres de sus columnas, y no se han probado con datos reales de ninguno de los dos
+plugins. **Ejecuta siempre primero con `-dry`** y revisa la tabla y las columnas que registra la consola, y que los
+recuentos coincidan con lo que mostraba el plugin antiguo. Su almacenamiento en MySQL y MongoDB no se lee.
+</Callout>
+
+### RoseStacker
+
+RoseStacker no tiene base de datos: cada chunk lleva sus propias pilas. Una importación convierte los chunks cargados
+en ese momento y deja `imports/rosestacker.pending`; a partir de entonces cada chunk existente se convierte la primera
+vez que se carga. Borra ese archivo para pararlo. En Folia, donde no se pueden listar los chunks cargados, cada chunk
+se convierte al cargarse.
+
+## En qué se convierte un spawner importado
+
+- **Tipo**: uno de tus ids de tipo, un nombre de entidad (se entienden nombres antiguos como `PIG_ZOMBIE`), el
+  material de un spawner de objetos comparado con el botín de tus tipos `ITEM`, o si no, el mob que muestra el
+  bloque. Un spawner cuyo tipo no coincide con ninguno de `types.yml` se omite, y la respuesta lista esos nombres:
+  añádelos y vuelve a ejecutarla.
+- **Tier**: el que guardaba la fuente cuando existe, si no `conversion.tier`.
+- **Pila**: la que tenía en la fuente, aunque supere tu límite de pila.
+- **Almacén**: el botín y la experiencia almacenados se meten en su almacén.
+- **Dueño**: el de la fuente cuando guardaba uno, si no ninguno. Consulta
+  [Spawners sin dueño](/docs/exyliaspawners/confianza-y-proteccion#spawners-sin-dueño).
+
+| Recuento en la respuesta | Significa |
+|---|---|
+| Importados | Ahora es un spawner de ExyliaSpawners. |
+| Ya existentes | Ya era nuestro: se deja como está. |
+| Bloque desaparecido | El bloque en ese lugar ya no es un spawner. |
+| Tipo desconocido | Ningún tipo tuyo coincide. |
+| Mundo ausente | Su mundo no está cargado en este servidor. |
+
+Los chunks que nunca se generaron se omiten en lugar de generarse. Solo se ejecuta una importación a la vez, y el
+comando espera a que el plugin termine de cargar al arrancar. Cada ejecución se escribe en el registro de auditoría.

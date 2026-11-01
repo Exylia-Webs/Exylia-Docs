@@ -1,0 +1,116 @@
+---
+title: "Spawners"
+description: "El objeto spawner, colocar, apilar, abrir, picar, explosiones, huevos de spawn, convertir spawners vanilla y los límites de colocación."
+---
+
+## El objeto spawner
+
+Un objeto spawner lleva un tipo, un tier y un número de spawners, además de un id único. Un solo objeto puede
+llevar muchos spawners: `/spawnersadmin give` con una cantidad de 500 entrega un objeto de 500. Los objetos nunca
+se juntan entre sí en el inventario (cada uno se apila hasta 1), porque cada uno es un único registro.
+
+Su aspecto sale de `lang/<language>/spawner-item.yml`, un objeto de ExyliaLib con los placeholders `%type%`,
+`%type_upper%`, `%tier%`, `%stack%` y `%mode%`. Cámbialo a tu gusto: los spawners se reconocen por los valores
+guardados en el objeto, nunca por su nombre. El material siempre es `SPAWNER`.
+
+<Callout type="note" title="Las copias se rechazan">
+Cada id se registra al crear el objeto y se gasta al colocarlo o apilarlo. Un objeto cuyo id ya se usó, que nunca
+se entregó, o cuyo tipo, tier o cantidad ya no coinciden con el registro se rechaza con "Este generador no es
+válido", y el intento queda en el registro de auditoría como `spawner-item-rejected`. En una red, si dos servidores
+compiten por colocar la misma copia, el resultado es un solo spawner: al segundo se le retira.
+</Callout>
+
+## Colocar
+
+Colocar el objeto crea un bloque spawner con esa cantidad de spawners, cuyo dueño es el jugador. Las
+comprobaciones, en orden:
+
+1. El tipo sigue existiendo y está activado en `types.yml`.
+2. El jugador tiene `exyliaspawners.use`, y `exyliaspawners.place.<type>` cuando
+   `placement.require-type-permission` está activado.
+3. Todos los plugins de protecciones y regiones permiten construir ahí. Consulta
+   [Confianza y protección](/docs/exyliaspawners/confianza-y-proteccion#protecciones-y-regiones).
+4. El chunk tiene menos bloques spawner que `placement.chunk-limit`.
+5. El jugador es dueño de menos bloques spawner que su límite: `placement.player-limit`, o el
+   `exyliaspawners.limit.<n>` más alto que tenga. En el [modo red](/docs/exyliaspawners/red) esto cuenta los
+   bloques spawner del jugador en todos los servidores.
+
+Un objeto con más spawners que el límite de pila coloca una pila completa y devuelve el resto como un objeto nuevo.
+
+## Apilar
+
+Hacer clic derecho en un spawner colocado con un objeto del **mismo tipo y tier** añade un spawner; agachado se
+añade el objeto entero, hasta el límite de pila. El límite de pila es el `stack-limit` del tipo, si no el del tier,
+aumentado por el `exyliaspawners.stack.<n>` más alto que tenga el jugador. Apilar exige los mismos derechos que
+abrir el spawner (ser el dueño o de confianza, y que la protección permita construir).
+
+Todos los spawners de una pila comparten el tier de la pila, sus niveles de mejora y su almacén, y el tope del
+almacén crece con la pila.
+
+## Abrir
+
+Hacer clic derecho en un spawner con cualquier otra cosa abre el panel del spawner: almacén, mejoras,
+potenciadores, jugadores de confianza, corrupción y **VENDER TODO**. Agachado y con un bloque en la mano se coloca
+el bloque. Solo el dueño, sus jugadores de confianza y el staff pueden abrir un spawner. Consulta
+[Almacén y venta](/docs/exyliaspawners/almacen-y-venta).
+
+## Picar
+
+| Regla | Predeterminado |
+|---|---|
+| La herramienta debe coincidir con `mining.tools` | `*_PICKAXE` |
+| La herramienta debe llevar Toque de seda | `mining.require-silk-touch: true` |
+| Probabilidad de que el spawner caiga | `mining.chance: 100`, aumentada por `exyliaspawners.chance.<n>` |
+| El último spawner de una pila no se puede picar mientras su almacén tenga objetos o experiencia | `mining.require-empty-storage: true` |
+| Los spawners picados van al inventario de quien los pica | `mining.to-inventory: true` |
+
+Picar quita **un** spawner de la pila; agachado se quitan todos. El bloque solo desaparece con el último. Con
+`mining.to-inventory` activado, el objeto va directo al inventario de quien pica, y lo que no cabe cae a sus pies,
+así que nadie que esté cerca del bloque puede cogerlo. Si falla la probabilidad, los spawners picados se destruyen
+con el mensaje "El generador se ha hecho añicos".
+
+Los jugadores en modo creativo se saltan las comprobaciones de herramienta y de Toque de seda. Picar exige
+`exyliaspawners.use`, `exyliaspawners.mine.<type>` cuando `mining.require-type-permission` está activado, ser el
+dueño o de confianza, y que la protección permita romper.
+
+El botón **RECOGER GENERADOR** del panel del spawner (pide confirmación) se lleva la pila entera con las mismas
+reglas, desde hasta seis bloques de distancia, y cuenta como herramienta el objeto de la mano principal. Siempre
+entrega el objeto en el inventario.
+
+<Callout type="warning" title="Los niveles de mejora son del bloque">
+Un objeto spawner lleva un tipo, un tier y una cantidad, no niveles de mejora. Picar spawners de una pila deja los
+niveles en el bloque; picar o recoger el último los pierde. Los potenciadores que estén funcionando en él vuelven
+como objetos.
+</Callout>
+
+## Explosiones
+
+Con `explosions.enabled` activado, una explosión que alcanza un spawner le quita **un** spawner a su pila, y
+`explosions.drop-chance` (50 por defecto) decide si cae como objeto donde estaba el bloque. Un spawner cuyo
+almacén tenga algo nunca explota. Se respetan los plugins de protecciones que protegen un bloque de las
+explosiones. Con `explosions.enabled` desactivado, las explosiones no tocan los spawners.
+
+## Huevos de spawn
+
+Con `egg-change.enabled` activado, hacer clic derecho en un spawner con un huevo de spawn cambia su tipo al de ese
+mob, gastando un huevo por cada spawner de la pila (ninguno en creativo). Exige `exyliaspawners.egg`, el derecho a
+apilar en el spawner, y `exyliaspawners.place.<type>` cuando `placement.require-type-permission` está activado. El
+cambio con huevo de vanilla nunca ocurre en un spawner del plugin, así que no se pueden saltar las pilas ni el
+almacén.
+
+## Spawners vanilla
+
+Con `conversion.enabled` activado (lo predeterminado), un spawner vanilla (el de una mazmorra, o uno que haya puesto
+otro plugin) pasa a ser un spawner de ExyliaSpawners del tier `conversion.tier` la primera vez que un jugador hace
+clic en él o lo pica, si existe un tipo para su mob. Los spawners de desafío nunca se tocan. Un spawner convertido
+no tiene dueño: el primer jugador que apile en él o lo cambie con un huevo pasa a ser su dueño. Hasta entonces lo
+puede usar cualquiera a quien se lo permitan las protecciones. Consulta
+[Confianza y protección](/docs/exyliaspawners/confianza-y-proteccion#spawners-sin-dueño).
+
+## Qué protege el bloque
+
+- El spawn de vanilla nunca funciona en un spawner del plugin: la producción pasa solo por el plugin.
+- El bloque se registra en la protección de bloques de ExyliaLib, así que los pistones no pueden empujarlo ni
+  tirar de él.
+- Un spawner cuyo bloque se sustituyó a espaldas del plugin (WorldEdit, otro plugin) se borra de los registros la
+  próxima vez que la producción lo revisa, y el borrado queda en el registro de auditoría.

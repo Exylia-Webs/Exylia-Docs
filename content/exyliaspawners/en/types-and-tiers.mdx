@@ -1,0 +1,157 @@
+---
+title: "Types and tiers"
+description: "types.yml and tiers.yml: entity, item and ExyliaMobs types, loot lines, VIRTUAL and CLASSIC production, tiers, tracks and stack limits."
+---
+
+A spawner is a **type** (what it makes) at a **tier** (how fast, how much, how big its storage). Both files are
+read once and kept in memory; `/spawnersadmin reload` reads them again, and the in-game
+[editors](/docs/exyliaspawners/administration#editors) write them for you. A line the plugin cannot read is
+reported in the console and skipped, and the reload message says how many problems it found.
+
+## How production works
+
+Every second (`production.interval-ticks`) the plugin looks at the spawners in loaded chunks. A spawner only
+counts down while a player who is not a spectator stands within `production.activation-range` blocks (16); when
+nobody is near, its timer resets. When its delay is up it makes one **cycle**:
+
+- **Mobs per cycle** = spawners in the stack × the tier's `amount` value × boosters. Fractions round at random
+  with the right average (2.3 makes 2 seven times out of ten, 3 the rest).
+- **Delay** = the tier's `speed` value in seconds, divided by speed boosters.
+- **Loot**: each loot line rolls for every mob produced; a stack of 500 is drawn statistically, not 500 times.
+- **Experience** = mobs × the type's `xp` × experience boosters. Item types make none.
+
+What a cycle makes lands in the storage up to its caps; what does not fit is lost, like loot nobody picked up.
+
+### VIRTUAL and CLASSIC
+
+| Mode | What a cycle does |
+|---|---|
+| `VIRTUAL` (default) | Loot and experience go into the storage. No mob appears. |
+| `CLASSIC` | Real mobs spawn within `production.spawn-radius` blocks (4), on a free spot over a solid block, never more than 16 per cycle, and none while `production.nearby-limit` (12) mobs of that type are within 8 blocks. Players kill them for their drops; nothing goes into the storage. Item types drop their items on the ground instead. |
+
+The mode is the type's `mode`, else the tier's `mode`, else `default-mode` in `config.yml`. Every mob a CLASSIC
+spawner makes carries the persistent data key `exyliaspawners:spawner` with the spawner's id, so mob stackers and
+other plugins can tell where it came from.
+
+## Types
+
+`types.yml` is generated on the first start with every living mob your server version can spawn, with loot close
+to its vanilla drops and its vanilla experience. Bosses and mobs vanilla never spawns from a spawner (`wither`,
+`ender_dragon`, `warden`, `elder_guardian`, `giant`, `illusioner`) are written but disabled. Two item spawners
+come with it: `iron` and `diamond`. After that the file is yours.
+
+```yaml
+types:
+  zombie:
+    enabled: true
+    kind: ENTITY
+    entity: ZOMBIE
+    mob: ''
+    mode: ''
+    xp: 5.0
+    stack-limit: 0
+    loot:
+    - ROTTEN_FLESH 1 2 66
+    - IRON_INGOT 1 1 2.5
+    - CARROT 1 1 1
+    - POTATO 1 1 1
+  iron:
+    enabled: true
+    kind: ITEM
+    entity: ''
+    mob: ''
+    mode: ''
+    xp: 0.0
+    stack-limit: 0
+    loot:
+    - IRON_INGOT 1 2 100
+```
+
+The key is the type id that items, commands and permissions use (lower case).
+
+| Key | What it does |
+|---|---|
+| `enabled` | `false` keeps the type in the file without loading it. Placed spawners of a disabled type stop producing and their items cannot be placed. |
+| `kind` | `ENTITY` (a vanilla mob), `ITEM` (no mob: its loot appears on a timer) or `MOB` (an ExyliaMobs template). |
+| `entity` | `ENTITY` only: the entity name; blank uses the type id. It must be a mob a spawner can make. |
+| `mob` | `MOB` only: the ExyliaMobs template id. |
+| `mode` | `VIRTUAL` or `CLASSIC`; blank follows the tier, then `config.yml`. |
+| `xp` | Experience per mob produced. |
+| `stack-limit` | Most spawners in one stack of this type; `0` follows the tier. |
+| `loot` | One line per drop: `MATERIAL MIN MAX CHANCE`, the chance in percent per mob. |
+
+Loot lines use ExyliaLib's loot grammar. A plain material name is stored under that name, so storage stays the
+same across server versions. Nothing is forced: when every line misses, that mob drops nothing.
+
+### Item types
+
+An `ITEM` type makes no mob: each cycle rolls its loot lines once per "mob" the cycle makes, so the tier's
+`amount` still multiplies it. Item types produce no experience. The in-game wizard can build one from the items
+in a chest. See [Administration](/docs/exyliaspawners/administration#editors).
+
+### Mob types
+
+A `MOB` type spawns an [ExyliaMobs](/docs/exyliamobs/introduction) template in CLASSIC mode. In VIRTUAL mode it
+produces its own `loot` and `xp` like any other type. Thirty seconds after the start, and on every reload, the
+console names any `MOB` type that cannot spawn: ExyliaMobs missing, a template it does not have, or one whose
+entity cannot be spawned.
+
+## Tiers
+
+`tiers.yml` holds the tiers by number. Every tier has four **tracks** with one value per level; a spawner starts
+at level 1 of each and buys the next levels with [upgrades](/docs/exyliaspawners/upgrades-and-boosters).
+
+| Track | Value per level |
+|---|---|
+| `speed` | Seconds between cycles. |
+| `amount` | Mobs per cycle, per spawner in the stack. |
+| `storage` | Items stored, per spawner in the stack. |
+| `xp` | Experience stored, per spawner in the stack. |
+
+```yaml
+tiers:
+  '1':
+    mode: ''
+    stack-limit: 64
+    speed: [20.0, 18.0, 16.0, 14.0, 12.0]
+    amount: [2.0, 2.5, 3.0, 3.5, 4.0]
+    storage: [1024.0, 2048.0, 4096.0, 8192.0, 16384.0]
+    xp: [2000.0, 4000.0, 8000.0, 16000.0, 32000.0]
+    upgrades:
+      speed:
+        cost: 2500 * (%level% - 1) ^ 2
+        currency: ''
+        permission: ''
+        requirements: {}
+        levels: {}
+      # amount, storage and xp the same
+```
+
+| Key | What it does |
+|---|---|
+| `mode` | `VIRTUAL` or `CLASSIC` for every type of this tier that sets none; blank follows `config.yml`. |
+| `stack-limit` | Most spawners in one stack, unless the type sets its own. At least 1. |
+| `speed`, `amount`, `storage`, `xp` | One value per level, every value above 0. The number of values is the track's highest level. |
+| `upgrades` | What each level of each track costs. See [Upgrades](/docs/exyliaspawners/upgrades-and-boosters#upgrades). |
+
+The defaults ship three tiers:
+
+| Tier | Stack limit | Speed (s) | Amount | Storage per spawner | Experience per spawner | Upgrade cost |
+|---|---|---|---|---|---|---|
+| 1 | 64 | 20 → 12 | 2 → 4 | 1,024 → 16,384 | 2,000 → 32,000 | `2500 * (%level% - 1) ^ 2` |
+| 2 | 128 | 16 → 8 | 3 → 5 | 2,048 → 32,768 | 4,000 → 64,000 | `5000 * (%level% - 1) ^ 2` |
+| 3 | 256 | 12 → 6 | 4 → 6 | 4,096 → 65,536 | 8,000 → 128,000 | `10000 * (%level% - 1) ^ 2` |
+
+A tier is fixed by the item: tier 2 spawners come from `/spawnersadmin give <player> <type> <amount> 2` or a
+shop or crate that runs it. Spawners only stack with the same type **and** tier. A spawner whose tier was deleted
+works as the lowest tier.
+
+<Callout type="note" title="Tiers also decide corruption">
+Each tier has its own corruption effect and timer in `config.yml`. The defaults make tier 1 halt, tier 2 slow
+down and tier 3 produce more loot at the risk of losing spawners. See [Corruption](/docs/exyliaspawners/corruption).
+</Callout>
+
+## Display names
+
+`lang/<language>/type-names.yml` maps each type id to what screens, items, holograms and messages call it. A type
+missing there shows its id in title case (`zombified_piglin` reads `Zombified Piglin`).

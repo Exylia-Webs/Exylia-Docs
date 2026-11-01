@@ -1,0 +1,55 @@
+---
+title: "Network"
+description: "Several servers sharing one database and Redis: every player's spawners listed and sold from any server, item ids shared, and one owning server per spawner."
+---
+
+Network mode lets a player see and sell their spawners from any server of a network: `/spawners` on the lobby
+lists the farm on the survival server, and a click sells its storage there.
+
+## Turning it on
+
+<Steps>
+  <Step title="One database for all">
+    Point ExyliaLib's `database.yml` of every server at the same MySQL, MariaDB, PostgreSQL or MongoDB. The
+    embedded H2 file cannot be shared: with it, network mode stays off and the console says why.
+  </Step>
+  <Step title="One Redis for all">
+    Enable `database.redis` on every server, each with its **own** `server-id`.
+  </Step>
+  <Step title="Switch it on">
+    `network.enabled: true` in every server's `config.yml`, then restart. A reload does not apply it.
+  </Step>
+</Steps>
+
+## How it works
+
+- **Each spawner belongs to one server**: the one it was placed on. That server is the only one that
+  loads it, produces it and runs its storage transactions. Every other server reaches it with a message over
+  Redis.
+- **Listing**: `/spawners` shows this server's spawners at once and the other servers' as they last answered,
+  asked again every few seconds while the screen stays open. Spawners elsewhere show their world with the server
+  in brackets, and their storage, experience and corruption state.
+- **Selling**: clicking a spawner on another server needs `exyliaspawners.remote` and sells its whole storage on
+  its own server. The money goes to the owner as always, and the player gets one line with what was sold and
+  for how much. A server that does not answer in five seconds gets "is taking a while": the sale may still finish
+  there, once, so looking again in a moment shows it.
+- **The player limit is network-wide**: `placement.player-limit` and `exyliaspawners.limit.<n>` count the player's
+  spawner blocks on every server. The other servers' part is their last answer, asked for when the player joins
+  and kept fresh while they play, so it can be up to about 15 seconds old.
+- **Spawner items are shared**: an item made on one server can be placed on any other, and an id spent on one is
+  spent everywhere. A copy placed on two servers at the same moment keeps one spawner; the other server takes its
+  placement back off and tells staff.
+
+<Callout type="warning" title="One server-id per server">
+Each running server holds a lease on its own `server-id`. A second server started with the same id never gets it,
+says so in the console every minute, and refuses every remote sale until the id is free, so the same spawners
+never run twice.
+</Callout>
+
+## What stays local
+
+- `/spawners sell` sells only the spawners the player owns on the server they are on.
+- Autosell runs on the spawner's server, and only while its owner is online there.
+- Opening a spawner, taking items and buying upgrades happen at the block.
+
+Without network mode, `/spawners` lists this server's spawners only, and everything else works the same.

@@ -1,0 +1,98 @@
+---
+title: "Storage and selling"
+description: "The storage screen, taking items, claiming experience with Mending, Full-to-Collect, prices, selling, autosell, /spawners sell, sell wands and who gets paid."
+---
+
+## The storage
+
+A VIRTUAL spawner keeps what it makes as counters: one per kind of item, plus one for experience. Two caps apply,
+both for the whole stack: items in all (the tier's `storage` value × spawners in the stack) and experience (the
+`xp` value × spawners). Upgrading the storage or experience track, or stacking more spawners, raises them.
+
+Production is kept in memory and written to the database every `storage.flush-interval` (30 seconds), when its
+chunk unloads and on shutdown. Taking, selling and claiming are written at once, as transactions: the same click
+twice, two players on the same screen or a repeated packet never take or pay twice. Items are handed over only
+once the transaction succeeded, and whatever does not fit in the inventory goes back into the storage.
+
+## The storage screen
+
+Open it from the spawner's hub (**Storage**). One row per stored item, live while the screen is open.
+
+| Click on an item | Does |
+|---|---|
+| Left-click | Takes one. |
+| Right-click | Takes a stack. |
+| Shift-left-click | Takes all that fits. |
+| Shift-right-click | Sells that item. |
+
+| Button | Does |
+|---|---|
+| **Sell all** | Sells every item that has a price. |
+| **Take all** | Moves as much as fits into the inventory. |
+| **Claim experience** | Gives every stored point of experience. |
+| **Autosell** | Turns autosell on or off for this spawner. |
+| **Collect everything** | Bedrock players only (with Floodgate): every item that fits and all the experience, in one tap, since Bedrock has no shift-click. |
+
+### Experience and Mending
+
+With `collecting.mending-repair` on (the default), claimed experience repairs the player's Mending items first,
+like an experience orb would, and the rest goes to the player.
+
+### Full-to-Collect
+
+With `collecting.full-to-collect` on, items can only be taken out once the storage is full; until then the
+screen answers with how full it is. Selling is not affected.
+
+## Prices
+
+Storage sells through ExyliaLib's prices: whatever the server's shops and worth lists quote for each item,
+in that quote's currency. With [ExyliaMarket](/docs/exyliamarket/prices) installed, its worth list and shop
+set them. An item nobody quotes stays in the storage, and so does the remainder of an item quoted per lot
+(quoted per 64, a stored 100 sells 64 and keeps 36).
+
+What a sale pays is multiplied by the spawner's **money** booster, by the factor of a sell wand, and by any
+global or personal money boost other plugins grant under the `spawners` source of ExyliaLib's modifiers (a rank
+perk, a server-wide event). See [Upgrades and boosters](/docs/exyliaspawners/upgrades-and-boosters#boosters).
+
+## Who gets paid
+
+<Callout type="note" title="Sales always pay the owner">
+Money from a spawner's storage goes to the spawner's **owner**, also when a trusted player sells from its
+screen, when a sell wand sells it, and when autosell sells it. The receipt goes to whoever sold. Only a spawner
+with no owner (a converted dungeon spawner nobody has claimed) pays the player who sold.
+</Callout>
+
+An offline owner is paid through the economy all the same. Every sale is written to the audit log and fires
+[`SpawnerSellEvent`](/docs/exyliaspawners/api).
+
+## Ways to sell
+
+| Where | Needs | Sells |
+|---|---|---|
+| **Sell all** on the hub or the storage screen | Opening the spawner | Everything with a price. |
+| Shift-right-click an item in the storage | Opening the spawner | That item. |
+| A sell wand on the spawner | Opening the spawner | Everything with a price, at the wand's multiplier. |
+| Autosell | `exyliaspawners.autosell` | Everything with a price, every `selling.autosell-interval`. |
+| `/spawners sell` | `exyliaspawners.remote` | Every spawner the player owns on this server, with one receipt. |
+| A click in `/spawners` | `exyliaspawners.remote` | That spawner, here or on another server of the network. |
+
+### Autosell
+
+Turned on per spawner from the storage screen; turning it on needs `exyliaspawners.autosell` (not granted by
+default), turning it off does not. While on, the storage sells itself every `selling.autosell-interval`
+(60 seconds), quietly, **only while the owner is online on this server and still holds the permission**. The
+flag is kept in the database and survives restarts.
+
+### Sell wands
+
+Sell wands of any plugin that asks ExyliaLib's sell targets work on spawners: right-clicking a spawner with an
+[ExyliaMarket sell wand](/docs/exyliamarket/sell-wands) sells its whole storage at the wand's multiplier. The
+player using it must be allowed to open the spawner; anyone else
+is told "You cannot sell this spawner". There is no separate spawner wand.
+
+### My spawners and `/spawners sell`
+
+`/spawners` lists every spawner the player owns, with its world, location, tier, mode, state, storage and
+experience. With `exyliaspawners.remote`, clicking one sells its storage from wherever the player stands, and
+`/spawners sell` sells all of this server's at once. With [network mode](/docs/exyliaspawners/network) the list
+holds the player's spawners on every server, and a click sells on the server that owns it.

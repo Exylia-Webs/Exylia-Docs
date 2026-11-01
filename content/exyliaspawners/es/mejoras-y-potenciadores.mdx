@@ -1,0 +1,109 @@
+---
+title: "Mejoras y potenciadores"
+description: "Comprar niveles de las líneas de velocidad, cantidad, almacén y experiencia, fórmulas de coste, monedas y requisitos, y objetos potenciadores con tiempo junto a los aumentos globales."
+---
+
+## Mejoras
+
+La pantalla **MEJORAS** de un spawner tiene una tarjeta por línea de mejora: velocidad, cantidad, almacén y
+experiencia. Cada una muestra el nivel actual y el más alto, el valor actual, el valor del siguiente nivel y su
+precio, todo actualizándose. Un clic compra el siguiente nivel.
+
+- Paga el jugador que hace clic, sea quien sea el dueño del spawner. Cualquiera que pueda abrir el spawner puede
+  mejorarlo.
+- Una compra a la vez por spawner y línea de mejora: a un segundo clic mientras el primero todavía se está pagando
+  se le responde que ya hay una mejora en curso. Un nivel se cobra una sola vez; si el spawner ha cambiado mientras
+  tanto, o un plugin cancela [`SpawnerUpgradeEvent`](/docs/exyliaspawners/api), se devuelve el precio.
+- Los niveles son de la pila: todos sus spawners, incluidos los que se apilen después, funcionan a esos niveles.
+  Picar el último spawner los pierde.
+
+El valor mostrado ya tiene en cuenta la pila: la tarjeta de cantidad dice los mobs que genera la pila entera por
+ciclo, y la de almacén los objetos que guarda la pila entera.
+
+### Costes
+
+Cada tier escribe, por línea de mejora, lo que cuestan sus niveles bajo `upgrades` en `tiers.yml`:
+
+```yaml
+tiers:
+  '2':
+    # ...
+    upgrades:
+      speed:
+        cost: 5000 * (%level% - 1) ^ 2
+        currency: ''
+        permission: ''
+        requirements:
+          stack: 16
+        levels:
+          '5':
+            cost: '64'
+            currency: diamonds
+```
+
+| Clave | Qué hace |
+|---|---|
+| `cost` | Una fórmula para el precio del nivel que se compra. `%level%` es ese nivel: 2 en la primera mejora. La predeterminada `2500 * (%level% - 1) ^ 2` cobra 2.500, 10.000, 22.500 y 40.000. |
+| `currency` | El id de una moneda de la economía de ExyliaLib, o una moneda de objeto; vacío es la moneda predeterminada del servidor. |
+| `permission` | Necesario para comprar cualquier nivel de esta línea de mejora; vacío para ninguno. Sin él, la tarjeta dice "Bloqueado para tu rango". |
+| `requirements` | Mínimos para comprar: `stack` (spawners en la pila) y `tier`. |
+| `levels` | Niveles sueltos escritos por separado, cada uno con su propio `cost`, `currency`, `permission` y `requirements`. |
+
+El nivel más alto de una línea de mejora es el número de valores que el tier le asigna. Una fórmula que la economía
+no puede leer se avisa en la consola al cargar el plugin. Una línea de mejora sin entrada en `upgrades` cuesta lo
+que marca la fórmula interna `1000 * (%level% - 1) ^ 2`.
+
+## Potenciadores
+
+Un potenciador es un objeto que un jugador mete en un spawner desde su pantalla **POTENCIADORES**. Multiplica una
+cosa durante un tiempo:
+
+| Clase | Multiplica |
+|---|---|
+| `SPEED` | Los ciclos: un potenciador de velocidad 2× reduce la espera a la mitad. |
+| `LOOT` | Los objetos que suelta cada mob producido. |
+| `XP` | La experiencia que da cada mob producido. |
+| `MONEY` | Lo que paga vender el almacén. |
+
+Un potenciador de cada clase por spawner, así que hasta cuatro a la vez. La pantalla tiene una tarjeta por clase con
+su cuenta atrás en directo. Un clic en una tarjeta vacía mete un potenciador de esa clase desde la mano principal, o
+si no desde cualquier parte del inventario; un clic en uno activo lo saca y devuelve un objeto con el tiempo que le
+queda. **El tiempo de un potenciador solo corre mientras está dentro**, así que se puede pasar a otro spawner sin
+perder nada. Cuando sale la pila entera (picada, recogida), los potenciadores activos vuelven como objetos a quien la
+ha roto.
+
+### `boosters.yml`
+
+Los potenciadores que el staff puede repartir, por id:
+
+```yaml
+boosters:
+  speed_2x_30m:
+    kind: SPEED
+    multiplier: 2.0
+    duration: 30m
+  loot_2x_30m:
+    kind: LOOT
+    multiplier: 2.0
+    duration: 30m
+  xp_2x_30m:
+    kind: XP
+    multiplier: 2.0
+    duration: 30m
+  money_1_5x_1h:
+    kind: MONEY
+    multiplier: 1.5
+    duration: 1h
+```
+
+`/spawnersadmin booster give <player> <id> [amount]` entrega hasta 64 de una vez. Las tiendas y las cajas los dan
+ejecutando ese comando. Los objetos tienen el aspecto que indica `lang/<language>/booster-item.yml`, una entrada por
+clase, con los placeholders `%kind%`, `%kind_upper%`, `%multiplier%` y `%time%` (el tiempo que le queda al objeto).
+Los potenciadores se reconocen por valores guardados en el objeto, no por su nombre.
+
+### Potenciadores globales y personales
+
+Los spawners son una fuente en los modificadores de ExyliaLib, listada como `spawners` con las clases de dinero,
+botín y experiencia. Un plugin de potenciadores, una ventaja de rango o un evento del servidor que potencie esa fuente
+multiplica, para el **dueño** del spawner: el botín de cada ciclo, su experiencia y lo que pagan sus ventas. Se combinan
+con los potenciadores propios del spawner.

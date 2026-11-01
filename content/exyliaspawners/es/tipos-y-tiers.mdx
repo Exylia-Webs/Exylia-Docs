@@ -1,0 +1,164 @@
+---
+title: "Tipos y tiers"
+description: "types.yml y tiers.yml: tipos de entidad, de objeto y de ExyliaMobs, líneas de botín, producción VIRTUAL y CLASSIC, tiers, líneas de mejora y límites de pila."
+---
+
+Un spawner es un **tipo** (lo que genera) en un **tier** (lo rápido que va, cuánto genera, lo grande que es su
+almacén). Los dos archivos se leen una vez y se guardan en memoria; `/spawnersadmin reload` los vuelve a leer, y
+los [editores](/docs/exyliaspawners/administracion#editores) del juego los escriben por ti. Una línea que el plugin
+no puede leer se avisa en la consola y se omite, y el mensaje de recarga dice cuántos problemas ha encontrado.
+
+## Cómo funciona la producción
+
+Cada segundo (`production.interval-ticks`) el plugin revisa los spawners de los chunks cargados. Un spawner solo
+avanza su cuenta atrás mientras haya un jugador que no sea espectador a menos de `production.activation-range`
+bloques (16); cuando no hay nadie cerca, su temporizador se reinicia. Cuando se cumple su espera hace un **ciclo**:
+
+- **Mobs por ciclo** = spawners de la pila × el valor `amount` del tier × potenciadores. Las fracciones se redondean
+  al azar con la media correcta (2,3 da 2 siete veces de cada diez, y 3 el resto).
+- **Espera** = el valor `speed` del tier en segundos, dividido entre los potenciadores de velocidad.
+- **Botín**: cada línea de botín se tira por cada mob producido; una pila de 500 se calcula estadísticamente, no
+  500 veces.
+- **Experiencia** = mobs × el `xp` del tipo × potenciadores de experiencia. Los tipos de objeto no generan
+  ninguna.
+
+Lo que genera un ciclo cae en el almacén hasta sus topes; lo que no cabe se pierde, como el botín que nadie recoge.
+
+### VIRTUAL y CLASSIC
+
+| Modo | Qué hace un ciclo |
+|---|---|
+| `VIRTUAL` (predeterminado) | El botín y la experiencia van al almacén. No aparece ningún mob. |
+| `CLASSIC` | Aparecen mobs reales a menos de `production.spawn-radius` bloques (4), en un hueco libre sobre un bloque sólido, nunca más de 16 por ciclo, y ninguno mientras haya `production.nearby-limit` (12) mobs de ese tipo a menos de 8 bloques. Los jugadores los matan para conseguir lo que sueltan; no va nada al almacén. Los tipos de objeto sueltan sus objetos en el suelo. |
+
+El modo es el `mode` del tipo, si no el `mode` del tier, si no `default-mode` en `config.yml`. Cada mob que genera
+un spawner CLASSIC lleva la clave de datos persistentes `exyliaspawners:spawner` con el id del spawner, para que los
+apiladores de mobs y otros plugins sepan de dónde ha salido.
+
+## Tipos
+
+`types.yml` se genera en el primer arranque con todos los mobs vivos que puede generar tu versión del servidor, con
+un botín parecido a lo que sueltan en vanilla y su experiencia de vanilla. Los jefes y los mobs que vanilla nunca
+genera desde un spawner (`wither`, `ender_dragon`, `warden`, `elder_guardian`, `giant`, `illusioner`) se escriben
+pero desactivados. Vienen dos spawners de objetos: `iron` y `diamond`. A partir de ahí el archivo es tuyo.
+
+```yaml
+types:
+  zombie:
+    enabled: true
+    kind: ENTITY
+    entity: ZOMBIE
+    mob: ''
+    mode: ''
+    xp: 5.0
+    stack-limit: 0
+    loot:
+    - ROTTEN_FLESH 1 2 66
+    - IRON_INGOT 1 1 2.5
+    - CARROT 1 1 1
+    - POTATO 1 1 1
+  iron:
+    enabled: true
+    kind: ITEM
+    entity: ''
+    mob: ''
+    mode: ''
+    xp: 0.0
+    stack-limit: 0
+    loot:
+    - IRON_INGOT 1 2 100
+```
+
+La clave es el id del tipo que usan los objetos, los comandos y los permisos (en minúsculas).
+
+| Clave | Qué hace |
+|---|---|
+| `enabled` | `false` deja el tipo en el archivo sin cargarlo. Los spawners colocados de un tipo desactivado dejan de producir y sus objetos no se pueden colocar. |
+| `kind` | `ENTITY` (un mob vanilla), `ITEM` (sin mob: su botín aparece cada cierto tiempo) o `MOB` (una plantilla de ExyliaMobs). |
+| `entity` | Solo `ENTITY`: el nombre de la entidad; vacío usa el id del tipo. Tiene que ser un mob que un spawner pueda generar. |
+| `mob` | Solo `MOB`: el id de la plantilla de ExyliaMobs. |
+| `mode` | `VIRTUAL` o `CLASSIC`; vacío sigue al tier, y después a `config.yml`. |
+| `xp` | Experiencia por mob producido. |
+| `stack-limit` | Máximo de spawners en una pila de este tipo; `0` sigue al tier. |
+| `loot` | Una línea por cada cosa que suelta: `MATERIAL MIN MAX CHANCE`, la probabilidad en porcentaje por mob. |
+
+Las líneas de botín usan la gramática de botín de ExyliaLib. Un nombre de material simple se guarda con ese nombre,
+así que el almacén se mantiene igual entre versiones del servidor. No se fuerza nada: cuando fallan todas las
+líneas, ese mob no suelta nada.
+
+### Tipos de objeto
+
+Un tipo `ITEM` no genera ningún mob: cada ciclo tira sus líneas de botín una vez por cada "mob" que genera el ciclo,
+así que el `amount` del tier sigue multiplicándolo. Los tipos de objeto no producen experiencia. El asistente del
+juego puede crear uno a partir de los objetos de un cofre. Consulta
+[Administración](/docs/exyliaspawners/administracion#editores).
+
+### Tipos de mob
+
+Un tipo `MOB` genera una plantilla de [ExyliaMobs](/docs/exyliamobs/introduccion) en modo CLASSIC. En modo VIRTUAL
+produce su propio `loot` y `xp` como cualquier otro tipo. Treinta segundos después del arranque, y en cada recarga,
+la consola nombra los tipos `MOB` que no pueden generar nada: falta ExyliaMobs, la plantilla no existe, o su entidad
+no se puede generar.
+
+## Tiers
+
+`tiers.yml` guarda los tiers por número. Cada tier tiene cuatro **líneas de mejora** con un valor por nivel; un
+spawner empieza en el nivel 1 de cada una y compra los siguientes niveles con
+[mejoras](/docs/exyliaspawners/mejoras-y-potenciadores).
+
+| Línea de mejora | Valor por nivel |
+|---|---|
+| `speed` | Segundos entre ciclos. |
+| `amount` | Mobs por ciclo, por spawner de la pila. |
+| `storage` | Objetos almacenados, por spawner de la pila. |
+| `xp` | Experiencia almacenada, por spawner de la pila. |
+
+```yaml
+tiers:
+  '1':
+    mode: ''
+    stack-limit: 64
+    speed: [20.0, 18.0, 16.0, 14.0, 12.0]
+    amount: [2.0, 2.5, 3.0, 3.5, 4.0]
+    storage: [1024.0, 2048.0, 4096.0, 8192.0, 16384.0]
+    xp: [2000.0, 4000.0, 8000.0, 16000.0, 32000.0]
+    upgrades:
+      speed:
+        cost: 2500 * (%level% - 1) ^ 2
+        currency: ''
+        permission: ''
+        requirements: {}
+        levels: {}
+      # amount, storage and xp the same
+```
+
+| Clave | Qué hace |
+|---|---|
+| `mode` | `VIRTUAL` o `CLASSIC` para todos los tipos de este tier que no fijen el suyo; vacío sigue a `config.yml`. |
+| `stack-limit` | Máximo de spawners en una pila, salvo que el tipo fije el suyo. Al menos 1. |
+| `speed`, `amount`, `storage`, `xp` | Un valor por nivel, todos mayores que 0. El número de valores es el nivel más alto de la línea de mejora. |
+| `upgrades` | Lo que cuesta cada nivel de cada línea de mejora. Consulta [Mejoras](/docs/exyliaspawners/mejoras-y-potenciadores#mejoras). |
+
+Por defecto vienen tres tiers:
+
+| Tier | Límite de pila | Velocidad (s) | Cantidad | Almacén por spawner | Experiencia por spawner | Coste de mejora |
+|---|---|---|---|---|---|---|
+| 1 | 64 | 20 → 12 | 2 → 4 | 1.024 → 16.384 | 2.000 → 32.000 | `2500 * (%level% - 1) ^ 2` |
+| 2 | 128 | 16 → 8 | 3 → 5 | 2.048 → 32.768 | 4.000 → 64.000 | `5000 * (%level% - 1) ^ 2` |
+| 3 | 256 | 12 → 6 | 4 → 6 | 4.096 → 65.536 | 8.000 → 128.000 | `10000 * (%level% - 1) ^ 2` |
+
+El tier lo fija el objeto: los spawners de tier 2 salen de `/spawnersadmin give <player> <type> <amount> 2` o de una
+tienda o caja que lo ejecute. Los spawners solo se apilan con el mismo tipo **y** tier. Un spawner cuyo tier se ha
+borrado funciona como el tier más bajo.
+
+<Callout type="note" title="Los tiers también deciden la corrupción">
+Cada tier tiene su propio efecto y temporizador de corrupción en `config.yml`. Por defecto el tier 1 se detiene, el
+tier 2 va más lento y el tier 3 produce más botín a riesgo de perder spawners. Consulta
+[Corrupción](/docs/exyliaspawners/corrupcion).
+</Callout>
+
+## Nombres visibles
+
+`lang/<language>/type-names.yml` asigna a cada id de tipo el nombre que usan las pantallas, los objetos, los
+hologramas y los mensajes. Un tipo que no aparezca ahí muestra su id con mayúscula en cada palabra
+(`zombified_piglin` se lee `Zombified Piglin`).
