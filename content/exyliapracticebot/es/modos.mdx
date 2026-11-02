@@ -25,10 +25,10 @@ bot:
 | `POT_PVP` | Combate de espada con sabor a 1.8 sobre mecánicas modernas: críticos, pociones de lanzamiento y manzanas doradas. | `advanced.pot-pvp` |
 | `UHC` | Hacha y escudo: roturas de guardia, manzanas, telarañas, lava y agua. | `advanced.uhc` |
 | `CRYSTAL_PVP` | Obsidiana, cristales del End, anclas de resurrección, perlas de ender, tótems, trampas. | `advanced.crystal-pvp` |
-| `MACE_PVP` | Lanzamientos con carga de viento y golpes de maza al caer. | — |
+| `MACE_PVP` | Lanzamientos con carga de viento y golpes de maza al caer. | `advanced.mace-pvp` |
 | `BOXING` | Los golpes se cuentan, no se aplican. Práctica pura de combo. | — |
 
-Solo tres modos tienen un bloque propio. `advanced.attack`, `advanced.movement`, `advanced.health` y
+Solo cuatro modos tienen un bloque propio. `advanced.attack`, `advanced.movement`, `advanced.health` y
 `advanced.defense` se aplican por igual a todos los modos: ver
 [configuración](/docs/exyliapracticebot/configuracion).
 
@@ -280,8 +280,8 @@ lo que significa que la altura es de verdad lo que hace daño: al bot no le est�
 grande.
 
 - **La carga de viento sale siempre que hay rango.** Es barata, vuelve en menos de dos segundos y una
-  maza en el suelo es una espada lenta. El lanzamiento necesita línea de visión y 5,5 bloques o
-  menos.
+  maza en el suelo es una espada lenta. El lanzamiento necesita línea de visión y
+  `launch-range` (5,5 bloques) o menos.
 - **La perla se guarda.** Una elevación con perla sube al bot doce bloques frente a los siete de la
   carga, y cuesta la mayor parte de un segundo quieto antes de que sus pies dejen el suelo, así que
   espera a alguien ya comprometido: comiendo, mirando a otro lado o por debajo del 45 % de vida.
@@ -290,10 +290,25 @@ grande.
 - **No hay dos lanzamientos a la misma altura**, así que la caída — y el daño al final de ella —
   varía como lo haría una real.
 - **Un golpe contra un escudo levantado es un golpe perdido**, así que el hacha va primero y el
-  lanzamiento espera el tiempo de carga que eso cuesta.
+  lanzamiento espera el tiempo de carga que eso cuesta (`shield-break-before-smash`).
 
-`MACE_PVP` no tiene bloque `advanced` propio: todo lo suyo es el bucle de arriba, los globales
-`advanced.attack` y `advanced.movement`, y la dificultad.
+Con un kit que lleva algo más que una maza, entran tres técnicas más:
+
+- **El attribute swap.** Una espada o un hacha del kit junto a la maza es con lo que el bot pelea en
+  el suelo. La maza entra en su mano solo en el tick del smash, así que el golpe conserva la barra de
+  ataque y el daño de la otra arma y suma el smash encima. Con qué frecuencia lo clava en el tick
+  depende de la dificultad; si falla, saca la maza antes de tiempo y pierde la barra. `attribute-swap`.
+- **Density o Breach.** Con más de una maza, una caída larga usa la maza con Density, que paga por
+  bloque caído, y una corta — o cualquier caída sobre armadura pesada — la de Breach, que paga contra
+  la armadura. `prefer-density-height` y `breach-armor-threshold`.
+- **La subida con cohete.** Con élitros y cohetes, el bot a veces sube con un cohete en lugar de una
+  carga de viento, y cambia los élitros por su pechera en cuanto empieza la caída, así que el smash
+  llega con armadura. Nunca planea. `use-elytra`.
+
+Los tiempos de espera, el rango de lanzamiento y las velocidades de subida son todos
+`advanced.mace-pvp`; ver [Configuración](/docs/exyliapracticebot/configuracion). Para practicar tú el
+combo de hacha y maza contra el bot, activa **Escudo arriba** — ver
+[Comportamiento](/docs/exyliapracticebot/comportamiento).
 
 ## `BOXING` — golpes, no daño
 
@@ -330,7 +345,8 @@ los objetos para ejecutarlas**, y de dónde salen esos objetos depende de cómo 
 <Callout type="warning" title="Un bot de crystal sin cristales solo mueve la espada">
 Crea un bot con `/bot` y no tiene kit: no se cuenta nada, y cada estilo cae en sus propias cifras —
 la obsidiana, los cristales, las pociones y las perlas no se acaban nunca. Para eso está un muñeco de
-sandbox.
+sandbox. La excepción es un modo que el servidor asocia a un kit de ExyliaPracticeCore en
+`advanced.practice-kits`: un `/bot` en ese modo se viste con el kit y lo gasta como un bot de partida.
 
 Créalo a través de la [API](/docs/exyliapracticebot/api) con un `BotSpec` que lleve un `BotKit` — una
 partida de práctica que le entrega al bot el mismo kit con el que pelean ambos lados — y el bot gasta
@@ -345,7 +361,8 @@ El kit también decide el equipo, y por eso la tabla de kits de arriba solo apli
 por su modo. Con un kit, el bot lo lleva tal como llegó — sus encantamientos, su durabilidad, sus
 nombres — y decide él solo qué objeto sostener: una maza antes que un hacha, antes que una espada,
 antes que un tridente, desempatando por material, juzgado por lo que gana una pelea y no por el orden
-de la hotbar. Un escudo o un tótem en la mano secundaria del kit se leen como escudo o tótem;
+de la hotbar. Un bot de `MACE_PVP` con `attribute-swap` activado sostiene la mejor espada o hacha del
+kit y guarda la maza para el smash. Un escudo o un tótem en la mano secundaria del kit se leen como escudo o tótem;
 cualquier otra cosa en esa ranura no vale nada para la IA. Un kit sin arma es un bot que pega
 puñetazos, y eso no es motivo para rechazar una pelea.
 
@@ -378,13 +395,14 @@ placeholders:
 Cambiar de modo desde el menú lo confirma con el mensaje `bot.mode-changed`, que lleva `%mode%`.
 
 <Callout type="warning" title="El mensaje mode-changed de serie promete de más">
-Su texto por defecto termina en "kit applied", y cambiar de modo desde el menú no aplica ningún kit:
-solo lo hacen la primera creación de la configuración y `/bot reset`. El propio ítem del menú sí lo
-dice bien ("Only the techniques change. Your kit stays as you left it."), así que hasta que se
-corrija el mensaje por defecto, reescribe `bot.mode-changed` para que coincida:
+Su texto por defecto termina en "kit applied", y cambiar de modo desde el menú no aplica el kit
+integrado del modo: solo lo hacen la primera creación de la configuración y `/bot reset`. Solo es
+cierto para un modo asociado en `advanced.practice-kits`, con cuyo kit de PracticeCore se viste el
+bot. El propio ítem del menú sí lo dice bien ("Only the techniques change. Your kit stays as you left
+it."), así que en un servidor sin `practice-kits`, reescribe `bot.mode-changed` para que coincida:
 
 ```yaml title="plugins/ExyliaPracticeBotV3/lang/<code>/messages.yml"
 bot:
-  mode-changed: '%prefix% {letters}Mode set to %mode% {letters_black}» {letters}techniques only.'
+  mode-changed: '[sound:BLOCK_NOTE_BLOCK_PLING|0.8|1.4]%prefix% {letters}Mode set to %mode% {letters_black}» {letters}techniques only.'
 ```
 </Callout>

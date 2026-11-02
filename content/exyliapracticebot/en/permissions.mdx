@@ -1,60 +1,75 @@
 ---
 title: "Permissions"
-description: "Two nodes, what each one gates, and why there is nothing per mode or per difficulty."
+description: "Every node plugin.yml declares, its default, what it gates, and how to make a feature a rank perk."
 ---
 
-There are exactly two nodes in the whole plugin. Everything a player does is behind one of them, and
-everything an administrator does is behind the other.
+Every node below is declared in `plugin.yml` with a default, so a permission plugin sees all of them
+and their descriptions. The player nodes default to `true`: out of the box everybody can use every
+feature, and a server makes one a rank perk by denying it to the default group.
 
-| Permission | What it gates |
-|---|---|
-| `exyliapracticebot.use` | The `/bot` command itself — and therefore the main menu — plus `spawn`, `remove`, `tpme`, `tpto` and `reset`. |
-| `exyliapracticebot.admin` | `/bot reload`, `/bot export` and `/bot import`. |
+| Permission | Default | What it gates |
+|---|---|---|
+| `exyliapracticebot.use` | `true` | `/bot` (and so the main menu), `/bot spawn`, `/bot tpme`, `/bot tpto` and `/bot reset`. |
+| `exyliapracticebot.spawn` | `true` | Spawning a bot: `/bot spawn`, the menu's **Spawn** button and any `spawn` action. |
+| `exyliapracticebot.teleport` | `true` | Both teleports: `/bot tpto`, `/bot tpme` and the menu's teleport button. |
+| `exyliapracticebot.advanced` | `true` | The **Fine tuning** screen: opening it, every slider (`adjust`) and its four toggles (invincible, anti-knockback, slow falling, fire resistance). |
+| `exyliapracticebot.mode.<mode>` | `true` | Picking that combat mode: `sword`, `pot_pvp`, `uhc`, `crystal_pvp`, `mace_pvp` or `boxing`. |
+| `exyliapracticebot.mode.*` | `true` | Parent of the six mode nodes. |
+| `exyliapracticebot.difficulty.<difficulty>` | `true` | Picking that difficulty: `easy`, `normal`, `hard`, `insane` or `extreme`. |
+| `exyliapracticebot.difficulty.*` | `true` | Parent of the five difficulty nodes. |
+| `exyliapracticebot.bypass.limit` | `op` | Spawning into the slots kept for matches (`reserved-for-matches`). `max-bots` still applies. |
+| `exyliapracticebot.admin` | `op` | `/bot reload`, `/bot settings`, `/bot export` and `/bot import`. |
 
-`exyliapracticebot.use` is checked on the root command as well as on each of its five player
-subcommands, so taking it away takes away the whole command: a player without it cannot type `/bot`,
-cannot open the menu, and therefore cannot reach any of the buttons inside it.
+Two things never need a node: **removing your bot** (`/bot remove` and the menu's **Remove** button are
+never behind a rank) and picking **no mode** (`NONE`), which is how a player steps out of one.
 
-`exyliapracticebot.admin` does not imply `exyliapracticebot.use`. An administrator who should also be
-able to spawn a bot needs both.
+A command needs `exyliapracticebot.use` **and** the feature node: `/bot spawn` checks `use` and then
+`spawn`, the two teleports check `use` and then `teleport`. `exyliapracticebot.admin` does not imply
+any player node, but those default to `true`, so a staff member has them unless you deny them.
 
-<Callout type="warning" title="Neither node is declared in plugin.yml">
-The plugin ships no `permissions:` block, so neither node arrives with a default your permission plugin
-can read. Until you grant them, they fall back to Bukkit's behaviour for an unregistered node, which is
-operators only. Grant `exyliapracticebot.use` to the groups that are meant to have the plugin.
+## When a node is missing
+
+A player who clicks or types something they do not hold gets the `bot.no-permission` line from
+`messages.yml` — *You don't have permission to do that.* — and nothing changes.
+
+The **Mode** and **Difficulty** buttons do better than refuse: cycling skips every mode or difficulty
+the player cannot pick, so they only ever land on one they hold. `NONE` is always on the mode wheel,
+and a player who holds only one difficulty stays on it.
+
+<Callout type="note" title="Denying a mode does not take it off a saved bot">
+The nodes gate *picking*. A player whose settings already hold a mode or difficulty you now deny keeps
+it until they change it or reset, and **Reset settings** goes back to the server's `bot.mode` and
+`bot.difficulty` whatever they hold. Keep those two defaults to a mode and difficulty everybody may use.
 </Callout>
 
-## What the menus check
+## Menus wired into other plugins
 
-Nothing. The menu files carry no permission of their own, and neither do the actions they are wired to —
-`spawn`, `remove`, `tp_to_bot`, `tp_bot_to_me`, `open_advanced_settings`, `reset_settings`, `set_mode`,
-`set_difficulty`, `toggle`, `cycle` and `adjust` all run for whoever clicked.
+The checks live in the plugin's own menu actions, not in the menu files, so they follow the action
+wherever you wire it. A `practicebot:spawn` button in a hub menu still needs `exyliapracticebot.spawn`,
+and a `practicebot:set_mode crystal_pvp` button still needs `exyliapracticebot.mode.crystal_pvp`.
+`remove`, `reset_settings` and the gear buttons (`cycle` for armour, hands and potions, `toggle` for
+attack, follow and shield up) check nothing. See [Menus](/docs/exyliapracticebot/menus).
 
-In practice that is the same gate: the only way into the main menu is `/bot`, which needs
-`exyliapracticebot.use`, and the advanced screen is only reachable from the main one. It stops being
-the same gate the moment you wire one of the `practicebot:` actions into a menu belonging to another
-plugin — a hub selector, a kit screen, a cosmetics GUI. That button spawns or removes a bot with no
-node checked, so put the check on the item in that menu. See [Menus](/docs/exyliapracticebot/menus).
-
-The same is true of the API: another plugin that spawns a bot through `PracticeBotService` is not
-asking about permissions at all. Whether a player may be given a bot in a duel is that plugin's
-question, not this one's. See [API](/docs/exyliapracticebot/api).
-
-<Callout type="note" title="Nothing per mode, nothing per difficulty">
-There is no node for Crystal PvP, none for Extreme, none for any piece of equipment, and none for the
-advanced settings screen. A player who may use the plugin at all may pick **every** mode at **every**
-difficulty and tune every slider the menu exposes. Gating a mode behind a rank is not something this
-plugin does — if you need it, remove the item from the menu file rather than looking for a node.
-</Callout>
+The API does not ask about permissions at all: another plugin that spawns a bot through
+`PracticeBotService` decides for itself whether a player may be given one. See
+[API](/docs/exyliapracticebot/api).
 
 ## Examples
 
-Giving the plugin to everybody and the admin half to staff:
+Making the fine-tuning screen a VIP perk:
 
 ```text
-/lp group default permission set exyliapracticebot.use true
-/lp group staff permission set exyliapracticebot.admin true
-/lp group staff permission set exyliapracticebot.use true
+/lp group default permission set exyliapracticebot.advanced false
+/lp group vip permission set exyliapracticebot.advanced true
+```
+
+Keeping crystal PvP and the top difficulty for a rank:
+
+```text
+/lp group default permission set exyliapracticebot.mode.crystal_pvp false
+/lp group default permission set exyliapracticebot.difficulty.extreme false
+/lp group vip permission set exyliapracticebot.mode.crystal_pvp true
+/lp group vip permission set exyliapracticebot.difficulty.extreme true
 ```
 
 Taking the plugin away from one group while leaving it for the rest:

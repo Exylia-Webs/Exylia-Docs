@@ -1,71 +1,86 @@
 ---
 title: "Permisos"
-description: "Dos nodos, qué controla cada uno, y por qué no hay nada por modo ni por dificultad."
+description: "Cada nodo que declara plugin.yml, su valor por defecto, qué controla y cómo convertir una función en ventaja de rango."
 ---
 
-Hay exactamente dos nodos en todo el plugin. Todo lo que hace un jugador está detrás de uno, y todo lo
-que hace un administrador está detrás del otro.
+Todos los nodos de abajo están declarados en `plugin.yml` con un valor por defecto, así que tu plugin de
+permisos los ve todos con su descripción. Los nodos de jugador valen `true` por defecto: recién instalado,
+todo el mundo puede usar cada función, y un servidor convierte una en ventaja de rango negándosela al
+grupo por defecto.
 
-| Permiso | Qué controla |
-|---|---|
-| `exyliapracticebot.use` | El propio comando `/bot` — y por tanto el menú principal — más `spawn`, `remove`, `tpme`, `tpto` y `reset`. |
-| `exyliapracticebot.admin` | `/bot reload`, `/bot export` y `/bot import`. |
+| Permiso | Por defecto | Qué controla |
+|---|---|---|
+| `exyliapracticebot.use` | `true` | `/bot` (y por tanto el menú principal), `/bot spawn`, `/bot tpme`, `/bot tpto` y `/bot reset`. |
+| `exyliapracticebot.spawn` | `true` | Generar un bot: `/bot spawn`, el botón **Generar bot** del menú y cualquier acción `spawn`. |
+| `exyliapracticebot.teleport` | `true` | Los dos teletransportes: `/bot tpto`, `/bot tpme` y el botón de teletransporte del menú. |
+| `exyliapracticebot.advanced` | `true` | La pantalla **Ajuste fino**: abrirla, cada deslizador (`adjust`) y sus cuatro interruptores (invencible, antiempuje, caída lenta, resistencia al fuego). |
+| `exyliapracticebot.mode.<modo>` | `true` | Elegir ese modo de combate: `sword`, `pot_pvp`, `uhc`, `crystal_pvp`, `mace_pvp` o `boxing`. |
+| `exyliapracticebot.mode.*` | `true` | Padre de los seis nodos de modo. |
+| `exyliapracticebot.difficulty.<dificultad>` | `true` | Elegir esa dificultad: `easy`, `normal`, `hard`, `insane` o `extreme`. |
+| `exyliapracticebot.difficulty.*` | `true` | Padre de los cinco nodos de dificultad. |
+| `exyliapracticebot.bypass.limit` | `op` | Generar en los huecos reservados para partidas (`reserved-for-matches`). `max-bots` sigue aplicando. |
+| `exyliapracticebot.admin` | `op` | `/bot reload`, `/bot settings`, `/bot export` y `/bot import`. |
 
-`exyliapracticebot.use` se comprueba tanto en el comando raíz como en cada uno de sus cinco subcomandos
-de jugador, así que quitarlo quita el comando entero: un jugador sin él no puede escribir `/bot`, no
-puede abrir el menú, y por tanto no llega a ninguno de los botones de dentro.
+Dos cosas nunca necesitan nodo: **quitar tu bot** (`/bot remove` y el botón **Eliminar bot** del menú nunca
+están detrás de un rango) y elegir **ningún modo** (`NONE`), que es como un jugador sale de uno.
 
-`exyliapracticebot.admin` no implica `exyliapracticebot.use`. Un administrador que además deba poder
-generar un bot necesita los dos.
+Un comando necesita `exyliapracticebot.use` **y** el nodo de la función: `/bot spawn` comprueba `use` y
+luego `spawn`, y los dos teletransportes comprueban `use` y luego `teleport`. `exyliapracticebot.admin`
+no implica ningún nodo de jugador, pero esos valen `true` por defecto, así que un miembro del staff los
+tiene salvo que se los niegues.
 
-<Callout type="warning" title="Ninguno de los dos nodos está declarado en plugin.yml">
-El plugin no trae bloque `permissions:`, así que ninguno de los dos llega con un valor por defecto que
-tu plugin de permisos pueda leer. Hasta que los concedas, caen en el comportamiento de Bukkit para un
-nodo no registrado, que es solo operadores. Concede `exyliapracticebot.use` a los grupos que deban tener
-el plugin.
+## Cuando falta un nodo
+
+Un jugador que pulsa o escribe algo para lo que no tiene nodo recibe la línea `bot.no-permission` de
+`messages.yml` — *You don't have permission to do that.* — y no cambia nada.
+
+Los botones **Modo** y **Dificultad** hacen algo mejor que rechazar: al ciclar se saltan cada modo o
+dificultad que el jugador no puede elegir, así que solo caen en uno que tenga. `NONE` siempre está en la
+rueda de modos, y un jugador con una sola dificultad se queda en ella.
+
+<Callout type="note" title="Negar un modo no se lo quita a un bot guardado">
+Los nodos controlan *elegir*. Un jugador cuyos ajustes ya tienen un modo o una dificultad que ahora
+niegas los conserva hasta que los cambie o reinicie, y **Reiniciar ajustes** vuelve al `bot.mode` y al
+`bot.difficulty` del servidor tenga lo que tenga. Deja esos dos valores en un modo y una dificultad que
+pueda usar todo el mundo.
 </Callout>
 
-## Qué comprueban los menús
+## Menús conectados a otros plugins
 
-Nada. Los archivos de menú no llevan permiso propio, y las acciones a las que están conectados tampoco —
-`spawn`, `remove`, `tp_to_bot`, `tp_bot_to_me`, `open_advanced_settings`, `reset_settings`, `set_mode`,
-`set_difficulty`, `toggle`, `cycle` y `adjust` se ejecutan para quien haya hecho clic.
-
-En la práctica es la misma puerta: la única forma de entrar al menú principal es `/bot`, que pide
-`exyliapracticebot.use`, y a la pantalla avanzada solo se llega desde la principal. Deja de ser la misma
-puerta en cuanto conectas una de las acciones `practicebot:` a un menú de otro plugin — un selector de
-lobby, una pantalla de kits, una GUI de cosméticos. Ese botón genera o elimina un bot sin comprobar
-ningún nodo, así que pon la comprobación en el ítem de ese menú. Ver
+Las comprobaciones viven en las acciones de menú del propio plugin, no en los archivos de menú, así que
+siguen a la acción la conectes donde la conectes. Un botón `practicebot:spawn` en un menú de hub sigue
+necesitando `exyliapracticebot.spawn`, y un botón `practicebot:set_mode crystal_pvp` sigue necesitando
+`exyliapracticebot.mode.crystal_pvp`. `remove`, `reset_settings` y los botones de equipo (`cycle` para
+armadura, manos y pociones, `toggle` para atacar, seguir y escudo arriba) no comprueban nada. Ver
 [Menús](/docs/exyliapracticebot/menus).
 
-Con la API pasa lo mismo: otro plugin que genere un bot mediante `PracticeBotService` no está
-preguntando por permisos en absoluto. Si a un jugador se le puede dar un bot en un duelo es pregunta de
-ese plugin, no de este. Ver [API](/docs/exyliapracticebot/api).
-
-<Callout type="note" title="Nada por modo, nada por dificultad">
-No hay nodo para Crystal PvP, ni para Extreme, ni para ninguna pieza de equipamiento, ni para la
-pantalla de ajustes avanzados. Un jugador que puede usar el plugin puede elegir **todos** los modos en
-**todas** las dificultades y tocar todos los deslizadores que el menú expone. Poner un modo detrás de un
-rango no es algo que este plugin haga — si lo necesitas, quita el ítem del archivo de menú en vez de
-buscar un nodo.
-</Callout>
+La API no pregunta por permisos en absoluto: otro plugin que genera un bot mediante `PracticeBotService`
+decide por su cuenta si a un jugador se le puede dar uno. Ver [API](/docs/exyliapracticebot/api).
 
 ## Ejemplos
 
-Dar el plugin a todo el mundo y la mitad de administración al staff:
+Convertir la pantalla de ajuste fino en ventaja VIP:
 
 ```text
-/lp group default permission set exyliapracticebot.use true
-/lp group staff permission set exyliapracticebot.admin true
-/lp group staff permission set exyliapracticebot.use true
+/lp group default permission set exyliapracticebot.advanced false
+/lp group vip permission set exyliapracticebot.advanced true
 ```
 
-Quitar el plugin a un grupo dejándolo para el resto:
+Reservar crystal PvP y la dificultad más alta para un rango:
+
+```text
+/lp group default permission set exyliapracticebot.mode.crystal_pvp false
+/lp group default permission set exyliapracticebot.difficulty.extreme false
+/lp group vip permission set exyliapracticebot.mode.crystal_pvp true
+/lp group vip permission set exyliapracticebot.difficulty.extreme true
+```
+
+Quitarle el plugin a un grupo y dejárselo al resto:
 
 ```text
 /lp group survival permission set exyliapracticebot.use false
 ```
 
-Limitar *dónde* se pueden generar bots es configuración, no permisos: `worlds` en `config.yml`
-es la lista de mundos en los que se acepta un spawn, y se aplica a todo el mundo. Ver
+Limitar *dónde* se pueden generar bots es configuración, no permisos: `worlds` en `config.yml` es la
+lista de mundos en los que se acepta un spawn, y se aplica a todo el mundo. Ver
 [Configuración](/docs/exyliapracticebot/configuracion).

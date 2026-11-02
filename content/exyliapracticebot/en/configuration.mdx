@@ -10,6 +10,10 @@ language folder, `lang/<code>/`. Edit the files there, never the copies in the j
 [menu files](/docs/exyliapracticebot/menus). Colours use palette tokens such as `{primary}` or
 `{success}`.
 
+Every key in `config.yml` can also be changed in game: `/bot settings`, with `exyliapracticebot.admin`,
+opens ExyliaLib's settings screens for it and saves straight to the same file. See
+[Commands](/docs/exyliapracticebot/commands).
+
 The file is deliberately shallow at the top: `bot.mode` and `bot.difficulty` are the only two keys
 anybody has to understand. The mode decides the kit and which techniques exist, the difficulty decides
 how well they are executed, and everything under `advanced` already has a value that works.
@@ -68,6 +72,19 @@ advanced:
     trap: true
     ender-pearls: true
     break-blocks: true
+  mace-pvp:
+    attribute-swap: true
+    use-elytra: true
+    prefer-density-height: 4.0
+    breach-armor-threshold: 30.0
+    shield-break-before-smash: true
+    launch-range: 5.5
+    wind-charge-cooldown-ticks: 38
+    pearl-lift-cooldown-ticks: 110
+    rocket-lift-cooldown-ticks: 90
+    wind-charge-lift-min: 0.92
+    wind-charge-lift-max: 1.14
+    rocket-lift: 1.5
   uhc:
     apple-percent: 60.0
     cobweb: true
@@ -90,6 +107,7 @@ advanced:
     checkpoint-reached-radius: 0.6
     consecutive-failed-searches-before-cooldown: 3
     give-up-cooldown-ticks: 60
+  practice-kits: {}
 
 limits:
   min-attack-speed: 0.25
@@ -190,8 +208,8 @@ Sandbox knobs and per-mode tuning. Safe to ignore.
 `advanced.attack`, `advanced.movement`, `advanced.health` and `advanced.defense` are what a player's
 settings start at and what **Reset settings** puts them back to. From then on each player owns their
 own copy and moves it from the [**Fine tuning**](/docs/exyliapracticebot/menus) menu. The per-mode
-blocks below them — `pot-pvp`, `crystal-pvp`, `uhc` — and `pathfinding` are not per-player: they are
-read live by the AI and apply to every bot on the server.
+blocks below them — `pot-pvp`, `crystal-pvp`, `mace-pvp`, `uhc` — `pathfinding` and `practice-kits`
+are not per-player: they are read live by the AI and apply to every bot on the server.
 </Callout>
 
 #### `advanced.attack`
@@ -245,6 +263,27 @@ read live by the AI and apply to every bot on the server.
 | `ender-pearls` | `true` | Pearl at the opponent's feet to close the gap. Crystal PvP is an aggressive format: the bot chases, it does not kite. |
 | `break-blocks` | `true` | Real crystal PvP: the blasts destroy terrain and the obsidian the bot places stays where it put it. Turn this off in a world you care about — the bot will then clean up after itself. Applies to a player's own `/bot` too; a plugin that spawns a match bot can set its own value. |
 
+#### `advanced.mace-pvp`
+
+`MACE_PVP` only. Most of it only matters to a bot that carries the items: an attribute swap needs a
+sword or axe next to the mace, a rocket lift needs an elytra and rockets, a Density or Breach choice
+needs more than one mace. A plain `/bot` holds just a mace, so those keys come alive with a kit — one
+another plugin sends, or one from [`practice-kits`](#advancedpractice-kits).
+
+| Key | Default | What it does |
+|---|---|---|
+| `attribute-swap` | `true` | When the kit carries a sword or axe next to its mace, fight on the ground with that weapon and put the mace in hand only on the tick of a smash: the swing keeps the faster weapon's attack bar and damage and adds the smash on top. How often it is pulled off cleanly comes from the difficulty. |
+| `use-elytra` | `true` | When the kit has an elytra and firework rockets, sometimes go up on a rocket: elytra on, boost straight up, chestplate back on before the smash. |
+| `prefer-density-height` | `4.0` | With more than one mace, a fall of at least this many blocks reaches for the Density mace; anything shorter reaches for the Breach one. |
+| `breach-armor-threshold` | `30.0` | Target armour plus armour toughness from which the Breach mace is used whatever the height. 32 is full netherite, 28 full diamond. |
+| `shield-break-before-smash` | `true` | Take the target's raised shield out with an axe before going up. Only with an axe in the kit, or always for a bot with no kit. |
+| `launch-range` | `5.5` | Blocks from the target within which it launches. Further out the target simply walks out from under the fall. |
+| `wind-charge-cooldown-ticks` | `38` | Ticks between launches of any kind. |
+| `pearl-lift-cooldown-ticks` | `110` | Ticks between pearl lifts, which go far higher than a wind charge. |
+| `rocket-lift-cooldown-ticks` | `90` | Ticks between rocket lifts. |
+| `wind-charge-lift-min` / `wind-charge-lift-max` | `0.92` / `1.14` | Upward speed a wind charge gives, picked between the two every launch so no two falls hit for the same number. |
+| `rocket-lift` | `1.5` | Upward speed a rocket lift gives. |
+
 #### `advanced.uhc`
 
 | Key | Default | What it does |
@@ -278,6 +317,26 @@ walks straight at its target and none of this runs.
 | `consecutive-failed-searches-before-cooldown` | `3` | Failed searches in a row before it stops trying. |
 | `give-up-cooldown-ticks` | `60` | Ticks it waits before trying again. |
 
+#### `advanced.practice-kits`
+
+Empty by default. Dresses a player's own `/bot` from an
+[ExyliaPracticeCore](/docs/exyliapractice) kit instead of the mode's built-in loadout: mode name to
+kit id.
+
+```yaml title="plugins/ExyliaPracticeBotV3/config.yml"
+advanced:
+  practice-kits:
+    MACE_PVP: mace
+    CRYSTAL_PVP: crystal
+```
+
+The bot then fights with that kit's own items, armour and consumables, and spends them the way a
+match bot does — what it carries runs out. It is laid over the player's settings each time the bot
+spawns or a setting changes, so picking a mapped mode in the menu dresses the bot in that kit; the
+player's saved settings and their own inventory are never touched. A mode left out, an unknown kit id
+or a server without PracticeCore keeps the built-in loadout, and the console names each kit it could
+not find once the server has started.
+
 ### `limits`
 
 Bounds the in-game menu clamps its sliders to. Each pair is the floor and ceiling of one
@@ -309,7 +368,7 @@ message, and the API refuses it with a `BotLimitReachedException`. A value below
 
 `4` by default. Of the `max-bots` slots, how many a player's own `/bot` can never take, so a match that
 needs a bot still finds a free slot. Players can fill `max-bots` minus this (at least one); bots other
-plugins spawn can use the whole ceiling. See [Limits](/docs/exyliapracticebot/limits).
+plugins spawn, and players with `exyliapracticebot.bypass.limit`, can use the whole ceiling. See [Limits](/docs/exyliapracticebot/limits).
 
 ## messages.yml
 
@@ -321,7 +380,7 @@ defaults use them throughout.
 | Section | Holds |
 |---|---|
 | `prefix` | `{primary}&lEXYLIA PRACTICEBOT &8•&r` by default. Every line's `%prefix%` expands to it. |
-| `bot` | The lines the plugin says: `spawned`, `removed`, `no-bot`, `already-has-bot`, `world-not-allowed`, `removed-death`, `removed-world-change`, `removed-too-far`, `teleported-to-bot`, `teleported-bot-to-you`, `respawning`, `respawned`, `settings-reset`, `reset-confirm` (the question the menu's reset button asks), `mode-changed` (`%mode%`), `difficulty-changed` (`%difficulty%`), `limit-reached` (`%limit%`), `boxing-score` (`%player_hits%`, `%bot_hits%`, shown on the action bar during a boxing round) and `bot-out-of-sight`; plus `name`, the name above the bot (`%player%` is its owner). |
+| `bot` | The lines the plugin says: `spawned`, `removed`, `no-bot`, `already-has-bot`, `world-not-allowed`, `removed-death`, `removed-world-change`, `removed-too-far`, `teleported-to-bot`, `teleported-bot-to-you`, `respawning`, `respawned`, `settings-reset`, `reset-confirm` (the question the menu's reset button asks), `mode-changed` (`%mode%`), `difficulty-changed` (`%difficulty%`), `limit-reached` (`%limit%`), `boxing-score` (`%player_hits%`, `%bot_hits%`, shown on the action bar during a boxing round), `bot-out-of-sight`, `stun-slam` (`%time%` in milliseconds and `%count%` this session; see [Behaviour](/docs/exyliapracticebot/behaviour)) and `no-permission` (a player without the node for that feature); plus `name`, the name above the bot (`%player%` is its owner). |
 | `placeholders` | The display labels the menus print: `enabled`, `disabled`, `unlimited`, and one block each for `armor`, `enchant`, `main-hand`, `off-hand`, `knockback`, `strength`, `speed`, `mode` and `difficulty`. |
 
 The `mode` and `difficulty` blocks each hold two things per value: the name, and the one-line summary
