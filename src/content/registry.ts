@@ -2158,14 +2158,14 @@ export const plugins: Plugin[] = [
     name: "ExyliaDuels",
     tagline: { en: "Survival 1v1 duels with stakes paid exactly once", es: "Duelos 1v1 de survival con apuestas pagadas exactamente una vez" },
     summary: {
-      en: "Survival 1v1 duels started with /duel and set up on one screen, fought with the players' own inventory (kept or at risk) or a server kit, in arenas that save, copy and regenerate themselves and can be bound to one kit, with money bets taxed as a sink and item bets in a two-player trade window, every stake held by an escrow that survives crashes, quits and restarts, spectators, records, and server-kit duels across a network on an arena server.",
-      es: "Duelos 1v1 de survival que se inician con /duel y se configuran en una sola pantalla, con el inventario propio de los jugadores (sin riesgo o a riesgo) o con un kit del servidor, en arenas que se guardan, se copian y se regeneran solas y pueden ligarse a un kit, con apuestas de dinero con impuesto como sumidero y apuestas de objetos en una ventana de intercambio entre los dos, cada apuesta retenida por un depósito que sobrevive a crashes, desconexiones y reinicios, espectadores, estadísticas, y duelos con kit del servidor en red en un servidor de arenas.",
+      en: "Survival 1v1 duels started with /duel and set up on one screen, fought with the players' own inventory (kept or at risk), a server kit or another plugin's kit such as the RandomKits Random kit, each kit with its own arena flags and rules (start state, combat, hits to win, fall depth, best-of rounds), in arenas that save, copy and regenerate themselves, with money bets taxed as a sink and item bets in a two-player trade window held by an escrow that survives crashes, quits and restarts, per-rank options, cooldowns, bet limits and tax, an end-of-duel inventory view and rematch, match history and replays, spectators, records and leaderboards, and kit duels across a network on an arena server.",
+      es: "Duelos 1v1 de survival que se inician con /duel y se configuran en una sola pantalla, con el inventario propio de los jugadores (sin riesgo o a riesgo), un kit del servidor o el kit de otro plugin como el kit aleatorio de RandomKits, cada kit con sus propias flags de arena y reglas (estado inicial, combate, golpes para ganar, profundidad de caída, rondas al mejor de), en arenas que se guardan, se copian y se regeneran solas, con apuestas de dinero con impuesto como sumidero y apuestas de objetos en una ventana de intercambio entre los dos retenidas por un depósito que sobrevive a crashes, desconexiones y reinicios, opciones, esperas, límites de apuesta e impuesto por rango, una vista del inventario al final del duelo y revancha, historial de duelos y repeticiones, espectadores, estadísticas y clasificaciones, y duelos con kit en red en un servidor de arenas.",
     },
-    version: "1.0.0",
+    version: "1.1.0",
     purchase: "https://builtbybit.com/resources/exylia-duels.134726/",
     status: "beta",
     category: { en: "PvP", es: "PvP" },
-    minecraft: "1.21.4+",
+    minecraft: "1.21.1+",
     banner: "https://s3.exylia.net/exylia-plugins/public/static/images/plugins/duels/ExyliaDuelsBanner.webp",
     tags: [
       { en: "Duels", es: "Duelos" },

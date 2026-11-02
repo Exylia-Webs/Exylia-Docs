@@ -1,6 +1,6 @@
 ---
 title: "Duelos"
-description: "La pantalla de reto, la solicitud, cómo se recogen las apuestas, la cuenta atrás y el combate, cómo termina y se paga un duelo, los espectadores y las estadísticas."
+description: "La pantalla de reto, la solicitud, cómo se recogen las apuestas, la cuenta atrás y el combate, las rondas, cómo termina y se paga un duelo, el bloque del final y la revancha, el historial, las repeticiones, los espectadores y las estadísticas."
 ---
 
 ## Retar
@@ -16,8 +16,8 @@ Antes de abrir la pantalla, el plugin comprueba que:
   sesión de ExyliaLib como una cola o un minijuego);
 - ninguno de los dos está en combate;
 - hay al menos una arena lista (o, en una red, un duelo con kit podría jugarse en el servidor de arenas);
-- quien reta no está en el cooldown de retos (`requests.cooldown`, que se salta con
-  `exyliaduels.bypass.cooldown`).
+- quien reta no está en el cooldown de retos (`requests.cooldown`, o el `exyliaduels.cooldown.<n>` de su
+  rango, que se salta con `exyliaduels.bypass.cooldown`).
 
 ### La pantalla de reto
 
@@ -27,10 +27,10 @@ pendiente.
 | Tarjeta | Qué hace |
 |---|---|
 | **Reto** (arriba) | La cabeza del rival. |
-| **Modo** | Cambia entre **inventario propio** y **kit del servidor**. Solo se ofrecen los modos que permite el servidor. |
-| **Kit** o **Riesgo** | Con kit del servidor, abre un selector con los kits activados. Con inventario propio, activa o desactiva el **riesgo**: si el inventario del perdedor pasa al ganador. |
+| **Modo** | Cambia entre **inventario propio** y **kit**. Solo se ofrecen los modos que permite el servidor. |
+| **Kit** o **Riesgo** | Con kit, abre un selector con los kits activados del servidor y después los que ofrecen otros plugins (como el kit aleatorio), solo los que incluye el rango del jugador. Con inventario propio, activa o desactiva el **riesgo**: si el inventario del perdedor pasa al ganador. |
 | **Arena** | Abre un selector: **Aleatoria**, o cualquier arena lista. Una arena ligada a un kit aparece como `Nombre (Kit)`, y elegirla elige también su kit. |
-| **Apuesta de dinero** | Pregunta la moneda, si se ofrece más de una, y luego la cantidad que apuesta cada jugador, entre el mínimo y el máximo; `0` quita la apuesta. |
+| **Apuesta de dinero** | Pregunta la moneda, si se ofrece más de una, y luego la cantidad que apuesta cada jugador, entre el mínimo y el máximo (el `exyliaduels.bet.max.<n>` de su rango si tiene uno); `0` quita la apuesta. |
 | **Apuesta de objetos** | Activa o desactiva una apuesta de objetos: los dos llenan una ventana de intercambio antes del combate. |
 | **Enviar reto** | Lo comprueba todo otra vez y lo envía. |
 
@@ -40,10 +40,16 @@ arena ligada a un kit) devuelve la arena a **Aleatoria**. Una apuesta de dinero 
 pagar, o por debajo del mínimo, se rechaza al escribirla, así que la pantalla nunca muestra una apuesta que
 no se pueda enviar.
 
+Cada opción depende de un nodo que todos tienen por defecto (`exyliaduels.mode.own`, `mode.risk`,
+`bet.money`, `bet.items`, `arena.choose`, `kit.<id>`). Un botón que el rango del jugador no incluye responde
+"Tu rango no incluye esa opción." y no cambia nada. Consulta
+[Permisos](/docs/exyliaduels/permisos#opciones-del-reto).
+
 ### La solicitud
 
 Al enviar, empieza el cooldown y el jugador retado recibe un bloque centrado en el chat: quién, el modo, la
-arena, la apuesta y cuánto espera, con los botones clicables **[✔ ACEPTAR]** y **[✘ RECHAZAR]**. Un reto
+arena, la apuesta y cuánto espera, con los botones clicables **[✔ ACEPTAR]** y **[✘ RECHAZAR]**. Un kit
+con golpes para ganar o con rondas lo indica tras su nombre: "(gana quien dé 5 golpes)", "(al mejor de 3)". Un reto
 espera `requests.expiry` (60 segundos por defecto); cuando caduca se avisa a los dos.
 
 Cada jugador tiene como mucho un reto enviado: uno nuevo sustituye al anterior. Salir del servidor descarta
@@ -52,7 +58,7 @@ todos los retos que un jugador envió o recibió.
 | Comando | Qué hace |
 |---|---|
 | `/duel accept [player]` | Acepta el reto de ese jugador; sin nombre, el más reciente. |
-| `/duel decline [player]` | Lo rechaza; sin nombre, el más reciente. Se avisa a quien retó. |
+| `/duel decline [player]` | Lo rechaza; sin nombre, el más reciente. Se avisa a quien retó. Nunca necesita permiso. |
 
 ## De aceptar a luchar
 
@@ -82,15 +88,18 @@ arenas o cualquiera de los jugadores pueden haber cambiado desde que se envió e
   </Step>
   <Step title="A la arena">
     Se guarda el estado de cada jugador y se les lleva a su spawn: quien reta al spawn A, el retado al
-    spawn B. En un duelo con kit los dos pasan a survival y se les equipa el kit.
+    spawn B. En un duelo con kit los dos pasan a survival y se les equipa el kit; un kit de otro plugin lo
+    equipa ese plugin.
   </Step>
   <Step title="Cuenta atrás">
-    Los dos empiezan igualados: survival, vida y comida al máximo, sin efectos de pociones, sin fuego. Quedan
+    Los dos empiezan igualados: survival, vida y comida al máximo, sin efectos de pociones, sin fuego, salvo
+    que el [inicio del combate](/docs/exyliaduels/arenas-y-kits#reglas) del kit diga otra cosa. Quedan
     congelados durante `match.countdown` (5 segundos por defecto) con un título de cuenta atrás, y aparece
     el scoreboard del duelo.
   </Step>
   <Step title="Combate">
-    **¡LUCHA!** Los dos quedan libres, y una boss bar muestra el tiempo que queda de `match.max-duration`.
+    **¡LUCHA!** Los dos quedan libres, reciben los efectos de poción del kit, y una boss bar muestra el
+    tiempo que queda de `match.max-duration`.
   </Step>
 </Steps>
 
@@ -102,7 +111,13 @@ arenas o cualquiera de los jugadores pueden haber cambiado desde que se envió e
 - **Nadie sale de la arena.** Un luchador no puede salir andando de las columnas de la arena, y un
   teletransporte hacia fuera se rechaza con "No puedes salir de la arena durante un duelo." Nadie más entra
   andando ni por teletransporte en una arena en uso, salvo quien tenga `exyliaduels.admin`.
-- **Caer fuera es perder.** Bajar más de un bloque por debajo del suelo de la arena cuenta como una muerte.
+- **Caer fuera es perder.** Bajar más de un bloque por debajo del suelo de la arena cuenta como una muerte, y
+  también bajar por debajo de la **profundidad de caída** del kit.
+- **Se aplican las reglas del kit**: sus flags de arena, sin daño, retraso de golpe, regeneración, hambre,
+  las esperas de perla de ender y manzana dorada y la altura de construcción. Consulta
+  [Arenas y kits](/docs/exyliaduels/arenas-y-kits#reglas).
+- **Los plugins de habilidades quedan en pausa.** AuraSkills y mcMMO no dan a los luchadores experiencia,
+  habilidades ni estadísticas de combate hasta que están en casa.
 - **Los comandos** que no estén en `allowed-commands` se rechazan.
 - **Tirar objetos** se rechaza en los duelos con kit y en los de inventario propio sin riesgo: lo que
   devuelve la instantánea volvería dos veces. En un duelo a riesgo los objetos son de los jugadores y pueden
@@ -111,17 +126,35 @@ arenas o cualquiera de los jugadores pueden haber cambiado desde que se envió e
 - **Morir** nunca llega a pasar: la muerte se cancela y no cae nada. Durante el combate supone perder el
   duelo. Las tumbas, los cofres de muerte y las recompensas por kill nunca ven una muerte en duelo.
 
+## Rondas
+
+Un kit con **Rondas** ajustadas se juega al mejor de 3, 5 o más. Perder una ronda (una muerte, una caída, o
+que el rival dé los golpes para ganar) se la apunta al otro jugador: los dos ven el marcador en el chat y en
+un título de RONDA GANADA o RONDA PERDIDA durante `match.end-delay`. Después se reponen los bloques de la
+arena, se retira lo que quedó por el suelo, y los dos vuelven a empezar desde sus spawns con el kit y su
+inicio del combate (un kit de otro plugin lo vuelve a equipar ese plugin, con la misma tirada), congelados
+durante `match.countdown` con el número de ronda bajo el título.
+
+- Gana el duelo el primero en ganar las rondas del kit. Solo el duelo decide las estadísticas, las apuestas y
+  lo que se juega.
+- `match.max-duration` cubre todas las rondas juntas: si se acaba, es un empate, vaya como vaya el marcador,
+  y se devuelven todas las apuestas.
+- Desconectarse en cualquier ronda es rendir el duelo entero.
+- El marcador sale en `rounds-scoreboard`, y el reto dice "(al mejor de N)".
+- Los duelos con inventario propio, sin riesgo o a riesgo, son siempre un solo combate.
+
 ## Cómo termina un duelo
 
 | Final | Resultado |
 |---|---|
-| Un jugador muere o cae fuera | Gana el otro. |
+| Un jugador muere o cae fuera | Gana el otro. Con rondas, el otro gana la ronda. |
+| Un jugador da los golpes para ganar del kit | Gana él (la ronda, con rondas). Al otro se le avisa: "… dio N golpes primero." |
 | Un jugador se desconecta durante el combate | Gana el otro: "… abandonó el duelo. ¡Ganas tú!". Los castigos por combat log se cancelan; desconectarse ya es rendirse. |
 | Un jugador se desconecta antes de la arena | El duelo se cancela; se devuelven todas las apuestas. |
 | Se acaba `match.max-duration` | **Empate**: se devuelven todas las apuestas. |
 | Otro plugin reclama a un jugador | Antes del combate se cancela; durante él, empate. |
 
-Los dos ven un título de VICTORIA, DERROTA o EMPATE. El resultado se queda en pantalla `match.end-delay` (3
+Los dos ven un título de VICTORIA, DERROTA o EMPATE, y el perdedor ve el final como espectador. El resultado se queda en pantalla `match.end-delay` (3
 segundos por defecto). Después se devuelve a los espectadores, se restaura a los dos jugadores, se liquidan
 las apuestas, y la arena se libera y se regenera.
 
@@ -129,10 +162,10 @@ las apuestas, y la arena se libera y se regenera.
 
 | Apuesta | Ganador | Empate o cancelado |
 |---|---|---|
-| Dinero | Las dos apuestas, menos `bets.money.tax-percent` (5% por defecto), que se destruye: un sumidero de dinero. Quien tenga `exyliaduels.bypass.tax` se lo queda todo. | Se devuelve entero. |
+| Dinero | Las dos apuestas, menos `bets.money.tax-percent` (5% por defecto) o el `exyliaduels.tax.<n>` del ganador, que se destruye: un sumidero de dinero. Quien tenga `exyliaduels.bypass.tax` se lo queda todo. | Se devuelve entero. |
 | Objetos | Las dos apuestas, enviadas al inventario del ganador. | Se devuelven. |
 | Duelo a riesgo | El inventario entero, la armadura y la mano secundaria del perdedor (incluidos el cursor y la cuadrícula de crafteo). El perdedor conserva todo lo demás que tenía. | Nadie pierde nada. |
-| Kit del servidor | Nadie se queda el kit. Los dos recuperan sus cosas. | Igual. |
+| Kit | Nadie se queda el kit. Los dos recuperan sus cosas. | Igual. |
 
 Quien se desconectó recupera sus cosas cuando vuelve a entrar. Las victorias, derrotas y rachas solo se
 anotan cuando hay ganador; un empate no cambia ninguna estadística.
@@ -144,6 +177,60 @@ jugador su estado guardado cuando vuelve a entrar; el inventario de un duelo a r
 que nunca se devuelve dos veces. Al desactivar el plugin, los duelos en curso se descartan igual, y los
 jugadores que sigan conectados van al spawn del mundo principal.
 </Callout>
+
+## Después del duelo
+
+Cuando se decide un duelo que llegó al combate, los dos jugadores leen un bloque centrado en el chat:
+**DUELO TERMINADO** con el rival, la duración ⌚ y, para un kit de rondas o de golpes, el marcador. Tres
+botones funcionan durante `after-duel.window` (5 minutos por defecto; `0s` los desactiva):
+
+| Botón | Qué hace |
+|---|---|
+| **[INVENTARIO]** | Una pantalla de solo lectura con lo que tenía el rival al terminar, capturado en el momento en que se decidió el duelo, antes de devolver nada o de cobrar ninguna apuesta: armadura, mano secundaria, cada hueco, y una tarjeta con el resultado, la vida, la comida, los efectos activos, las pociones y sopas que quedaban, los golpes y las rondas. Un botón cambia al otro jugador. |
+| **[EL TUYO]** | La misma pantalla con lo que tenías tú al terminar. |
+| **[⟲ REVANCHA]** | El mismo reto otra vez, enviado como una solicitud normal: se aplican todas las comprobaciones, el cooldown y el toggle, y el otro jugador recibe el bloque habitual para aceptar o rechazar. El mismo modo, kit y riesgo; la arena mientras siga existiendo, si no una aleatoria; la apuesta de dinero solo mientras los dos puedan pagarla; nunca una apuesta de objetos, porque los dos tendrían que volver a llenar la ventana de intercambio. Necesita `exyliaduels.rematch`. |
+
+Un botón pulsado fuera de su plazo, o por alguien que no estaba en el duelo, responde "Ese duelo ya no se
+puede consultar." En una red el resumen se guarda en la base de datos compartida hasta que se cierra su
+plazo, así que los botones funcionan desde el servidor al que se haya devuelto a los jugadores.
+
+## Historial
+
+`/duel history` muestra tus duelos terminados, del más reciente al más antiguo: resultado, rival, modo,
+marcador, duración ⌚ y fecha, con tus victorias, derrotas y empates entre ellos. `/duel history <player>`
+muestra los de cualquiera y necesita `exyliaduels.history.others`. Cada duelo abre una pantalla con el modo y
+la arena, el marcador, la apuesta de dinero, el tiempo, el servidor que lo decidió, y **Ver repetición**.
+
+Se guarda cada duelo que llegó al combate, empates incluidos; un duelo cancelado antes del combate nunca.
+Cada jugador guarda `history.keep` duelos (45 por defecto) durante como mucho `history.max-age` (30 días).
+
+## Repeticiones
+
+Cada duelo que llega al combate se graba (o solo los duelos con kit, con `replays.kit-only`): los dos
+luchadores, cada flecha, perla y poción, cada bloque puesto, roto o volado dentro de la arena, y cada ronda.
+**Ver repetición** da al espectador una copia libre de la misma arena, donde vuela alrededor del combate
+como una cámara que nadie puede tocar, manejada desde una barra rápida:
+
+| Hueco | Botón |
+|---|---|
+| 1 | **« 10 segundos** atrás. |
+| 2 | **Reproducir / pausar**. |
+| 3 | **10 segundos »** adelante. |
+| 5 | **Velocidad**: clic izquierdo más lenta, clic derecho más rápida. |
+| 6 | **Ojos de un luchador**: la vista de cada luchador por turnos, y después la tuya otra vez. |
+| 7 | **Desde el inicio**. |
+| 9 | **Salir**. |
+
+Encima se muestran el tiempo, la duración y la velocidad. `/duel leave`, desconectarse o un apagado también
+salen, y al espectador se le deja exactamente como estaba. La barra solo la ve quien mira: lo que lleva de
+verdad no se toca.
+
+- Tus propios duelos necesitan `exyliaduels.replay`; los de cualquiera, `exyliaduels.replay.others`.
+- La repetición se ve en su propia arena: un servidor sin esa arena la rechaza con "La arena de ese duelo no
+  está en este servidor.", y cuando todas las copias están en uso, "No hay ninguna copia libre de esa arena
+  ahora mismo."
+- Se guarda una sola repetición para los dos jugadores, y se borra con la última fila del historial que la
+  muestra, o pasado `replays.max-age` (14 días).
 
 ## Espectadores
 
@@ -162,6 +249,9 @@ ganado. `/duel stats` muestra las tuyas, `/duel stats <player>` las de cualquier
 
 El dinero ganado solo cuenta los pagos en la moneda configurada (`bets.money.currency`, o la del servidor
 por defecto): cantidades en monedas distintas no se suman.
+
+El porcentaje de victorias, los duelos jugados, las clasificaciones de victorias y rachas, y el rival y el
+resultado del último duelo son placeholders: consulta [Placeholders](/docs/exyliaduels/placeholders).
 
 `/duel toggle` deja de recibir retos o vuelve a recibirlos; se guarda con las estadísticas, así que sigue al
 jugador entre servidores que comparten la base de datos.

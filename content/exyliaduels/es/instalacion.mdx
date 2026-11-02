@@ -11,6 +11,8 @@ después le pasa el control al plugin.
 
 ## Antes de empezar
 
+ExyliaDuels funciona en Paper 1.21.1 o superior, o un fork, y en Folia 1.21.4 o superior, con Java 21.
+
 | Plugin | Para qué |
 |---|---|
 | `packetevents` | Obligatorio. Está en `depend`, así que sin él el servidor no carga ExyliaDuels. Congelar a los dos jugadores durante la cuenta atrás se hace con paquetes. |
@@ -30,6 +32,8 @@ avisa en consola; reinicia otra vez para aplicarla.
 |---|---|
 | `PlaceholderAPI` | Los placeholders del plugin en otros plugins: scoreboards, tab, hologramas. Consulta [Placeholders](/docs/exyliaduels/placeholders). |
 | `FastAsyncWorldEdit` | Si está instalado, se usa para guardar y pegar las schematics de las arenas. Sin él, el motor propio de ExyliaLib hace lo mismo con los mismos archivos `.schem`. |
+| `ExyliaRandomKitsCore` | Un **kit aleatorio** en el selector de kits de la pantalla de reto. Consulta [Arenas y kits](/docs/exyliaduels/arenas-y-kits#kits-de-otros-plugins). |
+| `AuraSkills`, `mcMMO` | Nada que configurar: mientras un jugador está en un duelo, mirando uno o viendo una repetición, estos plugins no le dan experiencia, habilidades ni estadísticas de combate. |
 | `ExyliaProxyUtils` | En el proxy, para duelos entre servidores. Consulta [Red](/docs/exyliaduels/red). |
 
 ## Instalar
@@ -59,23 +63,28 @@ Todos están en `plugins/ExyliaDuels/`.
 | Archivo | Contenido |
 |---|---|
 | `loader.yml` | Lo escribe el cargador: `license_key`, y `version` (`auto` mantiene el plugin en la última versión). |
-| `config.yml` | Solicitudes, tiempos del combate, modos, apuestas, espectadores, red, el scoreboard del duelo y la lista de comandos permitidos. Consulta [Configuración](/docs/exyliaduels/configuracion). |
+| `config.yml` | Solicitudes, tiempos del combate, modos, apuestas, espectadores, después del duelo, historial, repeticiones, red, los scoreboards del duelo y la lista de comandos permitidos. Consulta [Configuración](/docs/exyliaduels/configuracion). |
 | `database.yml` | Dónde se guardan las filas, y Redis para una red. Lo escribe ExyliaLib. |
 | `lang/<language>/messages.yml` | Cada línea de chat, título, boss bar y etiqueta. |
-| `lang/<language>/menus/user/challenge.yml` | La pantalla de reto. Es tuya para cambiarle el estilo: una actualización solo añade lo que falta. |
-| `lang/<language>/menus/admin/` | Las pantallas de administración: `panel`, `arenas`, `arena`, `kits`, `kit`, `settings`. Se regeneran desde el jar en cada arranque, así que no las edites. |
+| `lang/<language>/menus/user/` | Las pantallas de jugador: `challenge`, `duel_inventory` (la vista del inventario del final del duelo), `history` e `history_entry`. Son tuyas para cambiarles el estilo: una actualización solo añade lo que falta. |
+| `lang/<language>/overlays/replay.yml` | La barra que se muestra mientras se mira una repetición. Tuya para cambiarle el estilo, como las pantallas de jugador. |
+| `lang/<language>/menus/admin/` | Las pantallas de administración: `panel`, `arenas`, `arena`, `kits`, `kit`, `kit_external`, `kit_start`, `kit_attributes`, `kit_combat`, `kit_win`, `settings`, `own` y `own_win`. Se regeneran desde el jar en cada arranque, así que no las edites. |
 | `schematics/duels_<arena>.schem` | La schematic de cada arena, desde la que se regenera y se copia. |
 
 ## La base de datos
 
-ExyliaDuels guarda tres tablas en la base de datos a la que apunta `database.yml`: H2 en un archivo por
+ExyliaDuels guarda siete tablas en la base de datos a la que apunta `database.yml`: H2 en un archivo por
 defecto, o MySQL, MariaDB, PostgreSQL o MongoDB a través de [ExyliaLib](/docs/exylialib/base-de-datos).
 
 | Tabla | Filas |
 |---|---|
 | `exyliaduels_players` | Victorias, derrotas, racha actual y mejor racha, dinero ganado de cada jugador, y si acepta retos. |
 | `exyliaduels_arenas` | Cada arena: nombre, icono, mundo, caja, los dos spawns, copias, si está activada, y el kit al que está ligada. |
-| `exyliaduels_kits` | Cada kit: nombre, icono, objetos y si está activado. |
+| `exyliaduels_kits` | Cada kit: nombre, icono, objetos, si está activado, sus flags de arena y sus reglas. |
+| `exyliaduels_kit_profiles` | Las flags de arena y las reglas de los kits que ofrecen otros plugins, y de los duelos con inventario propio. |
+| `exyliaduels_history` | Una fila por jugador de cada duelo terminado: rival, resultado, modo, arena, marcador, apuesta, duración, fecha, servidor y la repetición a la que apunta. |
+| `exyliaduels_replays` | Las grabaciones, una por duelo, compartida por las filas de historial de los dos jugadores. |
+| `exyliaduels_post_duels` | Los resúmenes del final de un duelo en red, para que los botones de inventario y revancha funcionen desde cualquier servidor hasta que se cierre su plazo. |
 
 Las estadísticas son seguras en una base de datos que comparten varios servidores: cada cambio solo se
 escribe si la fila sigue como estaba al leerla, y si no se vuelve a intentar, así que una victoria en un
@@ -84,6 +93,14 @@ servidor y un toggle en otro nunca se pisan. Las filas de los jugadores conectad
 Las apuestas las retiene el depósito de ExyliaLib, y el estado de cada jugador las instantáneas de
 ExyliaLib, en la misma base de datos. Lo que un crash deja retenido se devuelve en el siguiente arranque; lo
 que tenía un jugador antes de un duelo se le devuelve cuando vuelve a entrar.
+
+## Borrar datos
+
+ExyliaDuels no tiene un comando de reinicio propio. Sus tablas están clasificadas para los comandos de
+ExyliaLib: `/exylialib wipe ExyliaDuels <table|*>` vacía una tabla o todas, y
+`/exylialib resetplayer <player> ExyliaDuels` borra las estadísticas y el historial de duelos de un jugador.
+Las arenas, los kits y sus flags y reglas son configuración, no datos de jugadores. Consulta
+[los comandos de ExyliaLib](/docs/exylialib/comandos).
 
 ## Actualizar
 

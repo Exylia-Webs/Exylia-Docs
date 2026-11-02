@@ -1,6 +1,6 @@
 ---
 title: "Duelling"
-description: "The challenge screen, the request, collecting the stakes, the countdown and the fight, how a duel ends and is paid, spectators and records."
+description: "The challenge screen, the request, collecting the stakes, the countdown and the fight, rounds, how a duel ends and is paid, the end-of-duel block and rematch, history, replays, spectators and records."
 ---
 
 ## Challenging
@@ -16,8 +16,8 @@ Before the screen opens, the plugin checks that:
   (an ExyliaLib session such as a queue or a minigame);
 - neither player is combat tagged;
 - at least one arena is ready (or, on a network, a kit duel could be fought on the arena server);
-- the challenger is not on the challenge cooldown (`requests.cooldown`, skipped with
-  `exyliaduels.bypass.cooldown`).
+- the challenger is not on the challenge cooldown (`requests.cooldown`, or the rank's
+  `exyliaduels.cooldown.<n>`, skipped with `exyliaduels.bypass.cooldown`).
 
 ### The challenge screen
 
@@ -26,10 +26,10 @@ One screen, one card per term. Every click redraws it in place; ESC closes it an
 | Card | What it does |
 |---|---|
 | **Challenge** (top) | The opponent's head. |
-| **Mode** | Switches between **own inventory** and **server kit**. Only the modes the server allows are offered. |
-| **Kit** or **Risk** | With a server kit, opens a picker of the enabled kits. With their own inventory, toggles **risk**: whether the loser's inventory goes to the winner. |
+| **Mode** | Switches between **own inventory** and **kit**. Only the modes the server allows are offered. |
+| **Kit** or **Risk** | With a kit, opens a picker of the enabled server kits, then the kits other plugins offer (such as the Random kit), only those the player's rank includes. With their own inventory, toggles **risk**: whether the loser's inventory goes to the winner. |
 | **Arena** | Opens a picker: **Random**, or any ready arena. An arena bound to a kit is listed as `Name (Kit)`, and picking it also picks its kit. |
-| **Money bet** | Asks for the currency, when more than one is offered, then the amount each player stakes, between the minimum and maximum; `0` removes the bet. |
+| **Money bet** | Asks for the currency, when more than one is offered, then the amount each player stakes, between the minimum and the maximum (the rank's `exyliaduels.bet.max.<n>` when it has one); `0` removes the bet. |
 | **Item bet** | Toggles an item bet: both players fill a trade window before the fight. |
 | **Send challenge** | Checks everything again and sends it. |
 
@@ -38,10 +38,16 @@ enabled kit. A change that the chosen arena no longer takes (a different kit, or
 kit-bound arena) puts the arena back to **Random**. A money bet the player cannot afford, or under the
 minimum, is refused when typed, so the screen never shows a bet that cannot go out.
 
+Each option sits behind a node everybody holds by default (`exyliaduels.mode.own`, `mode.risk`,
+`bet.money`, `bet.items`, `arena.choose`, `kit.<id>`). A button the player's rank does not include answers
+"Your rank does not include that option." and changes nothing. See
+[Permissions](/docs/exyliaduels/permissions#challenge-options).
+
 ### The request
 
 On send, the cooldown starts and the challenged player receives a centred block in chat: who, the mode, the
-arena, the bet and how long it waits, with clickable **[✔ ACCEPT]** and **[✘ DECLINE]** buttons. A
+arena, the bet and how long it waits, with clickable **[✔ ACCEPT]** and **[✘ DECLINE]** buttons. A kit
+with hits to win or rounds says so after its name: "(first to 5 hits)", "(best of 3)". A
 challenge waits `requests.expiry` (60 seconds by default); when it runs out both are told.
 
 Each player has at most one challenge out: a new one replaces the previous. Leaving the server drops every
@@ -50,7 +56,7 @@ challenge a player sent or received.
 | Command | What it does |
 |---|---|
 | `/duel accept [player]` | Accepts that player's challenge; without a name, the newest one. |
-| `/duel decline [player]` | Declines it; without a name, the newest one. The challenger is told. |
+| `/duel decline [player]` | Declines it; without a name, the newest one. The challenger is told. Never needs a permission. |
 
 ## From accept to fight
 
@@ -78,14 +84,17 @@ player may have changed since the challenge was sent. Then:
   </Step>
   <Step title="Into the arena">
     Each player's state is saved, then they are taken to their spawn: the challenger to spawn A, the
-    challenged player to spawn B. In a kit duel both are put in survival and dressed in the kit.
+    challenged player to spawn B. In a kit duel both are put in survival and dressed in the kit; a kit from
+    another plugin is put on by that plugin.
   </Step>
   <Step title="Countdown">
-    Both start even: survival, full health and food, no potion effects, no fire. They are frozen in place
-    through `match.countdown` (5 seconds by default) with a countdown title, and the duel scoreboard comes up.
+    Both start even: survival, full health and food, no potion effects, no fire, unless the kit's
+    [fight start](/docs/exyliaduels/arenas-and-kits#rules) says otherwise. They are frozen in place through
+    `match.countdown` (5 seconds by default) with a countdown title, and the duel scoreboard comes up.
   </Step>
   <Step title="Fight">
-    **FIGHT!** Both are released, and a boss bar shows the time left of `match.max-duration`.
+    **FIGHT!** Both are released, the kit's potion effects are given, and a boss bar shows the time left of
+    `match.max-duration`.
   </Step>
 </Steps>
 
@@ -97,7 +106,12 @@ player may have changed since the challenge was sent. Then:
 - **Nobody leaves the arena.** A fighter cannot walk out of the arena's columns, and a teleport away is
   refused with "You can't leave the arena during a duel." Nobody else walks or teleports into an arena in use, except
   players with `exyliaduels.admin`.
-- **Falling out loses.** Dropping more than a block below the arena's floor counts as a death.
+- **Falling out loses.** Dropping more than a block below the arena's floor counts as a death, and so does
+  dropping below the kit's **fall depth**.
+- **The kit's rules apply**: its arena flags, no damage, hit delay, regeneration, hunger, the ender pearl
+  and golden apple cooldowns and the build height. See [Arenas and kits](/docs/exyliaduels/arenas-and-kits#rules).
+- **Skill plugins are held back.** AuraSkills and mcMMO give fighters no experience, abilities or combat
+  stats until they are home.
 - **Commands** outside `allowed-commands` are refused.
 - **Dropping items** is refused in kit duels and own-inventory duels without risk: what the snapshot gives
   back would come back twice. In a risk duel the items are the players' to throw.
@@ -105,28 +119,45 @@ player may have changed since the challenge was sent. Then:
 - **Dying** never really happens: the death is cancelled and nothing drops. During the fight it loses the
   duel. Graves, death chests and kill rewards never see a duel death.
 
+## Rounds
+
+A kit with **Rounds** set is played as a best of 3, 5 or more. Losing a round (a death, a fall, or the
+opponent landing the hits to win) scores it for the other player: both see the score in chat and as a
+ROUND WON or ROUND LOST title for `match.end-delay`. Then the arena's blocks are put back, what was left
+lying around is cleared, and both start again from their spawns with the kit and its fight start (a kit from
+another plugin is put on again by it, with the same roll), frozen through `match.countdown` with the round
+number under the title.
+
+- The first to win the kit's rounds wins the duel. Only the duel decides records, bets and stakes.
+- `match.max-duration` covers every round together: running out is a draw, whatever the score, and every
+  stake is refunded.
+- Quitting during any round forfeits the whole duel.
+- The score is on `rounds-scoreboard`, and the challenge reads "(best of N)".
+- Own inventory duels, kept or at risk, are always a single fight.
+
 ## How a duel ends
 
 | Ending | Result |
 |---|---|
-| A player dies or falls out | The other wins. |
+| A player dies or falls out | The other wins. With rounds, the other wins the round. |
+| A player lands the kit's hits to win | They win (the round, with rounds). The other is told "… landed N hits first." |
 | A player quits during the fight | The other wins: "… left the duel. You win!". Combat-log punishments are cancelled; quitting already forfeits. |
 | A player quits before the arena | The duel is called off; every stake goes back. |
 | `match.max-duration` runs out | A **draw**: every stake goes back. |
 | Another plugin takes a player back | Before the fight it is called off; during it, a draw. |
 
-Both see a VICTORY, DEFEAT or DRAW title. The result stays on screen for `match.end-delay` (3 seconds by
-default). Then spectators are sent back, both players are restored, the stakes are settled, and the arena is
+Both see a VICTORY, DEFEAT or DRAW title, and the loser watches the end as a spectator. The result stays on
+screen for `match.end-delay` (3 seconds by default). Then spectators are sent back, both players are restored, the stakes are settled, and the arena is
 freed and regenerated.
 
 ### Who gets what
 
 | Stake | Winner | Draw or called off |
 |---|---|---|
-| Money | Both stakes, less `bets.money.tax-percent` (5% by default), which is destroyed: a money sink. Players with `exyliaduels.bypass.tax` keep it all. | Refunded in full. |
+| Money | Both stakes, less `bets.money.tax-percent` (5% by default) or the winner's `exyliaduels.tax.<n>`, which is destroyed: a money sink. Players with `exyliaduels.bypass.tax` keep it all. | Refunded in full. |
 | Items | Both stakes, sent to the winner's inventory. | Refunded. |
 | Risk duel | The loser's whole inventory, armour and off hand (the cursor and crafting grid included). The loser keeps everything else they had. | Nobody loses anything. |
-| Server kit | Nobody keeps the kit. Both get their own things back. | Same. |
+| Kit | Nobody keeps the kit. Both get their own things back. | Same. |
 
 A player who quit gets their things back on their next join. Wins, losses and streaks are only recorded when
 there is a winner; a draw changes no record.
@@ -137,6 +168,59 @@ in. A crash refunds what was held on the next start and gives each player their 
 join; a risk duel's inventory is the escrow's, so it is never given back twice. On a plugin disable,
 running duels are dropped the same way, and players still online are sent to the main world's spawn.
 </Callout>
+
+## After the duel
+
+Once a duel that reached the fight is decided, both players read a centred block in chat: **DUEL OVER**
+with the opponent, the duration ⌚ and, for a kit of rounds or hits, the score. Three buttons work for
+`after-duel.window` (5 minutes by default; `0s` turns them off):
+
+| Button | What it does |
+|---|---|
+| **[INVENTORY]** | A read-only screen with what the opponent ended with, captured the moment the duel was decided, before anything was given back or taken as a stake: armour, off hand, every slot, and a card with the result, health, food, active effects, potions and soups left, hits and rounds. A button switches to the other player. |
+| **[YOURS]** | The same screen for what you ended with. |
+| **[⟲ REMATCH]** | The same challenge again, sent as an ordinary request: every check, the cooldown and the toggle apply, and the other player gets the usual accept and decline block. Same mode, kit and risk; the arena while it still exists, else a random one; the money bet only while both can still pay it; never an item bet, since both would have to fill the trade window again. Needs `exyliaduels.rematch`. |
+
+A button clicked after its window, or by somebody who was not in the duel, answers "That duel can no longer
+be looked back on." On a network the summary is kept in the shared database until its window closes, so the
+buttons work from whichever server the players were sent back to.
+
+## History
+
+`/duel history` lists your finished duels, newest first: result, opponent, mode, score, duration ⌚ and
+date, with your wins, losses and draws among them. `/duel history <player>` shows anybody's and needs
+`exyliaduels.history.others`. Each duel opens a screen with the mode and arena, the score, the money bet,
+the time, the server that decided it, and **Watch replay**.
+
+Every duel that reached the fight is stored, draws included; a duel called off before the fight never is.
+Each player keeps `history.keep` duels (45 by default) for up to `history.max-age` (30 days).
+
+## Replays
+
+Every duel that reaches the fight is recorded (or only kit duels, with `replays.kit-only`): both fighters,
+every arrow, pearl and potion, every block placed, broken or blown up inside the arena, and each round.
+**Watch replay** gives the viewer a free copy of the same arena, where they fly around the fight as a camera
+nobody can touch, driven from a hotbar:
+
+| Slot | Button |
+|---|---|
+| 1 | **« 10 seconds** back. |
+| 2 | **Play / pause**. |
+| 3 | **10 seconds »** ahead. |
+| 5 | **Speed**: left-click slower, right-click faster. |
+| 6 | **A fighter's eyes**: each fighter's view in turn, then your own again. |
+| 7 | **From the start**. |
+| 9 | **Leave**. |
+
+The time, length and speed show above it. `/duel leave`, quitting or a stop also leave, and the viewer is
+put back exactly as they were. The hotbar is drawn for the viewer only: what they really hold stays
+untouched.
+
+- Your own duels need `exyliaduels.replay`; anybody's, `exyliaduels.replay.others`.
+- The replay is watched in its own arena: a server without that arena refuses it with "That duel's arena is
+  not on this server.", and when every copy is in use, "No copy of that arena is free right now."
+- One replay is stored for both players and deleted with the last history row that lists it, or after
+  `replays.max-age` (14 days).
 
 ## Spectators
 
@@ -155,6 +239,9 @@ shows your own, `/duel stats <player>` anybody's the server knows.
 
 Money won only counts payouts in the configured currency (`bets.money.currency`, or the server's default):
 amounts in different currencies do not add up.
+
+Win rate, games played, leaderboards of wins and streaks, and the last duel's opponent and result are
+placeholders: see [Placeholders](/docs/exyliaduels/placeholders).
 
 `/duel toggle` stops or resumes receiving challenges; it is stored with the record, so it follows the
 player across servers sharing the database.
