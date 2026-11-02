@@ -2596,10 +2596,10 @@ export const plugins: Plugin[] = [
     name: "ExyliaAnalytics",
     tagline: { en: "The agent behind Exylia Analytics", es: "El agente de Exylia Analytics" },
     summary: {
-      en: "One jar for Paper, Spigot, Folia and Velocity that reports sessions, AFK, performance, punishments, votes, ranks, PlaceholderAPI values and the economy to the Exylia Analytics dashboard: linked with a code, configured from the web, with no open port.",
-      es: "Un solo jar para Paper, Spigot, Folia y Velocity que envía sesiones, AFK, rendimiento, sanciones, votos, rangos, valores de PlaceholderAPI y la economía al panel de Exylia Analytics: se vincula con un código, se configura desde la web y no abre ningún puerto.",
+      en: "One jar for Paper, Spigot, Folia and Velocity that reports sessions, AFK, performance, punishments, votes, ranks, anticheat flags, PlaceholderAPI values, the economy and market trades to the Exylia Analytics dashboard: linked with a code, configured from the web, with no open port.",
+      es: "Un solo jar para Paper, Spigot, Folia y Velocity que envía sesiones, AFK, rendimiento, sanciones, votos, rangos, avisos de anticheat, valores de PlaceholderAPI, la economía y las operaciones de mercado al panel de Exylia Analytics: se vincula con un código, se configura desde la web y no abre ningún puerto.",
     },
-    version: "1.1.0",
+    version: "1.2.0",
     status: "beta",
     category: { en: "Analytics", es: "Analítica" },
     minecraft: "1.17+",

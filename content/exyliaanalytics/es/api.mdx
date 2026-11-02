@@ -199,6 +199,52 @@ ExyliaAnalytics.supply("coins", "coins", total, holders);
 Una moneda que nunca recibe un `supply(...)` también tiene masa monetaria en el panel, **estimada** a
 partir de los últimos saldos que ha visto el agente.
 
+## Informar del mercado
+
+Las casas de subastas, los libros de órdenes, las tiendas y los comandos de venta informan de cada
+operación completada y, cada pocos minutos, de lo que contiene cada mercado. `Trade` y `MarketSnapshot`
+están en `net.exylia.analytics.api`, en el mismo jar del loader.
+
+```java
+ExyliaAnalytics.trade(Trade.builder("auction_house", "sale")
+        .buyer(buyer).seller(seller)                  // null = el servidor
+        .item("minecraft:diamond", 16).plain(true)
+        .itemName("Sharp Diamond")
+        .price("coins", new BigDecimal("1600"))
+        .tax(new BigDecimal("80"))
+        .fee(new BigDecimal("5"))
+        .build());
+
+ExyliaAnalytics.marketState(new MarketSnapshot("bazaar", List.of(
+        MarketSnapshot.Entry.of("minecraft:diamond", "coins", 14, 900, new BigDecimal("88200"))
+                .book(new BigDecimal("95"), new BigDecimal("98"), 1200L, 900L))));
+```
+
+| Campo | Significado y límite |
+|---|---|
+| `market` | Dónde ocurrió: `auction_house`, `orders`, `bazaar`, `shop`, `sell`, `trade`… `[a-z0-9_]{1,32}` tras pasar a minúsculas. |
+| `action` | Qué ocurrió: `sale`, `buy`, `sell`, `fill`, `buyout`, `bid_win`… Mismo límite. |
+| `buyer`, `seller` | Los jugadores de cada lado; `null` es el servidor (una tienda de admin que vende, el comando de venta que compra). |
+| `item` | Una clave con espacio de nombres, `minecraft:diamond`, o `custom:<plugin>:<id>` para un ítem propio. `[a-z0-9_.:/-]{1,64}` tras pasar a minúsculas. |
+| `itemName` | Nombre visible opcional en texto plano: sin códigos de color, cortado a 64. |
+| `plain` | `true` cuando el stack es el material sin más (sin nombre, lore ni encantamientos), para que su precio unitario se compare con cualquier otro stack simple de esa clave. |
+| `amount` | Unidades intercambiadas, más de 0. |
+| `price` | La moneda (hasta 32 caracteres) y el total que pagó el comprador. |
+| `tax`, `fee` | Retenido al vendedor y destruido / pagado por el vendedor aparte, como una comisión de publicación. Ambos son 0 por defecto. |
+| `channel` | Opcional: cómo se hizo una venta al servidor (`command`, `wand`, `autosell`). |
+
+Una entrada de instantánea es un ítem y una moneda: anuncios abiertos, unidades ofrecidas y la suma de sus
+precios pedidos; `book(...)` añade la mejor oferta de compra y de venta (precios unitarios) y las unidades
+pedidas y ofrecidas, para mercados con libro de órdenes. Precios y valores son finitos y no negativos.
+
+- Cada operación se envía al momento; por encima de 5.000 por minuto el resto se descarta y se registra
+  cuántas.
+- Una instantánea guarda como mucho 500 entradas, la última de cada ítem y moneda, y cuenta una
+  instantánea por mercado y minuto (una repetición anterior se ignora).
+- Una operación o entrada que rompe un límite se descarta sola; las llamadas nunca lanzan excepciones a tu
+  código.
+- Ambas pasan por el módulo **Mercado**.
+
 ## `available()`
 
 ```java
@@ -216,3 +262,8 @@ API de economía solo tiene `track`; el agente registra entonces *"The installed
 economy API is disabled until it is updated"*, los eventos personalizados siguen funcionando, y tu plugin
 recibe un `NoSuchMethodError` si llama a `economy(...)` o `supply(...)`. Sustituir el jar del loader lo
 arregla.
+
+La API de mercado llegó aún después: con un loader sin ella el agente registra *"The installed loader is
+outdated: the market API is disabled until it is updated"*, y `trade(...)` y `marketState(...)` lanzan un
+`LinkageError` (`NoSuchMethodError` o `NoClassDefFoundError`). Un plugin de mercado captura
+`LinkageError` en su primera llamada y deja de informar.

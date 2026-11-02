@@ -197,6 +197,50 @@ ExyliaAnalytics.supply("coins", "coins", total, holders);
 A currency that never gets a `supply(...)` still gets a money supply on the dashboard, **estimated**
 from the latest balances the agent has seen.
 
+## Reporting the market
+
+Auction houses, order books, shops and sell commands report each completed trade and, every few minutes,
+what each market holds. `Trade` and `MarketSnapshot` live in `net.exylia.analytics.api`, in the same
+loader jar.
+
+```java
+ExyliaAnalytics.trade(Trade.builder("auction_house", "sale")
+        .buyer(buyer).seller(seller)                  // null = the server
+        .item("minecraft:diamond", 16).plain(true)
+        .itemName("Sharp Diamond")
+        .price("coins", new BigDecimal("1600"))
+        .tax(new BigDecimal("80"))
+        .fee(new BigDecimal("5"))
+        .build());
+
+ExyliaAnalytics.marketState(new MarketSnapshot("bazaar", List.of(
+        MarketSnapshot.Entry.of("minecraft:diamond", "coins", 14, 900, new BigDecimal("88200"))
+                .book(new BigDecimal("95"), new BigDecimal("98"), 1200L, 900L))));
+```
+
+| Field | Meaning and limit |
+|---|---|
+| `market` | Where it happened: `auction_house`, `orders`, `bazaar`, `shop`, `sell`, `trade`… `[a-z0-9_]{1,32}` after lower-casing. |
+| `action` | What happened: `sale`, `buy`, `sell`, `fill`, `buyout`, `bid_win`… Same limit. |
+| `buyer`, `seller` | The players on each side; `null` is the server (an admin shop selling, the sell command buying). |
+| `item` | A namespaced key, `minecraft:diamond`, or `custom:<plugin>:<id>` for a custom item. `[a-z0-9_.:/-]{1,64}` after lower-casing. |
+| `itemName` | Optional display name as plain text: colour codes removed, cut at 64. |
+| `plain` | `true` when the stack is the bare material (no name, lore or enchantments), so its unit price compares with every other plain stack of that key. |
+| `amount` | Units traded, above 0. |
+| `price` | The currency (up to 32 characters) and the total the buyer paid. |
+| `tax`, `fee` | Withheld from the seller and destroyed / paid by the seller on top, such as a listing fee. Both default to 0. |
+| `channel` | Optional: how a sale to the server was made (`command`, `wand`, `autosell`). |
+
+A snapshot entry is one item and currency: open listings, units offered and their asking prices summed;
+`book(...)` adds the best bid and ask (unit prices) and the units wanted and offered, for markets with an
+order book. Prices and values are finite and not negative.
+
+- Each trade is sent as it comes; over 5,000 a minute the rest are dropped and the count is logged.
+- A snapshot keeps at most 500 entries, the last one of each item and currency, and one snapshot per
+  market a minute counts (an earlier repeat is ignored).
+- A trade or entry that breaks a limit is dropped on its own; the calls never throw into your code.
+- Both go through the **Market** module.
+
 ## `available()`
 
 ```java
@@ -212,3 +256,8 @@ The API classes live in the loader, not in the agent the loader downloads. A loa
 economy API existed has only `track`; the agent then logs *"The installed loader is outdated: the
 economy API is disabled until it is updated"*, custom events keep working, and your plugin gets a
 `NoSuchMethodError` if it calls `economy(...)` or `supply(...)`. Replacing the loader jar fixes it.
+
+The market API came later still: on a loader without it the agent logs *"The installed loader is
+outdated: the market API is disabled until it is updated"*, and `trade(...)` and `marketState(...)` throw a
+`LinkageError` (`NoSuchMethodError` or `NoClassDefFoundError`). A market plugin catches `LinkageError`
+around its first call and stops reporting.

@@ -51,12 +51,30 @@ La envían los backends y los servidores independientes. Módulos: **Sesiones** 
 | Evento | Cuándo | Datos |
 |---|---|---|
 | `server.join` | Un jugador entra en este servidor. | — |
-| `server.leave` | Un jugador sale de él, o se apaga. | Cómo terminó (`quit`, `kick`, `shutdown`) y la actividad de la estancia: mensajes de chat, comandos, muertes y asesinatos de jugadores. |
+| `server.leave` | Un jugador sale de él, o se apaga. | Cómo terminó (`quit`, `kick`, `shutdown`) y la actividad de la estancia: mensajes de chat, comandos, muertes, asesinatos de jugadores y logros conseguidos (sin recetas ni logros ocultos), más los segundos desde la entrada hasta el primer mensaje de chat y hasta el primer comando. Los comandos de login (`/login`, `/register`, `/2fa`…) cuentan como comandos, pero nunca como el primero. |
 | `afk.start` | Un jugador no ha hecho nada durante el tiempo AFK (300 s por defecto). | — |
 | `afk.end` | Se mueve, mira alrededor, escribe, ejecuta un comando o interactúa de nuevo — o sale estando AFK. | — |
 
 Los contadores de actividad son **solo recuentos**. Un mensaje de chat cancelado por otro plugin no
 cuenta; una baja solo cuenta cuando quien mata es otro jugador.
+
+## Historial de jugadores
+
+| Evento | Lo envía | Módulo | Datos |
+|---|---|---|---|
+| `player.history` | B S | Sesiones | La primera y la última vez que una cuenta jugó en este servidor, su último nombre conocido y su tiempo de juego total. |
+
+Un servidor que llevaba tiempo funcionando antes de vincularse ya conoce a sus jugadores, así que el panel
+nunca cuenta a un veterano como nuevo:
+
+- **Una vez por id de servidor vinculado**, justo después de vincular o en el primer arranque con esta
+  versión, se leen todos los `<world>/playerdata/*.dat` y `<world>/stats/<uuid>.json` del mundo principal
+  en un hilo propio de baja prioridad, a unos 100 jugadores por segundo, con pausa mientras más de 2.000
+  eventos esperan para enviarse. No toca el hilo principal. Una importación terminada escribe
+  `data/history-imported`; una interrumpida vuelve a empezar en el siguiente arranque.
+- **En la primera entrada de un jugador que vuelve** tras cada arranque, desde el jugador en línea.
+
+`import-history: false` en [`config.yml`](/docs/exyliaanalytics/configuracion) desactiva ambas cosas.
 
 ## Rendimiento
 
@@ -78,6 +96,8 @@ Cada una se usa solo si su plugin está instalado. Ver [Integraciones](/docs/exy
 | `vote.cast` | Quien ejecute NuVotifier | Votos | La web de votación tal como la nombra Votifier, el nombre de usuario que votó, y el UUID del jugador cuando está conectado a ese servidor. |
 | `rank.add` | P B S | Rangos | El grupo y cuándo caduca (ninguno si es permanente). También se envía cuando cambia la caducidad de un grupo temporal. |
 | `rank.remove` | P B S | Rangos | El grupo. |
+| `anticheat.flag` | B S | Anticheat | Una vez por minuto por jugador, anticheat y check: cuántos avisos, el nombre y el tipo del check y el nivel de violación más alto de ese minuto. Ver [Integraciones](/docs/exyliaanalytics/integraciones#anticheats). |
+| `player.discord` | B S | Sesiones | La cuenta de Discord vinculada mediante DiscordSRV o EssentialsX Discord Link: su id, nombre y avatar. Se lee al entrar y al salir; solo se envía un cambio. |
 | `player.placeholders` | B S | Placeholders | Los valores de los placeholders indicados en `config.yml`, justo antes del `server.leave` del jugador. |
 
 ## Economía
@@ -90,6 +110,15 @@ una vez está en [Economía](/docs/exyliaanalytics/economia).
 | `economy.flow` | B S | Una vez por minuto, uno por jugador, moneda y motivo que se movió. | Moneda, motivo, número de cambios, total ganado, total gastado, el saldo tras el último cambio (cuando la fuente lo sabe) y la duración de la ventana. |
 | `economy.balance` | B S | Al entrar y al salir, y cada 10 minutos para las monedas de ExyliaLib. | El saldo de un jugador en una moneda. |
 | `economy.supply` | B S | Cuando un plugin lo envía a través de la API. | Moneda, ámbito de almacenamiento, la suma de todos los saldos y cuántas cuentas tienen dinero. |
+
+## Mercado
+
+| Evento | Lo envía | Cuándo | Datos |
+|---|---|---|---|
+| `market.trade` | B S | Al completarse cada operación que un plugin de mercado envía por la [API](/docs/exyliaanalytics/api#informar-del-mercado). Por encima de 5.000 operaciones por minuto el resto se descarta y se registra cuántas. | Mercado, acción, canal, comprador y vendedor (ninguno si es el servidor), id y nombre del ítem, cantidad, moneda, precio total, impuesto y comisión. |
+| `market.state` | B S | Cuando un plugin de mercado envía una instantánea: una por ítem y moneda, como mucho 500 por instantánea y una instantánea por mercado y minuto. | Mercado, ítem, moneda, anuncios, unidades y valor total y, en libros de órdenes, la mejor oferta de compra y de venta con su profundidad. |
+
+Ambos se descartan en el agente cuando el módulo **Mercado** está apagado.
 
 ## Eventos personalizados
 

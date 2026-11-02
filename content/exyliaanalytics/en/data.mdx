@@ -49,12 +49,30 @@ Sent by backends and standalone servers. Modules: **Sessions** for joins and lea
 | Event | When | Data |
 |---|---|---|
 | `server.join` | A player joins this server. | — |
-| `server.leave` | A player leaves it, or it shuts down. | How it ended (`quit`, `kick`, `shutdown`) and the stay's activity: chat messages, commands, deaths, and player kills. |
+| `server.leave` | A player leaves it, or it shuts down. | How it ended (`quit`, `kick`, `shutdown`) and the stay's activity: chat messages, commands, deaths, player kills and advancements earned (recipes and hidden advancements left out), plus the seconds from joining to the first chat message and to the first command. Login commands (`/login`, `/register`, `/2fa`…) count as commands but never as the first one. |
 | `afk.start` | A player has done nothing for the AFK time (300 s by default). | — |
 | `afk.end` | They move, look around, chat, run a command or interact again — or leave while AFK. | — |
 
 The activity counters are **counts only**. A chat message cancelled by another plugin is not counted;
 a kill counts only when the killer is another player.
+
+## Player history
+
+| Event | Sent by | Module | Data |
+|---|---|---|---|
+| `player.history` | B S | Sessions | One account's first and last time played on this server, its last known name and its lifetime playtime. |
+
+A server that ran long before it was linked already knows its players, so the dashboard never counts a
+veteran as new:
+
+- **Once per linked server id**, right after linking or on the first start with this version, every
+  `<world>/playerdata/*.dat` and `<world>/stats/<uuid>.json` of the main world is read on a low-priority
+  thread of its own, at about 100 players a second, pausing while more than 2,000 events wait to be
+  sent. Nothing touches the main thread. A finished import writes `data/history-imported`; an
+  interrupted one starts over on the next start.
+- **On a returning player's first join** after each start, from the live player.
+
+`import-history: false` in [`config.yml`](/docs/exyliaanalytics/configuration) turns both off.
 
 ## Performance
 
@@ -76,6 +94,8 @@ Each one is used only when its plugin is installed. See [Integrations](/docs/exy
 | `vote.cast` | Whoever runs NuVotifier | Votes | The voting site as Votifier names it, the username that voted, and the player's UUID when they are online on that server. |
 | `rank.add` | P B S | Ranks | The group, and when it expires (none when permanent). Also sent when a temporary group's expiry changes. |
 | `rank.remove` | P B S | Ranks | The group. |
+| `anticheat.flag` | B S | Anticheat | Once a minute per player, anticheat and check: how many flags, the check's name and type, and the highest violation level of that minute. See [Integrations](/docs/exyliaanalytics/integrations#anticheats). |
+| `player.discord` | B S | Sessions | The Discord account linked through DiscordSRV or EssentialsX Discord Link: its id, name and avatar. Read on join and quit; only a change is sent. |
 | `player.placeholders` | B S | Placeholders | The values of the placeholders listed in `config.yml`, just before the player's `server.leave`. |
 
 ## Economy
@@ -88,6 +108,15 @@ once is on [Economy](/docs/exyliaanalytics/economy).
 | `economy.flow` | B S | Once a minute, one per player, currency and reason that moved. | Currency, reason, number of changes, total gained, total spent, the balance after the last change (when the source knows it), and the window's length. |
 | `economy.balance` | B S | On join and quit, and every 10 minutes for ExyliaLib currencies. | One player's balance in one currency. |
 | `economy.supply` | B S | Whenever a plugin reports it through the API. | Currency, storage scope, the sum of every balance, and how many accounts hold money. |
+
+## Market
+
+| Event | Sent by | When | Data |
+|---|---|---|---|
+| `market.trade` | B S | As each trade a market plugin reports through the [API](/docs/exyliaanalytics/api#reporting-the-market) completes. Over 5,000 trades a minute the rest are dropped and the count is logged. | Market, action, channel, buyer and seller (none for the server), item id and display name, amount, currency, total price, tax and fee. |
+| `market.state` | B S | When a market plugin reports a snapshot: one per item and currency, at most 500 a snapshot and one snapshot per market a minute. | Market, item, currency, listings, units and total value, and for order books the best bid and ask with their depth. |
+
+Both are dropped at the agent when the **Market** module is off.
 
 ## Custom events
 
