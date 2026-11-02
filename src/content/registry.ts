@@ -2289,13 +2289,14 @@ export const plugins: Plugin[] = [
     name: "ExyliaMarket",
     tagline: { en: "Every way players buy and sell", es: "Todas las formas de comprar y vender" },
     summary: {
-      en: "An auction house, timed auctions with auto-bids, buy orders, a bazaar order book, a server shop edited in game, /sell with a worth list, sell wands and autosell, and safe face-to-face trades, with a shared price index, one /collect inbox and Discord webhooks.",
-      es: "Casa de subastas, subastas con tiempo y pujas automáticas, pedidos de compra, un bazar con libro de órdenes, una tienda del servidor editada en el juego, /sell con lista de precios, varitas de venta y autoventa, e intercambios cara a cara seguros, con un índice de precios compartido, un solo buzón /collect y webhooks de Discord.",
+      en: "An auction house, timed auctions with auto-bids, buy orders, a bazaar order book, a server shop of nested shops edited in game with coupons, gifts and a cart, /sell with a worth list, sell wands and autosell, and safe face-to-face trades, with network groups, a shared price index, one /collect inbox and Discord webhooks.",
+      es: "Casa de subastas, subastas con tiempo y pujas automáticas, pedidos de compra, un bazar con libro de órdenes, una tienda del servidor de tiendas anidadas editada en el juego con cupones, regalos y carrito, /sell con lista de precios, varitas de venta y autoventa, e intercambios cara a cara seguros, con grupos de red, un índice de precios compartido, un solo buzón /collect y webhooks de Discord.",
     },
-    version: "1.0.0",
+    version: "1.1.0",
+    purchase: "https://builtbybit.com/resources/exyliamarket.132053/",
     status: "beta",
     category: { en: "Survival", es: "Survival" },
-    minecraft: "1.21+",
+    minecraft: "1.21.1+",
     banner: "https://s3.exylia.net/exylia-plugins/public/static/images/plugins/market/ExyliaMarketBanner.webp",
     tags: [
       { en: "Economy", es: "Economía" },

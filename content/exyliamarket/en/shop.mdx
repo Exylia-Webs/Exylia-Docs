@@ -1,35 +1,43 @@
 ---
 title: "Shop"
-description: "The server shop: categories and products edited in game, item and command products, fixed, demand and random prices, stock and restock, per-player limits, sales, rotations and the default catalogue."
+description: "The server shop: shops inside shops edited in game, their own commands and servers, item and command products, fixed, demand and random prices, stock, limits, sales and coupons, gifts, the cart, history, celebrations and the default catalogue."
 ---
 
-The server's own shop: categories of products with a buy price, a sell price or both. The whole catalogue
-lives in the database and is edited from the game — there is no shop file to write. Every server on the
-same database sells the same catalogue.
+The server's own shop: shops of products with a buy price, a sell price or both, and shops drawn inside
+other shops. The whole catalogue lives in the database and is edited from the game — there is no shop
+file to write. By default every server on the database shares one catalogue, and each shop chooses the
+servers that offer it.
 
 Module id `shop`, file `modules/shop/config.yml`, commands `/shop` and `/shopadmin` (also `/shopa`).
 
 ## For players
 
-`/shop` opens the front: one button per category, and a **Sell** button that opens the
-[`/sell` window](/docs/exyliamarket/selling) on a left-click and sells everything on a right-click.
-`/shop <category>` opens a category straight away by its id.
+`/shop` opens the front: one button per shop that is not inside another, a **History** button and a
+**Cart** button. When a server offers only one shop, `/shop` skips the front and opens that shop; its back
+button then closes the menu. `/shop <id>` opens one shop straight away, and a shop may have commands of
+its own, such as `/blocks` or `/store` (see [Shops](#shops)).
 
-A category without the player's permission is hidden, or drawn locked when `hide-locked-categories` is off.
-Inside one, each product shows its buy and sell price, whether the price is moving, its discount, stock, how
-many more you may buy or sell this period, and how many you carry.
+Inside a shop, products and the shops inside it share one grid, where the admin placed them. A shop the
+player has no permission for is hidden, or drawn locked when `hide-locked-categories` is off. Each product
+shows its buy and sell price and how many you carry; whether the price is moving, its discount, its stock
+and what your limit leaves are shown only when they apply. The bottom row has **Back** (to the shop above,
+or the front), **Cart**, and a **Sell** button that opens the [`/sell` window](/docs/exyliamarket/selling)
+on a left-click and sells everything on a right-click.
 
 | Click | What it does |
 |---|---|
 | Left | Buy: opens the amount screen. |
 | Right | Sell: opens the amount screen. |
-| Shift + left / right | Buys or sells `shift-click-amount` units at once. |
+| Shift + left / right | Buys or sells `shift-click-amount` units on the spot. |
 
-The amount screen has ±1, ±16, ±64, **1** and **Max** buttons. The amount stops at `max-amount`, the stock,
-what your limit leaves, what you can pay and what fits in your inventory; for selling, at what you carry and
-your sell allowance. **Confirm** only appears when the trade can happen.
+The amount screen has ±1, ±16, ±64, **One** and **Max** buttons; from one, **+16** lands on 16, not 17. The
+amount stops at `max-amount`, the stock, what your limit leaves and what you can pay; for selling, at what
+you carry and your sell allowance. **Confirm** only appears when the trade can happen. When buying, the
+screen also has **Coupon** and **Gift** in its bottom corners and **Add to cart** above **Back**.
 
-- **Buying** checks that everything fits **before** any money is taken.
+- **Buying** something that does not all fit asks first, from the amount screen or a shift-click: on a
+  yes, what fits goes into your inventory and the rest waits in [`/collect`](/docs/exyliamarket/collect).
+  Nothing ever lands on the floor.
 - **Selling** takes matching items from your inventory (not armour or off hand), then pays. Selling a
   product that has stock adds it back, up to its maximum.
 
@@ -38,6 +46,44 @@ A product's price is for the item as it was set up, amount included. A product m
 16 at a time, and players' items are matched exactly — name, lore and enchantments — with only the count
 ignored.
 </Callout>
+
+### Gifts
+
+**Gift** on the amount screen asks for a name: anybody who has played on the server. The buyer pays and the
+purchase counts against the buyer's limits; the recipient gets the items in their inventory, or in
+`/collect` when they are not here, and a command product runs its commands for them where they are. The
+recipient is told, at once or on their next join. Leaving the name blank buys for yourself again.
+
+You cannot gift yourself, and a gift to a player who is in combat on this server is refused with the time
+the fight has left. It needs `exyliamarket.shop.gift`.
+
+### Coupons
+
+**Coupon** asks for a code and checks it at once; the code is kept on the screen until the purchase. It
+takes its percentage off the whole purchase, after any discount. A code is refused when it is unknown,
+expired, used up, already used by this player (a once-per-player code) or meant for another shop. A use is
+taken only when the purchase goes through: a payment that fails gives it back. Staff create coupons, see
+[Coupons and sales](#coupons-and-sales).
+
+### The cart
+
+**Add to cart** sets the amount on screen aside instead of buying it. The cart (`/shop cart`, or the
+**Cart** button) holds up to 54 products, kept while you are on the server and emptied when you leave.
+Nothing is reserved by being in it: prices, stock and limits are read again at checkout.
+
+| In the cart | What it does |
+|---|---|
+| Left / right click a line | One more / one fewer. |
+| Shift + right click | Takes the line out. |
+| **Empty cart** | Asks, then empties it. Needs no permission. |
+| **Checkout** | Checks you can pay the total, asks with the total per currency, then buys each line the way a single purchase is bought. A line that cannot be bought — sold out, over a limit, not fitting — stays in the cart. |
+
+Command products are added once. Adding and checking out need `exyliamarket.shop.cart`.
+
+### History
+
+`/shop history`, or the **History** button of the front, lists the latest 180 things you bought and sold
+in the shop, newest first: what, how many, for how much and how long ago.
 
 ## Products
 
@@ -48,10 +94,11 @@ ignored.
 | Buy price, sell price | Either may be off. Off on both sides shows "Not on sale right now". |
 | Currency | Any currency of the server. |
 | Pricing | **Fixed**, **By demand** or **Random**. See below. |
-| Stock and restock | `-1` is unlimited. Stock is shared by the whole network and refilled **to the maximum** every restock period. |
+| Stock and restock | `-1` is unlimited. Stock is shared by every server that shares the shop and refilled **to the maximum** every restock period. |
 | Buy limit, sell limit, period | Units each player may buy and sell per period. The period starts with the player's first trade of it. |
 | Permission | A node to buy or sell it. Shop admins always pass. |
-| Discount | A percentage off the buy price, until a date. |
+| Discount | A percentage off the buy price, for as long as you choose. |
+| Delivery | Command products only: the `server-id` its commands run on. Bought anywhere else, they wait until the player joins that server. Blank runs them wherever the buyer is. |
 | Enabled, page, position | Whether players see it, and where. |
 
 ### How prices move
@@ -66,80 +113,125 @@ Draws and rotations follow UTC: a 6-hour draw changes at 00, 06, 12 and 18 UTC.
 
 ### What the sell price is held to
 
-- **Discounts** apply to the buy price only. A product's and its category's discount do not add up: the
-  larger one wins.
+- **Discounts** apply to the buy price only. A product's and its shop's discount do not add up: the larger
+  one wins.
 - The **sell bonus** (`exyliamarket.shop.sell.<multiplier>`) and `shop-sell` boosters raise what selling
   pays. See [Selling](/docs/exyliamarket/selling#sell-bonus).
 - Selling never pays as much as buying the same units back costs right now, nor as much as crafting the
   item from things the shop sells. The price is held one step below both, so the shop cannot be farmed.
 
-## Categories
+## Shops
+
+A shop sits on the front screen or inside another shop, up to six levels deep.
 
 | Field | What it does |
 |---|---|
-| Id | Lower-case, fixed once created. What `/shop <category>` takes. |
-| Name, description, icon | How it is drawn on the front. |
-| Position | Its slot on the front: 21 places, three rows of seven. |
-| Pages | 1 to 10, each with 45 product slots. |
-| Permission | A node to open it. Blank is everybody. |
-| Currency | The currency of products **created later** in it. |
-| Discount | Off the buy price of every product in it, until a date. |
-| Rotation | Shows only a few of its products at a time — `rotation size` of them, drawn again every period. |
-| Enabled | Whether players see it. |
+| Id | Lower-case, fixed once created. What `/shop <id>` takes. |
+| Name, description, icon | How its button is drawn. |
+| Pages | 1 to 10, each with 45 slots for its products and the shops inside it. |
+| Inside | The shop it is drawn in, beside that shop's products, or the front screen. A shop cannot go inside itself or anything inside it. |
+| Position | Its slot on the screen it is drawn on: on the front, one of 21 places in three rows of seven; inside a shop, a page and slot of its grid. |
+| Commands | Commands that open it straight away, typed as `blocks, b`: letters, digits, `-` and `_`, up to 32 each. A name another shop already has is refused. They are installed at once on every server that offers the shop, and need `exyliamarket.shop`. |
+| Servers | The `server-id`s that offer it; blank is every server. Right-click the button for this server only, or every server again. The shops inside follow it. |
+| Permission | A node to open it **and every shop inside it**. Blank is everybody. |
+| Currency | The currency of products **created later** in it. A shop created inside another starts with that one's currency. |
+| Discount | Off the buy price of every product in it, for as long as you choose. |
+| Celebrate | Purchases here, and in every shop inside it, are celebrated across the network. See [Celebrations](#celebrations). |
+| Rotation | Shows only a few of its products at a time — `rotation size` of them, drawn again every period. The shops inside it come first. |
+| Enabled | Whether players see it. A disabled shop hides every shop inside it too. |
 
-<Callout type="warning" title="21 categories at most">
-The front has 21 places. Categories beyond that are not drawn, in `/shop` or in the editor, and nothing
-warns about it.
+<Callout type="note" title="21 places on the front">
+The front has 21 places. Put more shops inside others rather than on the front: a shop beyond the 21st
+place there is not drawn, in `/shop` or in the editor.
 </Callout>
 
 ## The editor
 
-`/shopadmin` opens the categories exactly where `/shop` draws them.
+`/shopadmin` opens the front exactly where `/shop` draws it.
 
-- **Click** a category to edit it; **shift-click** picks it up, and the next click drops it on an empty
-  place, swaps it with another, or puts it back.
-- **Create** asks for an id. **Load default shop**: left-click adds what is missing, right-click replaces
-  everything (see below).
+- **Click** a shop to edit it; **shift-click** picks it up, and the next click drops it on an empty place,
+  swaps it with another, or puts it back.
+- The bottom row: **Create** asks for an id; **Load default shop** (left-click adds what is missing,
+  right-click replaces everything, see below); **Coupons**; **Sale**, a discount on every shop at once;
+  **Back** to `/marketadmin`.
 
-A category's screen has **Enabled**, **General** (name, description, icon, pages), **Sales** (currency,
-discount and its duration, permission), **Rotation**, **Products**, **Player view** and **Delete**, which
-deletes every product in it after a confirmation.
+A shop's screen has **Status**, **General** (name, description, icon, pages), **Placement** (inside,
+position, commands, servers), **Sales** (currency, discount and its duration, permission, celebrate),
+**Rotation**, **Products**, **Player view**, **Back** (to the shop above) and **Delete shop**, which deletes
+it and every product in it after a confirmation; the shops inside it move up a level.
 
-In the products grid, **holding an item on the cursor and clicking an empty slot creates a product** from
-it, both prices off. The command block creates a command product. Click a product to edit it, shift-click
-to move it, the page arrows carry it to another page. A product's screen has **Enabled**, **General** (item,
-name, description, position), **Prices** (buy, sell, currency, pricing, discount), **Stock** (setting it
-fills it), **Limits** (buy, sell, period, permission), **Commands** and **Delete**.
+In a shop's grid, **holding an item on the cursor and clicking an empty slot creates a product** from it,
+both prices off. The bottom row also creates a **new shop inside this one** and a command product. Click a
+product or an inner shop to edit it, shift-click to move it, the page arrows carry it to another page. A
+product's screen has **Enabled**, **General** (item, name, description, position), **Prices** (buy, sell,
+currency, pricing, discount), **Stock** (setting it fills it), **Limits** (buy, sell, period, permission),
+**Commands**, **Delivery** for a command product, and **Delete**.
+
+Lowering a shop's pages when something sits on the pages that go asks first, then moves it into the free
+slots of the pages that stay. It is refused only when it no longer all fits.
+
+## Coupons and sales
+
+Coupons are listed and edited from the editor's **Coupons** button or `/shopadmin coupon list`: the
+discount, uses, expiry, the shop it works in (and every shop inside it), whether each player may use it once,
+and **Delete coupon**. A use is counted on the stored row, so a code with 50 uses is spent 50 times across
+every server, never 51.
+
+| Command | What it does |
+|---|---|
+| `/shopadmin coupon create <code> <percent> [uses] [duration] [shop]` | A new coupon: 3 to 32 letters, digits, `-` or `_`, stored in upper case; 1 to 100 percent off. `uses` `-1` (the default) is no cap; `duration` such as `7d` or `12h`, `0` (the default) never expires; no shop is every shop. Created once per player. |
+| `/shopadmin coupon delete <code>` | Deletes it. |
+| `/shopadmin coupon list` | The coupon screen in game; one line per coupon from the console. |
+| `/shopadmin sale <shop\|all> <percent> <duration> [starts-in]` | A discount on one shop or every shop, for `duration`, starting now or after `starts-in`: `/shopadmin sale all 25 2d 1h` is 25% off for two days from an hour from now. `0` percent ends it. |
+
+The **Sale** button of the editor and a shop's **Discount** ask for a percentage, then how long it lasts
+(at least a minute); `0` percent ends it.
+
+## Celebrations
+
+A purchase in a shop marked **Celebrate**, or inside one, is announced on every server. For
+`celebration.seconds` anyone who types one of `celebration.words` as their whole chat message earns
+`celebration.rewards` once, and their word shows in rainbow colours. Another celebrated purchase meanwhile
+extends the window without rewarding anyone twice. Announcements reach the other servers over Redis; without
+it, only the buyer's server celebrates. The words players read are in `messages.yml`.
 
 ## The default catalogue
 
-On a shop with no categories and no products, and with `example-catalogue` on, the plugin writes its
-default shop: **17 categories and 402 products**, plus a **Premium** category of 6 products priced in the
-first currency that is not the default, when the server has one. Materials the server's version does not
-know are skipped.
+On a shop with no shops and no products, and with `example-catalogue` on, the plugin writes its default
+shop: **20 shops and 402 products**. When the server has a currency other than the default one, a
+**Premium Store** priced in it is added, with **Ranks** and **Temporary Ranks** inside it: 23 shops and 415
+products. Materials the server's version does not know are skipped.
 
-| Category | Notes |
-|---|---|
-| blocks, wood, colours, ores, farming, food, mobs, armoury, redstone, brewing, nether, end, miscellaneous | Raw materials sell for their value and buy for three times it; crafted gear is buy only. Farming crops price **by demand**. |
-| perks | Four command products behind `exyliamarket.shop.perks`. |
-| daily-deals | Rotates 7 of 16 bulk lots a day, 20% off for 365 days from the install. |
-| enchanter | Rotates 6 of 17 books every 12 hours, priced at random. |
-| black-market | Small stock, restock timers and per-player limits. |
+| Front screen | Inside | Notes |
+|---|---|---|
+| **Building** (`/blocks`) | blocks, wood, colours, nether, end | Raw materials sell for their value and buy for three times it. |
+| **Ores & Minerals** | — | |
+| **Farming & Food** (`/farming`) | farming, food | Crops price **by demand**. |
+| **Mob Drops** | — | |
+| **Gear & Utilities** | armoury, redstone, brewing, miscellaneous | Crafted gear is buy only. |
+| **Daily Deals** (`/deals`) | — | Rotates 7 of 16 bulk lots a day, 20% off for 365 days from the install. |
+| **Enchanter** | — | Rotates 6 of 17 books every 12 hours, priced at random. |
+| **Black Market** | — | Small stock, restock timers and per-player limits. |
+| **Perks** | — | Four command products behind `exyliamarket.shop.perks`. |
+| **Premium Store** (`/store`) | Ranks (`/ranks`), and Temporary Ranks inside it | Celebrated. The ranks run LuckPerms `lp user` commands and are written **disabled**: create the `vip`, `vipplus` and `mvp` groups, then enable the shop. |
 
 | Command | What it does |
 |---|---|
 | `/shopadmin defaults add` | Adds whatever of the default shop and worth list is missing. Never changes an existing row. |
 | `/shopadmin defaults replace` | Backs up the shop and `worth.yml` to `backups/shop-<date>/`, then replaces both with the defaults. A player is asked to confirm; the console is not. If the backup fails, nothing changes. |
-| `/shopadmin log <player> [rows]` | What a player bought and sold, newest first, 10 rows by default and 50 at most. |
-
-`exyliamarket.shop.perks` is not declared in `plugin.yml`, so it is operators-only until a rank is given it.
+| `/shopadmin log <player> [rows]` | What a player bought and sold, newest first. In game, with `exyliamarket.admin.logs`, it opens that player's [market log](/docs/exyliamarket/administration#the-market-log); otherwise chat lines, 10 rows by default and 50 at most. |
 
 ## A network
 
-Every server keeps the catalogue in memory. With **Redis** on, an edit made on one server reaches the others
-at once; **without Redis, other servers only see an edit after their next restart**. Stock is safe either
-way: a purchase only completes once the database has taken the change. Each player's limits are read when
-they join and merged with what the server they came from wrote.
+The shop module is shared by every server on the database by default (`network.modules.shop: global` in
+`config.yml`, see [Configuration](/docs/exyliamarket/configuration#network)); each shop's **Servers** then
+chooses where it is offered. Every server keeps the catalogue in memory. With **Redis** on, an edit made on
+one server reaches the others at once; **without Redis, other servers only see an edit after their next
+restart**. Stock is safe either way: a purchase only completes once the database has taken the change. Each
+player's limits are read when they join and merged with what the server they came from wrote.
+
+A command product with a **Delivery** server, or a gift whose recipient is elsewhere, runs its commands when
+the player is on the right server: bought on the hub, a survival rank is given on survival.
 
 ## Settings
 
@@ -147,7 +239,7 @@ they join and merged with what the server they came from wrote.
 
 | Key | Default | What it does |
 |---|---|---|
-| `settings.hide-locked-categories` | `true` | Hide a category the player has no permission for, or draw it locked. |
+| `settings.hide-locked-categories` | `true` | Hide a shop the player has no permission for from the screen it is drawn on, or draw it locked. |
 | `settings.shift-click-amount` | `1` | Units a shift-click buys or sells. |
 | `settings.max-amount` | `2304` | Most units the amount screen or a shift-click buys at once. |
 | `settings.example-catalogue` | `true` | Fill an empty shop with the default catalogue. |
@@ -158,6 +250,10 @@ they join and merged with what the server they came from wrote.
 | `random.spread-percent` | `25.0` | How far from base a draw may land. |
 | `random.reset-hours` | `6` | How long one draw lasts. |
 | `sounds.bought`, `sounds.sold`, `sounds.failed` | | `NAME\|volume\|pitch`. |
+| `celebration.enabled` | `true` | Turns celebrations off everywhere, whatever the shops say. |
+| `celebration.seconds` | `15` | How long players have to join in. |
+| `celebration.words` | `[gg, ggs, gg!]` | What counts as joining in: the whole chat message, any case. |
+| `celebration.rewards` | `[console: minecraft:xp add %player_name% 50 points]` | Command lines given to each player who joins in, once per celebration, `console:` or `player:` first. `%player_name%` is the player, `%buyer%` the buyer. |
 
 ## Known issues
 
@@ -167,7 +263,11 @@ From then on any purchase is refilled within a minute, so rare items with small 
 black market's — are held back only by each player's limit.
 </Callout>
 
-- The front shows a rotating category's whole pool as its product count, not the rotation size.
-- Chat counts items (units × the product's stack), `/shopadmin log` counts units.
-- Two admins editing the same category at once: the last save wins the whole row.
+- The front shows a rotating shop's whole pool as its product count, not the rotation size.
+- Chat counts items (units × the product's stack), `/shopadmin log` in the console counts units.
+- Two admins editing the same shop at once: the last save wins the whole row.
 - `/shopadmin defaults replace` keeps players' limit counters: the default products get the same ids again.
+- A shop whose id is `cart` or `history` cannot be opened with `/shop <id>`: those are subcommands. Give it a
+  command of its own instead.
+- The cart's checkout refuses a line that does not fit rather than offering `/collect` as a single purchase
+  does.
