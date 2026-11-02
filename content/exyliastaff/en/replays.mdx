@@ -1,11 +1,11 @@
 ---
 title: "Replays"
-description: "The last minute around any player, saved on a death, a report, a freeze or on request, and watched from any server with ping and server lag on the board."
+description: "The last minute around any player, saved on a death, a report, a freeze, a capture rule or on request, and watched from any server, alone or together, with ping, server lag, hit cards and anticheat flags."
 ---
 
 The server keeps the last minute of everything around every player in memory. Nothing is written
-anywhere until something worth keeping happens: a death, a report, a freeze, a staff member or a
-player asking for it. Then that window is cut, stored in the database, and any staff member on any
+anywhere until something worth keeping happens: a death, a report, a freeze, a
+[capture rule](#capture-rules), a staff member or a player asking for it. Then that window is cut, stored in the database, and any staff member on any
 server can step into it as a flying camera, with the controls on their hotbar and a board that says
 how the server and both players' connections were doing at every moment.
 
@@ -23,6 +23,10 @@ PacketEvents.
 | `/staffreplay capture <player>` | `exyliastaff.replay.capture` | Saves the last minute around a player on this server, now. |
 | `/staffreplay debug <id>` | `exyliastaff.replay` | Lists what a saved replay holds, in chat. |
 | `/staffreplay leave` | `exyliastaff.replay` | Stops watching. |
+| `/staffreplay watch <id>` | `exyliastaff.replay` | Opens a replay by its number. The capture rule alert runs it. |
+| `/staffreplay invite <player>` | `exyliastaff.replay` | Asks a staff member on this server to [watch with you](#watching-together). |
+| `/staffreplay accept`, `/staffreplay decline` | `exyliastaff.replay` | Answers an invite. |
+| `/staffreplay rules log` | `exyliastaff.replay.rules` | What the capture rules decided lately, and why. |
 | `/savereplay` | `exyliastaff.savereplay` | A player saves their own last minute. `/saveclip` and `/clip` are aliases. |
 
 The bare `/staffreplay` answers with its usage lines. The player argument is anybody the network
@@ -46,6 +50,7 @@ member reading the report watches it. It costs one database row and a cooldown.
 | Freeze | A freeze starts. | `capture.freeze` |
 | Staff save | `/staffreplay capture`, or **Save now** in the list. | Always on |
 | Player save | `/savereplay`, every `player-saves.cooldown-seconds`. | `player-saves.enabled` |
+| Rule | A [capture rule](#capture-rules) matched: anticheat flags, a combat log, a big hit and more. | `rules.list.<name>.enabled` |
 
 The anticheat module saves one too when a player sets off a burst of alerts; see
 [Exylia Staff Web](/docs/exyliastaff/staff-web#anticheat-alerts).
@@ -57,35 +62,110 @@ of somebody who was not recorded on this server in that window is "Nothing of th
 ## Watching
 
 `/staffreplay <player>` lists their replays, newest first, each drawn with the icon of its cause and
-its length, how many players and things are in it, the date, the server and the coordinates. Left click
-watches; shift and right click deletes, with `exyliastaff.replay.delete`. **Save now** keeps the last
-minute around that player, with `exyliastaff.replay.capture`. A death at another player's hands is
-listed under the killer too, as a **Kill**, without being saved twice.
+its length, how many players and things are in it, the date, the server and the coordinates. A replay
+with anticheat flags in it says how many after its name. Left click watches; shift and right click
+deletes, with `exyliastaff.replay.delete`. **Save now** keeps the last minute around that player, with
+`exyliastaff.replay.capture`. A death at another player's hands is listed under the killer too, as a
+**Kill**, without being saved twice.
 
 The replay is staged on a temporary world before anybody moves, so one that cannot be shown never
 takes the viewer anywhere. They are put into it as a flying camera; leaving puts them back where they
 were. Opening another replay while watching goes straight to the next one.
 
-| Slot | Item | Left click | Right click |
-|---|---|---|---|
-| 0 | Spectral arrow | 5 seconds back | One frame back |
-| 1 | Clock | Play or pause; at the end it starts again | |
-| 2 | Arrow | 5 seconds on | One frame on |
-| 3 | Recovery compass | Previous hit, death, teleport or disconnection | |
-| 4 | Sugar | Slower | Faster |
-| 5 | Compass | Next hit, death, teleport or disconnection | |
-| 6 | Ender eye | First person, through each player in turn | The list of who is on screen |
-| 7 | Repeater | Back to the first second | |
-| 8 | Barrier | Leave | |
+| Slot | Item | Left click | Right click | Sneak and click |
+|---|---|---|---|---|
+| 0 | Spectral arrow | 5 seconds back | 5 seconds on | Back to the start |
+| 1 | Clock | Play or pause; at the end it starts again | | |
+| 2 | Arrow | One frame on | Ten frames on | One frame back (left), ten back (right) |
+| 3 | Compass | Previous hit, death, teleport or disconnection | Next one | |
+| 4 | Sugar | Slower | Faster | |
+| 5 | Writable book | The [event log](#the-event-log) | | |
+| 6 | Ender eye | First person, through each player in turn | The list of who is on screen | Next camera |
+| 7 | Spyglass | Server or attacker view, while following | | |
+| 8 | Barrier | Leave | | |
 
-The controls are drawn on the client, never put in the inventory: the viewer's own items stay
-underneath and come back when they leave. The layout is `lang/<language>/modules/replay/hotbar.yml`.
+Each frame step pauses on the frame it lands on, which is how a single hit is read. The controls are
+drawn on the client, never put in the inventory: the viewer's own items stay underneath and come back
+when they leave. The layout is `lang/<language>/modules/replay/hotbar.yml`.
 
 The **players** list shows everybody on screen at that moment with their ping: left click flies to
-them, right click watches through their eyes. As the replay passes them, chat lines, deaths,
-teleports, disconnections and totems are written into the viewer's chat, and the action bar shows the
-time, the speed and whose eyes the camera is in. With `reveal-invisible` on, invisible players are
-drawn glowing, so nobody hides in a replay.
+them, right click watches through their eyes. With `reveal-invisible` on, invisible players are drawn
+glowing, so nobody hides in a replay.
+
+### Cameras and views
+
+Sneaking and clicking the ender eye cycles the camera: **free** flight, **first person** through a
+player, **behind** them, and an **orbit** around them. The button's name shows the camera in use.
+
+The spyglass decides where everybody else is drawn while you watch through somebody's eyes:
+**server**, where the server had them, or **attacker**, where the followed player's screen had them.
+The gap between the two is the lag the attacker played with. The view only applies in first person.
+
+### What the replay tells you
+
+As the replay passes them, chat lines, deaths, teleports, disconnections and totems are written into
+the viewer's chat. With `narration.hits` on, so is every attack: who hit whom, for how much, which hit
+of theirs on that target it was, and its reach, look angle and flick; an attack the client sent and the
+server never counted is marked as such. With `narration.flags` on, so is every anticheat flag (Grim,
+Vulcan, Spartan or Matrix) with its check and count. A look more than `narration.wide-angle` degrees
+off the target is drawn as an error.
+
+The action bar shows the time, the frame, the speed, whose eyes the camera is in, the view, and what
+happened on the frame on screen.
+
+### The event log
+
+The writable book opens every moment of the replay worth jumping to: hits, flags, deaths, totems, chat,
+teleports, disconnections and bursts of block changes. It opens on the page of the moment on screen;
+a click jumps there, paused. Three filters at the bottom show or hide **combat**, **flags** and
+**other** moments, and are kept while you watch that replay.
+
+Each hit carries a **hit card**: whether the server counted it, the damage of that hit and of the pair
+in all, the reach by the server and by the attacker's screen, how far off the look was, the flick just
+before, the lag the attacker saw, their ping, and the attacker's flags within a second of it. The
+screen is `lang/<language>/menus/replay/events.yml`.
+
+## Watching together
+
+`/staffreplay invite <player>` asks another staff member on this server, holding `exyliastaff.replay`,
+to watch the replay you are in. They get a centred invite with **ACCEPT** and **DECLINE** buttons
+(`/staffreplay accept` or `decline`), valid for a minute, and join at the moment you are on.
+
+The time is shared: anybody in the room can pause, seek, step or change the speed, and the others are
+told in one short line who did what, folded so holding rewind is one line, not twenty. Joining and
+leaving are told too.
+
+## Capture rules
+
+Rules save a replay by themselves when something suspicious happens. Every rule ships turned off, and
+a trigger with no rule on registers nothing, so a server that never turns one on pays nothing for them.
+
+| Trigger | Sets it off |
+|---|---|
+| `ANTICHEAT_FLAG` | `count` flags within `within-seconds`, of a check whose name contains one of `checks` (empty is any). |
+| `COMBAT_LOG` | Somebody leaves while tagged in combat. |
+| `BIG_HIT` | One hit takes at least `hearts` after armour. |
+| `TOTEM_POP` | Somebody pops a totem. |
+| `LOW_HEALTH` | Somebody falls to `hearts` or fewer and lives. |
+| `KILL_STREAK` | `count` kills within `within-seconds`. |
+| `RAPID_DEATHS` | `count` deaths within `within-seconds`: spawn camping. |
+| `VALUABLE_BLOCK` | `count` of `materials` broken within `within-seconds`: x-ray. |
+
+`subject` picks whose replay is saved: `ACTOR`, who set it off (the flagged, the one who quit, the
+attacker, the killer, the miner); `VICTIM`, who was hurt; or `KILLER`, who hurt them. `seconds` is how
+far back it reaches (`0` uses `seconds` above), and `cooldown-seconds` how long before the same rule
+saves the same player again.
+
+A match still goes through a few guards, and the first that stops it is what the log records: the
+player holds `exyliastaff.replay.rules.exempt`; the rule's cooldown; a capture of them, by a rule, a
+death or a report, within `rules.aggregate-seconds`, which this one folds into; the server-wide
+`rules.max-per-minute`; or `rules.max-concurrent` captures being written. What passes is saved under the
+cause **Rule**.
+
+Staff holding `exyliastaff.replay.rules` get a line for every capture with a **WATCH** button, which
+runs `/staffreplay watch <id>`, and the `replays` [Discord webhook](/docs/exyliastaff/configuration#discord-webhooks)
+posts it. `/staffreplay rules log` shows the totals and the last twenty decisions: captured, cooldown,
+folded, over budget, busy, exempt, or nothing in the box.
 
 ## From reports and restores
 
@@ -158,7 +238,88 @@ icons:
   freeze: PACKED_ICE
   manual: SPYGLASS
   player: PLAYER_HEAD
+  rule: OBSERVER
+narration:
+  hits: true
+  flags: true
+  wide-angle: 10.0
+rules:
+  aggregate-seconds: 20
+  max-per-minute: 6
+  max-concurrent: 2
+  list:
+    anticheat-flags:
+      enabled: false
+      trigger: ANTICHEAT_FLAG
+      seconds: 30
+      subject: ACTOR
+      cooldown-seconds: 300
+      checks: []
+      count: 10
+      within-seconds: 30
+    reach-flags:
+      enabled: false
+      trigger: ANTICHEAT_FLAG
+      seconds: 30
+      subject: ACTOR
+      cooldown-seconds: 300
+      checks: [reach, killaura, aim]
+      count: 3
+      within-seconds: 20
+    combat-log:
+      enabled: false
+      trigger: COMBAT_LOG
+      seconds: 30
+      subject: ACTOR
+      cooldown-seconds: 120
+    big-hit:
+      enabled: false
+      trigger: BIG_HIT
+      seconds: 20
+      subject: ACTOR
+      cooldown-seconds: 120
+      hearts: 8
+    totem-pop:
+      enabled: false
+      trigger: TOTEM_POP
+      seconds: 30
+      subject: VICTIM
+      cooldown-seconds: 60
+    low-health:
+      enabled: false
+      trigger: LOW_HEALTH
+      seconds: 30
+      subject: VICTIM
+      cooldown-seconds: 120
+      hearts: 2
+    kill-streak:
+      enabled: false
+      trigger: KILL_STREAK
+      seconds: 60
+      subject: ACTOR
+      cooldown-seconds: 300
+      count: 5
+      within-seconds: 120
+    spawn-camping:
+      enabled: false
+      trigger: RAPID_DEATHS
+      seconds: 60
+      subject: KILLER
+      cooldown-seconds: 300
+      count: 3
+      within-seconds: 60
+    x-ray:
+      enabled: false
+      trigger: VALUABLE_BLOCK
+      seconds: 60
+      subject: ACTOR
+      cooldown-seconds: 600
+      count: 8
+      within-seconds: 120
+      materials: [DIAMOND_ORE, DEEPSLATE_DIAMOND_ORE, ANCIENT_DEBRIS, EMERALD_ORE, DEEPSLATE_EMERALD_ORE]
 ```
+
+The file writes every key of every rule; the ones a trigger does not read are left out above.
 
 | Key | Default | What it does |
 |---|---|---|
@@ -177,6 +338,13 @@ icons:
 | `reveal-invisible` | `true` | Draw invisible players glowing while watching. |
 | `board` | | The sidebar shown while watching. |
 | `icons` | | The icon of each cause in the list. |
+| `narration.hits` | `true` | Write every attack into the viewer's chat. |
+| `narration.flags` | `true` | Write every anticheat flag into the viewer's chat. |
+| `narration.wide-angle` | `10.0` | Degrees the look may be off the target's body before the angle is drawn as an error. |
+| `rules.aggregate-seconds` | `20` | A capture of somebody within this many seconds of another capture of them folds into it. |
+| `rules.max-per-minute` | `6` | Captures rules may save in any minute, server-wide. `0` is no limit. |
+| `rules.max-concurrent` | `2` | Captures rules may have being written at once. `0` is no limit. |
+| `rules.list` | | The rules, by a name of your choosing. See [Capture rules](#capture-rules). |
 
 A replay [Exylia Staff Web](/docs/exyliastaff/staff-web) marks as evidence is passed by `keep-days`,
 `death-keep-days` and `keep-per-player` until the web hands it back.
@@ -191,9 +359,17 @@ the network at a time and in small pages, so a backlog drains in steps instead o
 `nothing-recorded`, `no-replays`, `no-replay-for-backup`; `loading`, `load-failed`, `unsupported`,
 `deleted`, `not-watching`; `following` with `%player%`, `following-none`, `nobody-on-screen`,
 `no-more-events`; the chat lines `line-chat`, `line-death`, `line-teleport`, `line-quit` and
-`line-totem`; `hud` with `%time%`, `%length%`, `%speed%`, `%state%`, `%bar%` and `%following%`, and
-its pieces `state-playing`, `state-paused`, `bar-done`, `bar-left`, `hud-following`; `unknown`,
-`no-opponent`; `usage`; and `causes`, the name of each cause, with `kill` for a death the player caused.
+`line-totem`; `line-hit` with `%player%`, `%target%`, `%damage%`, `%total%`, `%number%` and
+`%analysis%`, `line-hit-missed`, `hit-analysis`, `hit-angle` and `hit-angle-wide`; `line-flag` with
+`%player%`, `%check%`, `%count%` and `%detail%`, and `flag-detail`; `hud` with `%time%`, `%length%`,
+`%speed%`, `%state%`, `%bar%`, `%following%`, `%frame%`, `%view%` and `%happened%`, and its pieces
+`state-playing`, `state-paused`, `bar-done`, `bar-left`, `hud-following`; `unknown`, `no-opponent`;
+`usage`; `causes`, the name of each cause, with `kill` for a death the player caused and `rule` for a
+capture rule; `log`, the event log's filter states, hit card values and `list-flags` with `%count%`;
+`view`, the view button's lines and states; `happened`, the moment shown at the end of the hud;
+`camera`, the camera names and lines; `room`, the invite and what the others did; and `rules`, with
+`captured` (`%player%`, `%rule%`, `%detail%`, `%id%`), the `/staffreplay rules log` lines and the
+`reasons`.
 
 ## Placeholders
 
@@ -214,6 +390,8 @@ Read by the viewer, while watching; empty otherwise.
 | `%staff_replay_mspt%` | The server's MSPT on that tick. |
 | `%staff_replay_cause%` | Why it was saved. |
 | `%staff_replay_server%` | The server it was recorded on. |
+| `%staff_replay_view%` | The view button's state: `view.state-none`, `state-server` or `state-attacker`. |
+| `%staff_replay_camera%` | The camera in use: `camera.free`, `first-person`, `behind` or `orbit`. |
 
 A figure that was not recorded reads as `unknown`.
 

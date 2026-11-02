@@ -1,0 +1,100 @@
+---
+title: "Two-factor"
+description: "Authenticator app codes for staff on join: setting it up with a QR map, requiring it for every staff member, trusted addresses and moving between servers."
+---
+
+A staff account is worth stealing. Two-factor asks a staff member for the six-digit code of an
+authenticator app (Google Authenticator, Authy, Aegis, 1Password and the like) when they join, so a
+leaked password alone does not get anybody into staff mode.
+
+Module id `twofactor`, switch `modules.two-factor`, files under `modules/twofactor/`. On by default,
+but nobody is asked for anything until they set it up, unless the server requires it.
+
+## Commands
+
+| Command | Permission | What it does |
+|---|---|---|
+| `/2fa` | `exyliastaff.staff` | Starts the setup. While locked on join, opens the code window again. `/totp` is an alias. |
+| `/2fa <code>` | `exyliastaff.staff` | Finishes the setup, or enters the code while locked on join. |
+| `/2fa disable <code>` | `exyliastaff.staff` | Turns two-factor off for your account. Only with a valid code, so a borrowed session cannot do it. |
+| `/2fa reset <player>` | `exyliastaff.2fa.reset` | Removes somebody's two-factor, for a staff member who lost their phone. Also from the console. |
+
+The command itself has no permission node: a locked staff member must always be able to run it.
+Setting it up is checked inside and refused to anybody without `exyliastaff.staff`.
+
+## Setting it up
+
+`/2fa` puts a map with a QR code in the staff member's hand and writes the key in chat, ready to copy
+for anybody who cannot scan. Asking again shows the same key, so a code already scanned keeps
+working. They scan it with the app and type the six digits it shows, in chat or as `/2fa <code>`; the
+map goes away and two-factor is on. The map is drawn on the client only, never put in the inventory.
+
+## On join
+
+A staff member with two-factor joins locked. They see a short notice and, a second later, a code
+window on clients that have one; anywhere else they type the code in chat. Six digits in chat, with
+or without a space in the middle, are taken as the code and never reach anybody.
+
+While locked, nothing of the staff join has happened yet: staff mode is not restored, nothing
+staff-only is drawn for them, and every command but `/2fa` and `/totp`, every chat line, movement,
+block, item, inventory and interaction is refused, and they take no damage. A valid code releases the
+lock and runs the join every other module skipped.
+
+They are kicked after `max-attempts` wrong codes or `login-timeout-seconds` without one. A code is
+used only once: the same six digits a second time are refused.
+
+<Callout type="note" title="Two-factor codes never reach the audit">
+`/2fa` and `/totp` are recorded in the [audit](/docs/exyliastaff/staff-admin) and in the web's
+command history without their arguments, so no code or key is ever stored there.
+</Callout>
+
+## Requiring it
+
+With `require-for-staff` on, a staff member who has none yet is held at the door the same way and
+shown the setup instead: they cannot play until they finish it. `exyliastaff.2fa.exempt` (default
+`false`) skips the requirement, for a console account or a bot that holds the staff node.
+
+## Trusted addresses and moving between servers
+
+`remember-ip-hours` lets the same address join without a code for that many hours after a valid one.
+`0`, the default, asks on every join.
+
+`session-grace-seconds` keeps a verified session alive across the network: moving to another server,
+or rejoining from the same address within that many seconds of leaving, asks for nothing. It works
+through the shared database, so every server must use the same one.
+
+The address is stored as a keyed hash, never in the clear, and the key is sealed. The seal is built
+into the jar: it protects a database dump read on its own, not one read together with the jar.
+
+## Configuration
+
+```yaml title="plugins/ExyliaStaff/modules/twofactor/config.yml"
+require-for-staff: false
+issuer: Minecraft Staff
+remember-ip-hours: 0
+session-grace-seconds: 120
+login-timeout-seconds: 120
+max-attempts: 5
+```
+
+| Key | Default | What it does |
+|---|---|---|
+| `require-for-staff` | `false` | Every holder of `exyliastaff.staff` without two-factor must set it up on join before playing. |
+| `issuer` | `Minecraft Staff` | The name the authenticator app files the code under. |
+| `remember-ip-hours` | `0` | Hours the same address skips the code after a valid one. `0` asks on every join. |
+| `session-grace-seconds` | `120` | Moving server, or rejoining from the same address within this many seconds, keeps the session verified. `0` turns it off. |
+| `login-timeout-seconds` | `120` | Seconds to enter the code before being kicked. Never less than ten. |
+| `max-attempts` | `5` | Wrong codes allowed per join before being kicked. |
+
+## Messages
+
+`lang/<language>/modules/twofactor/messages.yml`: `prompt`, the title of the code window; `locked`
+and `setup-required`, the notices on join; `setup` with `%secret%`; `verified`; `wrong-code` with
+`%left%`; `invalid-code`; `verify-first`; the kick screens `kick-attempts` and `kick-timeout`;
+`enabled`, `already-enabled`, `disabled`, `not-enabled`, `not-staff`; `reset` and `reset-none` with
+`%target%`; `reset-notice`, told to the staff member whose two-factor was reset; and `failed`.
+
+## Storage
+
+`staff_2fa`, one row per staff member with two-factor on. `/2fa reset` and
+`/exylialib resetplayer <player> ExyliaStaff @account` delete it.

@@ -1,6 +1,6 @@
 ---
 title: "Configuration"
-description: "config.yml, the language, the module switches, the command gate, disabled commands, the module files, the Discord webhooks, the sidebars, the menus and the database."
+description: "config.yml, the language, the module switches, the command gate, disabled commands, the in-game settings, the module files, the Discord webhooks, the sidebars, the menus and the database."
 ---
 
 Everything is generated in `plugins/ExyliaStaff/` on first boot, with comments. The core keeps
@@ -10,8 +10,10 @@ off never scrolls past its settings to find the switch. Text lives apart from se
 `{primary}`, `{error}` or `{highlight}`, resolved by the library. A message may open with an effect
 tag, `[sound:NAME|volume|pitch]`, that plays to the receiver and never reaches the screen.
 
-`/staffadmin reload` runs three steps: `configs`, `modules` and `command gate`. The hotbar is
-re-read and re-shown, the sidebars rebuilt, the mining ores re-indexed.
+`/staffadmin reload` runs four steps: `configs`, `modules`, `admin menus` and `command gate`. The
+hotbar is re-read and re-shown, the sidebars rebuilt, the mining ores re-indexed.
+
+Every setting can also be changed in game: see [In-game settings](#in-game-settings).
 
 <Callout type="note" title="Managed from the web">
 A network linked to Exylia Staff Web can hand `config.yml` and the modules' `config.yml` files over to
@@ -50,6 +52,7 @@ modules:
   alts: true
   anticheat: true
   discord: true
+  two-factor: true
 command-gate:
   enabled: true
   staff-only-commands:
@@ -118,10 +121,12 @@ A module that is off registers nothing: no commands, no listeners, no tables. Th
 | `replays` | `replay` | [Replays](/docs/exyliastaff/replays) |
 | `web`, `alts`, `anticheat` | `web`, `alts`, `anticheat` | [Exylia Staff Web](/docs/exyliastaff/staff-web) |
 | `discord` | `discord` | [Discord webhooks](#discord-webhooks) |
+| `two-factor` | `twofactor` | [Two-factor](/docs/exyliastaff/two-factor) |
 
 Item revocation is the one module off by default. A module whose dependency is off stays off too:
 item revocation needs inventory restore, and alts need web. A module that throws on enable shows as
-`failed`, keeps its commands off, and is retried on the next start.
+`failed`, keeps its commands off, and is retried on the next start. `/staffadmin module enable|disable`
+and the admin hub's module list write the switch here, so it survives a restart.
 
 Vanish, freeze, inspect, x-ray vision, reveal and staff mode need PacketEvents and fail without it;
 replays need it to be watched. Staff mode looks vanish and the scoreboard up on every call, so
@@ -153,6 +158,18 @@ disabled-commands:
 The names are dropped before the server ever sees them, so restart after changing the list: the freed
 name then goes to the plugin that also registers it.
 
+## In-game settings
+
+`/staffadmin settings`, or **Settings** in the hub `/staffadmin` opens, edits every settings file of the
+plugin from menus, with no file open: `config.yml` grouped into **General**, **Moderation**,
+**Communication**, **Evidence** and **Network**, and each module's `modules/<id>/config.yml` on its own
+screens. A change is written straight to the file. It needs `exyliastaff.admin`
+(or ExyliaLib's `exylialib.config`). The same files appear in ExyliaLib's `/exylialib config` and web
+editor.
+
+A file [Exylia Staff Web](/docs/exyliastaff/staff-web#managed-configuration) manages is left out of
+both, since the web writes over it on the next load.
+
 ## messages.yml
 
 The core's lines, in `lang/<language>/messages.yml`.
@@ -176,6 +193,7 @@ modules:
   enable-failed: '[sound:ENTITY_VILLAGER_NO|1.0|1.0]%prefix% {error}Module {highlight}%module% {error}could not start: it is already on, it failed, or a dependency is off.'
   disable-failed: '[sound:ENTITY_VILLAGER_NO|1.0|1.0]%prefix% {error}Module {highlight}%module% {error}is not enabled.'
   unknown: '[sound:ENTITY_VILLAGER_NO|1.0|1.0]%prefix% {error}No module named {highlight}%module%{error}.'
+  managed: '%prefix% {warning}The web panel manages this server''s modules: switch {highlight}%module% {warning}there too, or it returns to the panel''s value on the next restart.'
 gate:
   blocked: '[sound:ENTITY_VILLAGER_NO|1.0|1.0]%prefix% {error}Enable staff mode before using {highlight}/%command%{error}.'
 redis:
@@ -184,6 +202,10 @@ redis:
   inactive: ' {muted}❙ {letters}Redis {letters_black}» {muted}off, local bus only'
   stats: ' {muted}❙ {letters_black}%stats%'
 ```
+
+`admin-menu` holds the words the admin hub's module list shows: `running`, `stopped`, `failed`, and
+`enabled` or `disabled` for the switch at startup. `modules.managed` is sent when a module switched in
+game is managed by the web.
 
 `%prefix%` expands to `prefix` in every message of the plugin, the modules' included. `no-permission`
 and `player-only` are what the command framework sends; `player-not-found` is sent for any player
@@ -204,7 +226,7 @@ Each module page shows its own `config.yml` and lists its message keys.
 | `lang/<language>/modules/replay/hotbar.yml` | The replay controls. |
 
 Effect blocks such as `effects.enter`, `alert` or `reminder` are library effects with the sections
-`title`, `action-bar`, `boss-bar`, `sound`, `particle` and `firework`. A section left empty is not
+`title`, `action-bar`, `boss-bar`, `sound` and `particle`. A section left empty is not
 written to the file; add it to use it. Their keys are on the
 [library's effects page](/docs/exylialib/effects).
 
@@ -223,6 +245,7 @@ helpop: ''
 alerts: ''
 freeze: ''
 staff-log: ''
+replays: ''
 ```
 
 | Key | Posts |
@@ -234,6 +257,7 @@ staff-log: ''
 | `alerts` | Mining alerts and possible ban evasion. |
 | `freeze` | Players frozen and unfrozen. |
 | `staff-log` | Staff going on and off duty. |
+| `replays` | Replays saved by a [capture rule](/docs/exyliastaff/replays#capture-rules). |
 
 A URL Discord would refuse is reported once in the console on start and on reload, without printing it,
 since it holds the token. Events older than ten minutes, such as the rows of a ban plugin import, are not
@@ -256,6 +280,7 @@ event is a card coloured with a palette token, with `%server%` in the footer. Ev
 | `ban-evasion` | `%player%` `%banned%` |
 | `frozen`, `unfrozen` | `%target%` `%staff%` `%reason%` |
 | `duty-start`, `duty-end` | `%player%` |
+| `replay-rule` | `%player%` `%detail%` (the rule and what set it off) `%id%` `%seconds%` |
 
 Queues, Discord's rate limits and escaping are handled by the library.
 
@@ -330,10 +355,12 @@ Every staff screen is a YAML file under `lang/<language>/menus/<module>/`: `repo
 `reasons`, `list`, `player` and `history`; `helpop/list`; `punishments/` with `categories`,
 `reasons`, `confirm` and `history`; `mining/` with `suspicious` and `player`; `restore/` with
 `servers`, `list`, `backup`, `parts` and `log`; `replay/` with `list` and `players`;
-`revoke/quarantine`; `stafflog/` with `sessions`, `summary` and `top`. Their format is the
+`revoke/quarantine`; `stafflog/` with `sessions`, `summary` and `top`; `replay/events`, the event
+log; and `admin/` with `hub` and `modules`, the screens `/staffadmin` opens. Their format is the
 [library's menu format](/docs/exylialib/menus).
 
-They are yours to restyle. A release only adds what your files are missing; a default that changed on
+They are yours to restyle, except `admin/`: those two are the plugin's and are rewritten from the jar on
+every start and reload. A release only adds what your files are missing; a default that changed on
 something you never edited waits in `/exylialib updates`, where you apply it or keep yours.
 
 ## database.yml

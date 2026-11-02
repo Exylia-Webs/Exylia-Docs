@@ -1,11 +1,12 @@
 ---
 title: "Repeticiones"
-description: "El último minuto alrededor de cualquier jugador, guardado en una muerte, un reporte, un freeze o cuando se pide, y visto desde cualquier servidor con el ping y el lag del servidor en el marcador."
+description: "El último minuto alrededor de cualquier jugador, guardado en una muerte, un reporte, un freeze, una regla de captura o cuando se pide, y visto desde cualquier servidor, solo o en compañía, con el ping, el lag del servidor, fichas de golpe y avisos del anticheat."
 ---
 
 El servidor guarda en memoria el último minuto de todo lo que pasa alrededor de cada jugador. No se
 escribe nada en ningún sitio hasta que ocurre algo que merece la pena conservar: una muerte, un
-reporte, un freeze, o que lo pida un miembro del staff o un jugador. Entonces se corta esa ventana, se
+reporte, un freeze, una [regla de captura](#reglas-de-captura), o que lo pida un miembro del staff o un
+jugador. Entonces se corta esa ventana, se
 guarda en la base de datos, y cualquier miembro del staff de cualquier servidor puede entrar en ella
 como una cámara voladora, con los controles en su hotbar y un marcador que dice cómo iban el servidor y
 las conexiones de los dos jugadores en cada momento.
@@ -24,6 +25,10 @@ falta PacketEvents.
 | `/staffreplay capture <player>` | `exyliastaff.replay.capture` | Guarda ahora el último minuto alrededor de un jugador de este servidor. |
 | `/staffreplay debug <id>` | `exyliastaff.replay` | Lista en el chat lo que contiene una repetición guardada. |
 | `/staffreplay leave` | `exyliastaff.replay` | Deja de verla. |
+| `/staffreplay watch <id>` | `exyliastaff.replay` | Abre una repetición por su número. Lo ejecuta el aviso de una regla de captura. |
+| `/staffreplay invite <player>` | `exyliastaff.replay` | Invita a un miembro del staff de este servidor a [verla contigo](#verlas-en-compañía). |
+| `/staffreplay accept`, `/staffreplay decline` | `exyliastaff.replay` | Responde a una invitación. |
+| `/staffreplay rules log` | `exyliastaff.replay.rules` | Lo que decidieron últimamente las reglas de captura, y por qué. |
 | `/savereplay` | `exyliastaff.savereplay` | Un jugador guarda su propio último minuto. `/saveclip` y `/clip` son alias. |
 
 El `/staffreplay` a secas responde con sus líneas de uso. El argumento de jugador es cualquiera que
@@ -47,6 +52,7 @@ del staff que lee el reporte lo ve. Cuesta una fila en la base de datos y un tie
 | Freeze | Empieza un freeze. | `capture.freeze` |
 | Guardado del staff | `/staffreplay capture`, o **Guardar ahora** en la lista. | Siempre activo |
 | Guardado del jugador | `/savereplay`, cada `player-saves.cooldown-seconds`. | `player-saves.enabled` |
+| Regla | Coincidió una [regla de captura](#reglas-de-captura): avisos del anticheat, un combat log, un golpe fuerte y más. | `rules.list.<name>.enabled` |
 
 El módulo de anticheat también guarda una cuando un jugador dispara una ráfaga de alertas; consulta
 [Exylia Staff Web](/docs/exyliastaff/staff-web#alertas-del-anticheat).
@@ -60,37 +66,114 @@ necesita que salgan. Un guardado de alguien que no se grabó en este servidor en
 
 `/staffreplay <player>` lista sus repeticiones, la más reciente primero, cada una dibujada con el icono
 de su motivo y su duración, cuántos jugadores y cosas salen en ella, la fecha, el servidor y las
-coordenadas. Clic izquierdo para verla; shift y clic derecho la borra, con `exyliastaff.replay.delete`.
-**Guardar ahora** conserva el último minuto alrededor de ese jugador, con `exyliastaff.replay.capture`.
-Una muerte a manos de otro jugador aparece también en la lista del asesino, como **Kill**, sin
-guardarse dos veces.
+coordenadas. Una repetición con avisos del anticheat dice cuántos tras su nombre. Clic izquierdo para
+verla; shift y clic derecho la borra, con `exyliastaff.replay.delete`. **Guardar ahora** conserva el
+último minuto alrededor de ese jugador, con `exyliastaff.replay.capture`. Una muerte a manos de otro
+jugador aparece también en la lista del asesino, como **Kill**, sin guardarse dos veces.
 
 La repetición se prepara en un mundo temporal antes de que nadie se mueva, así que una que no se puede
 mostrar nunca lleva al espectador a ningún sitio. Se le mete en ella como una cámara voladora; al salir
 vuelve a donde estaba. Abrir otra repetición mientras ves una pasa directamente a la siguiente.
 
-| Casilla | Objeto | Clic izquierdo | Clic derecho |
-|---|---|---|---|
-| 0 | Flecha espectral | 5 segundos atrás | Un fotograma atrás |
-| 1 | Reloj | Reproducir o pausar; al final vuelve a empezar | |
-| 2 | Flecha | 5 segundos adelante | Un fotograma adelante |
-| 3 | Brújula de recuperación | Golpe, muerte, teletransporte o desconexión anterior | |
-| 4 | Azúcar | Más lento | Más rápido |
-| 5 | Brújula | Golpe, muerte, teletransporte o desconexión siguiente | |
-| 6 | Ojo de ender | Primera persona, a través de cada jugador por turnos | La lista de quién sale en pantalla |
-| 7 | Repetidor | Volver al primer segundo | |
-| 8 | Barrera | Salir | |
+| Slot | Objeto | Clic izquierdo | Clic derecho | Agachado y clic |
+|---|---|---|---|---|
+| 0 | Flecha espectral | 5 segundos atrás | 5 segundos adelante | Volver al principio |
+| 1 | Reloj | Reproducir o pausar; al final vuelve a empezar | | |
+| 2 | Flecha | Un fotograma adelante | Diez fotogramas adelante | Uno atrás (izquierdo), diez atrás (derecho) |
+| 3 | Brújula | Golpe, muerte, teletransporte o desconexión anterior | El siguiente | |
+| 4 | Azúcar | Más lento | Más rápido | |
+| 5 | Libro y pluma | El [registro de eventos](#el-registro-de-eventos) | | |
+| 6 | Ojo de ender | Primera persona, a través de cada jugador por turnos | La lista de quién sale en pantalla | Siguiente cámara |
+| 7 | Catalejo | Vista del servidor o del atacante, mientras sigues a alguien | | |
+| 8 | Barrera | Salir | | |
 
-Los controles se dibujan en el cliente, nunca se meten en el inventario: los objetos del propio
-espectador se quedan debajo y vuelven cuando sale. La disposición es
-`lang/<language>/modules/replay/hotbar.yml`.
+Cada paso de fotograma pausa en el fotograma al que llega, que es como se lee un golpe concreto. Los
+controles se dibujan en el cliente, nunca entran en el inventario: los objetos del propio espectador
+siguen debajo y vuelven cuando sale. La disposición está en `lang/<language>/modules/replay/hotbar.yml`.
 
 La lista de **jugadores** muestra a todos los que salen en pantalla en ese momento con su ping: clic
-izquierdo vuela hasta ellos, clic derecho mira a través de sus ojos. A medida que la repetición pasa
-por ellas, las líneas de chat, muertes, teletransportes, desconexiones y tótems se escriben en el chat
-del espectador, y la action bar muestra el tiempo, la velocidad y en los ojos de quién está la cámara.
-Con `reveal-invisible` activado, los jugadores invisibles se dibujan brillando, así que nadie se
-esconde en una repetición.
+izquierdo vuela hasta ellos, clic derecho mira a través de sus ojos. Con `reveal-invisible` activado, los
+jugadores invisibles se dibujan brillando, así que nadie se esconde en una repetición.
+
+### Cámaras y vistas
+
+Agacharse y hacer clic en el ojo de ender cambia de cámara: vuelo **libre**, **primera persona** a través
+de un jugador, **detrás** de él y una **órbita** a su alrededor. El nombre del botón muestra la cámara en
+uso.
+
+El catalejo decide dónde se dibuja a los demás mientras miras a través de los ojos de alguien:
+**servidor**, donde los tenía el servidor, o **atacante**, donde los tenía la pantalla del jugador
+seguido. La diferencia entre las dos es el lag con el que jugaba el atacante. La vista solo se aplica en
+primera persona.
+
+### Lo que te cuenta la repetición
+
+A medida que la repetición pasa por ellos, las líneas de chat, muertes, teletransportes, desconexiones y
+tótems se escriben en el chat del espectador. Con `narration.hits` activado, también cada ataque: quién
+golpeó a quién, por cuánto, qué golpe suyo sobre ese objetivo era, y su alcance, el ángulo de la mirada y
+el giro brusco; un ataque que el cliente envió y el servidor nunca contó se marca como tal. Con
+`narration.flags` activado, también cada aviso del anticheat (Grim, Vulcan, Spartan o Matrix) con su
+comprobación y su recuento. Una mirada desviada más de `narration.wide-angle` grados del objetivo se
+dibuja como error.
+
+La action bar muestra el tiempo, el fotograma, la velocidad, en los ojos de quién está la cámara, la
+vista y lo que pasó en el fotograma en pantalla.
+
+### El registro de eventos
+
+El libro y pluma abre cada momento de la repetición al que merece la pena saltar: golpes, avisos, muertes,
+tótems, chat, teletransportes, desconexiones y ráfagas de cambios de bloques. Se abre en la página del
+momento en pantalla; un clic salta allí, en pausa. Tres filtros abajo muestran u ocultan los momentos de
+**combate**, **avisos** y **otros**, y se conservan mientras ves esa repetición.
+
+Cada golpe lleva una **ficha de golpe**: si el servidor lo contó, el daño de ese golpe y el total de la
+pareja, el alcance según el servidor y según la pantalla del atacante, cuánto se desvió la mirada, el
+giro justo antes, el lag que vio el atacante, su ping y los avisos del atacante en el segundo alrededor
+del golpe. La pantalla es `lang/<language>/menus/replay/events.yml`.
+
+## Verlas en compañía
+
+`/staffreplay invite <player>` invita a otro miembro del staff de este servidor, con
+`exyliastaff.replay`, a ver la repetición en la que estás. Recibe una invitación centrada con botones
+**ACCEPT** y **DECLINE** (`/staffreplay accept` o `decline`), válida durante un minuto, y entra en el
+momento en el que estás.
+
+El tiempo es compartido: cualquiera de la sala puede pausar, buscar, avanzar fotogramas o cambiar la
+velocidad, y a los demás se les dice en una línea breve quién hizo qué, agrupada para que mantener
+rebobinado sea una línea y no veinte. Las entradas y salidas también se avisan.
+
+## Reglas de captura
+
+Las reglas guardan una repetición por sí solas cuando pasa algo sospechoso. Todas vienen apagadas, y un
+disparador sin ninguna regla encendida no registra nada, así que un servidor que nunca enciende una no
+paga nada por ellas.
+
+| Disparador | Lo activa |
+|---|---|
+| `ANTICHEAT_FLAG` | `count` avisos en `within-seconds`, de una comprobación cuyo nombre contiene alguno de `checks` (vacío es cualquiera). |
+| `COMBAT_LOG` | Alguien sale estando marcado en combate. |
+| `BIG_HIT` | Un golpe quita al menos `hearts` tras la armadura. |
+| `TOTEM_POP` | Alguien gasta un tótem. |
+| `LOW_HEALTH` | Alguien baja a `hearts` o menos y sobrevive. |
+| `KILL_STREAK` | `count` muertes causadas en `within-seconds`. |
+| `RAPID_DEATHS` | `count` muertes sufridas en `within-seconds`: spawn camping. |
+| `VALUABLE_BLOCK` | `count` bloques de `materials` rotos en `within-seconds`: x-ray. |
+
+`subject` elige de quién se guarda la repetición: `ACTOR`, quien la activó (el avisado, el que salió, el
+atacante, el asesino, el minero); `VICTIM`, quien salió herido; o `KILLER`, quien le hirió. `seconds` es
+hasta dónde llega hacia atrás (`0` usa `seconds` de arriba), y `cooldown-seconds` cuánto pasa antes de que
+la misma regla vuelva a guardar al mismo jugador.
+
+Una coincidencia aún pasa por unas cuantas barreras, y la primera que la para es lo que anota el registro:
+el jugador tiene `exyliastaff.replay.rules.exempt`; la espera de la regla; una captura suya, de una regla,
+una muerte o un reporte, dentro de `rules.aggregate-seconds`, en la que esta se pliega; el
+`rules.max-per-minute` de todo el servidor; o `rules.max-concurrent` capturas escribiéndose. Lo que pasa
+se guarda con el motivo **Rule**.
+
+El staff con `exyliastaff.replay.rules` recibe una línea por cada captura con un botón **WATCH**, que
+ejecuta `/staffreplay watch <id>`, y el [webhook de Discord](/docs/exyliastaff/configuracion#webhooks-de-discord)
+`replays` la publica. `/staffreplay rules log` muestra los totales y las últimas veinte decisiones:
+capturada, en espera, plegada, sin presupuesto, ocupado, exento o nada que guardar.
 
 ## Desde reportes y restauraciones
 
@@ -163,7 +246,88 @@ icons:
   freeze: PACKED_ICE
   manual: SPYGLASS
   player: PLAYER_HEAD
+  rule: OBSERVER
+narration:
+  hits: true
+  flags: true
+  wide-angle: 10.0
+rules:
+  aggregate-seconds: 20
+  max-per-minute: 6
+  max-concurrent: 2
+  list:
+    anticheat-flags:
+      enabled: false
+      trigger: ANTICHEAT_FLAG
+      seconds: 30
+      subject: ACTOR
+      cooldown-seconds: 300
+      checks: []
+      count: 10
+      within-seconds: 30
+    reach-flags:
+      enabled: false
+      trigger: ANTICHEAT_FLAG
+      seconds: 30
+      subject: ACTOR
+      cooldown-seconds: 300
+      checks: [reach, killaura, aim]
+      count: 3
+      within-seconds: 20
+    combat-log:
+      enabled: false
+      trigger: COMBAT_LOG
+      seconds: 30
+      subject: ACTOR
+      cooldown-seconds: 120
+    big-hit:
+      enabled: false
+      trigger: BIG_HIT
+      seconds: 20
+      subject: ACTOR
+      cooldown-seconds: 120
+      hearts: 8
+    totem-pop:
+      enabled: false
+      trigger: TOTEM_POP
+      seconds: 30
+      subject: VICTIM
+      cooldown-seconds: 60
+    low-health:
+      enabled: false
+      trigger: LOW_HEALTH
+      seconds: 30
+      subject: VICTIM
+      cooldown-seconds: 120
+      hearts: 2
+    kill-streak:
+      enabled: false
+      trigger: KILL_STREAK
+      seconds: 60
+      subject: ACTOR
+      cooldown-seconds: 300
+      count: 5
+      within-seconds: 120
+    spawn-camping:
+      enabled: false
+      trigger: RAPID_DEATHS
+      seconds: 60
+      subject: KILLER
+      cooldown-seconds: 300
+      count: 3
+      within-seconds: 60
+    x-ray:
+      enabled: false
+      trigger: VALUABLE_BLOCK
+      seconds: 60
+      subject: ACTOR
+      cooldown-seconds: 600
+      count: 8
+      within-seconds: 120
+      materials: [DIAMOND_ORE, DEEPSLATE_DIAMOND_ORE, ANCIENT_DEBRIS, EMERALD_ORE, DEEPSLATE_EMERALD_ORE]
 ```
+
+El archivo escribe todas las claves de cada regla; arriba se omiten las que un disparador no lee.
 
 | Clave | Por defecto | Qué hace |
 |---|---|---|
@@ -182,6 +346,13 @@ icons:
 | `reveal-invisible` | `true` | Dibujar brillando a los jugadores invisibles mientras se ve. |
 | `board` | | El sidebar que se muestra mientras se ve. |
 | `icons` | | El icono de cada motivo en la lista. |
+| `narration.hits` | `true` | Escribir cada ataque en el chat del espectador. |
+| `narration.flags` | `true` | Escribir cada aviso del anticheat en el chat del espectador. |
+| `narration.wide-angle` | `10.0` | Grados que puede desviarse la mirada del cuerpo del objetivo antes de dibujar el ángulo como error. |
+| `rules.aggregate-seconds` | `20` | Una captura de alguien a estos segundos o menos de otra captura suya se pliega en ella. |
+| `rules.max-per-minute` | `6` | Capturas que las reglas pueden guardar en un minuto, en todo el servidor. `0` es sin límite. |
+| `rules.max-concurrent` | `2` | Capturas que las reglas pueden estar escribiendo a la vez. `0` es sin límite. |
+| `rules.list` | | Las reglas, con el nombre que elijas. Ver [Reglas de captura](#reglas-de-captura). |
 
 Una repetición que [Exylia Staff Web](/docs/exyliastaff/staff-web) marca como prueba queda fuera de
 `keep-days`, `death-keep-days` y `keep-per-player` hasta que la web la devuelve.
@@ -196,9 +367,17 @@ servidor de la red a la vez y en páginas pequeñas, así que un atraso se vací
 `nothing-recorded`, `no-replays`, `no-replay-for-backup`; `loading`, `load-failed`, `unsupported`,
 `deleted`, `not-watching`; `following` con `%player%`, `following-none`, `nobody-on-screen`,
 `no-more-events`; las líneas de chat `line-chat`, `line-death`, `line-teleport`, `line-quit` y
-`line-totem`; `hud` con `%time%`, `%length%`, `%speed%`, `%state%`, `%bar%` y `%following%`, y
-sus piezas `state-playing`, `state-paused`, `bar-done`, `bar-left`, `hud-following`; `unknown`,
-`no-opponent`; `usage`; y `causes`, el nombre de cada motivo, con `kill` para una muerte que causó el jugador.
+`line-totem`; `line-hit` con `%player%`, `%target%`, `%damage%`, `%total%`, `%number%` y `%analysis%`,
+`line-hit-missed`, `hit-analysis`, `hit-angle` y `hit-angle-wide`; `line-flag` con `%player%`, `%check%`,
+`%count%` y `%detail%`, y `flag-detail`; `hud` con `%time%`, `%length%`, `%speed%`, `%state%`, `%bar%`,
+`%following%`, `%frame%`, `%view%` y `%happened%`, y sus piezas `state-playing`, `state-paused`,
+`bar-done`, `bar-left`, `hud-following`; `unknown`, `no-opponent`; `usage`; `causes`, el nombre de cada
+motivo, con `kill` para una muerte que causó el jugador y `rule` para una regla de captura; `log`, los
+estados de los filtros del registro de eventos, los valores de la ficha de golpe y `list-flags` con
+`%count%`; `view`, las líneas y estados del botón de vista; `happened`, el momento que se muestra al final
+de la hud; `camera`, los nombres y líneas de las cámaras; `room`, la invitación y lo que hicieron los
+demás; y `rules`, con `captured` (`%player%`, `%rule%`, `%detail%`, `%id%`), las líneas de
+`/staffreplay rules log` y las `reasons`.
 
 ## Placeholders
 
@@ -219,6 +398,8 @@ Los lee el espectador, mientras ve una repetición; vacíos en caso contrario.
 | `%staff_replay_mspt%` | Los MSPT del servidor en ese tick. |
 | `%staff_replay_cause%` | Por qué se guardó. |
 | `%staff_replay_server%` | El servidor donde se grabó. |
+| `%staff_replay_view%` | El estado del botón de vista: `view.state-none`, `state-server` o `state-attacker`. |
+| `%staff_replay_camera%` | La cámara en uso: `camera.free`, `first-person`, `behind` u `orbit`. |
 
 Un dato que no se grabó se lee como `unknown`.
 

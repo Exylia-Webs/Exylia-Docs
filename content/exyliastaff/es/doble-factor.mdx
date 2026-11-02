@@ -1,0 +1,101 @@
+---
+title: "Doble factor"
+description: "Códigos de una app de autenticación para el staff al entrar: configurarlo con un mapa QR, exigirlo a todo el staff, direcciones de confianza y el paso entre servidores."
+---
+
+Una cuenta de staff vale la pena robarla. El doble factor pide a un miembro del staff el código de seis
+dígitos de una app de autenticación (Google Authenticator, Authy, Aegis, 1Password y similares) al
+entrar, así que una contraseña filtrada no basta para meterse en el modo staff.
+
+Id de módulo `twofactor`, interruptor `modules.two-factor`, archivos bajo `modules/twofactor/`. Encendido
+por defecto, pero no se pide nada a nadie hasta que lo configura, salvo que el servidor lo exija.
+
+## Comandos
+
+| Comando | Permiso | Qué hace |
+|---|---|---|
+| `/2fa` | `exyliastaff.staff` | Empieza la configuración. Mientras está bloqueado al entrar, vuelve a abrir la ventana del código. `/totp` es un alias. |
+| `/2fa <code>` | `exyliastaff.staff` | Termina la configuración, o introduce el código mientras está bloqueado al entrar. |
+| `/2fa disable <code>` | `exyliastaff.staff` | Apaga el doble factor de tu cuenta. Solo con un código válido, para que una sesión prestada no pueda hacerlo. |
+| `/2fa reset <player>` | `exyliastaff.2fa.reset` | Quita el doble factor de alguien, para un miembro del staff que perdió el móvil. También desde la consola. |
+
+El comando en sí no tiene nodo de permiso: un miembro del staff bloqueado siempre tiene que poder usarlo.
+La configuración se comprueba dentro y se rechaza a quien no tenga `exyliastaff.staff`.
+
+## Configurarlo
+
+`/2fa` pone en la mano del miembro del staff un mapa con un código QR y escribe la clave en el chat, lista
+para copiar si no puede escanearla. Pedirlo otra vez muestra la misma clave, así que un código ya
+escaneado sigue sirviendo. Lo escanea con la app y escribe los seis dígitos que muestra, en el chat o como
+`/2fa <code>`; el mapa desaparece y el doble factor queda activado. El mapa se dibuja solo en el cliente,
+nunca entra en el inventario.
+
+## Al entrar
+
+Un miembro del staff con doble factor entra bloqueado. Ve un aviso breve y, un segundo después, una
+ventana para el código en los clientes que la tienen; en el resto escribe el código en el chat. Seis
+dígitos en el chat, con o sin un espacio en medio, se toman como el código y no llegan a nadie.
+
+Mientras está bloqueado, nada de la entrada del staff ha ocurrido todavía: el modo staff no se restaura,
+no se le dibuja nada exclusivo del staff, y se rechaza todo comando salvo `/2fa` y `/totp`, toda línea de
+chat, el movimiento, los bloques, los objetos, los inventarios y las interacciones, y no recibe daño. Un
+código válido quita el bloqueo y ejecuta la entrada que el resto de módulos se saltó.
+
+Se le expulsa tras `max-attempts` códigos erróneos o tras `login-timeout-seconds` sin ninguno. Un código
+se usa una sola vez: los mismos seis dígitos una segunda vez se rechazan.
+
+<Callout type="note" title="Los códigos nunca llegan a la auditoría">
+`/2fa` y `/totp` quedan en la [auditoría](/docs/exyliastaff/panel-admin) y en el historial de comandos de
+la web sin sus argumentos, así que ningún código ni clave se guarda ahí.
+</Callout>
+
+## Exigirlo
+
+Con `require-for-staff` activado, a un miembro del staff que aún no lo tiene se le retiene en la puerta del
+mismo modo y se le muestra la configuración: no puede jugar hasta terminarla. `exyliastaff.2fa.exempt`
+(por defecto `false`) se salta la exigencia, para una cuenta de consola o un bot que tenga el nodo de staff.
+
+## Direcciones de confianza y paso entre servidores
+
+`remember-ip-hours` deja entrar sin código desde la misma dirección durante esas horas tras uno válido.
+`0`, el valor por defecto, lo pide en cada entrada.
+
+`session-grace-seconds` mantiene viva una sesión verificada por toda la red: pasar a otro servidor, o
+volver a entrar desde la misma dirección en esos segundos después de salir, no pide nada. Funciona a
+través de la base de datos compartida, así que todos los servidores deben usar la misma.
+
+La dirección se guarda como un hash con clave, nunca en claro, y la clave va sellada. El sello va dentro
+del jar: protege un volcado de la base de datos leído por sí solo, no uno leído junto con el jar.
+
+## Configuración
+
+```yaml title="plugins/ExyliaStaff/modules/twofactor/config.yml"
+require-for-staff: false
+issuer: Minecraft Staff
+remember-ip-hours: 0
+session-grace-seconds: 120
+login-timeout-seconds: 120
+max-attempts: 5
+```
+
+| Clave | Por defecto | Qué hace |
+|---|---|---|
+| `require-for-staff` | `false` | Todo el que tenga `exyliastaff.staff` sin doble factor debe configurarlo al entrar antes de jugar. |
+| `issuer` | `Minecraft Staff` | El nombre bajo el que la app de autenticación guarda el código. |
+| `remember-ip-hours` | `0` | Horas que la misma dirección se salta el código tras uno válido. `0` lo pide en cada entrada. |
+| `session-grace-seconds` | `120` | Cambiar de servidor, o volver a entrar desde la misma dirección en estos segundos, mantiene la sesión verificada. `0` lo apaga. |
+| `login-timeout-seconds` | `120` | Segundos para introducir el código antes de la expulsión. Nunca menos de diez. |
+| `max-attempts` | `5` | Códigos erróneos permitidos por entrada antes de la expulsión. |
+
+## Mensajes
+
+`lang/<language>/modules/twofactor/messages.yml`: `prompt`, el título de la ventana del código; `locked`
+y `setup-required`, los avisos al entrar; `setup` con `%secret%`; `verified`; `wrong-code` con `%left%`;
+`invalid-code`; `verify-first`; las pantallas de expulsión `kick-attempts` y `kick-timeout`; `enabled`,
+`already-enabled`, `disabled`, `not-enabled`, `not-staff`; `reset` y `reset-none` con `%target%`;
+`reset-notice`, que se dice al miembro del staff cuyo doble factor se reinició; y `failed`.
+
+## Almacenamiento
+
+`staff_2fa`, una fila por miembro del staff con doble factor activado. `/2fa reset` y
+`/exylialib resetplayer <player> ExyliaStaff @account` la borran.
