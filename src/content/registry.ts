@@ -2247,7 +2247,7 @@ export const plugins: Plugin[] = [
       en: "A combat tag decided by itself or by DeluxeCombat, CelestCombat or PvPManager, with logout punishment and logout NPCs, every restriction a tagged player needs, a PvP barrier at the edge of WorldGuard, Lands, GriefPrevention, Towny and SuperiorSkyblock2 safe zones, vanilla item cooldowns per world and region, a PvP switch, newbie, respawn and loot protection, stats and leaderboards, anti kill-farming, kill rewards, streaks and bounties, death messages, nametags and a tag that follows players across a proxy, in sixteen modules that switch on and off on their own.",
       es: "Un combat tag que decide él mismo o DeluxeCombat, CelestCombat o PvPManager, con castigo y NPCs por desconexión, todas las restricciones que necesita un jugador en combate, una barrera PvP en el borde de las zonas seguras de WorldGuard, Lands, GriefPrevention, Towny y SuperiorSkyblock2, cooldowns de ítems por mundo y región, un interruptor de PvP, protección de novatos, al reaparecer y del botín, estadísticas y clasificaciones, anti farmeo de kills, recompensas, rachas y recompensas por cabeza, mensajes de muerte, nametags y un combate que sigue al jugador por todo un proxy, en dieciséis módulos que se activan por separado.",
     },
-    version: "1.0.0",
+    version: "1.1.0",
     purchase: "https://builtbybit.com/resources/exylia-combat.134727/",
     status: "beta",
     category: { en: "PvP", es: "PvP" },
