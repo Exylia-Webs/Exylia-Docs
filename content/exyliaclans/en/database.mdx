@@ -1,6 +1,6 @@
 ---
 title: "Database"
-description: "The nineteen tables, what keys them, running several servers on one database, and what to know before touching them by hand."
+description: "The nineteen tables, what keys them, how ExyliaLib wipes and resets them, running several servers on one database, and what to know before touching them by hand."
 ---
 
 Storage is ExyliaLib's. `database.yml` is written on first start and defaults to H2; MySQL, MariaDB,
@@ -11,7 +11,7 @@ created and migrated from the record definitions, so there is no schema file to 
 
 | Table | Key | Holds |
 |---|---|---|
-| `clans` | `id` (UUID text) | Name, leader, balance, open, friendly fire, home, banned list, DTR, DTR freeze, last regeneration, EXP, extra member slots |
+| `clans` | `id` (UUID text) | Name, styled name, leader, balance, open, friendly fire, home, banned list, DTR, DTR freeze, last regeneration, EXP, extra member slots |
 | `clan_members` | `uuid` | The player's clan and their rank |
 | `clan_roles` | `id` | Every rank of every clan: name, weight, permissions, whether it is the default |
 | `clan_relations` | `clanId:targetClanId` | One directional opinion, `ALLY` or `RIVAL` |
@@ -30,6 +30,32 @@ created and migrated from the record definitions, so there is no schema file to 
 | `clan_war_kits` | `id` | A war kit's icon and items |
 | `clan_war_records` | `clanId` | War wins, losses and draws |
 | `clan_war_returns` | `playerId` | Where a real-loss war fighter came from, and their game mode |
+
+## Wiping and resetting
+
+There is no clan wipe or reset command of its own. Every table declares what it holds for ExyliaLib, so
+[`/exylialib wipe`](/docs/exylialib/commands) and `/exylialib resetplayer` cover the plugin:
+
+| Kind | Tables |
+|---|---|
+| World (clans and everything they own) | `clans`, `clan_members`, `clan_roles`, `clan_relations`, `clan_invites`, `clan_alliance_requests`, `clan_claims`, `clan_stats`, `clan_mails`, `clan_webhooks`, `lfc_profiles`, `lfp_postings`, `lfp_applications`, `clan_war_records` |
+| Progress | `player_stats` |
+| History | `clan_logs` |
+| Setup (kept by a season wipe) | `clan_war_arenas`, `clan_war_kits` |
+| Cache | `clan_war_returns` |
+
+```text
+/exylialib wipe ExyliaClans all               every table
+/exylialib wipe ExyliaClans clan_logs         one table
+/exylialib resetplayer Steve ExyliaClans      one player's rows
+```
+
+Each first run prints what would go and a six-digit code; the same line with the code runs it.
+
+A player reset removes the rows keyed by that player: their membership (`clan_members`), their stats
+(`player_stats`), their invites, LFC profile, LFP applications and pending war return. The running
+server lets go of them at once, without a restart. If the player led a clan, the member with the
+heaviest rank becomes leader; if nobody is left, the clan is disbanded.
 
 ## What the keys buy you
 
@@ -56,7 +82,9 @@ Both make a page a bounded read rather than a scan.
 |---|---|
 | `clans.bannedPlayers` | Comma-separated UUIDs |
 | `clan_roles.permissions` | Comma-separated permission names. An unknown name is skipped when read |
-| `clans.homeLocation` | A serialised location that **carries the server it was set on** — `server,world,x,y,z,yaw,pitch`. `null` when unset |
+| `clans.homeLocation` | A serialised location that **carries the server it was set on** — `server,world,x,y,z,yaw,pitch`. `null` when unset. A home saved under a previous `server-id` is read as this server's |
+| `clans.styled_name` | The name as `/clan style` draws it, up to 1024 characters. `null` when the clan has no style |
+| `clans.balance` | Held in the currency `bank-currency` names; changing that key later does not convert it |
 | `clans.extraSlots` | Member slots granted with `/clanadmin setslots`, on top of `max-members` and the level bonus |
 | `clans.dtrRegenAt` | When the DTR last regenerated, epoch millis — what keeps several servers from each regenerating it |
 | `clan_invites.sentAt` / `clan_alliance_requests.sentAt` | Epoch millis. `0` on an invite written before 1.2.0, which counts as sent at the update |

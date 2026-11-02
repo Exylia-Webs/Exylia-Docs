@@ -1,6 +1,6 @@
 ---
 title: "Base de datos"
-description: "Las diecinueve tablas, qué las indexa, varios servidores sobre una base de datos, y qué saber antes de tocarlas a mano."
+description: "Las diecinueve tablas, qué las indexa, cómo las borra y reinicia ExyliaLib, varios servidores sobre una base de datos, y qué saber antes de tocarlas a mano."
 ---
 
 El almacenamiento es de ExyliaLib. `database.yml` se escribe en el primer arranque y usa H2 por defecto;
@@ -11,7 +11,7 @@ crean y migran desde las definiciones de los records, así que no hay ningún es
 
 | Tabla | Clave | Guarda |
 |---|---|---|
-| `clans` | `id` (UUID en texto) | Nombre, líder, saldo, abierto, friendly fire, home, baneados, DTR, congelado, última regeneración, EXP, huecos de miembro extra |
+| `clans` | `id` (UUID en texto) | Nombre, nombre con estilo, líder, saldo, abierto, friendly fire, home, baneados, DTR, congelado, última regeneración, EXP, huecos de miembro extra |
 | `clan_members` | `uuid` | El clan del jugador y su rango |
 | `clan_roles` | `id` | Cada rango de cada clan: nombre, peso, permisos, si es el rango por defecto |
 | `clan_relations` | `clanId:targetClanId` | Una opinión direccional, `ALLY` o `RIVAL` |
@@ -30,6 +30,35 @@ crean y migran desde las definiciones de los records, así que no hay ningún es
 | `clan_war_kits` | `id` | Icono y objetos de un kit de guerra |
 | `clan_war_records` | `clanId` | Victorias, derrotas y empates en guerra |
 | `clan_war_returns` | `playerId` | De dónde vino un luchador de pérdida real, y su modo de juego |
+
+
+## Borrar y reiniciar
+
+No hay un comando propio para borrar los clanes o reiniciar a un jugador. Cada tabla declara qué guarda
+para ExyliaLib, así que [`/exylialib wipe`](/docs/exylialib/comandos) y `/exylialib resetplayer` cubren el
+plugin:
+
+| Tipo | Tablas |
+|---|---|
+| Mundo (los clanes y todo lo suyo) | `clans`, `clan_members`, `clan_roles`, `clan_relations`, `clan_invites`, `clan_alliance_requests`, `clan_claims`, `clan_stats`, `clan_mails`, `clan_webhooks`, `lfc_profiles`, `lfp_postings`, `lfp_applications`, `clan_war_records` |
+| Progreso | `player_stats` |
+| Historial | `clan_logs` |
+| Preparación (una temporada nueva la conserva) | `clan_war_arenas`, `clan_war_kits` |
+| Caché | `clan_war_returns` |
+
+```text
+/exylialib wipe ExyliaClans all               todas las tablas
+/exylialib wipe ExyliaClans clan_logs         una tabla
+/exylialib resetplayer Steve ExyliaClans      las filas de un jugador
+```
+
+Cada primera ejecución muestra lo que se iría y un código de seis dígitos; la misma línea con el código
+lo ejecuta.
+
+Reiniciar a un jugador quita las filas que son suyas: su pertenencia (`clan_members`), sus estadísticas
+(`player_stats`), sus invitaciones, su perfil LFC, sus solicitudes LFP y su vuelta de guerra pendiente.
+El servidor en marcha las suelta al momento, sin reiniciar. Si el jugador era líder de un clan, pasa a
+serlo el miembro con el rango de más peso; si no queda nadie, el clan se disuelve.
 
 ## Qué te dan las claves
 
@@ -56,7 +85,9 @@ Los dos convierten una página en una lectura acotada en vez de un escaneo.
 |---|---|
 | `clans.bannedPlayers` | UUIDs separados por comas |
 | `clan_roles.permissions` | Nombres de permiso separados por comas. Un nombre desconocido se salta al leer |
-| `clans.homeLocation` | Una localización serializada que **lleva el servidor en el que se puso**: `servidor,mundo,x,y,z,yaw,pitch`. `null` si no está puesta |
+| `clans.homeLocation` | Una localización serializada que **lleva el servidor en el que se puso**: `servidor,mundo,x,y,z,yaw,pitch`. `null` si no está puesta. Un home guardado con un `server-id` anterior se lee como de este servidor |
+| `clans.styled_name` | El nombre tal como lo dibuja `/clan style`, hasta 1024 caracteres. `null` si el clan no tiene estilo |
+| `clans.balance` | En la moneda que indica `bank-currency`; cambiar esa clave después no lo convierte |
 | `clans.extraSlots` | Huecos de miembro dados con `/clanadmin setslots`, sobre `max-members` y el bonus de nivel |
 | `clans.dtrRegenAt` | Cuándo regeneró el DTR por última vez, en milisegundos epoch — lo que evita que varios servidores lo regeneren cada uno |
 | `clan_invites.sentAt` / `clan_alliance_requests.sentAt` | Milisegundos epoch. `0` en una invitación escrita antes de 1.2.0, que cuenta como enviada en la actualización |
