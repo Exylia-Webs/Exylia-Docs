@@ -1700,7 +1700,7 @@ export const plugins: Plugin[] = [
       en: "Unlimited arenas, multiple kits, permission-gated spawns, per-arena rules, schematic regeneration, persistent stats and a full admin panel.",
       es: "Arenas ilimitadas, kits múltiples, spawns con permisos, reglas por arena, regeneración con esquemáticos, estadísticas persistentes y panel de administración completo.",
     },
-    version: "1.4.0",
+    version: "1.5.0",
     status: "stable",
     category: { en: "Gamemode", es: "Modo de juego" },
     minecraft: "1.21+",
