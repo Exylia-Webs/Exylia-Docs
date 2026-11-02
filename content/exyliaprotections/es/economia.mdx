@@ -35,7 +35,9 @@ valor es un ID de moneda de ahí.
 
 El dinero siempre sale del jugador antes de usarse, y le vuelve cuando lo que pagó no ocurre. Una moneda con
 menos decimales que la cantidad pedida la redondea hacia abajo, y solo lo que realmente salió del jugador se
-abona o se devuelve. Sin ninguna economía instalada, todos los pagos se rechazan por falta de dinero.
+abona o se devuelve. Un pago o reembolso que el saldo del jugador rechaza no se pierde: se guarda como
+recompensa pendiente y se le entrega la próxima vez que entre. Sin ninguna economía instalada, todos los
+pagos se rechazan por falta de dinero.
 
 <Callout type="note" title="El banco y otra moneda">
 El banco solo recibe el alquiler, y solo paga las mejoras, cuando `rent.currency` o `upgrades.currency` es la
@@ -92,6 +94,7 @@ dejan de jugar, queda **abandonada**: abierta a todos durante unos días y luego
 | `upkeep.charge-owner` | `true` | Si un dueño conectado al servidor de la protección paga lo que su banco no cubre |
 | `upkeep.grace-periods` | `3` | Periodos sin pagar que abandonan una protección |
 | `upkeep.inactive-days` | `30` | Días sin que juegue el dueño ni un miembro que la abandonan. `0` lo desactiva |
+| `upkeep.only-managers-keep-active` | `true` | Si solo el dueño y los miembros con `manage-members` la mantienen activa. Desactivado: cualquier miembro jugador |
 | `upkeep.abandoned-days` | `3` | Días que una protección abandonada queda abierta a todos antes de borrarse |
 | `upkeep.warn-hours` | `12` | Horas antes de un pago que el banco no cubre en las que se avisa a los miembros |
 | `upkeep.check-minutes` | `10` | Minutos entre dos revisiones de las protecciones de este servidor. Se lee al arrancar |
@@ -124,7 +127,9 @@ protección con el banco vacío queda abandonada 48 horas después de vencer su 
 periodo.
 
 Solo cuentan para la actividad el dueño y los jugadores añadidos como miembros, no los miembros de clanes ni
-los de parcelas. La "última vez que jugó" se guarda en la base de datos para todos los servidores de la red,
+los de parcelas. Con `only-managers-keep-active` activado (por defecto), un miembro solo cuenta mientras su
+rol, o un override, le da `manage-members`, así que una cuenta secundaria añadida como miembro normal no
+puede mantener viva para siempre la protección de otro. La "última vez que jugó" se guarda en la base de datos para todos los servidores de la red,
 y es ahora mientras alguno de ellos está conectado al servidor de la protección. Cuando se cargan las
 protecciones, un dueño o miembro sin registro cuenta como visto en ese momento, así que nadie está inactivo
 antes de que el plugin lo haya observado.
@@ -140,8 +145,9 @@ antes de que el plugin lo haya observado.
 - `/protections upkeep` muestra el estado, el coste por periodo, la duración del periodo, el tiempo hasta el
   próximo pago y lo que se debe. Lo puede usar cualquier miembro.
 
-Mientras se debe mantenimiento, el núcleo no se puede recoger: volver a colocarlo crearía una cuenta nueva y
-borraría la deuda.
+Mientras se debe mantenimiento, el núcleo no se puede recoger y la protección no se puede borrar ni poner a la
+venta hasta pagar la deuda: volver a colocarlo crearía una cuenta nueva y borraría la deuda, y un comprador la
+heredaría. Tampoco se puede comprar en el mercado una protección que debe mantenimiento.
 
 ### Abandonada
 
@@ -152,8 +158,12 @@ Mientras una protección está abandonada:
   [Asaltos](/docs/exyliaprotections/asaltos#el-asalto).
 - Cualquiera puede entrar, digan lo que digan el bloqueo o los baneos.
 - No se puede recoger, mover, borrar, poner a la venta, regalar, ofrecer en alquiler, mejorar ni ampliar con un núcleo nuevo.
-  Una venta publicada se cancela y se avisa al vendedor.
+  En vez de rechazarlo, al dueño (o al miembro que lo intenta) se le pregunta si quiere pagar antes su
+  mantenimiento: si acepta, la deuda sale de su saldo y la acción sigue. Una venta publicada se cancela y se
+  avisa al vendedor.
 - Las ventajas de los miembros se detienen, su warp se rechaza o se oculta, y nadie puede alquilar en ella.
+  Una parcela que alguien ya alquila sigue cerrada para los demás, y se avisa a sus inquilinos de ese
+  servidor de cuánto le queda al terreno.
 - Se avisa a los miembros conectados a su servidor, y con `announce` activado también a todos los jugadores
   conectados con los anuncios de asaltos activados.
 - El botón Mantenimiento y `%exyliaprotections_protections_upkeep_due%` muestran cuánto le queda antes de
@@ -179,9 +189,9 @@ El borrado vence en cuanto la protección queda abandonada. La siguiente revisi�
 la elimina.
 </Callout>
 
-Desactivar `submodules.upkeep` deja de cobrar y anula el efecto de todos los abandonos. Lo que se debía y
-cuándo se abandonó cada protección se quedan guardados, y vuelven a aplicarse si se reactiva el
-mantenimiento.
+Desactivar `submodules.upkeep` deja de cobrar. Mientras está desactivado, cada vencimiento que pasa avanza
+periodos enteros y se levanta todo abandono, así que al reactivar el mantenimiento no se cobra nada por el
+tiempo que estuvo apagado ni se borra nada por un abandono que quedó en pausa.
 
 | Estado | Cuándo |
 |---|---|
@@ -216,17 +226,22 @@ cancela la venta si ya está publicada. **En venta** en `/protections` abre el m
 **Publicar.** El precio debe ser mayor que 0 y como mucho `max-price`. Se rechaza mientras la protección es
 saqueable, su núcleo está dañado, está abandonada o alguien alquila en ella. La venta conserva la moneda que
 indica `market.currency` en ese momento. Se cancela sola, y se avisa al vendedor, cuando la protección pasa a
-ser saqueable o abandonada, o cambia de dueño. Mientras está en venta no se puede ofrecer en alquiler ni
-alquilar, y un núcleo nuevo no puede ampliarla.
+ser saqueable o abandonada, cambia de dueño, o se mejora, se mueve, se amplía o cambia de tier: el precio se
+pidió por un terreno que ya no es el que recibiría el comprador. Un vendedor baneado del servidor pierde la
+venta, y nadie puede comprarla. Mientras está en venta no se puede ofrecer en alquiler ni alquilar, y un
+núcleo nuevo no puede ampliarla. Publicarla se rechaza mientras debe mantenimiento.
 
 **Comprar.** En el mercado, clic izquierdo compra y clic derecho teletransporta al hogar de la protección
-para verla antes. El comprador no puede ser el dueño, y debe pasar las mismas comprobaciones que al colocar
-ese tier: su permiso, su límite de protecciones, el límite del tier y el del mundo. Tras una confirmación, el
+para verla antes. Cada venta muestra también el estado del mantenimiento de la protección y lo que guarda su
+banco. El comprador no puede ser el dueño, y debe pasar las mismas comprobaciones que al colocar ese tier: su
+permiso, su límite de protecciones, el límite del tier y el del mundo. Una protección que debe mantenimiento
+no se puede comprar hasta que su dueño lo pague. Tras una confirmación, el
 precio sale del comprador. Si otro la compró antes, dejó de estar en venta o el cambio de dueño no se puede
 escribir, el dinero vuelve.
 
 El vendedor recibe el precio menos `tax-percent`: una protección vendida por 10.000 al 5 % paga 9.500. Se le
-paga aunque esté desconectado, y se avisa a los dos jugadores. Con el survival core instalado, la venta cuenta
+paga aunque esté desconectado, y se avisa a los dos jugadores. Lo que guardaba el banco al venderse también va
+al vendedor, y el comprador empieza con el banco vacío. Con el survival core instalado, la venta cuenta
 `protections.sold` para el vendedor y `protections.bought` para el comprador.
 
 ## Regalar una protección
@@ -246,8 +261,8 @@ administración.
 
 ## Qué cambia de manos
 
-Una venta, un regalo o una transferencia de administrador conservan con el terreno su banco, su
-mantenimiento, sus vidas y su asalto, su nivel, sus flags, baneos, saludo y despedida, sus parcelas, sus
+Un regalo o una transferencia de administrador conservan con el terreno su banco; una venta paga el banco al
+vendedor. Los tres conservan su mantenimiento, sus vidas y su asalto, su nivel, sus flags, baneos, saludo y despedida, sus parcelas, sus
 ventajas, su hora y su clima. El nuevo dueño nunca queda baneado de su propio terreno ni como miembro de él.
 
 | `market.keep-members` | Qué pasa con las personas |
@@ -388,6 +403,7 @@ upkeep:
   warn-hours: 12
   check-minutes: 10
   announce: false
+  only-managers-keep-active: true
 market:
   currency: ""
   tax-percent: 5.0

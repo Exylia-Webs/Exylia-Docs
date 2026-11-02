@@ -3,8 +3,8 @@ title: "Asaltos"
 description: "Vidas, la salud del núcleo, las muertes, lo que abre un asalto, las ventanas de asedio, el escudo sin conexión, los estados y los anuncios, con cada clave de raids."
 ---
 
-Los asaltos dan a cada protección un número de **vidas**. Los enemigos se las quitan golpeando el núcleo y
-matando a miembros dentro. Una protección sin vidas queda **saqueable** durante un tiempo: los enemigos
+Los asaltos dan a cada protección un número de **vidas**. Los enemigos se las quitan golpeando el núcleo,
+volándolo y matando a miembros dentro. Una protección sin vidas queda **saqueable** durante un tiempo: los enemigos
 pueden romper, colocar y abrir contenedores, y cualquiera puede entrar. Cuando el asalto termina, la
 protección recupera algunas vidas y empieza un enfriamiento en el que no puede perder ninguna.
 
@@ -63,7 +63,8 @@ agota.
 | `hit-cooldown-millis` | `500` | Los golpes de un jugador más seguidos que esto se ignoran, sin aviso |
 | `core-heal-seconds` | `30` | Segundos sin golpes para que un núcleo dañado vuelva a tener la salud completa |
 | `hit-sound` | `BLOCK_ANVIL_LAND\|0.4\|1.6` | El sonido que oye el atacante en cada golpe |
-| `allow-hidden-core` | `false` | Si se pueden ocultar núcleos mientras los asaltos están activados |
+| `allow-hidden-core` | `false` | Si se pueden ocultar núcleos mientras los asaltos están activados. Desactivado: todo núcleo oculto vuelve a mostrarse al activar los asaltos |
+| `selection-cores` | `true` | Si el terreno protegido por selección recibe un núcleo con los asaltos activados |
 
 Cada golpe hace al menos 1. Con los valores por defecto, una vida cuesta 150 golpes con la mano vacía, o 38
 con un pico de netherita. Cuando la salud llega a 0 la protección pierde una vida y el núcleo vuelve a
@@ -74,11 +75,32 @@ admite `%name%`.
 La salud del núcleo solo se guarda en la memoria del servidor de la protección. Un reinicio la cura, lo
 que cambia poco, porque un núcleo que nadie golpea durante `core-heal-seconds` se cura igualmente.
 
-<Callout type="note" title="El terreno sin núcleo solo pierde vidas por muertes">
-El terreno protegido por selección no tiene núcleo, y un núcleo oculto no se puede golpear. Los dos solo
-pierden vidas cuando matan a miembros. Con `allow-hidden-core: false`, ocultar un núcleo se rechaza
-mientras los asaltos están activados. Los núcleos ocultados antes de activar los asaltos siguen ocultos.
-</Callout>
+### Núcleos para el terreno seleccionado
+
+El terreno protegido por selección no tiene núcleo propio. Con `selection-cores` activado (por defecto), una
+protección seleccionada con los asaltos activados recibe uno, colocado en el primer bloque libre de la
+superficie en su centro. El terreno seleccionado antes recibe su núcleo cuando se activan los asaltos, al
+recargar o al arrancar el servidor. Una columna sin bloque libre dentro de las alturas de la protección la deja
+sin núcleo, y la consola lo dice.
+
+Una protección sin núcleo, y una cuyo núcleo está oculto, solo pierde vidas por muertes. Con
+`allow-hidden-core: false`, ocultar un núcleo se rechaza mientras los asaltos están activados, y los núcleos
+ocultados antes de activarlos vuelven a mostrarse: el bloque se repone donde nada ocupó su lugar.
+
+## Explosiones
+
+La TNT, las vagonetas con TNT y los cristales del End que estallan a menos de `explosion-core-radius` bloques
+de un núcleo visible le quitan `explosion-core-damage` de vida, atravesando cualquier pared, así que enterrar un
+núcleo no lo protege. Los creepers y demás mobs nunca. Una explosión cuenta para el jugador que la provocó, y
+nunca contra un terreno que ese jugador defiende; una que no provocó nadie, como un cañón encendido por
+redstone, cuenta como `raids.unknown-raider` en el archivo de mensajes ("An explosion"). Cuenta aunque los
+bloques sigan en pie, pero no cuando otro plugin anuló la explosión. Se aplican las mismas reglas que a un
+golpe: enfriamiento, ventanas de asedio y escudo sin conexión.
+
+| Clave | Por defecto | Qué hace |
+|---|---|---|
+| `explosion-core-radius` | `4` | Bloques desde un núcleo dentro de los cuales esas explosiones lo dañan. `0` lo desactiva |
+| `explosion-core-damage` | `25` | Vida del núcleo que quita una explosión. `0` lo desactiva |
 
 <Callout type="note" title="Golpes al núcleo con el backend WORLDGUARD">
 Con el backend `WORLDGUARD` cada protección es una región de WorldGuard en la que solo el dueño y los
@@ -111,6 +133,17 @@ Un golpe no quita nada, y se le dice al atacante por qué, cuando:
 5. el escudo sin conexión está levantado.
 
 El atacante ve estas negativas como mucho una vez cada dos segundos.
+
+## Mientras puede perder vidas
+
+Una protección que ahora mismo puede perder vidas (asaltos activados, todavía no saqueable, sin enfriamiento,
+con el escudo sin conexión bajado y dentro de una ventana si las ventanas de asedio están activadas) se abre a
+sus enemigos:
+
+| Clave | Por defecto | Qué hace |
+|---|---|---|
+| `attackers-ignore-lock` | `true` | Los enemigos pueden entrar aunque esté bloqueada o estén baneados de ella; si no, un bloqueo dejaría su núcleo fuera de alcance |
+| `siege-pvp` | `true` | Enemigos y defensores pueden pelear dentro aunque su flag `pvp` esté desactivado. Entre defensores sigue mandando el flag |
 
 ## El asalto
 
@@ -250,8 +283,15 @@ desactivados.
 ## Administración
 
 Los administradores fijan las vidas de una protección (terminando cualquier asalto y enfriamiento) o
-limpian su asalto con todas las vidas desde la pantalla de administración, y el editor de tiers escribe las
+limpian su asalto con todas las vidas, tras una confirmación, desde la pantalla de administración, y el editor de tiers escribe las
 `tier-lives` de un tier. Ver [Administración](/docs/exyliaprotections/administracion).
+
+<Callout type="note" title="Asedios y el backend WORLDGUARD">
+Que un asedio deje entrar o pelear a los enemigos cambia con la hora y con quién está conectado, algo que una
+región escrita una vez no puede seguir. Con los asaltos activados, una región espejo no recibe la negación de
+entrada mientras `attackers-ignore-lock` está activado, ni el flag `pvp` mientras `siege-pvp` lo está; este
+plugin aplica las dos cosas por sí mismo en cualquier backend.
+</Callout>
 
 ## Todas las claves
 
@@ -285,6 +325,11 @@ raids:
   restore-price: 5000
   restore-currency: ""
   allow-hidden-core: false
+  explosion-core-radius: 4
+  explosion-core-damage: 25
+  attackers-ignore-lock: true
+  siege-pvp: true
+  selection-cores: true
   siege-windows:
     enabled: false
     timezone: ""

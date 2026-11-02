@@ -2051,7 +2051,7 @@ export const plugins: Plugin[] = [
       en: "Land protected with a core block or a two-corner selection, shared through roles, clans and per-player overrides, with raids on the core, a bank, upkeep and rent, subregions, upgrades, perks and public warps, on an internal index or mirrored into WorldGuard.",
       es: "Terreno protegido con un bloque núcleo o una selección de dos esquinas, compartido con roles, clanes y permisos por jugador, con asaltos al núcleo, banco, mantenimiento y alquiler, subregiones, mejoras, ventajas y warps públicos, sobre un índice interno o reflejado en WorldGuard.",
     },
-    version: "1.0.2",
+    version: "1.1.0",
     status: "beta",
     category: { en: "Survival", es: "Survival" },
     minecraft: "1.21+",

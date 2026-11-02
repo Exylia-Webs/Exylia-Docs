@@ -88,9 +88,10 @@ queda en la mano, si falla cualquiera de estas:
 4. El `permission` del tipo, si tiene uno.
 5. El mundo no está en `settings.disabled-worlds` (`world_the_end` por defecto).
 6. Los [límites](#límites) de abajo.
-7. El terreno no se solapa con ninguna otra protección y guarda la distancia con las de otros dueños. Ver
+7. El terreno no se solapa con ninguna protección de otro dueño y guarda la distancia con ellas. Ver
    [Solapamiento y distancia](#solapamiento-y-distancia).
-8. Con WorldGuard activado, el terreno no se solapa con ninguna región de WorldGuard que no sea de este
+8. El terreno queda dentro del borde del mundo ("That land reaches past the world border.").
+9. Con WorldGuard activado, el terreno no se solapa con ninguna región de WorldGuard que no sea de este
    plugin, la región global o las de `settings.allowed-world-guard-regions`. Se comprueba en los dos
    [backends](/docs/exyliaprotections/backends).
 
@@ -110,7 +111,7 @@ hasta la caja que contiene a las dos y el núcleo se gasta. Se avisa al jugador 
 a la protección, con su tamaño nuevo, el registro anota una entrada `merge` "grown by a new core", y con
 `visualization.show-on-create` se dibuja el borde nuevo.
 
-Solo ocurre cuando la caja ampliada no se solapa con otra protección, guarda `settings.min-distance` con el
+Solo ocurre cuando la caja ampliada no se solapa con una protección de otro dueño, guarda `settings.min-distance` con el
 terreno de otros dueños y no se solapa con ninguna región de WorldGuard ajena; si no, el núcleo crea su propia
 protección como siempre. Se sigue pidiendo el `permission` del tipo del núcleo. Se rechaza, y el núcleo se
 queda en la mano, mientras esa protección esté en venta u ofrecida en alquiler, o bajo ataque, asaltable,
@@ -148,7 +149,7 @@ selección se rechaza con "Proteger terreno por selección no está disponible."
 | `selection.price-per-block` | 5 | Precio por bloque de área (ancho × largo, sea cual sea la altura). |
 | `selection.currency` | vacío | Vacío es la moneda por defecto. |
 | `selection.min-side` | 9 | El lado más corto que puede tener una selección. |
-| `selection.max-area` | 10000 | El área máxima que puede cubrir. |
+| `selection.max-area` | 10000 | El área máxima que puede cubrir. El `exyliaprotections.select.area.<n>` más alto del jugador la sustituye. |
 | `selection.full-height-tool` | `GOLDEN_HOE` | El selector para selecciones de altura completa. |
 | `selection.normal-height-tool` | `GOLDEN_AXE` | El selector para selecciones `NORMAL`. |
 
@@ -158,7 +159,13 @@ cobrarle. Una protección seleccionada **no tiene bloque núcleo**: no se puede 
 mover o borrar. Su hogar es donde estaba el jugador al confirmar.
 
 Una selección cuenta contra el `limit` de `selection.tier`, y el jugador necesita el `permission` de ese
-tipo cuando tiene uno, igual que con un núcleo.
+tipo cuando tiene uno, igual que con un núcleo. Con los asaltos y `raids.selection-cores` activados, el
+terreno seleccionado recibe un núcleo en la superficie de su centro para poder asaltarlo; ver
+[Asaltos](/docs/exyliaprotections/asaltos#núcleos-para-el-terreno-seleccionado).
+
+Si la nueva protección no se puede guardar en la base de datos, se deshace: el terreno vuelve a quedar sin
+proteger, el núcleo colocado o el precio de la selección vuelven al jugador, y se le pide que lo intente de
+nuevo.
 
 Las dos herramientas del selector también se usan para las
 [parcelas](/docs/exyliaprotections/herramientas).
@@ -171,7 +178,7 @@ vuelve a contar contra ellos.
 | Límite | Dónde se define | Qué cuenta |
 |---|---|---|
 | Protecciones por jugador | El `exyliaprotections.limit.<n>` más alto que tenga el jugador, o `settings.default-limit` (3) sin ninguno | Todas las que tiene, en todos los servidores. |
-| Por tipo | El `limit` del tipo | Las suyas de ese tipo, en todos los servidores. |
+| Por tipo | El `exyliaprotections.limit.<tipo>.<n>` más alto del jugador, o el `limit` del tipo si no tiene ninguno. `0` es sin límite propio | Las suyas de ese tipo, en todos los servidores. |
 | Por mundo | `settings.world-limits`, un mapa de nombre de mundo a número | Las suyas en ese mundo **en este servidor**. Un mundo que no esté no tiene límite propio. |
 
 ```yaml
@@ -193,12 +200,17 @@ la cuentan en su propio límite; solo su dueño.
 
 | Regla | Se aplica a |
 |---|---|
-| Las protecciones nunca se solapan. | Todas las protecciones, sea quien sea su dueño. |
-| Al menos `settings.min-distance` (8) bloques de terreno entre ellas, en horizontal. | Protecciones de **otros** dueños. Las protecciones de un mismo jugador pueden tocarse. |
+| El terreno nunca se solapa con la protección de otro dueño. | Protecciones de **otros** dueños cuyas alturas se cruzan con el terreno nuevo. |
+| Al menos `settings.min-distance` (8) bloques de terreno entre ellas, en horizontal. | Protecciones de **otros** dueños, cubran las alturas que cubran, para que un terreno apilado encima o debajo no alcance un núcleo desde el lado. |
 
-Las dos reglas solo comparan protecciones cuyas alturas se cruzan. Una protección `CUBOID` o `NORMAL` puede
-estar justo encima o debajo de otra, incluso de otro dueño, siempre que sus rangos de altura no compartan
-ni un bloque.
+Las protecciones de un mismo jugador pueden tocarse e incluso solaparse, así que un núcleo nuevo no tiene que
+dar con el borde exacto de su terreno. Donde dos de ellas se solapan, un bloque de núcleo pertenece a su
+propia protección, y cualquier otro bloque a la más antigua. El agua, la lava, los pistones, la redstone, el
+crecimiento y la propagación cruzan libremente entre las protecciones de un mismo dueño, así que una granja
+puede abarcar varias; a través del borde con el terreno de otro, nunca.
+
+Con `min-distance` a `0`, una protección `CUBOID` o `NORMAL` puede estar justo encima o debajo de la de otro
+dueño, siempre que sus rangos de altura no compartan ni un bloque.
 
 ## Altura
 
@@ -237,10 +249,13 @@ las comprobaciones de colocación salvo los límites, cuesta `settings.move-pric
 nuevo. Si el movimiento no se puede guardar, se devuelve el precio.
 
 **Borrar**, desde la pantalla de la protección, es solo del dueño y pide confirmación. El bloque núcleo se
-quita y el banco va al dueño, después de devolver a cualquier inquilino el tiempo que le quedaba.
+quita y se devuelve al dueño como un núcleo en blanco de su tipo (una protección seleccionada no tiene
+ninguno que devolver), y el banco va al dueño, después de devolver a cualquier inquilino el tiempo que le
+quedaba.
 
-Nada de esto funciona mientras la protección esté bajo ataque, asaltable, abandonada o alquilada. Recoger
-también se rechaza mientras se deba mantenimiento.
+Nada de esto funciona mientras la protección esté bajo ataque, asaltable o alquilada. En una protección
+abandonada, al dueño se le pregunta si quiere pagar antes su mantenimiento y seguir. Recoger y borrar también
+se rechazan mientras se deba mantenimiento.
 
 <Callout type="warning" title="Los admins cuentan como dueños de todas las protecciones">
 Un jugador con `exyliaprotections.admin` (los operadores, por defecto) pasa toda comprobación de "solo el

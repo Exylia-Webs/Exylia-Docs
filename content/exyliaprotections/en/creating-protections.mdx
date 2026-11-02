@@ -84,9 +84,10 @@ hand, when any of these fails:
 4. The tier's `permission`, if it has one.
 5. The world is not in `settings.disabled-worlds` (`world_the_end` by default).
 6. The [limits](#limits) below.
-7. The land overlaps no other protection, and keeps its distance from other owners'. See
+7. The land overlaps no other owner's protection, and keeps its distance from them. See
    [Overlap and distance](#overlap-and-distance).
-8. With WorldGuard enabled, the land overlaps no WorldGuard region other than this plugin's own, the
+8. The land lies inside the world border ("That land reaches past the world border.").
+9. With WorldGuard enabled, the land overlaps no WorldGuard region other than this plugin's own, the
    global region and the ones in `settings.allowed-world-guard-regions`. This is checked in both
    [backends](/docs/exyliaprotections/backends).
 
@@ -105,7 +106,7 @@ the box holding both, and the core is spent. The player is told "The new core jo
 records a `merge` entry "grown by a new core", and with `visualization.show-on-create` the new border is
 drawn.
 
-It only happens when the grown box overlaps no other protection, keeps `settings.min-distance` from other
+It only happens when the grown box overlaps no other owner's protection, keeps `settings.min-distance` from other
 owners' land and overlaps no foreign WorldGuard region; otherwise the core makes a protection of its own as
 usual. The core's tier `permission` is still asked. It is refused while that protection is for sale or
 offered for rent ("listed"), or under attack, raidable, abandoned or rented, and the core stays in the
@@ -142,7 +143,7 @@ the selection is refused with "Protecting land by selection is not available."
 | `selection.price-per-block` | 5 | Price per block of area (width × length, whatever the height). |
 | `selection.currency` | blank | Blank is the default currency. |
 | `selection.min-side` | 9 | The shortest side a selection may have. |
-| `selection.max-area` | 10000 | The largest area it may cover. |
+| `selection.max-area` | 10000 | The largest area it may cover. A player's highest `exyliaprotections.select.area.<n>` replaces it. |
 | `selection.full-height-tool` | `GOLDEN_HOE` | The selector used for full-height selections. |
 | `selection.normal-height-tool` | `GOLDEN_AXE` | The selector used for `NORMAL` selections. |
 
@@ -152,7 +153,11 @@ selected protection has **no core block**: it cannot be picked up or hidden, onl
 home is where the player stood when they confirmed.
 
 A selection counts against `selection.tier`'s `limit`, and the player must hold that tier's `permission`
-when it has one, as for a core.
+when it has one, as for a core. With raids on and `raids.selection-cores` on, selected land gets a core on
+the surface at its centre so it can be raided; see [Raids](/docs/exyliaprotections/raids#cores-for-selected-land).
+
+If the new protection cannot be saved to the database, it is undone: the land is unprotected again, a placed
+core or the selection price goes back to the player, and they are told to try again.
 
 Both selector tools are also used for [plots](/docs/exyliaprotections/land-tools).
 
@@ -164,7 +169,7 @@ against them again.
 | Limit | Where it is set | What it counts |
 |---|---|---|
 | Protections per player | The highest `exyliaprotections.limit.<n>` the player holds, or `settings.default-limit` (3) without one | Every protection they own, on every server. |
-| Per tier | The tier's `limit` | Their protections of that tier, on every server. |
+| Per tier | The highest `exyliaprotections.limit.<tier>.<n>` the player holds, or the tier's `limit` without one. `0` is no limit of its own | Their protections of that tier, on every server. |
 | Per world | `settings.world-limits`, a map of world name to number | Their protections in that world **on this server**. A world left out has no limit of its own. |
 
 ```yaml
@@ -186,12 +191,16 @@ count it against their own limit; only its owner does.
 
 | Rule | Applies to |
 |---|---|
-| Protections never overlap. | Every protection, whoever owns it. |
-| At least `settings.min-distance` (8) blocks of land between them, horizontally. | Protections of **other** owners. A player's own protections may touch. |
+| Land never overlaps another owner's protection. | Protections of **other** owners whose heights overlap the new land. |
+| At least `settings.min-distance` (8) blocks of land between them, horizontally. | Protections of **other** owners, whatever heights both cover, so land stacked above or below cannot reach a core from beside it. |
 
-Both rules only compare protections whose heights overlap. A `CUBOID` or `NORMAL` protection can sit
-directly above or below another one, even another owner's, as long as their height ranges do not share a
-single block.
+A player's own protections may touch and even overlap, so a new core need not find the exact edge of their
+land. Where two of them overlap, a core block belongs to its own protection, and every other block to the
+oldest of them. Water, lava, pistons, redstone, growth and spreading cross freely between one owner's
+protections, so a farm can span several of them; across the border with anybody else's land, they never do.
+
+With `min-distance` at `0`, a `CUBOID` or `NORMAL` protection can sit directly above or below another
+owner's, as long as their height ranges do not share a single block.
 
 ## Height
 
@@ -229,10 +238,12 @@ to where the player stands. A public warp moves with it, to the new home. If the
 the price is paid back.
 
 **Deleting**, from the protection's screen, is the owner's alone and asks for confirmation. The core block
-is removed and the bank goes to the owner, after paying back any tenant for the time they had left.
+is removed and handed back to the owner as a blank core of its tier (a selected protection has none to
+return), and the bank goes to the owner, after paying back any tenant for the time they had left.
 
-None of these work while the protection is under attack, raidable, abandoned or rented. Picking up is
-also refused while upkeep is due.
+None of these work while the protection is under attack, raidable or rented. On an abandoned protection,
+the owner is asked whether to pay its upkeep first and go on. Picking up and deleting are also refused
+while upkeep is due.
 
 <Callout type="warning" title="Admins count as the owner of every protection">
 A player with `exyliaprotections.admin` (operators, by default) passes every "owner only" check. Breaking

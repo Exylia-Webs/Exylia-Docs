@@ -34,8 +34,9 @@ currency id from there.
 
 Money always leaves a player before it is used, and goes back to them when what they paid for does not
 happen. A currency with fewer decimals than the amount asked rounds it down, and only what actually left
-the player is credited or paid back. Without any economy installed, every payment is refused as not
-enough money.
+the player is credited or paid back. A payout or refund the player's balance refuses is not lost: it is
+kept as a pending reward and handed over the next time they join. Without any economy installed, every
+payment is refused as not enough money.
 
 <Callout type="note" title="The bank and another currency">
 The bank only takes rent, and only pays upgrades, when `rent.currency` or `upgrades.currency` is the same
@@ -92,6 +93,7 @@ With upkeep on, protections pay every period. One that stops paying, or whose pl
 | `upkeep.charge-owner` | `true` | Whether an owner online on the protection's server pays what its bank cannot |
 | `upkeep.grace-periods` | `3` | Unpaid periods that abandon a protection |
 | `upkeep.inactive-days` | `30` | Days without the owner or a member playing that abandon it. `0` turns it off |
+| `upkeep.only-managers-keep-active` | `true` | Whether only the owner and members allowed to `manage-members` keep it active. Off: any player member does |
 | `upkeep.abandoned-days` | `3` | Days an abandoned protection stays open to everyone before it is deleted |
 | `upkeep.warn-hours` | `12` | Hours before a payment the bank cannot cover when members are warned |
 | `upkeep.check-minutes` | `10` | Minutes between two checks of this server's protections. Read when the server starts |
@@ -120,7 +122,9 @@ server charges it: a protection on a server that is down is not charged until it
 A period counts as owed from the moment it is due. With 24-hour periods and 3 grace periods, a protection
 whose bank is empty is abandoned 48 hours after its payment was due, as the third period falls due.
 
-Only the owner and players added as members count towards activity, not clan members or plot members.
+Only the owner and players added as members count towards activity, not clan members or plot members. With
+`only-managers-keep-active` on (the default), a member counts only while their role, or an override, gives
+them `manage-members`, so a single alt added as a plain member cannot keep somebody's land alive forever.
 "Last played" is kept in the database for every server of the network, and is now while one of them is
 online on the protection's server. When protections load, an owner or member without a record counts as
 seen at that moment, so nobody is inactive before the plugin has watched them.
@@ -136,8 +140,9 @@ seen at that moment, so nobody is inactive before the plugin has watched them.
 - `/protections upkeep` shows the state, the cost per period, the period length, the time to the next
   payment and what is owed. Any member may run it.
 
-While upkeep is **due**, the core cannot be picked up: placing it again would start a new account and wipe
-the debt.
+While upkeep is **due**, the core cannot be picked up and the protection cannot be deleted or listed for sale
+until the debt is paid: placing it again would start a new account and wipe the debt, and a buyer would
+inherit it. Nobody can buy a protection on the market while it owes upkeep either.
 
 ### Abandoned
 
@@ -147,8 +152,10 @@ While a protection is abandoned:
   whether raids are on or not. See [Raids](/docs/exyliaprotections/raids#the-raid).
 - Anybody may enter, whatever the lock or the bans say.
 - It cannot be picked up, moved, deleted, listed for sale, given away, offered for rent, upgraded or grown by a new core.
-  A listed sale is cancelled and the seller told.
-- Member perks stop, its warp is refused or hidden, and nobody may rent in it.
+  Instead of refusing, the owner (or the member trying it) is asked whether to pay its upkeep first: on yes
+  the debt leaves their balance and the action goes on. A listed sale is cancelled and the seller told.
+- Member perks stop, its warp is refused or hidden, and nobody may rent in it. A plot somebody already rents
+  stays closed to everybody else, and its tenants on that server are told how long the land has left.
 - Members online on its server are told, and with `announce` on so is every player online with raid
   announcements on.
 - The Upkeep button and `%exyliaprotections_protections_upkeep_due%` show how long is left before it is
@@ -173,8 +180,9 @@ The deletion is due as soon as the protection is abandoned. The next check, with
 it.
 </Callout>
 
-Turning `submodules.upkeep` off stops charging and ends the effect of every abandonment. What was owed and
-when a protection was abandoned stay stored, and apply again when upkeep is turned back on.
+Turning `submodules.upkeep` off stops charging. While it is off, each due date that passes moves on by whole
+periods and every abandonment is lifted, so turning upkeep back on bills nothing for the time it was off and
+deletes nothing for an abandonment that was paused.
 
 | Upkeep state | When |
 |---|---|
@@ -209,17 +217,21 @@ cancel its sale when it is listed. **For sale** in `/protections` opens the mark
 **Listing.** The price must be above 0 and at most `max-price`. It is refused while the protection is
 raidable, its core is damaged, it is abandoned, or somebody rents in it. The listing keeps the currency
 `market.currency` names at that moment. It is cancelled on its own, and the seller told, when the protection
-becomes raidable or abandoned, or changes owner. While a protection is listed, it cannot be offered for rent
-or rented, and a new core cannot grow it.
+becomes raidable or abandoned, changes owner, or is upgraded, moved, grown or given another tier: the price
+was asked for land that is no longer what a buyer would get. A seller banned from the server loses the
+sale, and nobody can buy it. While a protection is listed, it cannot be offered for rent or rented, and a new
+core cannot grow it. Listing is refused while it owes upkeep.
 
 **Buying.** In the market, left-click buys and right-click teleports to the protection's home to look
-first. The buyer cannot be the owner, and must pass the same checks as placing that tier: its permission,
-their protection limit, the tier's limit and the world's limit. After a confirmation the price leaves the
+first. Each listing also shows the protection's upkeep state and what its bank holds. The buyer cannot be the
+owner, and must pass the same checks as placing that tier: its permission, their protection limit, the
+tier's limit and the world's limit. A protection that owes upkeep cannot be bought until its owner pays. After a confirmation the price leaves the
 buyer. If somebody else bought it first, it stopped being for sale, or the change of owner cannot be
 written, the money goes back.
 
 The seller receives the price minus `tax-percent`: a protection sold for 10,000 at 5% pays 9,500. The seller
-is paid even when offline, and both players are told. With the survival core installed, the sale counts
+is paid even when offline, and both players are told. What the bank held when the land was sold also goes
+to the seller, and the buyer starts with an empty bank. With the survival core installed, the sale counts
 `protections.sold` for the seller and `protections.bought` for the buyer.
 
 ## Giving a protection away
@@ -238,7 +250,8 @@ Admins hand a protection to anybody, whatever their limits, from the admin scree
 
 ## What changes hands
 
-A sale, a gift or an admin transfer keeps with the land its bank, its upkeep, its lives and raid, its level,
+A gift or an admin transfer keeps with the land its bank; a sale pays the bank out to the seller. All three
+keep its upkeep, its lives and raid, its level,
 its flags, bans, greeting and farewell, its plots, its perks, time and weather. The new owner is never left
 banned from, or a member of, their own land.
 
@@ -374,6 +387,7 @@ upkeep:
   warn-hours: 12
   check-minutes: 10
   announce: false
+  only-managers-keep-active: true
 market:
   currency: ""
   tax-percent: 5.0
