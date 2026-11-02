@@ -27,8 +27,8 @@ tiene que hacer cualquier otro modo antes de nada; `state(UUID)` dice por qué l
 
 <Callout type="note" title="Las consultas son baratas, las acciones no">
 Todo lo que devuelve un valor lee de la caché del plugin y es seguro desde el redibujado de un menú o
-desde un placeholder — los dos métodos que devuelven `CompletableFuture` son la excepción, y los dos se
-delatan solos. Todo lo demás ejecuta el mismo flujo que el comando del propio jugador, con sus
+desde un placeholder — los métodos que devuelven `CompletableFuture` son la excepción, y cada uno se
+delata solo. Todo lo demás ejecuta el mismo flujo que el comando del propio jugador, con sus
 comprobaciones de permiso, sus cooldowns y sus mensajes, así que llámalo en el hilo principal y no más
 seguido de lo que un jugador podría provocarlo. Una acción devuelve si el plugin la *aceptó*; al
 jugador ya se le dijo por qué no.
@@ -40,6 +40,9 @@ jugador ya se le dijo por qué no.
 |---|---|
 | `Optional<Arena> arena(String arenaId)` | Una arena por id. Vacío si ninguna la tiene. |
 | `List<Arena> arenas()` | Todas las arenas, activadas o no, como snapshot de la caché. Vale para un menú, sobra dentro de un bucle. |
+| `Optional<ArenaLayout> arenaLayout(String arenaId)` | Dónde está cada cosa en la copia original de la arena: `spawn1`, `spawn2`, `spectatorSpawn` (puede ser `null`) y las esquinas `min` y `max` de la región jugable. Vacío si ninguna arena tiene ese id o no está activada y configurada del todo. |
+| `CompletableFuture<Optional<ArenaLease>> acquireArena(String arenaId)` | Reserva una copia libre de la arena para tu propia pelea, construyendo un clon nuevo si no hay ninguna libre (de ahí el future, que puede completarse en cualquier hilo). El préstamo lleva `arenaId`, el `layout` de la copia y un `handle` opaco. Los usos no se comprueban: filtra tú por `ArenaUsage.EVENT`. Vacío si la arena no existe, no está configurada o no se pudo conseguir una copia. |
+| `void releaseArena(ArenaLease lease)` | Devuelve la copia, que se regenera en el acto, así que saca antes a tus jugadores. Liberar dos veces el mismo préstamo no hace nada la segunda. |
 
 ## Kits
 
@@ -51,6 +54,9 @@ jugador ya se le dijo por qué no.
 | `List<KitCategory> kitCategories()` | Todas las categorías de kit, activadas o no. |
 | `List<KitLoadout> loadouts(UUID player, String kitId)` | Los loadouts guardados de un jugador para un kit. Se leen de la copia cargada al entrar, así que un jugador desconectado no tiene ninguno. |
 | `boolean applyKit(Player player, String kitId)` | Le da el kit al jugador como haría una partida: limpia lo que llevaba y aplica los efectos y reglas del kit, usando su propio loadout si guardó alguno. `false` si ningún kit tiene ese id. |
+| `Optional<KitItems> kitItems(String kitId)` | Los objetos del propio kit, nunca el loadout de un jugador: `contents` (36 huecos), `armor` (botas primero, el orden de Bukkit) y `offhand`. Cada stack es una copia nueva. |
+| `Optional<KitRules> kitRules(String kitId)` | Una foto de las reglas del kit para un plugin que lleva sus propias peleas: construir, romper bloques, interactuar, soltar y recoger objetos, PvP, daño de caída, regeneración, hambre, retardo de golpe, los cooldowns de perla / manzana dorada / flecha (segundos, `0` si no hay), vida / comida / saturación iniciales (`-1` si el kit no las toca) y sus efectos de poción. |
+| `void applyKitEffects(Player player, String kitId)` | Lo que hace una partida al acabar la cuenta atrás: los atributos del kit (vida máxima, daño de ataque, velocidad, resistencia al empuje), vida, comida y saturación iniciales, retardo de golpe y efectos de poción. Es la contraparte de `applyKit`, que solo pone los objetos. Llámalo en el hilo del propio jugador. |
 
 ## Estado del jugador
 
@@ -182,7 +188,7 @@ partida, no lo que otro plugin necesita saber.
 ### `ArenaUsage`
 
 `QUEUE` (matchmaking), `DUEL` (duelos entre jugadores), `PARTY` (FFA y peleas por equipos de party),
-`BOT` (peleas contra bots). Una arena que no declara ninguno los acepta todos, y en ese caso
+`BOT` (peleas contra bots), `EVENT` (eventos de otros plugins que toman prestada una arena con `acquireArena`). Una arena que no declara ninguno los acepta todos, y en ese caso
 `Arena.usages()` devuelve el conjunto completo en vez de uno vacío.
 
 ### `Kit`
@@ -341,7 +347,7 @@ Sessions.watch(myPlugin,
 ```
 
 El service está curado, no es un espejo del plugin. Las pantallas de admin, la sesión del editor de kits, el manejo
-y la regeneración de instancias de arena, la rotación de temporada, las escrituras administrativas
+y la regeneración de instancias de arena más allá de tomar prestada una copia, la rotación de temporada, las escrituras administrativas
 sobre las estadísticas de alguien y las filas crudas de configuración quedan afuera a propósito: son el
 plugin corriéndose a sí mismo, y un método público que metiera mano ahí sería una forma de romper una
 partida en silencio.

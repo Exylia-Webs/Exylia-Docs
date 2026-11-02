@@ -26,7 +26,7 @@ another mode has to ask first; `state(UUID)` says why the answer was no.
 
 <Callout type="note" title="Queries are cheap, actions are not">
 Everything returning a value reads from the plugin's cache and is safe from a menu redraw or a
-placeholder — the two `CompletableFuture` methods are the exception, and both name themselves.
+placeholder — the `CompletableFuture` methods are the exception, and each names itself.
 Everything else runs the same flow the player's own command runs, including permission checks,
 cooldowns and the messages the player sees, so call those on the main thread and no more often than a
 player could trigger them. An action returns whether the plugin *accepted* it; the player has already
@@ -39,6 +39,9 @@ been told why not.
 |---|---|
 | `Optional<Arena> arena(String arenaId)` | An arena by id. Empty when no arena has it. |
 | `List<Arena> arenas()` | Every arena, enabled or not, as a snapshot of the cache. Fine for a menu, wasteful in a loop. |
+| `Optional<ArenaLayout> arenaLayout(String arenaId)` | Where things are in the arena's original copy: `spawn1`, `spawn2`, `spectatorSpawn` (may be `null`), and the playable region's `min` and `max` corners. Empty when no arena has that id or it is not enabled and fully set up. |
+| `CompletableFuture<Optional<ArenaLease>> acquireArena(String arenaId)` | Reserves a free copy of the arena for your own fight, building a new clone when none is free (hence the future, which may complete on any thread). The lease carries `arenaId`, the copy's `layout` and an opaque `handle`. Usages are not checked: filter on `ArenaUsage.EVENT` yourself. Empty when the arena is unknown, not set up, or no copy could be had. |
+| `void releaseArena(ArenaLease lease)` | Hands the copy back, which regenerates it straight away, so move your players out first. A second release of the same lease does nothing. |
 
 ## Kits
 
@@ -50,6 +53,9 @@ been told why not.
 | `List<KitCategory> kitCategories()` | Every kit category, enabled or not. |
 | `List<KitLoadout> loadouts(UUID player, String kitId)` | A player's saved loadouts for a kit. Read from the copy loaded when they joined, so an offline player has none. |
 | `boolean applyKit(Player player, String kitId)` | Gives a player a kit as a match would: clears what they held, applies the kit's effects and rules, and uses their own loadout when they have saved one. `false` when no kit has that id. |
+| `Optional<KitItems> kitItems(String kitId)` | The kit's own items, never a player's loadout: `contents` (36 slots), `armor` (boots first, Bukkit's order) and `offhand`. Every stack is a fresh copy. |
+| `Optional<KitRules> kitRules(String kitId)` | A snapshot of the kit's rules for a plugin running its own fights: build, block break, interact, item drop and pickup, PvP, fall damage, regeneration, hunger, hit delay, the ender pearl / golden apple / arrow cooldowns (seconds, `0` for none), start health / food / saturation (`-1` when the kit leaves them alone) and its potion effects. |
+| `void applyKitEffects(Player player, String kitId)` | What a match does when its countdown ends: the kit's attributes (max health, attack damage, speed, knockback resistance), start health, food and saturation, hit delay and potion effects. The counterpart to `applyKit`, which only sets items. Call it on the player's own thread. |
 
 ## Player state
 
@@ -181,7 +187,7 @@ not what another plugin needs to know.
 ### `ArenaUsage`
 
 `QUEUE` (matchmaking), `DUEL` (player-sent duels), `PARTY` (party FFA and team fights), `BOT` (fights
-against bots). An arena that declares none accepts everything, and `Arena.usages()` reports the full
+against bots), `EVENT` (other plugins' events that lease an arena through `acquireArena`). An arena that declares none accepts everything, and `Arena.usages()` reports the full
 set in that case rather than an empty one.
 
 ### `Kit`
@@ -339,7 +345,7 @@ Sessions.watch(myPlugin,
 ```
 
 The service is curated rather than a mirror of the plugin. Admin screens, the kit editor session, arena
-instance handling and regeneration, season rotation, administrative writes to somebody's statistics
+instance handling and regeneration beyond leasing a copy, season rotation, administrative writes to somebody's statistics
 and raw configuration rows are left out on purpose: they are the plugin running itself, and a public
 method that reached into them would be a way to break a match quietly.
 
