@@ -23,7 +23,9 @@ default.
 | `/exylialib pendingrewards [player]` | `exylialib.pendingrewards` | [Rewards still owed](#pending-rewards). |
 | `/exylialib export <plugin>` | `exylialib.admin` | Writes that plugin's tables to a dump in `plugins/ExyliaLib/dumps/`. |
 | `/exylialib import <plugin> <file> [force]` | `exylialib.admin` | Reads a dump back. `force` **merges**, it does not replace. |
-| `/exylialib wipe <plugin> <table\|*> [code]` | `exylialib.admin.wipe` | Empties one table or all of them, after a typed code and an automatic dump. |
+| `/exylialib wipe` | `exylialib.admin.wipe` | Opens the [wipe screens](#wiping-by-kind); the console gets a help panel. |
+| `/exylialib wipe <plugin\|all> <table\|@kind\|@preset\|all> [code]` | `exylialib.admin.wipe` | Empties tables by name, by kind or by preset, after a typed code and an automatic dump. |
+| `/exylialib resetplayer <player> [plugin\|all] [@kind ...] [code]` | `exylialib.admin.wipe` | Deletes one player's rows, in every plugin or in one. See [Resetting a player](#resetting-a-player). |
 
 `/settings` is the library's other command, and it is **off** until `settings.command.enabled` is turned on
 in `config.yml`. It opens the screen where players set the preferences every Exylia plugin registers, and
@@ -56,10 +58,57 @@ would go through. `force` merges: rows whose key is in the dump are overwritten,
 where they are.
 
 `wipe` runs twice. The first run deletes nothing: it lists what would go and gives a six-digit code. The
-same command with that code within 60 seconds — same sender, same plugin, same table — writes a dump
-first and only then deletes; if the dump fails, nothing is deleted. Restart afterwards: until then the
-plugin still holds the rows in memory, and its writes to the wiped tables are ignored so they cannot come
-back.
+same command with that code within 60 seconds — same sender, same request — writes a dump first and only
+then deletes; if the dump fails, nothing is deleted. Restart afterwards: until then the plugin still holds
+the rows in memory, and its writes to the wiped tables are ignored so they cannot come back. Restore a
+dump with `/exylialib import <plugin> <file> true`.
+
+### Wiping by kind
+
+Every table a plugin declares says what it holds, so a wipe picks kinds instead of table names:
+
+| Kind | What it holds |
+|---|---|
+| `@progress` | Per-player progress a new season starts over: balances, stats, ranks, homes, kit layouts. |
+| `@world` | Server-wide state of the current playthrough: claims, clans, listings, auctions, graves, placed spawners, the live season. |
+| `@account` | Per-player data that survives a season: purchases, unlocks, preferences, punishments. |
+| `@history` | Logs and history: match history, ledgers, audits, replays, past seasons. |
+| `@cache` | Rebuilt by itself: stat caches, cooldowns, leases. |
+| `@setup` | Built by the admin: warps, kits, arenas, crates, shop products. |
+| `@unspecified` | Not classified by its plugin yet. |
+
+Two presets name the usual sets: `@season` (progress, world and cache) and `@players` (progress and
+cache). Neither ever touches `@setup` or `@unspecified` tables; those go only when named, by kind, by
+table, or with `all`. `<plugin> <table|all>` keeps working as before, and `all all` is every table of every
+plugin.
+
+```
+/exylialib wipe all @season            # a new season, every plugin
+/exylialib wipe ExyliaClans @world     # one plugin's world state
+```
+
+In game, `/exylialib wipe` alone opens the same thing as screens: pick a preset, leave plugins out, see the
+rows each kind would remove, and confirm by typing `WIPE`. The screens can also delete the vanilla player
+files (`playerdata`, `stats`, `advancements`) on the next start.
+
+### Resetting a player
+
+`resetplayer` deletes one player's rows without a restart. Only tables that name the player's column take
+part; the others are skipped, and the preview says how many.
+
+```
+/exylialib resetplayer Steve                       # every plugin, the default kinds
+/exylialib resetplayer Steve ExyliaPracticeCore    # one plugin
+/exylialib resetplayer Steve all @progress @account
+```
+
+- With no kinds, a reset clears **progress, world and cache**. Naming kinds replaces that set:
+  `@account` and `@history` are only removed when named, and `@setup` and `@unspecified` are refused.
+- Presets do not apply here: name kinds one by one.
+- It confirms like `wipe`: the first run shows what goes and a code, the same line with the code runs it.
+- A player online on another server is refused. The player is kicked and kept out of the network while it
+  runs, a dump is written first, and they may join again as soon as it finishes.
+- Deleting the player's vanilla files is offered only by the screens.
 
 ## Staff log
 

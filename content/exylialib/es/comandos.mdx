@@ -22,7 +22,9 @@ tiene su propio permiso para que un servidor pueda dar uno sin los demás; todos
 | `/exylialib pendingrewards [jugador]` | `exylialib.pendingrewards` | [Recompensas aún debidas](#recompensas-pendientes). |
 | `/exylialib export <plugin>` | `exylialib.admin` | Escribe las tablas de ese plugin en un volcado en `plugins/ExyliaLib/dumps/`. |
 | `/exylialib import <plugin> <archivo> [force]` | `exylialib.admin` | Lee un volcado de vuelta. `force` **fusiona**, no reemplaza. |
-| `/exylialib wipe <plugin> <tabla\|*> [código]` | `exylialib.admin.wipe` | Vacía una tabla o todas, tras un código tecleado y un volcado automático. |
+| `/exylialib wipe` | `exylialib.admin.wipe` | Abre las [pantallas de borrado](#borrar-por-tipo); la consola recibe un panel de ayuda. |
+| `/exylialib wipe <plugin\|all> <tabla\|@tipo\|@preset\|all> [código]` | `exylialib.admin.wipe` | Vacía tablas por nombre, por tipo o por preset, tras un código tecleado y un volcado automático. |
+| `/exylialib resetplayer <jugador> [plugin\|all] [@tipo ...] [código]` | `exylialib.admin.wipe` | Borra las filas de un jugador, en todos los plugins o en uno. Ver [Reiniciar a un jugador](#reiniciar-a-un-jugador). |
 
 `/settings` es el otro comando de la librería, y está **apagado** hasta que se activa
 `settings.command.enabled` en `config.yml`. Abre la pantalla donde los jugadores ajustan las preferencias
@@ -57,10 +59,58 @@ tabla, así que uno que registra alguna de forma perezosa exporta menos de las q
 están.
 
 `wipe` se ejecuta dos veces. La primera no borra nada: lista lo que se iría y da un código de seis dígitos.
-El mismo comando con ese código en 60 segundos — mismo emisor, mismo plugin, misma tabla — escribe primero un
-volcado y solo entonces borra; si el volcado falla, no se borra nada. Reinicia después: hasta entonces el
-plugin sigue teniendo las filas en memoria, y sus escrituras en las tablas vaciadas se ignoran para que no
-vuelvan.
+El mismo comando con ese código en 60 segundos — mismo emisor, misma petición — escribe primero un volcado y
+solo entonces borra; si el volcado falla, no se borra nada. Reinicia después: hasta entonces el plugin sigue
+teniendo las filas en memoria, y sus escrituras en las tablas vaciadas se ignoran para que no vuelvan. Un
+volcado se restaura con `/exylialib import <plugin> <archivo> true`.
+
+### Borrar por tipo
+
+Cada tabla que declara un plugin dice qué guarda, así que un borrado elige tipos en vez de nombres de tabla:
+
+| Tipo | Qué guarda |
+|---|---|
+| `@progress` | Progreso por jugador que una temporada nueva reinicia: saldos, estadísticas, rangos, homes, distribuciones de kits. |
+| `@world` | Estado de toda la partida actual: claims, clanes, anuncios, subastas, tumbas, spawners colocados, la temporada en curso. |
+| `@account` | Datos por jugador que sobreviven a una temporada: compras, desbloqueos, preferencias, sanciones. |
+| `@history` | Registros e historial: historial de partidas, libros de cuentas, auditorías, repeticiones, temporadas pasadas. |
+| `@cache` | Se reconstruye solo: cachés de estadísticas, cooldowns, reservas. |
+| `@setup` | Lo monta el admin: warps, kits, arenas, cajas, productos de tienda. |
+| `@unspecified` | Su plugin aún no lo ha clasificado. |
+
+Dos presets nombran los conjuntos habituales: `@season` (progreso, mundo y caché) y `@players` (progreso y
+caché). Ninguno toca nunca las tablas `@setup` ni `@unspecified`; esas solo se van cuando se nombran, por
+tipo, por tabla o con `all`. `<plugin> <tabla|all>` sigue funcionando como antes, y `all all` es cada tabla
+de cada plugin.
+
+```
+/exylialib wipe all @season            # una temporada nueva, todos los plugins
+/exylialib wipe ExyliaClans @world     # el estado de mundo de un plugin
+```
+
+En el juego, `/exylialib wipe` a secas abre lo mismo en pantallas: eliges un preset, dejas fuera plugins,
+ves las filas que quitaría cada tipo y confirmas tecleando `WIPE`. Las pantallas también pueden borrar los
+archivos vanilla de los jugadores (`playerdata`, `stats`, `advancements`) en el siguiente arranque.
+
+### Reiniciar a un jugador
+
+`resetplayer` borra las filas de un jugador sin reiniciar el servidor. Solo participan las tablas que
+nombran la columna del jugador; las demás se saltan, y la vista previa dice cuántas.
+
+```
+/exylialib resetplayer Steve                       # todos los plugins, los tipos por defecto
+/exylialib resetplayer Steve ExyliaPracticeCore    # un plugin
+/exylialib resetplayer Steve all @progress @account
+```
+
+- Sin tipos, un reinicio borra **progreso, mundo y caché**. Nombrar tipos reemplaza ese conjunto:
+  `@account` y `@history` solo se borran si se nombran, y `@setup` y `@unspecified` se rechazan.
+- Los presets no sirven aquí: nombra los tipos uno a uno.
+- Se confirma como `wipe`: la primera vez muestra lo que se va y un código, la misma línea con el código lo
+  ejecuta.
+- Un jugador conectado en otro servidor se rechaza. Al jugador se le expulsa y se le mantiene fuera de la red
+  mientras dura, primero se escribe un volcado, y puede volver a entrar en cuanto termina.
+- Borrar los archivos vanilla del jugador solo lo ofrecen las pantallas.
 
 ## Registro del staff
 
