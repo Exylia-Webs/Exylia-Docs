@@ -1789,10 +1789,10 @@ export const plugins: Plugin[] = [
     name: "ExyliaHitEffect",
     tagline: { en: "Hit effects drawn with display entities", es: "Efectos de golpe hechos con display entities" },
     summary: {
-      en: "90 hit effects across six categories, played on the body of whoever was struck and written to a budget of six tenths of a second: chosen from a menu, won out of a crate, bought with currency or bound to a weapon with a token.",
-      es: "90 efectos de golpe en seis categorías, lanzados sobre el cuerpo de quien recibe el impacto y escritos con un presupuesto de seis décimas de segundo: elegidos desde un menú, ganados en una caja, comprados con moneda o atados a un arma con una ficha.",
+      en: "90 hit effects across six categories, played on the body of whoever was struck and written to a budget of six tenths of a second: chosen from an inventory menu or a 3D selector, won out of a crate, bought with currency or bound to a weapon with a token, with every feature a rank perk.",
+      es: "90 efectos de golpe en seis categorías, lanzados sobre el cuerpo de quien recibe el impacto y escritos con un presupuesto de seis décimas de segundo: elegidos desde un menú de inventario o un selector 3D, ganados en una caja, comprados con moneda o atados a un arma con una ficha, con cada función como ventaja de rango.",
     },
-    version: "1.5.0",
+    version: "1.6.0",
     status: "stable",
     category: { en: "Cosmetic", es: "Cosmético" },
     minecraft: "1.21+",
