@@ -1,9 +1,7 @@
 "use client";
 
-import Image from "next/image";
 import { m } from "framer-motion";
-
-const OFFICIAL_LOGO = "/exylia-mark.webp";
+import { AppIcon, appIcon } from "@exylia-webs/ui";
 
 export function Logo({ className = "h-7 w-auto" }: { className?: string }) {
   return (
@@ -13,14 +11,7 @@ export function Logo({ className = "h-7 w-auto" }: { className?: string }) {
         animate={{ y: [0, -1, 0] }}
         transition={{ duration: 3.2, repeat: Infinity, ease: "easeInOut" }}
       >
-        <Image
-          src={OFFICIAL_LOGO}
-          alt="Exylia"
-          fill
-          sizes="28px"
-          className="object-contain"
-          priority
-        />
+        <AppIcon src={appIcon("docs")} size={28} />
       </m.div>
       <span className="font-display text-[16px] font-semibold tracking-tight2 text-white">
         Exylia

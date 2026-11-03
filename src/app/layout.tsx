@@ -19,7 +19,6 @@ export const metadata: Metadata = {
     description: SITE.description[DEFAULT_LANG],
     type: "website",
   },
-  icons: { icon: "/exylia-mark.webp" },
 };
 
 export const viewport: Viewport = {
