@@ -1879,7 +1879,7 @@ export const plugins: Plugin[] = [
       en: "120 projectile effects across six categories, each one three moments — launch, trail and impact — drawn with real blocks and items: chosen from a classic or 3D menu, or bound to a bow with a token.",
       es: "120 efectos de proyectil en seis categorías, cada uno con tres momentos — lanzamiento, estela e impacto — dibujados con bloques y objetos reales: elegidos desde un menú clásico o 3D, o atados a un arco con una ficha.",
     },
-    version: "1.7.0",
+    version: "1.7.1",
     status: "stable",
     category: { en: "Cosmetic", es: "Cosmético" },
     minecraft: "1.21+",
