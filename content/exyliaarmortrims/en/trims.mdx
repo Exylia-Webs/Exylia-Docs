@@ -1,16 +1,15 @@
 ---
 title: "Trims"
-description: "Presets, patterns and materials: what trims.yml ships and how it is written."
+description: "Patterns and materials: what trims.yml ships, how a trim is stored, and what happened to presets."
 ---
 
-A trim is a **pattern** plus a **material**. It is worn in one of two ways: as a **preset** with a
-name of its own, or as a combination the player builds on the CUSTOM tab.
+A trim is a **pattern** plus a **material**, combined by the player in the menu or the 3D wardrobe.
 
-All of it lives in `trims.yml`, which has three sections: `patterns`, `materials` and `presets`.
+Both lists live in `trims.yml`, which has two sections: `patterns` and `materials`.
 
 ## Patterns and materials
 
-These are the two lists the CUSTOM tab combines. The key is the game's registry key — `sentry`,
+These are the two lists a player combines a trim from. The key is the game's registry key — `sentry`,
 `netherite` — and `minecraft:sentry` works just as well: the namespace is trimmed when it is read.
 
 ```yaml title="trims.yml"
@@ -32,12 +31,12 @@ materials:
 | Key | What it does |
 |---|---|
 | `name` | What is shown. Takes palette tokens, MiniMessage and gradients. |
-| `icon` | The item the row is drawn with on the CUSTOM tab. `BARRIER` when left empty. |
+| `icon` | The item the entry is drawn with in the menu. `BARRIER` when left empty. |
 | `tier` | The crate rarity it falls in on its own: a key of `crate.tiers` in `config.yml`. Empty means `common`. |
 | `price` | What it costs in the shop. Empty uses its rarity's price from `shop.tier-prices`. A number is the default currency; `{amount: 50, currency: gems}` names one. |
 
-Each pattern and each material is a crate prize of its own, won or bought separately and combined on
-the CUSTOM tab — see [The crate](/docs/exyliaarmortrims/crate).
+Each pattern and each material is a crate prize of its own, won or bought separately and combined in
+the menu — see [The crate](/docs/exyliaarmortrims/crate).
 
 <Callout type="note" title="The list is yours, not vanilla's">
 Patterns and materials are **listed** on purpose rather than read from the server's registries. A
@@ -59,79 +58,44 @@ Their shipped rarities follow how hard each one is to find in vanilla:
 | Epic | Rib, Eye, Spire, Flow, Bolt | Amethyst, Netherite |
 | Legendary | Silence | — |
 
-## Presets
+## How a trim is stored
 
-A combination with a name, an id and **one permission**. This is what you sell without explaining
-anything:
+A trim has no id of its own: it is stored as `pattern/material` — `sentry/netherite` — on armor, in the
+player's row and in every command, placeholder and API call. It is named with the `menu.custom-name`
+template from `messages.yml`, which defaults to `%pattern% » %material%`.
 
-```yaml title="trims.yml"
-presets:
-  shogun:
-    name: "{error}&lSHOGUN"
-    pattern: "sentry"
-    material: "netherite"
-    pieces: []
-    icon: "SENTRY_ARMOR_TRIM_SMITHING_TEMPLATE"
-    tier: legendary
-    price: ""
-```
+It is worn once the player owns **both halves**, each by a node or a crate unlock. Owning a pattern
+alone does nothing; owning every pattern and one material gives eighteen trims.
 
-| Key | What it does |
+## Coming from presets
+
+Up to 1.4, `trims.yml` also had a `presets:` section: named combinations with an id, a node and a crate
+slot of their own. 1.5.0 removed them, and the first start converts what they left behind:
+
+| What | What happens |
 |---|---|
-| `name` | Shown on the item, in the menu and in messages. |
-| `pattern` | A trim pattern key. |
-| `material` | A trim material key. |
-| `pieces` | `helmet`, `chestplate`, `leggings`, `boots`. Empty means all four. |
-| `icon` | Material of the trim item. Empty uses `trim-item.material` from `config.yml`. |
-| `tier` | The crate rarity it falls in: a key of `crate.tiers` in `config.yml`. Empty means `common`. |
-| `price` | What it costs in the shop. Empty uses its rarity's price from `shop.tier-prices`. |
+| The `presets:` section | Moved out of `trims.yml` into `legacy-presets.yml` in the plugin folder, as `id: pattern/material`, and logged once. |
+| A preset id on armor (trim items, item mode) | Read as the look it stood for, so the piece keeps its engraving. |
+| A preset id in a player's row | Rewritten to its `pattern/material` the first time the row loads. |
+| A crate unlock of a preset | Turned into unlocks of its pattern and its material on the player's next join; the preset unlock is then dropped. |
+| `exyliaarmortrims.trim.<preset>` and `exyliaarmortrims.custom` | No longer read. Grant `exyliaarmortrims.pattern.<id>` and `exyliaarmortrims.material.<id>` instead. |
+| A preset's `price`, `pieces` and `icon` | Gone: halves are priced by their own `price` or their rarity, and every trim fits every piece. |
 
-The eighteen presets that ship:
+A preset id that is in neither `legacy-presets.yml` nor a `pattern/material` form is dropped from the
+row rather than left behind.
 
-| Id | Trim | Rarity | Id | Trim | Rarity |
-|---|---|---|---|---|---|
-| `shogun` | Sentry · Netherite | Legendary | `bulwark` | Ward · Iron | Common |
-| `poltergeist` | Vex · Quartz | Common | `silence` | Silence · Netherite | Legendary |
-| `verdant` | Wild · Emerald | Common | `abyss` | Tide · Diamond | Epic |
-| `tidewalker` | Coast · Lapis | Common | `bloodsnout` | Snout · Redstone | Epic |
-| `mirage` | Dune · Gold | Rare | `ossuary` | Rib · Copper | Rare |
-| `wayfarer` | Wayfinder · Copper | Common | `oracle` | Eye · Amethyst | Epic |
-| `sunrise` | Raiser · Gold | Rare | `citadel` | Spire · Quartz | Rare |
-| `artisan` | Shaper · Copper | Common | `breeze` | Flow · Diamond | Rare |
-| `hearth` | Host · Resin | Common | `voltage` | Bolt · Copper | Rare |
-
-<Callout type="warning" title="The id is the permission, and it is what gets stored">
-`shogun` is `exyliaarmortrims.trim.shogun`, and it is also what is written onto armor and into the
-player's row. Renaming it voids the permission and turns everything stored into a value that no longer
-resolves. Change `name`; never the id.
-
-An id may not contain `/` either: that slash is what tells a preset apart from a free combination.
+<Callout type="warning" title="Ranks that sold presets">
+A player whose preset came from a **permission**, not a crate, keeps the look on their row but now needs
+both halves to wear it. With `hide-without-permission` on, their armor shows bare until the rank grants
+the pattern and the material nodes.
 </Callout>
-
-## Free combinations
-
-What a player builds on the CUSTOM tab has no id: it is stored as `pattern/material` —
-`sentry/netherite` — and named with the `menu.custom-name` template from `messages.yml`, which defaults
-to `%pattern% » %material%`.
-
-It takes three things at once: the tab, the pattern and the material, each a node or a crate unlock. So handing somebody a preset
-never quietly hands them its halves to recombine, and opening the tab never hands them a pattern
-nobody sold.
 
 ## Broken entries
 
-An entry in `trims.yml` that cannot be read is **named in the console** and skipped; the rest of the
-file loads regardless:
-
-| Problem | What is warned |
-|---|---|
-| Empty id | `an entry has an empty id` |
-| Id containing `/` | `a preset id may not contain '/'` |
-| Id starting with `pattern:` or `material:` | `a preset id may not start with pattern: or material:, which name crate halves` |
-| Missing pattern or material | `a trim needs both a pattern and a material` |
-| Unknown piece in `pieces` | `unknown piece "..."` |
+An entry with no id is skipped; one with no `name` uses its id, and one with no `icon` is drawn as a
+`BARRIER`. The rest of the file loads regardless.
 
 ## Trims from code
 
-Another plugin can register presets of its own, and they live alongside the file's: a reload replaces
-only the entries that came from `trims.yml`. See [API](/docs/exyliaarmortrims/api).
+Another plugin reads the catalogue and puts trims on armor through the API, always as
+`pattern/material`. See [API](/docs/exyliaarmortrims/api).

@@ -4,14 +4,13 @@ description: "Leer el catálogo de trims, las mitades que el jugador combina a m
 badge: "dev"
 ---
 
-`ArmorTrimService` es por donde otro plugin lee y maneja ExyliaArmorTrims: los presets, los patrones y
-materiales que el jugador combina a mano, el trim que eligió, y los trims escritos en la armadura
-misma.
+`ArmorTrimService` es por donde otro plugin lee y maneja ExyliaArmorTrims: los patrones y materiales que
+combina el jugador, el trim que eligió, y los trims escritos en la armadura misma.
 
 ```java
 ExyliaAPI.get(ArmorTrimService.class).ifPresent(trims -> {
     trims.select(player, ArmorPiece.CHESTPLATE, "sentry/netherite");
-    trims.trimItem("ruby").ifPresent(item -> player.getInventory().addItem(item));
+    trims.trimItem("rib/redstone").ifPresent(item -> player.getInventory().addItem(item));
 });
 ```
 
@@ -22,18 +21,24 @@ Exylia y están en la [página de la API pública](/docs/exylialib/api). `shown`
 `v1.133.0`: compila contra esa etiqueta o una más nueva para usarlos.
 </Callout>
 
-Todo se direcciona por **id de trim**, comparado sin distinguir mayúsculas. Ese id es o un preset que
-nombró el dueño del servidor, o la forma `patrón/material` de una combinación: la barra los distingue,
-y ninguna clave de registro lleva una. Un id que no nombra ninguno de los dos no es un error, así que
+Todo se direcciona por **id de trim**, comparado sin distinguir mayúsculas: la forma `patrón/material`
+de una combinación — `sentry/netherite`. Un id de preset de antes de la 1.5.0 se sigue leyendo como el
+aspecto que representaba. Un id que no nombra nada de lo que ofrece el catálogo no es un error, así que
 las búsquedas devuelven vacío y las escrituras devuelven `false`.
+
+<Callout type="warning" title="Los presets desaparecen en la 1.5.0">
+`trims()` devuelve ahora siempre una lista vacía y `exists` siempre `false`: listaban presets, y ya no
+hay. Lee `patterns()` y `materials()` para el catálogo, y `trim(String)` para una combinación. Todo
+`ArmorTrim` tiene `preset` en `false`, `permission` vacío y las cuatro piezas.
+</Callout>
 
 ## El catálogo
 
 | Método | Qué hace |
 |---|---|
-| `trims()` | Todos los presets que declara el servidor, en el orden en que los dibuja el menú. Solo presets: las combinaciones son demasiadas para listarlas. |
-| `trim(String trimId)` | Un trim como `Optional<ArmorTrim>`, aceptando un id de preset o una combinación `patrón/material`. Vacío cuando el id no nombra ninguno. |
-| `exists(String trimId)` | Si el catálogo declara ese preset. Solo presets: una combinación vale siempre que valgan sus dos mitades, así que para eso usa `trim`. |
+| `trims()` | Siempre vacío desde la 1.5.0: listaba presets. Las combinaciones son demasiadas para listarlas. |
+| `trim(String trimId)` | Un trim como `Optional<ArmorTrim>`, aceptando una combinación `patrón/material`. Vacío cuando alguna de las dos mitades no se ofrece. |
+| `exists(String trimId)` | Siempre `false` desde la 1.5.0: preguntaba por presets. Usa `trim` en su lugar. |
 | `patterns()` | Los patrones que el jugador puede combinar a mano, en orden de menú. |
 | `materials()` | Los materiales que el jugador puede combinar a mano, en orden de menú. |
 
@@ -41,13 +46,12 @@ las búsquedas devuelven vacío y las escrituras devuelven `false`.
 
 | Método | Qué hace |
 |---|---|
-| `canUse(Player, String trimId)` | Si puede llevar el trim en al menos una pieza. |
-| `canUse(Player, String trimId, ArmorPiece)` | Si puede llevarlo en esa pieza concreta. |
+| `canUse(Player, String trimId)` | Si puede llevar el trim. |
+| `canUse(Player, String trimId, ArmorPiece)` | La misma respuesta: un trim encaja en todas las piezas. Se mantiene para quien llama escrito contra presets. |
 
-Los dos responden con la regla del propio servidor: los nodos del trim, o lo que desbloqueó una caja o
-una compra. Una tienda que pregunta recibe la misma respuesta que daría el menú, no una comprobación
-cruda de nodo. La forma por pieza existe aparte porque un rango se vende ranura a ranura: quien tiene
-el nodo del casco lleva el trim en la cabeza y en ningún otro sitio.
+Los dos responden con la regla del propio servidor: las dos mitades, cada una por su nodo o por lo que
+desbloqueó una caja o una compra. Una tienda que pregunta recibe la misma respuesta que daría el menú,
+no una comprobación cruda de nodo.
 
 ## Lo que eligió el jugador
 
@@ -76,7 +80,7 @@ que eso decida.
 
 | Método | Qué hace |
 |---|---|
-| `shown(UUID player, ArmorPiece)` | El trim que se dibuja en esa ranura ahora mismo, como `Optional<String>`: un id de preset o una combinación `patrón/material`. |
+| `shown(UUID player, ArmorPiece)` | El trim que se dibuja en esa ranura ahora mismo, como `Optional<String>`: una combinación `patrón/material`. |
 
 La respuesta después de que cada regla haya dicho lo suyo — el modo, la armadura que de verdad hay en
 la ranura, si el portador lo tiene y si sus cosméticos se muestran — que ni `selected` ni `trimOf` dan
@@ -103,7 +107,7 @@ normal: un objeto de trim se dibuja como le convenga y no es el material que apa
 |---|---|
 | `giveTrimItem(Player, String trimId, int amount)` | Da objetos de trim por la cola de recompensas del plugin: lo que no cabe se guarda y se entrega cuando el jugador vuelve a entrar. Al jugador no se le dice nada. `false` cuando el id no nombra ningún trim o la cantidad es menor que uno. |
 | `removerItem()` | Un removedor nuevo, listo para entregar. Solo quita trims en un servidor cuyo modo usa objetos. |
-| `openMenu(Player)` | Abre el menú de trims como lo hace `/trims`, para un NPC, un cartel o un objeto del lobby. No comprueba permisos. `false` cuando el modo no tiene menú. |
+| `openMenu(Player)` | Abre el menú de trims como lo hace `/trims` — el clásico o el vestidor 3D, según `menu-style` y el nodo del vestidor — para un NPC, un cartel o un objeto del lobby. No comprueba el nodo del comando. `false` cuando el modo no tiene menú. |
 
 Llama a `giveTrimItem` y `openMenu` en el hilo dueño del jugador.
 
@@ -119,14 +123,12 @@ objeto cambiado por otro plugin. Todas las escrituras de arriba ya redibujan.
 ## Tipos
 
 **`ArmorTrim`** — `id`, `name` (con los códigos de color dentro), `permission`, `pieces`, `pattern`,
-`material` y `preset`. `supports(ArmorPiece)` responde si encaja en una ranura. Un preset es una
-entrada que nombró el dueño y tiene un nodo propio; una combinación trae `permission` vacío, porque la
-conceden las dos mitades que hay detrás.
+`material` y `preset`. Desde la 1.5.0 todo trim es una combinación: `permission` viene vacío, porque lo
+conceden las dos mitades que hay detrás, `pieces` lleva las cuatro y `preset` es `false`.
 
 **`TrimOption`** — una mitad de las que el jugador combina a mano: `id`, `name`, `permission`. Patrones
 y materiales comparten el record, y cuál es cada uno lo dice el método que te lo entregó. Existen
-porque una combinación se vende por mitades: dar un preset a un jugador no le regala en silencio su
-patrón para recombinarlo.
+porque un trim se vende por mitades.
 
 **`ArmorPiece`** — `HELMET`, `CHESTPLATE`, `LEGGINGS`, `BOOTS`. `slot()` da el `EquipmentSlot` de
 Bukkit, para que quien lea un inventario no mantenga un switch propio al día.
@@ -169,7 +171,7 @@ public void onTrim(TrimSelectionChangeEvent event) {
 
 ## Lo que no expone
 
-El flujo de edición de la pestaña CUSTOM, la caja y las filas crudas de configuración quedan fuera a
+Los flujos del menú y del vestidor, la caja y las filas crudas de configuración quedan fuera a
 propósito: un
 contrato público no se puede romper después, así que lleva lo que una integración necesita y nada que
 solo tuviera sentido dentro de una versión.

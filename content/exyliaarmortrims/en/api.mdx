@@ -4,14 +4,13 @@ description: "Reading the trim catalogue, the halves a player combines by hand, 
 badge: "dev"
 ---
 
-`ArmorTrimService` is what another plugin reads and drives ExyliaArmorTrims through: the presets, the
-patterns and materials a player combines by hand, the trim they chose, and the trims written onto
-armor itself.
+`ArmorTrimService` is what another plugin reads and drives ExyliaArmorTrims through: the patterns and
+materials a player combines, the trim they chose, and the trims written onto armor itself.
 
 ```java
 ExyliaAPI.get(ArmorTrimService.class).ifPresent(trims -> {
     trims.select(player, ArmorPiece.CHESTPLATE, "sentry/netherite");
-    trims.trimItem("ruby").ifPresent(item -> player.getInventory().addItem(item));
+    trims.trimItem("rib/redstone").ifPresent(item -> player.getInventory().addItem(item));
 });
 ```
 
@@ -22,18 +21,24 @@ the two events arrived with ExyliaArmorTrims 1.3.0, in `exylia-api` `v1.133.0`: 
 tag or a newer one to reach them.
 </Callout>
 
-Everything is addressed by **trim id**, matched without regard to case. That is either a preset the
-server owner named, or the `pattern/material` form of a combination — the slash tells them apart, and
-no registry key contains one. An id that names neither is not an error, so lookups answer empty and
-writes answer `false`.
+Everything is addressed by **trim id**, matched without regard to case: the `pattern/material` form of
+a combination — `sentry/netherite`. A preset id from before 1.5.0 is still read as the look it stood
+for. An id that names nothing the catalogue offers is not an error, so lookups answer empty and writes
+answer `false`.
+
+<Callout type="warning" title="Presets are gone in 1.5.0">
+`trims()` now always answers an empty list and `exists` always `false`: they listed presets, and there
+are none. Read `patterns()` and `materials()` for the catalogue, and `trim(String)` for one
+combination. Every `ArmorTrim` has `preset` `false`, an empty `permission` and all four pieces.
+</Callout>
 
 ## The catalogue
 
 | Method | What it does |
 |---|---|
-| `trims()` | Every preset the server declares, in the order a menu draws them. Presets only: combinations are too many to list. |
-| `trim(String trimId)` | One trim as an `Optional<ArmorTrim>`, taking a preset id or a `pattern/material` combination. Empty when the id names neither. |
-| `exists(String trimId)` | Whether the catalogue declares that preset. Presets only — a combination is valid whenever both halves are, so ask `trim` for one of those. |
+| `trims()` | Always empty since 1.5.0: it listed presets. Combinations are too many to list. |
+| `trim(String trimId)` | One trim as an `Optional<ArmorTrim>`, taking a `pattern/material` combination. Empty when either half is not offered. |
+| `exists(String trimId)` | Always `false` since 1.5.0: it asked for presets. Ask `trim` instead. |
 | `patterns()` | The patterns a player can combine by hand, in menu order. |
 | `materials()` | The materials a player can combine by hand, in menu order. |
 
@@ -41,13 +46,11 @@ writes answer `false`.
 
 | Method | What it does |
 |---|---|
-| `canUse(Player, String trimId)` | Whether they may wear the trim on at least one piece. |
-| `canUse(Player, String trimId, ArmorPiece)` | Whether they may wear it on that one piece. |
+| `canUse(Player, String trimId)` | Whether they may wear the trim. |
+| `canUse(Player, String trimId, ArmorPiece)` | The same answer: a trim fits every piece. Kept for callers written against presets. |
 
-Both answer by the server's own rule: the trim's nodes, or what a crate or a purchase unlocked — a
-shop asking gets the same answer the menu would give, not a raw permission check. The
-per-piece form is separate because a rank can be sold one slot at a time: a player given the helmet
-node wears the trim on their head and nowhere else.
+Both answer by the server's own rule: both halves, each by its node or by what a crate or a purchase
+unlocked — a shop asking gets the same answer the menu would give, not a raw permission check.
 
 ## What the player chose
 
@@ -76,7 +79,7 @@ ownership to decide.
 
 | Method | What it does |
 |---|---|
-| `shown(UUID player, ArmorPiece)` | The trim drawn on that slot right now, as an `Optional<String>`: a preset id or a `pattern/material` combination. |
+| `shown(UUID player, ArmorPiece)` | The trim drawn on that slot right now, as an `Optional<String>`: a `pattern/material` combination. |
 
 The answer after every rule has had its say — the mode, the armor actually in the slot, the wearer's
 ownership, and whether their cosmetics are shown at all — which neither `selected` nor `trimOf` gives
@@ -102,7 +105,7 @@ is drawn as whatever suits it and is not the material it looks like.
 |---|---|
 | `giveTrimItem(Player, String trimId, int amount)` | Gives trim items through the plugin's reward queue: what does not fit is kept and handed over on the player's next join. The player is told nothing. `false` when the id names no trim or the amount is below one. |
 | `removerItem()` | A new remover, ready to be given. It only takes trims off on a server whose mode uses items. |
-| `openMenu(Player)` | Opens the trim menu as `/trims` does, for an NPC, a sign or a lobby item. No permission is checked. `false` when the mode has no menu. |
+| `openMenu(Player)` | Opens the trim menu as `/trims` does — the classic one or the 3D wardrobe, by `menu-style` and the wardrobe node — for an NPC, a sign or a lobby item. The command node is not checked. `false` when the mode has no menu. |
 
 Call `giveTrimItem` and `openMenu` on the thread that owns the player.
 
@@ -118,14 +121,12 @@ runtime, an item swapped by another plugin. Every write above already redraws.
 ## Types
 
 **`ArmorTrim`** — `id`, `name` (colour codes still in it), `permission`, `pieces`, `pattern`,
-`material` and `preset`. `supports(ArmorPiece)` answers whether the trim fits a slot. A preset is an
-entry the owner named and has one node; a combination has an empty `permission`, because it is
-granted by the two halves behind it instead.
+`material` and `preset`. Since 1.5.0 every trim is a combination: `permission` is empty, because it is
+granted by the two halves behind it, `pieces` holds all four and `preset` is `false`.
 
 **`TrimOption`** — one half a player combines by hand: `id`, `name`, `permission`. Patterns and
 materials share the record, and which half one is comes from the method that handed it over. They
-exist because a combination is sold in halves: giving a player a preset never quietly gives them its
-pattern to recombine.
+exist because a trim is sold in halves.
 
 **`ArmorPiece`** — `HELMET`, `CHESTPLATE`, `LEGGINGS`, `BOOTS`. `slot()` gives the Bukkit
 `EquipmentSlot`, so a caller reading an inventory does not keep a switch of its own in step.
@@ -165,7 +166,7 @@ public void onTrim(TrimSelectionChangeEvent event) {
 
 ## What it does not expose
 
-The custom-tab editor flow, the crate and raw configuration rows are left out on purpose — a public contract cannot be broken later, so it
+The menu and wardrobe flows, the crate and raw configuration rows are left out on purpose — a public contract cannot be broken later, so it
 carries what an integration needs and nothing that only made sense inside one version.
 
 If something you need is genuinely missing, ask on [Discord](https://discord.exylia.net).
