@@ -1857,7 +1857,7 @@ export const plugins: Plugin[] = [
       en: "Forty animated colour-and-trim skins worn over any armour piece, chosen from an inventory or 3D wardrobe that tries them on your own body, won out of a crate, bought with currency or carried as an item, and drawn on the way to the client with packets: enchantments, attributes, durability and plugin data stay exactly as they were.",
       es: "Cuarenta skins animadas de color y trim que se llevan sobre cualquier pieza de armadura, elegidas en un vestidor de inventario o en uno 3D que te las prueba sobre tu propio cuerpo, ganadas en una caja, compradas con moneda o llevadas como objeto, y dibujadas en el camino al cliente con paquetes: encantamientos, atributos, durabilidad y datos de otros plugins quedan intactos.",
     },
-    version: "1.4.0",
+    version: "1.4.1",
     status: "stable",
     category: { en: "Cosmetic", es: "Cosmético" },
     minecraft: "1.21+",
