@@ -1,7 +1,7 @@
 "use client";
 
 import { m } from "framer-motion";
-import { AppIcon, appIcon } from "@exylia-webs/ui";
+import { AppIcon, appIcon } from "@exylia-webs/ui/app-icons";
 
 export function Logo({ className = "h-7 w-auto" }: { className?: string }) {
   return (
