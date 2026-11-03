@@ -1836,7 +1836,7 @@ export const plugins: Plugin[] = [
       en: "Any pattern with any material, combined in a 3D wardrobe or a classic menu, won out of a crate, bought with currency or carried as a trim item, and drawn on the way to the client so the armour itself is never converted.",
       es: "Cualquier patrón con cualquier material, combinado en un vestidor 3D o en un menú clásico, ganado en una caja, comprado con moneda o llevado como objeto, y dibujado en el camino al cliente para que la armadura nunca se convierta.",
     },
-    version: "1.5.0",
+    version: "1.5.1",
     status: "stable",
     category: { en: "Cosmetic", es: "Cosmético" },
     minecraft: "1.21+",
