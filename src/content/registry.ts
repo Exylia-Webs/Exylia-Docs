@@ -1900,7 +1900,7 @@ export const plugins: Plugin[] = [
       en: "43 patterns and 16 colours layered into custom shield designs, in an inventory editor or a 3D designer and shield picker on the centre stage, saved in numbered slots, unlocked by permission, a crate or currency, with per-rank slots, layers and features, and shareable through a community library.",
       es: "43 patrones y 16 colores en capas para diseñar escudos, en un editor de inventario o en un diseñador y un selector 3D en el escenario central, guardados en ranuras numeradas, desbloqueados por permiso, caja o moneda, con ranuras, capas y funciones por rango, y compartibles en una biblioteca comunitaria.",
     },
-    version: "1.4.0",
+    version: "1.5.0",
     status: "stable",
     category: { en: "Cosmetic", es: "Cosmético" },
     minecraft: "1.21+",
