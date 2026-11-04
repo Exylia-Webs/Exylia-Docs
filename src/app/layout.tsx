@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { CookieConsent } from "@exylia-webs/ui";
 import "./globals.css";
 import { DEFAULT_LANG, SITE } from "@/content/registry";
 import { MotionProvider } from "@/components/motion/MotionProvider";
@@ -40,6 +41,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang={DEFAULT_LANG} className={`${geist.variable} ${geistMono.variable}`}>
       <body className="font-sans antialiased">
         <MotionProvider>{children}</MotionProvider>
+        {/* The shared banner, restyled for the docs in globals.css (.consent). Its policy link is the hub's. */}
+        <div className="consent">
+          <CookieConsent gaId={process.env.NEXT_PUBLIC_GA_ID} clarityId={process.env.NEXT_PUBLIC_CLARITY_ID} />
+        </div>
       </body>
     </html>
   );

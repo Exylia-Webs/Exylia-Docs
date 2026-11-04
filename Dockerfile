@@ -14,7 +14,10 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 RUN --mount=type=secret,id=NPMRC,target=/root/.npmrc --mount=type=cache,id=pnpm-store,target=/pnpm/store pnpm install --frozen-lockfile --store-dir /pnpm/store
 
 COPY . .
-RUN --mount=type=cache,id=docs-next,target=/app/.next/cache,sharing=locked pnpm run build
+# Next inlines NEXT_PUBLIC_* into the static export; Coolify passes them as build secrets, mounted as env here.
+RUN --mount=type=secret,id=NEXT_PUBLIC_GA_ID,env=NEXT_PUBLIC_GA_ID \
+    --mount=type=secret,id=NEXT_PUBLIC_CLARITY_ID,env=NEXT_PUBLIC_CLARITY_ID \
+    --mount=type=cache,id=docs-next,target=/app/.next/cache,sharing=locked pnpm run build
 
 # --- serve ------------------------------------------------------------------
 FROM nginx:1.30-alpine AS runner

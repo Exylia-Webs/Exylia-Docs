@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { CookieSettingsButton } from "@exylia-webs/ui";
 import { documentedPlugins, SITE, type Lang } from "@/content/registry";
 import { dict } from "@/content/dictionary";
 import { Logo } from "./Logo";
@@ -75,6 +76,7 @@ export function Footer({ lang }: { lang: Lang }) {
             <a href={`${HUB_LEGAL}/${lang}/legal/privacy`} className="text-white/40 transition-colors hover:text-white">
               {f.privacy[lang]}
             </a>
+            <CookieSettingsButton className="text-white/40 transition-colors hover:text-white" />
           </div>
           <p className="font-mono text-[11px] tracking-wide text-white/25">{f.madeWith[lang]}</p>
         </div>
