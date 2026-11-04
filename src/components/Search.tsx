@@ -164,7 +164,7 @@ export function SearchDialog({
                 onChange={(e) => setQuery(e.target.value)}
                 onKeyDown={onKeyDown}
                 placeholder={dict.search.placeholder[lang]}
-                className="h-14 w-full bg-transparent text-[15px] text-white placeholder:text-white/25 focus:outline-none"
+                className="h-14 w-full bg-transparent text-base text-white sm:text-[15px] placeholder:text-white/25 focus:outline-none"
               />
               <kbd className="hidden shrink-0 rounded border border-white/10 px-1.5 py-0.5 font-mono text-[10px] text-white/30 sm:block">
                 ESC

@@ -100,7 +100,7 @@ export function Catalog({ lang }: { lang: Lang }) {
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   placeholder={l.filterPlaceholder[lang]}
-                  className="w-full bg-transparent text-[14px] text-white placeholder:text-white/28 focus:outline-none"
+                  className="w-full bg-transparent text-base text-white placeholder:text-white/28 sm:text-[14px] focus:outline-none"
                 />
                 {query && (
                   <button

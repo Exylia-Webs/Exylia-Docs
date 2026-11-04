@@ -215,13 +215,13 @@ export function MobileNav({
   return (
     <>
       <div className="sticky top-[93px] z-40 -mx-6 mb-8 border-b border-white/[0.06] bg-ink-950/85 px-6 py-3 backdrop-blur-xl lg:hidden">
-        <button onClick={() => setOpen(true)} className="flex items-center gap-2.5 text-white/60">
-          <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none">
+        <button onClick={() => setOpen(true)} className="flex w-full min-w-0 items-center gap-2.5 text-left text-white/60">
+          <svg className="h-3.5 w-3.5 shrink-0" viewBox="0 0 16 16" fill="none">
             <path d="M2.5 4h11M2.5 8h11M2.5 12h7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
           </svg>
-          <span className="font-mono text-[11px] uppercase tracking-[0.16em]">{plugin.name}</span>
-          <span className="text-white/20">/</span>
-          <span className="truncate text-[13px] text-white/80">{title}</span>
+          <span className="shrink-0 font-mono text-[11px] uppercase tracking-[0.16em]">{plugin.name}</span>
+          <span className="shrink-0 text-white/20">/</span>
+          <span className="min-w-0 truncate text-[13px] text-white/80">{title}</span>
         </button>
       </div>
 
