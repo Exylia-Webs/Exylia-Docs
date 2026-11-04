@@ -4,6 +4,8 @@ import { dict } from "@/content/dictionary";
 import { Logo } from "./Logo";
 import { Beam } from "./motion/Backdrops";
 
+const HUB_LEGAL = "https://hub.exylia.net";
+
 export function Footer({ lang }: { lang: Lang }) {
   const f = dict.footer;
 
@@ -64,9 +66,16 @@ export function Footer({ lang }: { lang: Lang }) {
         </div>
 
         <div className="mt-14 flex flex-col items-start justify-between gap-3 border-t hair pt-6 sm:flex-row sm:items-center">
-          <p className="font-mono text-[11px] tracking-wide text-white/25">
-            © {new Date().getFullYear()} Exylia · DiGround
-          </p>
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2 font-mono text-[11px] tracking-wide">
+            <p className="text-white/25">© {new Date().getFullYear()} Exylia · DiGround</p>
+            {/* The hub's privacy policy covers this site too: it collects nothing beyond it. */}
+            <a href={`${HUB_LEGAL}/${lang}/legal`} className="text-white/40 transition-colors hover:text-white">
+              {f.legal[lang]}
+            </a>
+            <a href={`${HUB_LEGAL}/${lang}/legal/privacy`} className="text-white/40 transition-colors hover:text-white">
+              {f.privacy[lang]}
+            </a>
+          </div>
           <p className="font-mono text-[11px] tracking-wide text-white/25">{f.madeWith[lang]}</p>
         </div>
       </div>

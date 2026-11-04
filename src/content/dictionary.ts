@@ -201,6 +201,8 @@ export const dict = {
     store: { en: "BuiltByBit", es: "BuiltByBit" },
     exylia: { en: "Exylia", es: "Exylia" },
     madeWith: { en: "Made with care, not in a hurry", es: "Hecho con cuidado, no con prisa" },
+    legal: { en: "Legal", es: "Legal" },
+    privacy: { en: "Privacy", es: "Privacidad" },
   },
   notFound: {
     kicker: { en: "Error 404", es: "Error 404" },
