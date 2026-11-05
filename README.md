@@ -57,3 +57,19 @@ por IP (la IP real tras Traefik/Cloudflare), solo `POST` del mismo origen con `a
 cuerpo de 512 KB como máximo, historial y mensajes recortados por el núcleo de `@exylia-webs/ui`, y
 con Turnstile un pase firmado de una hora por IP. Los límites por IP viven en memoria: un reinicio
 los olvida y con varias réplicas cada una tendría los suyos.
+
+## Panel de superadmin
+
+`/admin/`: acceso con Discord (OAuth2 con state y PKCE) solo para los ids de `SUPER_ADMIN_DISCORD_IDS`,
+comprobados en cada petición. La sesión vive en la tabla `AdminSession` (solo el SHA-256 del token,
+cookie `__Host-` sobre https). Las páginas públicas y el asistente no leen nada de esto.
+
+| Variable | |
+|---|---|
+| `PUBLIC_URL` | La dirección del sitio; vacío: `https://docs.exylia.net`. En desarrollo `http://localhost:3010`. |
+| `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET` | La aplicación de Discord; su redirect OAuth2 es `<PUBLIC_URL>/api/admin/auth/callback/`. |
+| `SUPER_ADMIN_DISCORD_IDS` | Ids de Discord separados por comas; vacío no deja entrar a nadie. |
+
+El panel usa el sistema de diseño (`@exylia-webs/ui`, Tailwind 4, `src/app/admin/admin.css`) y
+next-intl solo para los textos propios del sistema; los del panel están en `src/content/admin.ts`.
+El sitio público sigue en Tailwind 3: `scripts/postcss-tailwind.cjs` manda cada hoja a su versión.

@@ -1,3 +1,5 @@
+import createNextIntlPlugin from "next-intl/plugin";
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // Served by `next start` (the assistant's API route, the admin panel); every docs page is still
@@ -34,4 +36,5 @@ const nextConfig = {
   },
 };
 
-export default nextConfig;
+// next-intl only serves the admin panel (the design system's strings); the docs never call it.
+export default createNextIntlPlugin("./src/i18n/request.ts")(nextConfig);

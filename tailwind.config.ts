@@ -1,7 +1,8 @@
 import type { Config } from "tailwindcss";
 
 const config: Config = {
-  content: ["./src/**/*.{ts,tsx}"],
+  // The admin panel is styled by the design system (Tailwind 4, src/app/admin/admin.css), not here.
+  content: ["./src/**/*.{ts,tsx}", "!./src/app/admin/**"],
   theme: {
     extend: {
       colors: {

@@ -38,7 +38,7 @@ export const viewport: Viewport = {
  */
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang={DEFAULT_LANG} className={`${geist.variable} ${geistMono.variable}`}>
+    <html lang={DEFAULT_LANG} suppressHydrationWarning className={`${geist.variable} ${geistMono.variable}`}>
       <body className="font-sans antialiased">
         <MotionProvider>{children}</MotionProvider>
         {/* The shared banner, restyled for the docs in globals.css (.consent). Its policy link is the hub's. */}
