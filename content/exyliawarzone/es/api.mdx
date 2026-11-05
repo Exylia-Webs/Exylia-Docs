@@ -1,0 +1,50 @@
+---
+title: "API"
+description: "DuelRoomEndEvent, el único evento que ExyliaWarzone lanza a través de la API pública de ExyliaLib, y lo que lleva."
+---
+
+ExyliaWarzone no tiene ningún servicio propio al que llamar. Lo que otros plugins pueden escuchar es un solo evento,
+lanzado por el módulo de salas de duelo: `DuelRoomEndEvent`, parte del artefacto público `exylia-api` de ExyliaLib.
+
+<Callout type="note" title="Añadirlo a tu proyecto">
+El artefacto, el repositorio y la línea de `plugin.yml` son los mismos para todos los plugins de Exylia y están en la
+[página de la API pública](/docs/exylialib/api). `DuelRoomEndEvent` está en `exylia-api` desde `v1.133.0`. Su
+paquete, `net.exylia.lib.api.survival.event`, es donde estaba cuando las salas de duelo formaban parte de
+ExyliaSurvivalCore, así que un listener escrito entonces sigue funcionando sin cambios.
+</Callout>
+
+## DuelRoomEndEvent
+
+`net.exylia.lib.api.survival.event.DuelRoomEndEvent`. Se lanza cuando se ha decidido un duelo en una sala de duelo:
+queda un luchador en pie, o ninguno. No se puede cancelar: el último luchador ya ha caído o ha huido.
+
+| Método | Devuelve |
+|---|---|
+| `getRoomId()` | El ID con el que se creó la sala. |
+| `getWinner()` | El último luchador en pie como `UUID`, o `null` en un empate. |
+| `getParticipants()` | Todos los que empezaron el duelo, en el orden en que entraron, ganador incluido. Puede que algunos ya no estén en el servidor: un jugador que se desconecta pierde por abandono, pero sí participó. |
+
+```java
+@EventHandler
+public void onDuelEnd(DuelRoomEndEvent event) {
+    UUID winner = event.getWinner();
+    if (winner == null) return; // a draw
+    // count a win, advance a quest, post the result...
+}
+```
+
+### Cuándo se lanza
+
+- Solo para un duelo que se ha peleado. Uno cancelado durante su cuenta atrás, porque alguien salió o se editó la
+  sala, nunca empezó y no lanza nada.
+- Antes de que las recompensas de la sala lleguen al ganador. Después, la sala sigue cerrada durante su tiempo de
+  botín, así que los jugadores suelen seguir dentro.
+- Para cada duelo decidido, se le pague o no al ganador. Las comprobaciones propias de la sala (la espera entre los
+  mismos dos jugadores, un abandono temprano, dos cuentas desde una misma dirección) pueden retener las recompensas y
+  la victoria contada; el evento informa igualmente de quién quedó en pie.
+
+### Hilos
+
+Se llama en el hilo que haya detectado el final: el temporizador de las salas, que corre una vez por segundo en el
+hilo global, o el hilo de región del jugador cuya muerte, desconexión o salida lo decidió. En Folia ninguno de los dos
+tiene garantizado ser el dueño del ganador, así que todo lo que toque a un jugador hay que programarlo en ese jugador.

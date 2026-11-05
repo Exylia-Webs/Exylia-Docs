@@ -1,0 +1,193 @@
+---
+title: "Salas de duelo"
+description: "Arenas que se cierran con un borde cuando entran suficientes enemigos: cómo montar una, la cuenta atrás, la pelea, los estancamientos, la ventana de botín, las recompensas del ganador, los anuncios y la reconstrucción desde un schematic."
+---
+
+Una sala de duelo es una zona de tu mundo que se convierte sola en una arena cerrada. Los jugadores entran
+caminando; cuando hay suficientes enemigos dentro, las caras de la sala se llenan con un bloque de borde, corre una
+cuenta atrás y pelean hasta que solo queda uno en pie. El ganador recoge el botín y las recompensas de la sala, y
+después la sala se abre y se reconstruye para el siguiente duelo. No hay spawns que fijar ni comando para jugadores:
+entrar es apuntarse.
+
+El módulo está **activado por defecto** (`modules.duel-rooms` en `config.yml`). Las salas se montan en el juego con
+`/duelroomsadmin` (`exyliawarzone.duelrooms.admin`), o desde la tarjeta **Duel rooms** de `/warzoneadmin`.
+
+## Montar una sala
+
+<Steps>
+  <Step title="Créala">
+    `/duelroomsadmin` → **Crear**, y escribe un ID: en minúsculas y único entre todos los servidores que comparten
+    la base de datos.
+  </Step>
+  <Step title="Selecciona la región">
+    **Arena** → **Región de la sala** te da el selector: clic izquierdo en una esquina, clic derecho en la otra y
+    shift + clic izquierdo para confirmar. La caja es toda la arena: su capa de abajo es el suelo, la de arriba el
+    techo y sus columnas exteriores las paredes. Mínimo 3×4×3 bloques, y como mucho `max-border-blocks` (20000)
+    bloques en sus caras.
+  </Step>
+  <Step title="Fija la salida">
+    **Arena** → **Punto de salida**: ponte fuera de la sala, agáchate y haz clic. Aquí van los jugadores sobrantes,
+    los intrusos y el ganador.
+  </Step>
+  <Step title="Guarda el schematic">
+    **Arena** → **Esquema de la arena** guarda los bloques de la arena tal como están; cada duelo acaba pegándolo
+    de nuevo. Guárdalo con la sala limpia y vacía.
+  </Step>
+  <Step title="Ajústala y actívala">
+    **General** fija el **Nombre visible** (sale en títulos, bossbars y anuncios), los **Jugadores necesarios** (de
+    2 a 16, por defecto 2) y el **Bloque del borde** (cualquier bloque sólido, por defecto `RED_STAINED_GLASS`).
+    Después pulsa la tarjeta **Estado** de arriba de la pantalla de la sala; solo se activa cuando tiene región y
+    salida.
+  </Step>
+</Steps>
+
+<Callout type="warning" title="Probar como operador">
+`exyliawarzone.duelrooms.bypass` es de op por defecto. Quien lo tiene nunca entra en un duelo ni es expulsado, así
+que un operador que entra en una sala no ve que pase nada. Prueba con cuentas sin op, o niega el permiso.
+</Callout>
+
+La lista de salas y la pantalla de cada una muestran en vivo lo que está haciendo: **Inactiva**, **Esperando**,
+**Cerrándose** (la cuenta atrás), **Peleando**, **Recogiendo botín** o **Reabriendo** (el borde bajando y la arena
+reconstruyéndose).
+
+## Quién pelea
+
+Todo el que entra espera, con una bossbar que se llena según llegan jugadores. Solo cuentan los jugadores vivos en
+supervivencia o aventura sin el permiso de bypass. Cuando esperan suficientes, los luchadores se eligen al azar,
+**nunca dos del mismo clan ni de clanes aliados** (cualquier plugin de clanes que soporte ExyliaLib; sin ninguno,
+cuentan todos). Tres compañeros de clan y uno de fuera hacen un duelo de dos, y a quien solo tiene esperando a gente
+de su bando se le avisa de que aquí solo pelean enemigos.
+
+En cuanto se forma el duelo, el resto de los que están dentro va a la salida. Quien entra después o se conecta
+dentro también es expulsado, y cada segundo la sala saca a quien se haya colado de otra forma. Quien tiene bypass
+puede quedarse a mirar, pero no puede golpear a los luchadores ni recibir sus golpes.
+
+## El borde
+
+El borde son bloques reales colocados en las seis caras de la región. Solo se rellena el aire y los bloques
+reemplazables (hierba, flores, nieve), así que un suelo o una pared que ya existe se queda como está. Los
+luchadores que están sobre una cara se mueven antes un bloque hacia dentro. Mientras dura el duelo, nada de las
+caras de la sala se puede romper, explotar, quemar, empujar con un pistón ni llevárselo un mob: cavar para salir es
+salir, y cavar para entrar también.
+
+Con `draw-world-border` activado, los luchadores ven además un borde del mundo inofensivo dibujado sobre las
+paredes. Solo se dibuja, y los bordes del mundo son cuadrados, así que las paredes cortas de una sala alargada no
+tienen borde dibujado; desactívalo para ahorrar FPS al cliente. Los muros se registran en la carpeta `walls/` del
+plugin: tras un crash, cada muro que quedó en pie baja en el siguiente arranque y su arena se reconstruye antes de
+que la sala pueda volver a cerrarse.
+
+## La pelea
+
+1. **Cuenta atrás** (`countdown-seconds`, 3s): un título y un sonido corto cada segundo. Los golpes aún no hacen nada.
+2. **Pelea**: el título ¡PELEA!, se dan los efectos del duelo y se quita el vuelo (`disable-flight`). Una bossbar
+   muestra el tiempo que queda y cuántos siguen vivos.
+3. **Ventana de botín** (`loot-seconds`, 5s): VICTORIA para el último en pie, DERROTA para el resto. La bossbar del
+   ganador cuenta hasta que la sala se abre.
+4. **Reabriendo**: el borde baja. En un empate todos los que quedan van a la salida; el ganador también mientras
+   `teleport-winner-out` esté activado. La arena se reconstruye y quien sigue dentro vuelve a esperar.
+
+Los luchadores pueden golpearse aunque una flag de región, la protección del spawn o WorldGuard lo impidieran. Desde
+la cuenta atrás hasta que se decide la pelea, los comandos están bloqueados salvo `allowed-commands` (`msg`,
+`tell`, `w`, `r`, `reply`), y cualquier teletransporte fuera de la sala se cancela: `/spawn`, frutas coral, portales,
+otros plugins.
+
+Cada efecto de **Efectos del duelo** tiene su propia duración; `-1` dura toda la pelea. Los efectos propios del
+luchador de esos tipos se apartan y se devuelven después, los tótems no quitan los del duelo, y cada efecto se limita
+al límite de pelea más la cuenta atrás y 30 segundos, así que un crash nunca deja a nadie con ventaja para siempre.
+
+## Estancamientos
+
+Una pelea se estanca cuando se acaba el límite de pelea (`max-duration-seconds`, 3 minutos) o nadie golpea durante
+el límite de inactividad (`inactivity-seconds`, 30 segundos), que atrapa a quien se queda quieto, está AFK, huye o
+no quiere pelear. Se avisa a los luchadores 10 segundos antes del límite de inactividad, o a la mitad si es más
+corto. Cuenta cualquier golpe con daño, aunque lo absorban corazones de manzana dorada, un escudo o la armadura.
+Cualquiera de los dos límites a `0` está desactivado. Decide el modo `stalemate` de la sala:
+
+| Modo | Qué pasa |
+|---|---|
+| `DRAW` (por defecto) | Empate sin ganador; todos van a la salida cuando la sala se abre. |
+| `SUDDEN_DEATH` | Muerte súbita: cada luchador pierde cada segundo medio corazón más que el anterior, atravesando armadura, resistencia y tótems, hasta que uno cae. A los 60 segundos sin resultado es empate. |
+| `MOST_DAMAGE` | Gana quien haya hecho estrictamente más daño y los demás mueren, así que su botín cae. Un empate a daño, o ningún daño, es empate. |
+
+## Salir, morir y otros finales
+
+| Un luchador... | Durante la cuenta atrás | Durante la pelea |
+|---|---|---|
+| Muere | Se cancela el duelo. | Eliminado; lo que suelta es el botín del ganador. |
+| Se desconecta | Se cancela el duelo. | Muere en el sitio con `kill-on-leave` activado, así que suelta su botín; si no, solo queda fuera. |
+| Sale de la sala | Se cancela el duelo. | Muere con `kill-on-leave` activado; si no, queda fuera y se le dice que perdió el duelo. |
+| Pasa a creativo o espectador | Se cancela el duelo. | Queda fuera de la pelea, nunca muere. |
+
+Un duelo cancelado baja el borde, reconstruye la arena y deja volver a esperar a quien esté dentro; lo mismo pasa si
+el borde sigue sin levantarse 15 segundos después de la cuenta atrás. Si el ganador cae menos de un segundo después
+del último perdedor, es un **doble K.O.**: nadie gana y nadie cobra.
+
+Una muerte en la pelea suelta los objetos como siempre, y los plugins de tumbas la dejan en paz para que el botín
+quede para el ganador. **Cualquier otra muerte dentro de una sala de duelo conserva el inventario y los niveles**:
+esperando, en la cuenta atrás, en la ventana de botín o sin ningún duelo en marcha.
+
+## Recompensas del ganador
+
+**Recompensas del ganador** abre el editor de recompensas de ExyliaLib: objetos, dinero, experiencia, comandos y
+más. Se pagan un momento después de la victoria a través de los modificadores de ExyliaLib con la fuente
+`duel-rooms`, así que los plugins de boosters pueden multiplicar el dinero, la experiencia y los drops. Lo que no
+cabe, o lo que se le debe a un ganador que ya se desconectó, se entrega en su próxima conexión.
+
+Una victoria no paga nada, ni cuenta, cuando:
+
+- los mismos dos jugadores tuvieron una victoria pagada entre ellos en los últimos `win-reward-cooldown-seconds`
+  (30 minutos), en cualquier sentido y en cualquier servidor de la red;
+- el rival comparte dirección con el ganador, o la base de datos no puede saberlo;
+- un rival se desconectó o salió en los primeros `forfeit-grace-seconds` (30 segundos) de la pelea.
+
+Si la sala tiene recompensas, se avisa al ganador de que esa victoria no paga. Una victoria pagada cuenta como
+`duels.wins` para las misiones, clasificaciones y temporadas de ExyliaSurvivalCore cuando está instalado.
+
+## Anuncios
+
+Con `broadcast-results` activado, cada victoria se anuncia en este servidor: "Steve ganó un duelo contra Alex en
+Pit". Los jugadores lo silencian en `/settings` → **ANUNCIOS** → ExyliaWarzone → **Duel announcements**; empieza
+activado.
+
+## Reconstruir la arena
+
+Tras cada duelo, peleado o cancelado, la sala pega `schematics/duelroom_<id>.schem` sobre su región antes de poder
+cerrarse otra vez. Lo hace FastAsyncWorldEdit si está instalado y, si no, el motor propio de ExyliaLib; los dos leen
+los mismos archivos. La sala espera como mucho 60 segundos al pegado, así que siempre se reabre. Una sala sin
+schematic se queda como la dejó la pelea. **Regenerar ahora** lo pega cuando quieras, y eliminar una sala elimina
+su schematic.
+
+## Tiempos y reglas por sala
+
+**Tiempos y reglas** muestra ocho ajustes y, para cada uno, si lo fija **Esta sala** o el **Archivo de
+configuración**. Un ajuste que la sala nunca fijó sigue al archivo, también cuando lo editas.
+
+| Botón | Clave de config | Por defecto | Clic |
+|---|---|---|---|
+| Cuenta atrás | `countdown-seconds` | `3s` | Clic izquierdo para cambiarlo, shift + clic para volver a seguir el archivo. |
+| Límite de pelea | `max-duration-seconds` | `3m` | Igual; `0` es sin límite. |
+| Límite de inactividad | `inactivity-seconds` | `30s` | Igual; `0` lo desactiva. |
+| Ventana de botín | `loot-seconds` | `5s` | Igual. |
+| El ganador sale | `teleport-winner-out` | sí | Alterna sí, no, config. |
+| Sin vuelo | `disable-flight` | sí | Alterna sí, no, config. |
+| Matar al salir | `kill-on-leave` | sí | Alterna sí, no, config. |
+| Estancamiento | `stalemate` | `DRAW` | Pasa por los tres modos y luego config. |
+
+Los comandos permitidos, los anuncios, el límite de bloques del borde, el borde dibujado, la espera entre
+recompensas y la gracia de abandono son de todo el servidor: mira
+[Configuración](/docs/exyliawarzone/configuracion#salas-de-duelo).
+
+## Flags de la sala
+
+La región de una sala puede llevar flags de región: **Flags de la sala** en su pantalla, una vez seleccionada la
+región. Se explican en [Flags de región](/docs/exyliawarzone/flags-de-region). Deja `KEEP_INVENTORY` desactivada e
+`ITEM_PICKUP` permitida si el ganador debe poder recoger el botín; una flag `PVP` que prohíbe el combate no detiene
+un duelo en marcha.
+
+## Editar una sala en uso
+
+Cambiar la región, la salida o los jugadores necesarios, desactivar la sala o eliminarla detiene su duelo en marcha
+y vacía su cola. El nombre, el bloque del borde, los efectos, las recompensas, los tiempos y las flags se pueden
+cambiar en mitad de un duelo: el duelo en marcha conserva los valores con los que empezó, y los cambios de flags se
+aplican al momento. Cada servidor lista solo las salas que creó, aunque compartan base de datos. Los mensajes,
+títulos y bossbars están en `lang/<idioma>/modules/duel-rooms/messages.yml`, los títulos y bossbars bajo `visuals`.

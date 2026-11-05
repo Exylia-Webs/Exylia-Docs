@@ -1,0 +1,50 @@
+---
+title: "API"
+description: "DuelRoomEndEvent, the one event ExyliaWarzone fires through ExyliaLib's public API, and what it carries."
+---
+
+ExyliaWarzone has no service of its own to call. What other plugins can listen to is one event, fired by the duel
+rooms module: `DuelRoomEndEvent`, part of ExyliaLib's public `exylia-api` artifact.
+
+<Callout type="note" title="Adding it to your project">
+The artifact, the repository and the `plugin.yml` line are the same for every Exylia plugin and live on the
+[public API page](/docs/exylialib/api). `DuelRoomEndEvent` is in `exylia-api` since `v1.133.0`. Its package,
+`net.exylia.lib.api.survival.event`, is where it lived while duel rooms were part of ExyliaSurvivalCore, so a listener
+written then keeps working unchanged.
+</Callout>
+
+## DuelRoomEndEvent
+
+`net.exylia.lib.api.survival.event.DuelRoomEndEvent`. Fired when a duel in a duel room has been decided: one fighter
+is left standing, or nobody is. Not cancellable: the last fighter has already fallen or fled.
+
+| Method | Returns |
+|---|---|
+| `getRoomId()` | The id the room was created with. |
+| `getWinner()` | The last fighter standing as a `UUID`, or `null` for a draw. |
+| `getParticipants()` | Everybody who started the duel, in the order they entered, the winner included. Some may have left the server: a player who disconnects forfeits but still took part. |
+
+```java
+@EventHandler
+public void onDuelEnd(DuelRoomEndEvent event) {
+    UUID winner = event.getWinner();
+    if (winner == null) return; // a draw
+    // count a win, advance a quest, post the result...
+}
+```
+
+### When it fires
+
+- Only for a duel that was fought. One called off during its countdown, because somebody stepped out or the room was
+  edited, never started and fires nothing.
+- Before the room's rewards reach the winner. The room stays closed for its loot time afterwards, so the players are
+  usually still inside.
+- For every decided duel, whether or not the winner is paid. The room's own checks (the cooldown between the same two
+  players, an early forfeit, two accounts from one address) can withhold the rewards and the counted win; the event
+  still reports who was left standing.
+
+### Threads
+
+It is called on whichever thread noticed the end: the rooms' once-a-second timer on the global thread, or the region
+thread of the player whose death, disconnect or exit decided it. On Folia neither is guaranteed to own the winner, so
+anything that touches a player has to be scheduled on that player.

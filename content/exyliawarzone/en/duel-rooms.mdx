@@ -1,0 +1,182 @@
+---
+title: "Duel rooms"
+description: "Arenas that close with a border once enough enemies step in: setting one up, the countdown, the fight, stalemates, the loot window, winner rewards, announcements and rebuilding from a schematic."
+---
+
+A duel room is an area of your world that turns into a closed arena by itself. Players walk in; once enough
+enemies are inside, the room's faces fill with a border block, a countdown runs, and they fight until one is left
+standing. The winner collects the loot and the room's rewards, then the room opens and rebuilds itself for the
+next duel. There are no spawns to set and no player command: walking in is joining.
+
+The module is **on by default** (`modules.duel-rooms` in `config.yml`). Rooms are built in game with
+`/duelroomsadmin` (`exyliawarzone.duelrooms.admin`), or from the **Duel rooms** card of `/warzoneadmin`.
+
+## Setting up a room
+
+<Steps>
+  <Step title="Create it">
+    `/duelroomsadmin` → **Create**, then type an ID: lowercase, and unique across every server sharing the database.
+  </Step>
+  <Step title="Select the region">
+    **Arena** → **Room region** hands you the selector: left-click one corner, right-click the other, shift +
+    left-click to confirm. The box is the whole arena: its bottom layer is the floor, its top layer the ceiling, its
+    outer columns the walls. At least 3×4×3 blocks, with at most `max-border-blocks` (20000) blocks on its faces.
+  </Step>
+  <Step title="Set the exit">
+    **Arena** → **Exit location**: stand outside the room and sneak-click. Extra players, intruders and the winner
+    are sent here.
+  </Step>
+  <Step title="Save the schematic">
+    **Arena** → **Schematic** saves the arena's blocks as they are now; every duel ends by pasting it back. Save it
+    while the room is clean and empty.
+  </Step>
+  <Step title="Tune it and enable it">
+    **General** sets the display name (shown in titles, boss bars and announcements), **Players needed** (2 to 16,
+    default 2) and the **Border block** (any solid block, default `RED_STAINED_GLASS`). Then click the **Status**
+    card at the top of the room's screen; a room enables only once it has a region and an exit.
+  </Step>
+</Steps>
+
+<Callout type="warning" title="Testing as an operator">
+`exyliawarzone.duelrooms.bypass` defaults to op. A player holding it is never drawn into a duel and never sent
+out, so an operator walking into a room sees nothing happen. Test with non-op accounts, or negate the permission.
+</Callout>
+
+The room list and each room's screen show, live, what the room is doing: **Idle**, **Waiting**, **Closing** (the
+countdown), **Fighting**, **Looting** or **Reopening** (the border coming down and the arena being rebuilt).
+
+## Who fights
+
+Everyone who walks in waits, with a boss bar filling as players arrive. Only living players in survival or
+adventure without the bypass permission count. When enough are waiting, the fighters are drawn at random, **never
+two from the same clan or from allied clans** (any clan plugin ExyliaLib supports; without one, everyone counts).
+Three clanmates and one outsider make a duel of two, and a player whose waiting company is all on their side is told
+only enemies fight here.
+
+Once the duel is drawn, everyone else inside is sent to the exit. Anyone walking in later or logging in inside is
+sent out too, and once a second the room clears whoever got in some other way. Bypass holders can stay and watch,
+but cannot hit the fighters or be hit by them.
+
+## The border
+
+The border is real blocks placed on the six faces of the region. Only air and replaceable blocks (grass, flowers,
+snow) are filled, so an existing floor or wall stays. Fighters standing on a face are moved one block inward first.
+While a duel runs, nothing on the room's faces can be broken, blown up, burned, pushed by a piston or taken by a
+mob: digging out is leaving, and so is digging in.
+
+With `draw-world-border` on, the fighters also see a harmless world border drawn over the walls. It only draws, and
+world borders are square, so a long room's short walls have no drawn edge; turn it off to save client FPS. Walls
+are recorded in the plugin's `walls/` folder: after a crash, every wall left standing comes down on the next start
+and its arena is rebuilt before the room may close again.
+
+## The fight
+
+1. **Countdown** (`countdown-seconds`, 3s): a title and a short sound each second. Hits do nothing yet.
+2. **Fight**: a FIGHT title, the room's duel effects are given and flight is taken away (`disable-flight`). A boss
+   bar shows the time left and how many are alive.
+3. **Loot window** (`loot-seconds`, 5s): VICTORY for the last one standing, DEFEAT for the rest. The winner's boss
+   bar counts down to the room opening.
+4. **Reopening**: the border comes down. On a draw everyone left is sent to the exit; the winner is too while
+   `teleport-winner-out` is on. The arena is rebuilt, and whoever is still inside starts waiting again.
+
+Fighters can hit each other even where a region flag, spawn protection or WorldGuard would stop it. From the
+countdown until the fight is decided, commands are blocked except `allowed-commands` (`msg`, `tell`, `w`, `r`,
+`reply`), and any teleport out of the room is cancelled: `/spawn`, chorus fruit, portals, other plugins.
+
+**Duel effects** each have their own length; `-1` lasts the whole fight. A fighter's own effects of those types are
+set aside and given back afterwards, totems do not clear the duel's, and every effect is capped to the fight limit
+plus the countdown and 30 seconds, so a crash never leaves anyone buffed.
+
+## Stalemates
+
+A fight stalls when the fight limit runs out (`max-duration-seconds`, 3 minutes) or nobody lands a hit for the
+inactivity limit (`inactivity-seconds`, 30 seconds), which catches standing still, AFK, running away and refusing to
+fight. Fighters are warned 10 seconds before the inactivity limit, or halfway through a shorter one. Any hit with
+damage counts, even one absorbed by golden-apple hearts, a shield or armor. Either limit at `0` is off. The room's
+`stalemate` mode decides:
+
+| Mode | What happens |
+|---|---|
+| `DRAW` (default) | No winner; everyone is sent out when the room opens. |
+| `SUDDEN_DEATH` | Every fighter loses half a heart more each second than the second before, through armor, resistance and totems, until one falls. After 60 seconds without a result it is a draw. |
+| `MOST_DAMAGE` | Whoever dealt strictly the most damage wins and the rest are killed, so their loot drops. A tie, or no damage at all, is a draw. |
+
+## Leaving, dying and other endings
+
+| A fighter... | During the countdown | During the fight |
+|---|---|---|
+| Dies | The duel is called off. | Eliminated; their drops are the winner's loot. |
+| Disconnects | The duel is called off. | Killed on the spot with `kill-on-leave` on, so their loot drops; otherwise just out. |
+| Gets out of the room | The duel is called off. | Killed with `kill-on-leave` on; otherwise out, told they forfeited. |
+| Is put in creative or spectator | The duel is called off. | Out of the fight, never killed. |
+
+A called-off duel brings the border down, rebuilds the arena and lets whoever is inside wait again; so does a
+border that is still not up 15 seconds after the countdown. If the winner falls within a second of the last loser,
+it is a **double knockout**: nobody wins and nobody is paid.
+
+A death in the fight drops as usual, and graves plugins leave it alone so the drops stay for the winner. **Any other
+death inside a duel room keeps the inventory and levels**: while waiting, in the countdown, in the loot window, or
+with no duel running.
+
+## Winner rewards
+
+**Winner rewards** opens ExyliaLib's reward editor: items, money, experience, commands and more. They are paid a
+moment after the win through ExyliaLib's modifiers under the source `duel-rooms`, so booster plugins can multiply the
+money, experience and drops. What does not fit, or what a winner who already logged off is owed, is handed over on
+their next join.
+
+A win pays nothing, and is not counted, when:
+
+- the same two players had a paid win against each other within `win-reward-cooldown-seconds` (30 minutes), either
+  way round and on any server of the network;
+- the opponent shares the winner's address, or the database cannot tell;
+- an opponent disconnected or left within `forfeit-grace-seconds` (30 seconds) of the fight starting.
+
+When the room has rewards, the winner is told the win paid nothing. A paid win counts as `duels.wins` for
+ExyliaSurvivalCore's missions, leaderboards and seasons when it is installed.
+
+## Announcements
+
+With `broadcast-results` on, every win is announced to this server: "Steve won a duel against Alex in Pit". Players
+mute it in `/settings` → **Announcements** → ExyliaWarzone → **Duel announcements**; it starts on.
+
+## Rebuilding the arena
+
+After every duel, fought or called off, the room pastes `schematics/duelroom_<id>.schem` back over its region
+before it can close again. FastAsyncWorldEdit does it when installed, ExyliaLib's built-in engine otherwise; both
+read the same files. The room waits at most 60 seconds for the paste, so it always reopens. A room without a
+schematic keeps whatever the fight did to it. **Regenerate now** pastes it on demand, and deleting a room deletes
+its schematic.
+
+## Per-room timings and rules
+
+**Timings & rules** shows eight settings and, for each, whether **This room** sets it or the **Config file** does.
+A setting the room never set follows the file, edits included.
+
+| Button | Config key | Default | Click |
+|---|---|---|---|
+| Countdown | `countdown-seconds` | `3s` | Left-click to change, shift-click to follow the file again. |
+| Fight limit | `max-duration-seconds` | `3m` | The same; `0` is no limit. |
+| Inactivity limit | `inactivity-seconds` | `30s` | The same; `0` is off. |
+| Loot window | `loot-seconds` | `5s` | The same. |
+| Winner leaves | `teleport-winner-out` | on | Cycles on, off, config file. |
+| No flight | `disable-flight` | on | Cycles on, off, config file. |
+| Kill on leave | `kill-on-leave` | on | Cycles on, off, config file. |
+| Stalemate | `stalemate` | `DRAW` | Cycles the three modes, then config file. |
+
+The allowed commands, announcements, border block limit, drawn world border, reward cooldown and forfeit grace are
+server-wide: see [Configuration](/docs/exyliawarzone/configuration#duel-rooms).
+
+## Room flags
+
+A room's region can carry region flags: **Room flags** on its screen, once the region is selected. They are
+explained on [Region flags](/docs/exyliawarzone/region-flags). Leave `KEEP_INVENTORY` off and `ITEM_PICKUP` allowed
+if the winner should loot; a `PVP` flag that denies combat does not stop a running duel.
+
+## Editing a room in use
+
+Changing the region, the exit or the players needed, disabling the room or deleting it stops its running duel and
+empties its queue. The name, border block, effects, rewards, timings and flags can change mid-duel: the running duel
+keeps the values it started with, and flag changes apply at once. Each server lists only the rooms it created, even
+on a shared database. Messages, titles and boss bars are in `lang/<language>/modules/duel-rooms/messages.yml`, the
+titles and bars under `visuals`.

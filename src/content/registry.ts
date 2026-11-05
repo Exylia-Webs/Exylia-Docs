@@ -1693,6 +1693,46 @@ const SPAWNERS_NAV: NavGroup[] = [
   },
 ];
 
+const WARZONE_NAV: NavGroup[] = [
+  {
+    label: { en: "Getting started", es: "Empezar" },
+    pages: [
+      page("introduction", "introduction", "introduccion"),
+      page("installation", "installation", "instalacion"),
+      page("first-steps", "first-steps", "primeros-pasos"),
+    ],
+  },
+  {
+    label: { en: "Modules", es: "Módulos" },
+    pages: [
+      page("supply-drops", "supply-drops", "suministros"),
+      page("power-ups", "power-ups", "power-ups"),
+      page("loot-chests", "loot-chests", "cofres-de-botin"),
+      page("regen-zones", "regen-zones", "zonas-de-regeneracion"),
+      page("duel-rooms", "duel-rooms", "salas-de-duelo"),
+    ],
+  },
+  {
+    label: { en: "Server", es: "Servidor" },
+    pages: [
+      page("region-flags", "region-flags", "flags-de-region"),
+      page("integrations", "integrations", "integraciones"),
+      page("migrating", "migrating", "migracion"),
+    ],
+  },
+  {
+    label: { en: "Reference", es: "Referencia" },
+    pages: [
+      page("commands", "commands", "comandos"),
+      page("permissions", "permissions", "permisos"),
+      page("placeholders", "placeholders", "placeholders"),
+      page("configuration", "configuration", "configuracion"),
+      page("api", "api", "api"),
+      page("faq", "faq", "faq"),
+    ],
+  },
+];
+
 export const plugins: Plugin[] = [
   {
     id: "exyliaffa",
@@ -2330,6 +2370,27 @@ export const plugins: Plugin[] = [
       { en: "Folia", es: "Folia" },
     ],
     nav: SPAWNERS_NAV,
+  },
+  {
+    id: "exyliawarzone",
+    name: "ExyliaWarzone",
+    tagline: { en: "Supply drops, power-ups, loot chests, regen zones and duel rooms", es: "Suministros, potenciadores, cofres de botín, zonas de regeneración y salas de duelo" },
+    summary: {
+      en: "Content for your combat areas, all built in game: supply drops falling on a parachute into envoy areas on a timetable, with tiers, loot tables and their own timings; power-ups that spin at set points or anywhere in an area and pay effects and rewards; chests and barrels that refill from a template's loot table with a countdown hologram; zones pasted back from a snapshot on a timer or once idle; and duel rooms that seal with a border, pay the winner and rebuild. Region flags for zones and rooms, boosters on rewards, announcements players can mute, and everything carried over from ExyliaSurvivalCore.",
+      es: "Contenido para tus zonas de combate, todo creado en el juego: suministros que caen en paracaídas sobre las áreas de los envoys según un horario, con niveles, tablas de botín y tiempos propios; potenciadores que giran en puntos fijos o en cualquier lugar de un área y dan efectos y recompensas; cofres y barriles que se rellenan desde la tabla de botín de una plantilla con un holograma de cuenta atrás; zonas que se restauran desde una captura con un temporizador o al quedar inactivas; y salas de duelo que se cierran con un borde, pagan al ganador y se reconstruyen. Flags de región para zonas y salas, multiplicadores de recompensas, anuncios que cada jugador puede silenciar, y todo lo que ya tenías en ExyliaSurvivalCore.",
+    },
+    version: "1.0.0",
+    status: "beta",
+    category: { en: "PvP", es: "PvP" },
+    minecraft: "1.21.1+",
+    banner: "https://s3.exylia.net/exylia-plugins/public/static/images/plugins/warzone/ExyliaWarzoneBanner.webp",
+    tags: [
+      { en: "Supply drops", es: "Suministros" },
+      { en: "Regeneration", es: "Regeneración" },
+      { en: "Duels", es: "Duelos" },
+      { en: "Folia", es: "Folia" },
+    ],
+    nav: WARZONE_NAV,
   },
   {
     id: "exyliadisplays",
