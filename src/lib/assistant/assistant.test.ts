@@ -127,6 +127,11 @@ test("10 a minute and 50 a day per address", () => {
   assert.ok(allow("1.2.3.4", [minute, day], now), "a new day starts over");
 });
 
+test("each of N worker copies allows its share of the limit", () => {
+  assert.equal(new RateLimiter(10, 60_000, 2).limit, 5);
+  assert.equal(new RateLimiter(1, 60_000, 4).limit, 1);
+});
+
 /** An in-memory AssistantUsage: each upsert adds to the row atomically, as Postgres' ON CONFLICT does. */
 function fakeDb() {
   const months = new Map<string, number>();

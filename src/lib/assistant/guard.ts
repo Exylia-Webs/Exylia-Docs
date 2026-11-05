@@ -81,16 +81,16 @@ export async function readCapped(request: Request, maxBytes: number): Promise<st
 
 /**
  * Fixed windows per key: `limit` requests a `windowMs`.
- * ponytail: per-process memory, so a restart forgets them and two replicas would each allow the
- * limit; fine for the one container this site runs as. Move to Redis if it ever scales out. The map
- * is swept of expired windows once it passes 10 000 keys, so memory stays bounded.
+ * ponytail: per-process memory, so a restart forgets them. With NODE_WORKERS copies (cluster.mjs)
+ * each one allows its share of the limit; two replicas would each allow it. Move to Redis if it ever
+ * scales out. The map is swept of expired windows once it passes 10 000 keys, so memory stays bounded.
  */
 export class RateLimiter {
   private hits = new Map<string, { count: number; resetAt: number }>();
   readonly limit: number;
   readonly windowMs: number;
-  constructor(limit: number, windowMs: number) {
-    this.limit = limit;
+  constructor(limit: number, windowMs: number, workers = Math.max(1, Number.parseInt(process.env.NODE_WORKERS ?? "1", 10) || 1)) {
+    this.limit = Math.max(1, Math.floor(limit / workers));
     this.windowMs = windowMs;
   }
 

@@ -48,7 +48,8 @@ RUN apt-get update \
 # non-root user works because Docker (20.10+) sets net.ipv4.ip_unprivileged_port_start=0 in every
 # container; on a runtime that does not, set PORT=3000 and point Coolify's port at 3000.
 # The heap cap keeps the process well inside the container's 512 MB limit: V8 collects instead of
-# growing until the kernel kills it under load.
+# growing until the kernel kills it under load. Each NODE_WORKERS copy gets its own 256 MB heap:
+# raise the container limit with the copy count.
 ENV NODE_ENV=production \
     NODE_OPTIONS=--max-old-space-size=256 \
     NEXT_TELEMETRY_DISABLED=1 \
@@ -76,4 +77,4 @@ HEALTHCHECK --interval=10s --start-interval=1s --timeout=5s --start-period=10s -
 
 # Migrations run as the new container starts: Coolify's pre-deployment command would run them in
 # the old container, with the old schema.
-CMD ["sh", "-c", "node node_modules/prisma/build/index.js migrate deploy && exec node node_modules/next/dist/bin/next start"]
+CMD ["sh", "-c", "node node_modules/prisma/build/index.js migrate deploy && exec node cluster.mjs node_modules/next/dist/bin/next start"]
