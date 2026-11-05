@@ -4,7 +4,8 @@ import { dict } from "@/content/dictionary";
 import { getPlugin, toLang } from "@/content/registry";
 import { aiConfig, aiSend } from "@/lib/assistant/ai";
 import { docsKnowledge, docsTools } from "@/lib/assistant/docs-tools";
-import { PASS_COOKIE, PASS_SECONDS, RateLimiter, UsageStore, allow, clientIp, issuePass, readCapped, sameOrigin, validPass, verifyTurnstile } from "@/lib/assistant/guard";
+import { PASS_COOKIE, PASS_SECONDS, RateLimiter, allow, chargeTokens, clientIp, importUsageFile, issuePass, readCapped, recordQuotaHit, sameOrigin, usedTokens, validPass, verifyTurnstile } from "@/lib/assistant/guard";
+import { prisma } from "@/lib/db";
 
 /**
  * `/api/assistant/`: the public docs assistant. `GET` tells the page whether it is on (and the
@@ -20,7 +21,16 @@ const MAX_STEPS = 6;
 
 const perMinute = new RateLimiter(10, 60_000);
 const perDay = new RateLimiter(50, 24 * 60 * 60_000);
-const usage = new UsageStore(path.join(process.env.AI_DATA_DIR?.trim() || path.join(process.cwd(), "data"), "assistant-usage.json"));
+const usageFile = path.join(process.env.AI_DATA_DIR?.trim() || path.join(process.cwd(), "data"), "assistant-usage.json");
+
+let imported: Promise<void> | null = null;
+/** This month's tokens; the first read of the process imports the old JSON count first, once. */
+async function spent(): Promise<number> {
+  imported ??= importUsageFile(prisma, usageFile).catch((error: unknown) => console.error("assistant usage file not imported", error));
+  await imported;
+  return usedTokens(prisma);
+}
+const quotaHit = () => recordQuotaHit(prisma).catch((error: unknown) => console.error("assistant quota hit not recorded", error));
 
 type ErrorCode = "off" | "origin" | "json" | "rate" | "challenge" | "too_large" | "bad_request" | "quota";
 const fail = (status: number, error: ErrorCode, headers?: Record<string, string>) => Response.json({ error }, { status, headers: { "cache-control": "no-store", ...headers } });
@@ -58,7 +68,10 @@ export async function POST(request: Request) {
   } catch {
     return fail(400, "bad_request");
   }
-  if (usage.used() >= config.monthlyTokens) return fail(429, "quota");
+  if ((await spent()) >= config.monthlyTokens) {
+    await quotaHit();
+    return fail(429, "quota");
+  }
 
   const url = new URL(request.url);
   const lang = toLang(url.searchParams.get("lang") ?? undefined);
@@ -66,6 +79,8 @@ export async function POST(request: Request) {
   const text = dict.assistant;
   const system = assistantSystemPrompt({ product: "Exylia Docs", knowledge: docsKnowledge(lang, plugin), user: "An anonymous visitor of the public documentation site. They are not signed in and have no workspace: you only read the docs for them.", locale: lang });
 
+  // Charges still on their way count before the next call is allowed.
+  const charges: Promise<void>[] = [];
   const events = runAssistant({
     ...parsed,
     model: config.model,
@@ -74,9 +89,15 @@ export async function POST(request: Request) {
     send: aiSend(config),
     maxSteps: MAX_STEPS,
     beforeCall: async () => {
-      if (usage.used() >= config.monthlyTokens) throw new Error(text.quota[lang]);
+      await Promise.all(charges);
+      if ((await spent()) >= config.monthlyTokens) {
+        await quotaHit();
+        throw new Error(text.quota[lang]);
+      }
     },
-    onUsage: (spent) => usage.charge(spent.inputTokens + spent.outputTokens),
+    onUsage: (used) => {
+      charges.push(chargeTokens(prisma, used.inputTokens + used.outputTokens).catch((error: unknown) => console.error("assistant usage not charged", error)));
+    },
   });
   const response = assistantStream(publicErrors(events, { quota: text.quota[lang], steps: text.steps[lang], failed: text.failed[lang] }));
   if (pass) response.headers.append("set-cookie", `${PASS_COOKIE}=${pass}; Path=/api/assistant; Max-Age=${PASS_SECONDS}; HttpOnly; SameSite=Strict${url.protocol === "https:" || request.headers.get("x-forwarded-proto") === "https" ? "; Secure" : ""}`);

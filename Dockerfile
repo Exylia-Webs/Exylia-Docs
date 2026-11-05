@@ -1,34 +1,48 @@
 # syntax=docker/dockerfile:1
-# Exylia Docs: every page prerendered at build time, served by Next's standalone Node server (which
-# also runs the assistant's API route).
+# Exylia Docs: every page prerendered at build time, served by the Next server (which also runs the
+# assistant's API route and the admin panel), which runs its migrations as it starts.
 #
 #   docker build -t exylia-docs --secret id=NPMRC,env=NPMRC .
 #
-# --- build ------------------------------------------------------------------
-FROM node:22-alpine AS builder
+# Same shape as Exylia-Utils: the runtime keeps the whole built project rather than Next's traced
+# file list. pnpm's node_modules is a tree of symlinks, and a pruned copy is what breaks the Prisma
+# CLI the migration step needs.
 
+# ---------------------------------------------------------------- deps ------
+FROM node:22-slim AS deps
 WORKDIR /app
+# No TTY in a build: pnpm must never stop to ask.
+ENV CI=true
 
-RUN corepack enable
-ENV NEXT_TELEMETRY_DISABLED=1
+RUN corepack enable && apt-get update \
+    && apt-get install -y --no-install-recommends openssl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 
-# Dependencies first, so a content-only change reuses this layer.
+# Only the manifests, so a content-only change reuses the install layer.
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 # The registry token for @exylia-webs/ui is a build secret (an .npmrc line), mounted only for this
 # step so it never lands in a layer. Its id is NPMRC because Coolify passes each build-time
 # variable as a secret under its own name ("Use Docker Build Secrets").
-RUN --mount=type=secret,id=NPMRC,target=/root/.npmrc --mount=type=cache,id=pnpm-store,target=/pnpm/store pnpm install --frozen-lockfile --store-dir /pnpm/store
+RUN --mount=type=secret,id=NPMRC,target=/root/.npmrc --mount=type=cache,id=pnpm-store,target=/pnpm/store pnpm install --frozen-lockfile --prod=false --store-dir /pnpm/store
 
+# --------------------------------------------------------------- build ------
+FROM deps AS build
+WORKDIR /app
 COPY . .
-# Next inlines NEXT_PUBLIC_* into the client bundle; Coolify passes them as build secrets, mounted as env here.
+ENV NEXT_TELEMETRY_DISABLED=1
+# Next inlines NEXT_PUBLIC_* into the client bundle; Coolify passes them as build secrets, mounted as
+# env here. The Prisma client is generated code: `pnpm run build` generates it before Next compiles.
 RUN --mount=type=secret,id=NEXT_PUBLIC_GA_ID,env=NEXT_PUBLIC_GA_ID \
     --mount=type=secret,id=NEXT_PUBLIC_CLARITY_ID,env=NEXT_PUBLIC_CLARITY_ID \
     --mount=type=cache,id=docs-next,target=/app/.next/cache,sharing=locked pnpm run build
 
-# --- serve ------------------------------------------------------------------
-FROM node:22-alpine AS runner
-
+# ------------------------------------------------------------- runtime ------
+FROM node:22-slim AS runtime
 WORKDIR /app
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends openssl ca-certificates curl \
+    && rm -rf /var/lib/apt/lists/*
 
 # Port 80, as the nginx image before it, so the Coolify app keeps its port. Binding it as a
 # non-root user works because Docker (20.10+) sets net.ipv4.ip_unprivileged_port_start=0 in every
@@ -39,20 +53,24 @@ ENV NODE_ENV=production \
     PORT=80 \
     AI_DATA_DIR=/app/data
 
-# The traced server (with the MDX it reads at run time), then the assets it does not trace.
-COPY --from=builder --chown=node:node /app/.next/standalone ./
-COPY --from=builder --chown=node:node /app/.next/static ./.next/static
-COPY --from=builder --chown=node:node /app/public ./public
+# Dependencies and code in separate layers: node_modules only changes with the lockfile, so a
+# deploy uploads and pulls just the code layer.
+COPY --from=deps --chown=node:node /app ./
+COPY --from=build --chown=node:node --exclude=node_modules /app ./
 
-# The assistant's monthly token count lives here: mount a volume on it so a redeploy keeps it.
+# Where the assistant kept its monthly token count before the database: the first request of this
+# version imports this month's count from it, once. Keep the volume mounted until then.
 RUN mkdir -p /app/data && chown node:node /app/data
 VOLUME ["/app/data"]
 
+# Never run as root.
 USER node
 
 EXPOSE 80
 
-HEALTHCHECK --interval=10s --timeout=3s --start-period=10s --retries=6 \
-  CMD wget -q -O /dev/null "http://127.0.0.1:${PORT}/robots.txt" || exit 1
+HEALTHCHECK --interval=10s --start-interval=1s --timeout=5s --start-period=10s --retries=6 \
+  CMD curl -fsS -o /dev/null "http://127.0.0.1:${PORT}/robots.txt" || exit 1
 
-CMD ["node", "server.js"]
+# Migrations run as the new container starts: Coolify's pre-deployment command would run them in
+# the old container, with the old schema.
+CMD ["sh", "-c", "node node_modules/prisma/build/index.js migrate deploy && exec node node_modules/next/dist/bin/next start"]

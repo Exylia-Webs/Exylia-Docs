@@ -1,15 +1,13 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // A Node server (for the assistant's API route); every page is still prerendered at build time.
-  output: "standalone",
+  // Served by `next start` (the assistant's API route, the admin panel); every docs page is still
+  // prerendered at build time.
   images: { unoptimized: true },
   trailingSlash: true,
   // The design system ships TypeScript source.
   transpilePackages: ["@exylia-webs/ui"],
   // Pull only the modules a page imports from the barrel (CookieConsent), not the whole design system.
   experimental: { optimizePackageImports: ["@exylia-webs/ui"] },
-  // The assistant reads the MDX at run time: ship it with the server.
-  outputFileTracingIncludes: { "/api/assistant": ["./content/**/*"] },
 
   // What nginx did in front of the static export.
   async redirects() {

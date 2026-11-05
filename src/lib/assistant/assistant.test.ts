@@ -5,7 +5,7 @@ import path from "node:path";
 import { test } from "node:test";
 import { aiSend, parseAiEnv, redactError } from "./ai";
 import { docsTools, findPlugin, parsePageUrl, readPage, searchDocs, toPlainText } from "./docs-tools";
-import { RateLimiter, UsageStore, allow, clientIp, issuePass, sameOrigin, validPass } from "./guard";
+import { RateLimiter, type UsageDb, allow, chargeTokens, clientIp, importUsageFile, issuePass, sameOrigin, usedTokens, validPass } from "./guard";
 
 // --- search_docs -----------------------------------------------------------------------------------
 
@@ -127,37 +127,66 @@ test("10 a minute and 50 a day per address", () => {
   assert.ok(allow("1.2.3.4", [minute, day], now), "a new day starts over");
 });
 
-test("the monthly token count survives a restart and rolls over", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "docs-ai-"));
-  const file = path.join(dir, "sub", "assistant-usage.json");
-  const store = new UsageStore(file);
-  assert.equal(store.used("2026-11"), 0);
-  store.charge(700.2, "2026-11");
-  store.charge(400, "2026-11");
-  assert.equal(store.used("2026-11"), 1101);
-  const restarted = new UsageStore(file);
-  assert.equal(restarted.used("2026-11"), 1101);
-  assert.ok(restarted.used("2026-11") >= 1000, "a cap of 1000 is spent");
-  assert.equal(restarted.used("2026-12"), 0, "a new month starts at zero");
-  restarted.charge(5, "2026-12");
-  assert.equal(new UsageStore(file).used("2026-12"), 5);
-  fs.rmSync(dir, { recursive: true, force: true });
+/** An in-memory AssistantUsage: each upsert adds to the row atomically, as Postgres' ON CONFLICT does. */
+function fakeDb() {
+  const months = new Map<string, number>();
+  const days = new Map<string, number>();
+  const sql: string[] = [];
+  const db: UsageDb = {
+    async $queryRaw<T>(_query: TemplateStringsArray, month: unknown) {
+      return (months.has(month as string) ? [{ tokens: BigInt(months.get(month as string)!) }] : []) as T;
+    },
+    async $executeRaw(query: TemplateStringsArray, ...values: unknown[]) {
+      const text = query.join("?");
+      sql.push(text);
+      if (text.includes("DO NOTHING")) {
+        if (!months.has(values[0] as string)) months.set(values[0] as string, values[1] as number);
+      } else if (text.includes('"tokens" = "AssistantUsage"."tokens" + EXCLUDED."tokens"')) {
+        const [month, amount, day] = values as [string, number, string];
+        months.set(month, (months.get(month) ?? 0) + amount);
+        days.set(day, (days.get(day) ?? 0) + amount);
+      }
+      return 1;
+    },
+  };
+  return { db, months, days, sql };
+}
+
+test("the monthly cap adds up concurrent charges atomically, per month and per day", async () => {
+  const { db, months, days, sql } = fakeDb();
+  const now = new Date("2026-11-05T12:00:00Z");
+  assert.equal(await usedTokens(db, "2026-11"), 0);
+  await Promise.all([chargeTokens(db, 700.2, now), chargeTokens(db, 400, now)]);
+  assert.equal(await usedTokens(db, "2026-11"), 1101);
+  assert.equal(days.get("2026-11-05"), 1101);
+  assert.equal(sql.length, 2, "one statement per charge, month and day together");
+  for (const statement of sql) {
+    assert.match(statement, /ON CONFLICT \("month"\) DO UPDATE SET "tokens" = "AssistantUsage"\."tokens" \+ EXCLUDED\."tokens"/);
+    assert.match(statement, /ON CONFLICT \("day"\) DO UPDATE SET "tokens" = "AssistantUsageDay"\."tokens" \+ EXCLUDED\."tokens"/);
+  }
+  await chargeTokens(db, 0, now);
+  assert.equal(sql.length, 2, "nothing spent, nothing written");
+  assert.equal(await usedTokens(db, "2026-12"), 0, "a new month starts at zero");
+  await chargeTokens(db, 5, new Date("2026-12-01T00:00:00Z"));
+  assert.equal(months.get("2026-12"), 5);
+  assert.equal(months.get("2026-11"), 1101);
 });
 
-test("an unwritable usage file still counts in memory", () => {
-  // A path under a regular file: no directory can ever be made there.
-  const blocker = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "docs-ai-")), "file");
-  fs.writeFileSync(blocker, "");
-  const store = new UsageStore(path.join(blocker, "sub", "assistant-usage.json"));
-  const error = console.error;
-  console.error = () => {};
-  try {
-    store.charge(10);
-    store.charge(10);
-  } finally {
-    console.error = error;
-  }
-  assert.equal(store.used(), 20);
+test("the old JSON count is imported once, only for this month, never over a row", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "docs-ai-"));
+  const file = path.join(dir, "assistant-usage.json");
+  const { db, months } = fakeDb();
+  await importUsageFile(db, file, "2026-11");
+  assert.equal(months.size, 0, "no file, nothing to import");
+  fs.writeFileSync(file, JSON.stringify({ month: "2026-11", tokens: 1234 }));
+  await importUsageFile(db, file, "2026-12");
+  assert.equal(months.size, 0, "last month's count is not this month's");
+  await importUsageFile(db, file, "2026-11");
+  await importUsageFile(db, file, "2026-11");
+  assert.equal(await usedTokens(db, "2026-11"), 1234, "a second import changes nothing");
+  await chargeTokens(db, 10, new Date("2026-11-20T00:00:00Z"));
+  assert.equal(await usedTokens(db, "2026-11"), 1244);
+  fs.rmSync(dir, { recursive: true, force: true });
 });
 
 // --- Request checks ----------------------------------------------------------------------------------

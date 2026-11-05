@@ -1,14 +1,12 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import fs from "node:fs";
-import path from "node:path";
 import { BlockList, isIP } from "node:net";
 import { SITE } from "@/content/registry";
 
 /**
  * What stands between an anonymous visitor and the AI bill: the real client address, per-address
  * rate limits, a monthly token cap for everyone together, a same-origin check and an optional
- * Turnstile pass. No database here: the cap is a small JSON file on a volume, the rate limits live
- * in memory.
+ * Turnstile pass. The cap lives in the database (AssistantUsage), the rate limits in memory.
  */
 
 // --- Client address (copied from Exylia-Utils) ----------------------------------------------------
@@ -124,57 +122,63 @@ export function allow(key: string, limiters: RateLimiter[], now = Date.now()): b
 
 /** `2026-11`, in UTC. */
 export const monthOf = (date = new Date()) => date.toISOString().slice(0, 7);
+/** `2026-11-05`, in UTC. */
+export const dayOf = (date = new Date()) => date.toISOString().slice(0, 10);
+
+/** What the cap needs of the Prisma client, so a test can stand in for it. */
+export type UsageDb = {
+  $queryRaw<T = unknown>(query: TemplateStringsArray, ...values: unknown[]): Promise<T>;
+  $executeRaw(query: TemplateStringsArray, ...values: unknown[]): Promise<number>;
+};
+
+/** Tokens every visitor together has spent in `month`. */
+export async function usedTokens(db: UsageDb, month = monthOf()): Promise<number> {
+  const rows = await db.$queryRaw<{ tokens: bigint | number }[]>`SELECT "tokens" FROM "AssistantUsage" WHERE "month" = ${month}`;
+  return Number(rows[0]?.tokens ?? 0);
+}
 
 /**
- * Tokens spent this month by every visitor together, kept in `<dir>/assistant-usage.json` so a
- * restart or a redeploy does not reset the cap (mount a volume there). Written atomically (temp
- * file and rename) after every model call. Without a writable directory it counts in memory and
- * says so once.
- * ponytail: one process owns the file; concurrent requests may each pass the check just before the
- * cap and overshoot it by a few calls' worth (bounded by AI_MAX_TOKENS × steps). Two replicas would
- * need Redis or a database instead.
+ * Adds one model call's tokens to its month and its day in one statement, each an atomic upsert:
+ * concurrent calls on any number of instances add up instead of overwriting each other, and the
+ * first call of a month (or a day) creates its row.
  */
-export class UsageStore {
-  private state = { month: "", tokens: 0 };
-  private loaded = false;
-  private warned = false;
-  private readonly file: string | null;
-  constructor(file: string | null) {
-    this.file = file;
-  }
+export async function chargeTokens(db: UsageDb, tokens: number, now = new Date()): Promise<void> {
+  const amount = Math.max(0, Math.ceil(tokens));
+  if (!amount) return;
+  await db.$executeRaw`WITH month AS (
+      INSERT INTO "AssistantUsage" ("month", "tokens", "calls", "updatedAt") VALUES (${monthOf(now)}, ${amount}, 1, NOW())
+      ON CONFLICT ("month") DO UPDATE SET "tokens" = "AssistantUsage"."tokens" + EXCLUDED."tokens", "calls" = "AssistantUsage"."calls" + 1, "updatedAt" = NOW()
+    )
+    INSERT INTO "AssistantUsageDay" ("day", "tokens", "calls", "updatedAt") VALUES (${dayOf(now)}::date, ${amount}, 1, NOW())
+    ON CONFLICT ("day") DO UPDATE SET "tokens" = "AssistantUsageDay"."tokens" + EXCLUDED."tokens", "calls" = "AssistantUsageDay"."calls" + 1, "updatedAt" = NOW()`;
+}
 
-  private load() {
-    if (this.loaded) return;
-    this.loaded = true;
-    if (!this.file) return;
-    try {
-      const saved = JSON.parse(fs.readFileSync(this.file, "utf8")) as { month?: unknown; tokens?: unknown };
-      if (typeof saved.month === "string" && typeof saved.tokens === "number" && saved.tokens >= 0) this.state = { month: saved.month, tokens: saved.tokens };
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "ENOENT") console.error("assistant usage file unreadable, starting from 0", error);
-    }
-  }
+/** Counts a question refused by the spent cap, on its month and its day, for the admin panel. */
+export async function recordQuotaHit(db: UsageDb, now = new Date()): Promise<void> {
+  await db.$executeRaw`WITH month AS (
+      INSERT INTO "AssistantUsage" ("month", "quotaHits", "updatedAt") VALUES (${monthOf(now)}, 1, NOW())
+      ON CONFLICT ("month") DO UPDATE SET "quotaHits" = "AssistantUsage"."quotaHits" + 1
+    )
+    INSERT INTO "AssistantUsageDay" ("day", "quotaHits", "updatedAt") VALUES (${dayOf(now)}::date, 1, NOW())
+    ON CONFLICT ("day") DO UPDATE SET "quotaHits" = "AssistantUsageDay"."quotaHits" + 1`;
+}
 
-  used(month = monthOf()): number {
-    this.load();
-    return this.state.month === month ? this.state.tokens : 0;
+/**
+ * The month's count the assistant kept in `<AI_DATA_DIR>/assistant-usage.json` before the
+ * database: when it is this month's, it becomes the month's row, unless one already exists (the
+ * insert does nothing then, so importing twice, or from two instances, never counts it twice).
+ * Its tokens have no day, so the daily table leaves them out.
+ */
+export async function importUsageFile(db: UsageDb, file: string, month = monthOf()): Promise<void> {
+  let saved: { month?: unknown; tokens?: unknown };
+  try {
+    saved = JSON.parse(fs.readFileSync(file, "utf8")) as typeof saved;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") console.error("assistant usage file unreadable, not imported", error);
+    return;
   }
-
-  charge(tokens: number, month = monthOf()): void {
-    const amount = Math.max(0, Math.ceil(tokens));
-    if (!amount) return;
-    this.state = { month, tokens: this.used(month) + amount };
-    if (!this.file) return;
-    try {
-      fs.mkdirSync(path.dirname(this.file), { recursive: true });
-      const temp = `${this.file}.${process.pid}.tmp`;
-      fs.writeFileSync(temp, JSON.stringify(this.state));
-      fs.renameSync(temp, this.file);
-    } catch (error) {
-      if (!this.warned) console.error(`assistant usage not persisted to ${this.file}: counting in memory until it is writable`, error);
-      this.warned = true;
-    }
-  }
+  if (saved.month !== month || typeof saved.tokens !== "number" || !(saved.tokens > 0)) return;
+  await db.$executeRaw`INSERT INTO "AssistantUsage" ("month", "tokens", "updatedAt") VALUES (${month}, ${Math.ceil(saved.tokens)}, NOW()) ON CONFLICT ("month") DO NOTHING`;
 }
 
 // --- Turnstile -------------------------------------------------------------------------------------
