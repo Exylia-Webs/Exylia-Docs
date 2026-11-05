@@ -2408,7 +2408,7 @@ export const plugins: Plugin[] = [
     category: { en: "Utility", es: "Utilidad" },
     minecraft: "1.21+",
     banner: "https://s3.exylia.net/exylia-plugins/public/static/images/plugins/displays/ExyliaDisplaysBanner.webp",
-    download: "https://github.com/Exylia-Plugins/ExyliaDisplays/releases",
+    download: "https://modrinth.com/plugin/exyliadisplays",
     tags: [
       { en: "Holograms", es: "Hologramas" },
       { en: "NPCs", es: "NPCs" },
@@ -2453,7 +2453,7 @@ export const plugins: Plugin[] = [
     category: { en: "Survival", es: "Survival" },
     minecraft: "1.21+",
     banner: "https://s3.exylia.net/exylia-plugins/public/static/images/plugins/economy/ExyliaEconomyBanner.webp",
-    download: "https://github.com/Exylia-Plugins/ExyliaEconomy/releases",
+    download: "https://modrinth.com/plugin/exyliaeconomy",
     tags: [
       { en: "Economy", es: "Economía" },
       { en: "Vault", es: "Vault" },
@@ -2475,7 +2475,7 @@ export const plugins: Plugin[] = [
     category: { en: "Survival", es: "Survival" },
     minecraft: "1.21+",
     banner: "https://s3.exylia.net/exylia-plugins/public/static/images/plugins/graves/ExyliaGravesBanner.webp",
-    download: "https://github.com/Exylia-Plugins/ExyliaGraves/releases",
+    download: "https://modrinth.com/plugin/exyliagraves",
     tags: [
       { en: "Graves", es: "Tumbas" },
       { en: "Network", es: "Red" },
@@ -2496,7 +2496,7 @@ export const plugins: Plugin[] = [
     category: { en: "Survival", es: "Survival" },
     minecraft: "1.21+",
     banner: "https://s3.exylia.net/exylia-plugins/public/static/images/plugins/player-vaults/ExyliaPlayerVaultsBanner.webp",
-    download: "https://github.com/Exylia-Plugins/ExyliaPlayerVaults/releases",
+    download: "https://modrinth.com/plugin/exyliaplayervaults",
     tags: [
       { en: "Vaults", es: "Baúles" },
       { en: "Storage", es: "Almacenamiento" },
