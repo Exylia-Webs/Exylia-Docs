@@ -5,6 +5,8 @@ const nextConfig = {
   // Served by `next start` (the assistant's API route, the admin panel); every docs page is still
   // prerendered at build time.
   images: { unoptimized: true },
+  // Coolify's Traefik already gzips every response; compressing in Node too only burns the event loop.
+  compress: false,
   trailingSlash: true,
   // The design system ships TypeScript source.
   transpilePackages: ["@exylia-webs/ui"],
@@ -32,6 +34,12 @@ const nextConfig = {
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
         ],
       },
+      // Not hashed, but only a deploy changes them: an hour in the browser, then revalidated (ETag).
+      // The search index is 1.7 MB, fetched on the first search of every visit without this.
+      ...["/:lang/search-index.json", "/:lang/og/:path*"].map((source) => ({
+        source,
+        headers: [{ key: "Cache-Control", value: "public, max-age=3600, stale-while-revalidate=86400" }],
+      })),
     ];
   },
 };

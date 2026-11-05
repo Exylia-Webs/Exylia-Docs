@@ -47,7 +47,10 @@ RUN apt-get update \
 # Port 80, as the nginx image before it, so the Coolify app keeps its port. Binding it as a
 # non-root user works because Docker (20.10+) sets net.ipv4.ip_unprivileged_port_start=0 in every
 # container; on a runtime that does not, set PORT=3000 and point Coolify's port at 3000.
+# The heap cap keeps the process well inside the container's 512 MB limit: V8 collects instead of
+# growing until the kernel kills it under load.
 ENV NODE_ENV=production \
+    NODE_OPTIONS=--max-old-space-size=256 \
     NEXT_TELEMETRY_DISABLED=1 \
     HOSTNAME=0.0.0.0 \
     PORT=80 \
