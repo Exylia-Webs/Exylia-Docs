@@ -217,6 +217,58 @@ export const dict = {
     detecting: { en: "Detecting your language…", es: "Detectando tu idioma…" },
     manual: { en: "Continue in English", es: "Continuar en español" },
   },
+  assistant: {
+    open: { en: "Ask the docs assistant", es: "Preguntar al asistente" },
+    title: { en: "Docs assistant", es: "Asistente de la documentación" },
+    close: { en: "Close", es: "Cerrar" },
+    newChat: { en: "New conversation", es: "Nueva conversación" },
+    messages: { en: "Conversation with the assistant", es: "Conversación con el asistente" },
+    placeholder: { en: "Ask about any Exylia plugin…", es: "Pregunta sobre cualquier plugin de Exylia…" },
+    send: { en: "Send", es: "Enviar" },
+    hint: {
+      en: "Answers come from these docs and can be wrong: check the linked pages.",
+      es: "Las respuestas salen de esta documentación y pueden equivocarse: revisa las páginas enlazadas.",
+    },
+    emptyTitle: { en: "What do you need to set up?", es: "¿Qué necesitas configurar?" },
+    empty: {
+      en: "I search the documentation and answer with links to the pages I used.",
+      es: "Busco en la documentación y respondo con enlaces a las páginas que usé.",
+    },
+    suggestions: { en: "Suggestions", es: "Sugerencias" },
+    you: { en: "You", es: "Tú" },
+    thinking: { en: "Thinking…", es: "Pensando…" },
+    verifying: { en: "Checking you are human…", es: "Comprobando que eres humano…" },
+    retry: { en: "Retry", es: "Reintentar" },
+    failed: {
+      en: "The assistant could not answer right now. Try again in a moment.",
+      es: "El asistente no ha podido responder ahora. Inténtalo de nuevo en un momento.",
+    },
+    rate: {
+      en: "Too many questions in a short time. Wait a minute and try again.",
+      es: "Demasiadas preguntas en poco tiempo. Espera un minuto e inténtalo de nuevo.",
+    },
+    quota: {
+      en: "The assistant has reached its limit for this month. The docs and the Discord are still here.",
+      es: "El asistente ha alcanzado su límite de este mes. La documentación y el Discord siguen aquí.",
+    },
+    steps: {
+      en: "That took too many steps. Ask again, a little more precisely.",
+      es: "Ha necesitado demasiados pasos. Vuelve a preguntar con algo más de detalle.",
+    },
+    challenge: {
+      en: "The human check failed. Reload the page and try again.",
+      es: "La comprobación humana ha fallado. Recarga la página e inténtalo de nuevo.",
+    },
+    general: {
+      en: ["How do I install a plugin and ExyliaLib?", "Which plugins are there for PvP servers?", "Where do I change a plugin's messages?"],
+      es: ["¿Cómo instalo un plugin y ExyliaLib?", "¿Qué plugins hay para servidores PvP?", "¿Dónde cambio los mensajes de un plugin?"],
+    },
+    /** `{plugin}` is the plugin the visitor is reading. */
+    forPlugin: {
+      en: ["How do I set up {plugin}?", "Which commands and permissions does {plugin} have?", "What placeholders does {plugin} provide?"],
+      es: ["¿Cómo configuro {plugin}?", "¿Qué comandos y permisos tiene {plugin}?", "¿Qué placeholders ofrece {plugin}?"],
+    },
+  },
 } as const;
 
 /** Reads one entry of the dictionary in a language. */

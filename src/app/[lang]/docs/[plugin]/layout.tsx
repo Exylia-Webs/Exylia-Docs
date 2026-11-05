@@ -3,6 +3,7 @@ import { Nav } from "@/components/Nav";
 import { ScrollProgress } from "@/components/ScrollProgress";
 import { Footer } from "@/components/Footer";
 import { Sidebar } from "@/components/docs/Sidebar";
+import { AssistantLauncher } from "@/components/assistant/AssistantLauncher";
 import { getNav } from "@/lib/docs";
 import { documentedPlugins, LANGS, getPlugin, toLang } from "@/content/registry";
 
@@ -41,6 +42,7 @@ export default async function DocsLayout({
       </div>
 
       <Footer lang={lang} />
+      <AssistantLauncher lang={lang} plugin={entry.id} pluginName={entry.name} />
     </>
   );
 }
