@@ -10,7 +10,8 @@ import { prisma } from "@/lib/db";
 /**
  * `/api/assistant/`: the public docs assistant. `GET` tells the page whether it is on (and the
  * Turnstile site key); `POST` runs one turn, read-only tools only, and streams it as NDJSON
- * (`assistantStream`). Off (no `AI_MODEL`, or a bad configuration): both answer 404.
+ * (`assistantStream`). Off (switched off in /admin/settings, or before the first save no `AI_MODEL`
+ * or a bad configuration): both answer 404.
  */
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -35,14 +36,14 @@ const quotaHit = () => recordQuotaHit(prisma).catch((error: unknown) => console.
 type ErrorCode = "off" | "origin" | "json" | "rate" | "challenge" | "too_large" | "bad_request" | "quota";
 const fail = (status: number, error: ErrorCode, headers?: Record<string, string>) => Response.json({ error }, { status, headers: { "cache-control": "no-store", ...headers } });
 
-export function GET() {
-  const config = aiConfig();
+export async function GET() {
+  const config = await aiConfig();
   if (!config) return fail(404, "off");
   return Response.json({ enabled: true, turnstileSiteKey: config.turnstile?.siteKey ?? null }, { headers: { "cache-control": "no-store" } });
 }
 
 export async function POST(request: Request) {
-  const config = aiConfig();
+  const config = await aiConfig();
   if (!config) return fail(404, "off");
   if (!sameOrigin(request.headers)) return fail(403, "origin");
   if (!/^application\/json\s*(;|$)/i.test(request.headers.get("content-type") ?? "")) return fail(415, "json");

@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
-import { aiSend, parseAiEnv, redactError } from "./ai";
+import { type AiConfig, aiSend, redactError } from "./ai";
 import { docsTools, findPlugin, parsePageUrl, readPage, searchDocs, toPlainText } from "./docs-tools";
 import { RateLimiter, type UsageDb, allow, chargeTokens, clientIp, importUsageFile, issuePass, sameOrigin, usedTokens, validPass } from "./guard";
 
@@ -220,44 +220,18 @@ test("a Turnstile pass is bound to its address and expires", () => {
 
 // --- Configuration and transport ---------------------------------------------------------------------
 
-test("no model, or a blank one, is off without complaint", () => {
-  assert.deepEqual(parseAiEnv({}), { config: null, problems: [] });
-  assert.deepEqual(parseAiEnv({ AI_MODEL: "  ", AI_API_KEY: "k" }), { config: null, problems: [] });
-});
-
-test("a bad configuration is off and says why", () => {
-  for (const env of [
-    { AI_MODEL: "m", AI_PROVIDER: "gemini", AI_API_KEY: "k" },
-    { AI_MODEL: "m", AI_PROVIDER: "openai" },
-    { AI_MODEL: "m", AI_API_KEY: "k", AI_BASE_URL: "ftp://x" },
-    { AI_MODEL: "m", AI_API_KEY: "k", AI_MAX_TOKENS: "lots" },
-    { AI_MODEL: "m", AI_API_KEY: "k", AI_TIMEOUT_SECONDS: "0" },
-    { AI_MODEL: "m", AI_API_KEY: "k", AI_MONTHLY_TOKENS: "-1" },
-    { AI_MODEL: "m", AI_API_KEY: "k", TURNSTILE_SITE_KEY: "only-one" },
-  ]) {
-    const parsed = parseAiEnv(env);
-    assert.equal(parsed.config, null, JSON.stringify(env));
-    assert.ok(parsed.problems.length > 0);
-  }
-});
-
-test("a good configuration fills the defaults", () => {
-  const { config } = parseAiEnv({ AI_MODEL: "qwen3", AI_PROVIDER: "ollama", AI_BASE_URL: "http://ollama:11434", TURNSTILE_SITE_KEY: "s", TURNSTILE_SECRET_KEY: "t" });
-  assert.deepEqual(config, { model: { provider: "ollama", model: "qwen3", apiKey: "", baseUrl: "http://ollama:11434", maxTokens: 1024 }, timeoutMs: 60_000, monthlyTokens: 2_000_000, turnstile: { siteKey: "s", secretKey: "t" } });
-});
-
 test("busy providers are retried, errors keep the status and lose the key", async () => {
-  const { config } = parseAiEnv({ AI_MODEL: "m", AI_API_KEY: "sk-secretsecretsecret", AI_TIMEOUT_SECONDS: "5" });
+  const config: AiConfig = { model: { provider: "openai", model: "m", apiKey: "sk-secretsecretsecret", baseUrl: "", maxTokens: 1024 }, timeoutMs: 5_000, monthlyTokens: 1000, turnstile: null };
   let calls = 0;
   const flaky = (async () => {
     calls++;
     return calls < 3 ? new Response("busy", { status: 503, headers: { "retry-after": "0" } }) : Response.json({ choices: [{ message: { content: "hi" } }] });
   }) as unknown as typeof fetch;
-  const body = await aiSend(config!, flaky)({ url: "https://x/v1/chat/completions", headers: {}, body: {} });
+  const body = await aiSend(config, flaky)({ url: "https://x/v1/chat/completions", headers: {}, body: {} });
   assert.equal(calls, 3);
   assert.deepEqual(body, { choices: [{ message: { content: "hi" } }] });
 
   const leaky = (async () => Response.json({ error: { message: "bad key sk-secretsecretsecret" } }, { status: 401 })) as unknown as typeof fetch;
-  await assert.rejects(aiSend(config!, leaky)({ url: "https://x", headers: {}, body: {} }), (error: Error) => error.message.startsWith("401 ") && !error.message.includes("secretsecret"));
+  await assert.rejects(aiSend(config, leaky)({ url: "https://x", headers: {}, body: {} }), (error: Error) => error.message.startsWith("401 ") && !error.message.includes("secretsecret"));
   assert.equal(redactError("Bearer abc.def key sk-abcdefghijkl", []), "Bearer [redacted] key [redacted]");
 });

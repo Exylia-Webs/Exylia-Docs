@@ -1,81 +1,26 @@
-import { type AssistantModel, type AssistantProvider, type AssistantSend, readAssistantBody } from "@exylia-webs/ui/assistant";
+import { type AssistantSend, readAssistantBody } from "@exylia-webs/ui/assistant";
+import { openSecret, platform } from "@/lib/platform";
+import { type AiConfig, aiConfigFrom, turnstileKeys } from "@/lib/platform-settings";
+
+export type { AiConfig };
+
+let warned = false;
 
 /**
- * The platform AI the docs assistant runs on, from the environment only (copied from Exylia-Utils
- * and adapted: no zod here). `AI_MODEL` unset turns the assistant off (no panel, the route answers
- * 404); a configuration that does not parse turns it off too, saying why in the log once.
+ * The platform AI the docs assistant runs on: the `ai` section of the platform settings
+ * (/admin/settings), read through their short cache; before the first save, the AI_* variables.
+ * Off, without a model, or without the key its provider needs: null (no button, the route answers
+ * 404). The Turnstile keys stay in the environment; only one of them set turns it off too, as before.
  */
-
-export type AiConfig = {
-  model: AssistantModel;
-  timeoutMs: number;
-  /** Tokens (in and out) every visitor together may spend a calendar month (UTC). */
-  monthlyTokens: number;
-  /** Cloudflare Turnstile, when both keys are set. */
-  turnstile: { siteKey: string; secretKey: string } | null;
-};
-
-const PROVIDERS: AssistantProvider[] = ["openai", "ollama", "openrouter", "anthropic"];
-
-/** Parses the variables; `null` with the problems when they are set but wrong, `null` without when the assistant is simply off. */
-export function parseAiEnv(source: Record<string, string | undefined>): { config: AiConfig | null; problems: string[] } {
-  // Coolify writes a variable left blank as "": the same as unset.
-  const env = (key: string) => source[key]?.trim() || undefined;
-  const model = env("AI_MODEL");
-  if (!model) return { config: null, problems: [] };
-  const problems: string[] = [];
-  const number = (key: string, fallback: number, min: number, max: number, integer = true) => {
-    const raw = env(key);
-    if (raw === undefined) return fallback;
-    const value = Number(raw);
-    if (!Number.isFinite(value) || value < min || value > max || (integer && !Number.isInteger(value))) problems.push(`${key}: expected ${integer ? "an integer" : "a number"} from ${min} to ${max}`);
-    return value;
-  };
-
-  const provider = (env("AI_PROVIDER") ?? "openai") as AssistantProvider;
-  if (!PROVIDERS.includes(provider)) problems.push(`AI_PROVIDER: one of ${PROVIDERS.join(", ")}`);
-  const baseUrl = env("AI_BASE_URL") ?? "";
-  if (baseUrl) {
-    try {
-      const url = new URL(baseUrl);
-      if (url.protocol !== "https:" && url.protocol !== "http:") throw new Error();
-      if (url.username || url.password) problems.push("AI_BASE_URL: no credentials in the URL, use AI_API_KEY");
-    } catch {
-      problems.push("AI_BASE_URL: an http(s) URL");
-    }
+export async function aiConfig(): Promise<AiConfig | null> {
+  const { ai } = await platform();
+  const { keys, error } = turnstileKeys(process.env);
+  if (error) {
+    if (!warned) console.error(`AI assistant off: ${error}`);
+    warned = true;
+    return null;
   }
-  const apiKey = env("AI_API_KEY") ?? "";
-  if (!apiKey && provider !== "ollama") problems.push("AI_API_KEY: required for every provider but ollama");
-  if (model.length > 200) problems.push("AI_MODEL: at most 200 characters");
-  const maxTokens = number("AI_MAX_TOKENS", 1024, 64, 64_000);
-  const timeoutSeconds = number("AI_TIMEOUT_SECONDS", 60, 1, 600, false);
-  const monthlyTokens = number("AI_MONTHLY_TOKENS", 2_000_000, 0, Number.MAX_SAFE_INTEGER);
-
-  const siteKey = env("TURNSTILE_SITE_KEY");
-  const secretKey = env("TURNSTILE_SECRET_KEY");
-  if (Boolean(siteKey) !== Boolean(secretKey)) problems.push("TURNSTILE_SITE_KEY and TURNSTILE_SECRET_KEY: set both or neither");
-
-  if (problems.length) return { config: null, problems };
-  return {
-    config: {
-      model: { provider, model, apiKey, baseUrl, maxTokens },
-      timeoutMs: timeoutSeconds * 1000,
-      monthlyTokens,
-      turnstile: siteKey && secretKey ? { siteKey, secretKey } : null,
-    },
-    problems,
-  };
-}
-
-let cached: { config: AiConfig | null } | undefined;
-
-/** The configuration of this process, read once. */
-export function aiConfig(): AiConfig | null {
-  if (cached) return cached.config;
-  const { config, problems } = parseAiEnv(process.env);
-  if (problems.length) console.error(`AI assistant off: ${problems.join("; ")}`);
-  cached = { config };
-  return config;
+  return aiConfigFrom(ai, openSecret(ai.apiKey), keys);
 }
 
 /** Keys, bearer tokens and the configured secret out of a provider's error text. */

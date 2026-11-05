@@ -34,8 +34,10 @@ del mes que guardaba allí (`assistant-usage.json`) se importa una vez.
 ## Asistente de IA
 
 Un chat de solo lectura en las páginas de documentación: busca en el contenido, lee páginas y
-responde citando enlaces. Se configura solo por entorno (ver `.env.example`); se leen al arrancar,
-sin rebuild.
+responde citando enlaces. Se configura en `/admin/settings/` (fila `PlatformSettings`, la clave
+sellada con `SECRET_KEY`, aplica en ~10 s sin reiniciar). Hasta el primer guardado sale de las
+variables de abajo (ver `.env.example`), así que desplegar no cambia nada; un guardado nunca escribe
+en el entorno. Las claves de Turnstile siguen siempre en el entorno.
 
 | Variable | |
 |---|---|
@@ -47,7 +49,8 @@ sin rebuild.
 | `AI_TIMEOUT_SECONDS` | Por llamada, 1-600. Por defecto 60. |
 | `AI_MONTHLY_TOKENS` | Tope global (entrada + salida, todos los visitantes) por mes UTC. Por defecto 2 000 000. |
 | `AI_DATA_DIR` | Dónde estaba el contador del mes antes de la base de datos (se importa una vez). La imagen usa `/app/data`. |
-| `TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY` | Las dos o ninguna: Cloudflare Turnstile antes de preguntar. |
+| `TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY` | Las dos o ninguna: Cloudflare Turnstile antes de preguntar (activable en el panel mientras estén puestas). |
+| `SECRET_KEY` | Sella la clave de IA guardada en el panel (32+ caracteres). Cambiarla obliga a escribir la clave de nuevo. |
 
 Una configuración inválida apaga el asistente y deja el motivo en el log.
 
