@@ -220,7 +220,6 @@ export const dict = {
   assistant: {
     open: { en: "Ask the docs assistant", es: "Preguntar al asistente" },
     title: { en: "Docs assistant", es: "Asistente de la documentación" },
-    close: { en: "Close", es: "Cerrar" },
     newChat: { en: "New conversation", es: "Nueva conversación" },
     messages: { en: "Conversation with the assistant", es: "Conversación con el asistente" },
     placeholder: { en: "Ask about any Exylia plugin…", es: "Pregunta sobre cualquier plugin de Exylia…" },
@@ -237,7 +236,6 @@ export const dict = {
     suggestions: { en: "Suggestions", es: "Sugerencias" },
     you: { en: "You", es: "Tú" },
     thinking: { en: "Thinking…", es: "Pensando…" },
-    verifying: { en: "Checking you are human…", es: "Comprobando que eres humano…" },
     retry: { en: "Retry", es: "Reintentar" },
     failed: {
       en: "The assistant could not answer right now. Try again in a moment.",
