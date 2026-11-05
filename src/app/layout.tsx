@@ -1,7 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { CookieConsent } from "@exylia-webs/ui";
-import "./globals.css";
 import { DEFAULT_LANG, SITE } from "@/content/registry";
 import { MotionProvider } from "@/components/motion/MotionProvider";
 

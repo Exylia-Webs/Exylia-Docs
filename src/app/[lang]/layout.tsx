@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+// The docs' stylesheet (Tailwind 3), loaded by the public pages only: the admin panel has its own.
+import "../globals.css";
 import { ogImageFor } from "@/lib/og";
 import { notFound } from "next/navigation";
 import { DEFAULT_LANG, LANGS, SITE, toLang, type Lang } from "@/content/registry";

@@ -67,6 +67,11 @@ los olvida y con varias réplicas cada una tendría los suyos.
 comprobados en cada petición. La sesión vive en la tabla `AdminSession` (solo el SHA-256 del token,
 cookie `__Host-` sobre https). Las páginas públicas y el asistente no leen nada de esto.
 
+Páginas: Resumen (llamadas, tokens y límites alcanzados del mes), Uso de IA (por día, tabla
+`AssistantUsageDay`, frente al tope mensual), Auditoría (`AdminAuditEvent`, escrito en la misma
+transacción que cada cambio) y Ajustes (Proveedor de IA con "Probar conexión", y Respuestas: tokens
+por respuesta, tiempo límite, tope mensual y Turnstile).
+
 | Variable | |
 |---|---|
 | `PUBLIC_URL` | La dirección del sitio; vacío: `https://docs.exylia.net`. En desarrollo `http://localhost:3010`. |
@@ -75,4 +80,5 @@ cookie `__Host-` sobre https). Las páginas públicas y el asistente no leen nad
 
 El panel usa el sistema de diseño (`@exylia-webs/ui`, Tailwind 4, `src/app/admin/admin.css`) y
 next-intl solo para los textos propios del sistema; los del panel están en `src/content/admin.ts`.
-El sitio público sigue en Tailwind 3: `scripts/postcss-tailwind.cjs` manda cada hoja a su versión.
+El sitio público sigue en Tailwind 3 (`globals.css`, importado solo por las páginas públicas):
+`scripts/postcss-tailwind.cjs` manda cada hoja a su versión.

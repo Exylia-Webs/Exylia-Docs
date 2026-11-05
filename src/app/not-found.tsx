@@ -1,4 +1,6 @@
 import Link from "next/link";
+// The docs' stylesheet (Tailwind 3), loaded by the public pages only: the admin panel has its own.
+import "./globals.css";
 import { dict } from "@/content/dictionary";
 import { DEFAULT_LANG } from "@/content/registry";
 
