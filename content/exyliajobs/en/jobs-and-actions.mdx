@@ -1,0 +1,106 @@
+---
+title: "Jobs and actions"
+description: "The twelve shipped jobs, the job file, the 21 action types and how a target is written."
+---
+
+A job is one file in `plugins/ExyliaJobs/jobs/`; the file name is the job id (`a-z`, `0-9`, `-`, `_`). `/jobsadmin reload` reads them again. A bad entry costs that entry only and is reported in the console.
+
+## The shipped jobs
+
+| Job | Pays for |
+|---|---|
+| Miner | `break`: stone and ores. |
+| Digger | `break`: dirt, sand, gravel, clay. |
+| Woodcutter | `break` logs, `strip-log`, `plant` saplings. |
+| Farmer | `harvest` ripe crops, `plant`, `collect` (berries, honey, compost). |
+| Fisher | `fish`. |
+| Hunter | `kill` mobs. |
+| Rancher | `breed`, `shear`, `milk`, `tame`. |
+| Builder | `place`. |
+| Smith | `smelt`, `craft`, `repair`, `smithing`. |
+| Enchanter | `enchant`. |
+| Brewer | `brew`. |
+| Explorer | `explore` biomes and `villager-trade`. |
+
+Each ships with max level 50, a geometric curve (base 100, growth 1.08), three milestone rewards (levels 10, 25, 50) and five perk tiers.
+
+## The job file
+
+```yaml
+name: 'Miner'            # plain text: every screen colours it
+icon: IRON_PICKAXE       # a material, or a custom item id such as nexo:ruby_pickaxe
+description:
+  - 'Dig deep for stone and ores.'
+max-level: 50
+curve: {type: geometric, base: 100, growth: 1.08}
+income-bonus: 0.02       # money per level above 1
+xp-bonus: 0              # experience per level above 1
+price-share: 0.10        # what a target with xp but no money pays, of its sell price
+anti-exploit: {tnt: true}
+actions:
+  break:
+    stone: {money: 0.02, xp: 0.25}
+    '#diamond_ores': {money: 4.0, xp: 15}
+rewards:
+  10:
+    - type: ECONOMY
+      value: '250'
+```
+
+| Key | Meaning |
+|---|---|
+| `enabled` | `false` hides the job from players and pays nothing. Progress is kept. |
+| `name`, `icon`, `description` | The card. Never put colour codes in the name. |
+| `max-level` | Defaults to `defaults.max-level` (50). Below 1 is refused. |
+| `curve` | `linear` (`base`, `step`), `geometric` (`base`, `growth`) or `formula` (any expression of `level`, e.g. `100 * level ^ 1.6`). Default geometric 100 x 1.1. |
+| `income-bonus`, `xp-bonus` | Per level above 1. Defaults 0.02 and 0. |
+| `price-share` | Default 0.10. |
+| `anti-exploit` | Overrides `config.yml` key by key. See [Anti-exploit](/docs/exyliajobs/anti-exploit). |
+| `actions` | What is paid. |
+| `rewards` | Milestones: a level from 2 to `max-level` to a list of ExyliaLib rewards. A bare string is a console command. |
+| `perks` | See [Perks and prestige](/docs/exyliajobs/perks-and-prestige). |
+| `economy: {fatigue: false}` | Turns fatigue off for this job. |
+| `integrations: {mines: ...}` | `true`, a mine id or a list: pay inside ExyliaMines mines. |
+
+A job with no actions still loads (a job being set up) and pays nothing.
+
+## Actions
+
+Every action is credited to every job the player holds that pays for it.
+
+| Action | Credited when |
+|---|---|
+| `break` | A block is broken (also by a player's TNT if the job allows it). Target: the block. |
+| `place` | A block is placed; once per position per `place-cooldown`. |
+| `harvest` | A **ripe** crop is broken. |
+| `plant` | A crop or sapling is planted; once per growth cycle. |
+| `strip-log` | An axe strips a log or wood. |
+| `kill` | A player kills a mob (or player). `kill-custom` is read as `kill`. |
+| `breed` | Two animals breed; once per pair per `breed-cooldown`. |
+| `tame` | A player tames an animal. |
+| `shear` | A player shears an entity. |
+| `milk` | A bucket on an adult cow or goat, or a bowl on a mooshroom; each animal once per `breed-cooldown`. |
+| `fish` | Something is caught; by the item, times its amount. |
+| `smelt` | The player takes the furnace output, by the amount taken. |
+| `brew` | A brew finishes, credited to the last player who used the stand, per potion; target is the ingredient. |
+| `enchant` | An item is enchanted, per level spent; target is the item. |
+| `repair` | An anvil result that really repairs is taken (a rename is not a repair). |
+| `smithing` | A smithing result is taken. |
+| `craft` | A craft really made by the click. |
+| `eat` | A player eats or drinks an item. |
+| `collect` | Sweet or glow berries picked, honey from a full hive, bone meal from a full composter. |
+| `villager-trade` | A trade is made; target is the item received. |
+| `explore` | The first player to enter a chunk generated since the plugin was installed; target is the biome. |
+
+## Targets
+
+Under each action, each key is a target and its value is `{money, xp}`.
+
+| Syntax | Example | Meaning |
+|---|---|---|
+| Vanilla id | `diamond_ore`, `zombie` | Lower case, without `minecraft:` (`DIAMOND_ORE` and `minecraft:diamond_ore` read the same). |
+| Tag | `'#logs'`, `'#diamond_ores'` | Expanded when loaded to every member, for the kind the action uses (block, item, mob or biome). A target written by name beats the same target reached through a tag. |
+| Custom id | `nexo:ruby_ore`, `mythicmobs:king` | Custom blocks from Nexo, Oraxen, ItemsAdder and CraftEngine; custom mobs from MythicMobs and ExyliaMobs (`exyliamobs:<id>`). A custom block that no job names falls back to its vanilla material. |
+| `*` | `'*': {money: 0.1, xp: 1}` | Anything the action's other targets do not name. |
+
+`money` is optional: a target with `xp` but no `money` pays `price-share` times what the item sells for, from ExyliaLib's prices (ExyliaMarket's worth list when installed). Money and xp cannot be negative.

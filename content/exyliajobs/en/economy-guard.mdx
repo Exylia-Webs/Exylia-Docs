@@ -1,0 +1,54 @@
+---
+title: "Economy guard"
+description: "Budget modes, market rate and warm-up, fatigue, pacing, caps, the dashboard and the weekly Discord report."
+---
+
+The guard lives in `economy.yml`, and every value is editable from the admin hub's **Settings**. It can be turned off with `features: {economy: false}`. Money passes market, fatigue, budget and caps; experience passes only fatigue.
+
+## Budget
+
+`budget.mode`:
+
+| Mode | The budget |
+|---|---|
+| `per-active-hour` (default) | `per-active-hour` (4000) money for each **active** player each hour. Idle players do not count. |
+| `daily` | `daily` (200000) money spread over the day, across every player. |
+| `off` | No budget and no pacing. |
+
+Every 5 seconds the pay factor moves a step towards `allowed / demand` (demand is what would have been paid at factor 1, so the factor never feeds on itself), clamped between `lowest` (0.5) and `highest` (1.25). The window is the last hour, weighted, and shared across the network over Redis. Server orders spend from the same budget.
+
+## Market rate
+
+Recent money volume per job, action and target decays with a half-life (`market.half-life`, 2 hours). The rate is:
+
+- Below the normal volume (`normal-per-player-hour`, 1500 per active player): up to `highest` (1.5, i.e. 150%) when nobody works the target.
+- At the normal volume: 100%.
+- Above it: `1 / (1 + 0.5 x (load - 1))`, never under `lowest` (0.25). Twice normal pays 67%.
+
+**Warm-up** (`warm-up`, 3 player-hours of normal volume): until the market has seen that much recent volume across all targets, ignored targets pay at most 100%, so a quiet or fresh server pays base rates. Past it the bonus grows in. `0` turns the warm-up off. A target at `hot-from` (1.2) or more is marked hot on the rates screen, and a job worked far less than the others is hinted on job screens. Shared over Redis; without Redis each server counts its own.
+
+## Fatigue
+
+Per player, actions on one target inside one 3x3 chunk area are counted (decaying with `recovery`, 10 minutes). The first `free-actions` (64) pay in full; past that pay halves every `halves-every` (64) more, never under `floor` (0.1). Moving to another area or target starts fresh. A job turns it off with `economy: {fatigue: false}`.
+
+## Caps
+
+Off by default (`caps.enabled`). Groups have `soft-per-hour` and `hard-per-day` (0 is no cap). The part of a payout past the soft cap pays `soft-share` (0.5); nothing passes the hard cap. `default` applies to everyone; a player with `exyliajobs.caps.<group>` gets the most generous of their groups (0 beats any number). Shipped groups: `default` 5000 and 50000, `vip` 7500 and 75000. Earnings are seeded from the ledger on join, so a restart or a server change does not start the player over.
+
+## Dashboard
+
+`/jobsadmin economy`, or the hub's **Economy** card:
+
+- **Dashboard**: the budget mode, allowed and paid money per hour and the pay factor.
+- **Last 24 hours**: money created each hour against that hour's budget.
+- **By job**: each job's money, share, busiest targets and servers.
+- **Sinks**: money jobs took back (leave fees, perk swaps, order tax) in 24 hours.
+- **Top earners**: this hour's earners with flags, and a player lookup.
+
+Flags on an earner: **above p99** (more this hour than the 99th percentile of recent finished player-hours, quiet until 50 samples exist), **single target** (64 or more actions with 90% of the money from one target) and **standing still** (earning for three minutes without moving four blocks). A player's economy screen shows hour, today, main target and caps, and **Pause** stops all their job pay (money and experience) until resumed; the pause survives restarts and is read again on join.
+
+## Discord report
+
+`report.enabled`, `report.webhook`: once a week, a summary with money created, sunk and net, the budget in words and one line per job. The message is `report.message` (placeholders `%created%`, `%sunk%`, `%net%`, `%budget%`, `%jobs%`). An empty or invalid webhook sends nothing.
+
+The first admin who joins after installation is told once about the default budget.

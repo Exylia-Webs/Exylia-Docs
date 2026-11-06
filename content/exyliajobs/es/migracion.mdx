@@ -1,0 +1,38 @@
+---
+title: "Migración"
+description: "Importar trabajos y niveles desde Jobs Reborn, EcoJobs, ExcellentJobs y AdvancedJobs, y qué aporta cada origen."
+---
+
+`/jobsadmin import <source>` o la tarjeta **Migration** del centro. Orígenes: `jobsreborn`, `ecojobs`, `excellentjobs`, `advancedjobs`.
+
+| Opción | Qué hace |
+|---|---|
+| ninguna | Abre una pantalla de vista previa (la consola la imprime). |
+| `-dry` | Solo imprime la vista previa. |
+| `-confirm` | Importa. |
+
+La vista previa se lee fuera del hilo principal y no escribe nada: jugadores y clasificaciones encontrados, trabajos nuevos y fusionados, trabajos antiguos sin correspondencia, y cada entrada de los archivos antiguos que no tiene sitio aquí. Importar pide una confirmación en el juego.
+
+## Qué importa cada origen
+
+| Origen | Carpeta leída | Importa |
+|---|---|---|
+| Jobs Reborn | `plugins/Jobs` | Archivos de trabajos (`jobs/*.yml`, o el antiguo `jobConfig.yml`) y niveles, desde SQLite (`jobs.sqlite.db`) o MySQL (`generalConfig.yml`, se respeta el prefijo de tabla). |
+| EcoJobs | `plugins/eco` | Niveles, trabajos a los que se está apuntado y experiencia desde el `data.yml` de eco, SQLite o MySQL/MariaDB (y la antigua tabla `eco_data`). |
+| ExcellentJobs | `plugins/ExcellentJobs` | Niveles, desde SQLite o MySQL (`job_data` y la antigua columna JSON `data`). |
+| AdvancedJobs | `plugins/AdvancedJobs` | Solo niveles, **sin verificar**: el plugin es de código cerrado, así que las tablas y los archivos YAML de jugadores se leen adivinando nombres de columnas y claves. MySQL no se lee. |
+
+<Callout type="warning" title="No compatible">
+Los datos de EcoJobs guardados en MongoDB, PostgreSQL o Redis no se leen: la consola lo indica. Cambia el `data-handler` de eco a `sqlite` o `mysql` (eco mueve los datos) e importa de nuevo.
+</Callout>
+
+## Cómo se convierten los archivos de trabajos (Jobs Reborn)
+
+Las acciones se asignan a `break`, `strip-log`, `place`, `kill` (también `mmkill`, como `mythicmobs:<id>`), `fish`, `craft`, `villager-trade`, `smelt`, `brew`, `enchant`, `repair`, `breed`, `tame`, `shear`, `milk`, `explore`, `eat` y `collect`. La ecuación de niveles se convierte en una curva `formula` cuando es legible (si no, la curva por defecto). Los nombres se dejan en texto plano y los nombres de objetos antiguos se actualizan. No se trasladan, y se listan en la vista previa y en la cabecera del archivo nuevo: puntos, pagos negativos, `from-level`/`until-level`, subtipos (el pago se aplica a cualquiera), objetos identificados por su nombre visible, objetivos de encantamientos, explorar más allá del primer jugador, y acciones como `tntbreak`, `dye` o plugins de pesca personalizados.
+
+## Correspondencia y escritura
+
+- Un archivo de trabajo nuevo se escribe tal cual. Un trabajo que ya tiene archivo aquí se **fusiona**: solo se añaden los objetivos que al tuyo le faltan y el archivo antiguo se copia antes en `imports/backup/`.
+- Las clasificaciones se asocian a los trabajos por id, un sinónimo de nombre (fisherman, lumberjack, excavator, blacksmith, alchemist, breeder, fighter...) o el nombre visible; el resto se listan como sin correspondencia.
+- Los niveles **nunca se suman**: una clasificación se escribe solo si es mayor (nivel, luego experiencia) que lo que el jugador tiene aquí, así que ejecutarlo dos veces no cambia nada. A los jugadores conectados se les actualiza en memoria. Los trabajos importados que tenían allí se les apuntan aquí.
+- Se registra en el registro de auditoría como `jobs-import`. Si el plugin antiguo sigue activado se te recuerda que lo quites.

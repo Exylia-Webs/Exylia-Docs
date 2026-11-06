@@ -1,0 +1,26 @@
+---
+title: "Órdenes de trabajo"
+description: "Jugadores que pagan a otros jugadores por entregar objetos: depósito en garantía, impuesto, entrega, límites y órdenes que publica el servidor."
+---
+
+`/jobs orders` abre el tablón; el centro de cada trabajo tiene un botón **Work orders** para ese trabajo. Los ajustes están en `orders.yml`.
+
+## Publicar
+
+**Post an order** pregunta, en este orden: el objeto (insertado o elegido), el trabajo cuyos trabajadores pueden entregar (o cualquiera), luego un formulario con unidades, precio por unidad, un nivel mínimo opcional en ese trabajo y una duración, y después una confirmación. Requiere `exyliajobs.orders.post`.
+
+- Se **cobra el precio completo** al publicar la orden, en una retención de depósito persistente, más el **impuesto de publicación** (`tax`, 1% por defecto) cargado aparte y que nunca se devuelve.
+- Límites: `limit` órdenes abiertas por jugador (5; `exyliajobs.orders.limit.<n>` lo aumenta, `.unlimited` lo quita), `max-quantity` 2304, `min-unit-price` 0.01, `duration` 3 días por defecto y `max-duration` 7 días.
+- Una orden puede pedir un objeto normal o un id de objeto personalizado, nunca una etiqueta.
+
+## Entregar
+
+Clic izquierdo en una orden para entregar todo lo que llevas y que admite, clic derecho para elegir cuántos. No puedes entregar a tu propia orden, y una orden ligada a un trabajo exige tener ese trabajo y el nivel mínimo. Primero salen los objetos de tu inventario; luego se paga el precio por unidad desde la retención por cada unidad, y los objetos llegan al comprador (en cola si su inventario está lleno). Ambos reciben aviso. `delivery-xp` (0) da experiencia de trabajo por unidad en el trabajo de la orden. Se lanza `WorkOrderFilledEvent`.
+
+## Cerrar
+
+Cancelar, caducar o que el staff la retire devuelve lo que no se entregó; el staff retira desde el tablón de administración. Las órdenes terminadas se quedan en **My orders** durante `keep-finished` (3 días). Cada cambio se escribe bajo un bloqueo de fila entre servidores antes de mover dinero, así que una entrega, una cancelación y una caducidad mueven el dinero de una unidad una sola vez, en cualquier servidor. Una escritura cuyo resultado no se puede saber no paga a nadie y se registra para el staff.
+
+## Órdenes del servidor
+
+`server-orders` (requiere la función de economía y un presupuesto): cada `interval` (30 minutos) el servidor busca objetos que pedir, hasta `max-open` (5) abiertas a la vez, cada una con una duración de `duration` (1 día). Los candidatos son objetivos `harvest`, `fish`, `smelt` y `craft` con un `money` explícito que el mercado señala como caliente (ignorados por los jugadores, en `hot-from` o más); cada una pide un stack al dinero de la regla por la tasa de mercado, reservado contra el presupuesto de la hora (ninguna con el presupuesto desactivado). Las entregas cuentan como dinero creado y como volumen de presupuesto y de mercado.

@@ -1,0 +1,54 @@
+---
+title: "Guardia económica"
+description: "Modos de presupuesto, tasa de mercado y calentamiento, fatiga, ritmo, topes, el panel y el informe semanal de Discord."
+---
+
+La guardia vive en `economy.yml`, y cada valor se puede editar desde **Settings** en el centro de administración. Se puede desactivar con `features: {economy: false}`. El dinero pasa por mercado, fatiga, presupuesto y topes; la experiencia solo pasa por la fatiga.
+
+## Presupuesto
+
+`budget.mode`:
+
+| Modo | El presupuesto |
+|---|---|
+| `per-active-hour` (por defecto) | `per-active-hour` (4000) de dinero por cada jugador **activo** cada hora. Los jugadores inactivos no cuentan. |
+| `daily` | `daily` (200000) de dinero repartido a lo largo del día, entre todos los jugadores. |
+| `off` | Sin presupuesto ni ritmo. |
+
+Cada 5 segundos el factor de pago avanza un paso hacia `allowed / demand` (la demanda es lo que se habría pagado con factor 1, así que el factor nunca se alimenta de sí mismo), limitado entre `lowest` (0.5) y `highest` (1.25). La ventana es la última hora, ponderada, y se comparte en toda la red mediante Redis. Las órdenes del servidor gastan del mismo presupuesto.
+
+## Tasa de mercado
+
+El volumen reciente de dinero por trabajo, acción y objetivo decae con una vida media (`market.half-life`, 2 horas). La tasa es:
+
+- Por debajo del volumen normal (`normal-per-player-hour`, 1500 por jugador activo): hasta `highest` (1.5, es decir, 150%) cuando nadie trabaja el objetivo.
+- En el volumen normal: 100%.
+- Por encima: `1 / (1 + 0.5 x (load - 1))`, nunca por debajo de `lowest` (0.25). El doble de lo normal paga el 67%.
+
+**Calentamiento** (`warm-up`, 3 horas de jugador de volumen normal): hasta que el mercado haya visto tanto volumen reciente entre todos los objetivos, los objetivos ignorados pagan como máximo el 100%, así que un servidor tranquilo o recién creado paga las tasas base. Pasado ese punto la bonificación crece poco a poco. `0` desactiva el calentamiento. Un objetivo en `hot-from` (1.2) o más se marca como caliente en la pantalla de tasas, y un trabajo muy poco trabajado frente a los demás se señala en las pantallas de trabajos. Se comparte mediante Redis; sin Redis cada servidor cuenta el suyo.
+
+## Fatiga
+
+Por jugador, se cuentan las acciones sobre un objetivo dentro de una misma zona de 3x3 chunks (decaen con `recovery`, 10 minutos). Las primeras `free-actions` (64) pagan completas; a partir de ahí el pago se reduce a la mitad cada `halves-every` (64) más, nunca por debajo de `floor` (0.1). Moverse a otra zona u otro objetivo empieza de cero. Un trabajo la desactiva con `economy: {fatigue: false}`.
+
+## Topes
+
+Desactivados por defecto (`caps.enabled`). Los grupos tienen `soft-per-hour` y `hard-per-day` (0 es sin tope). La parte de un pago que pasa del tope blando paga `soft-share` (0.5); nada pasa del tope duro. `default` se aplica a todos; un jugador con `exyliajobs.caps.<group>` recibe el más generoso de sus grupos (0 gana a cualquier número). Grupos incluidos: `default` 5000 y 50000, `vip` 7500 y 75000. Las ganancias se cargan desde el libro al entrar, así que un reinicio o un cambio de servidor no hace que el jugador empiece de cero.
+
+## Panel
+
+`/jobsadmin economy`, o la tarjeta **Economy** del centro:
+
+- **Dashboard**: el modo de presupuesto, el dinero permitido y pagado por hora y el factor de pago.
+- **Last 24 hours**: el dinero creado cada hora frente al presupuesto de esa hora.
+- **By job**: el dinero de cada trabajo, su proporción, los objetivos más activos y los servidores.
+- **Sinks**: el dinero que los trabajos recuperaron (tarifas por dejar un trabajo, cambios de mejora, impuesto de órdenes) en 24 horas.
+- **Top earners**: los que más ganan esta hora, con marcas, y una búsqueda de jugadores.
+
+Marcas en un jugador: **above p99** (más esta hora que el percentil 99 de las horas de jugador terminadas recientemente, en silencio hasta que existan 50 muestras), **single target** (64 o más acciones con el 90% del dinero de un solo objetivo) y **standing still** (ganando durante tres minutos sin moverse cuatro bloques). La pantalla de economía de un jugador muestra hora, hoy, objetivo principal y topes, y **Pause** detiene todo su pago de trabajos (dinero y experiencia) hasta reanudarlo; la pausa sobrevive a los reinicios y se vuelve a leer al entrar.
+
+## Informe de Discord
+
+`report.enabled`, `report.webhook`: una vez a la semana, un resumen con el dinero creado, recuperado y neto, el presupuesto en palabras y una línea por trabajo. El mensaje es `report.message` (placeholders `%created%`, `%sunk%`, `%net%`, `%budget%`, `%jobs%`). Un webhook vacío o no válido no envía nada.
+
+Al primer admin que entra tras la instalación se le avisa una vez del presupuesto por defecto.

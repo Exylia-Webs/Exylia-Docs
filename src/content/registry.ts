@@ -1693,6 +1693,49 @@ const SPAWNERS_NAV: NavGroup[] = [
   },
 ];
 
+const JOBS_NAV: NavGroup[] = [
+  {
+    label: { en: "Getting started", es: "Empezar" },
+    pages: [
+      page("introduction", "introduction", "introduccion"),
+      page("installation", "installation", "instalacion"),
+      page("first-steps", "first-steps", "primeros-pasos"),
+    ],
+  },
+  {
+    label: { en: "Jobs", es: "Trabajos" },
+    pages: [
+      page("jobs-and-actions", "jobs-and-actions", "trabajos-y-acciones"),
+      page("payout", "payout", "pago"),
+      page("economy-guard", "economy-guard", "guardia-economica"),
+      page("anti-exploit", "anti-exploit", "anti-exploit"),
+      page("levels-and-slots", "levels-and-slots", "niveles-y-ranuras"),
+      page("perks-and-prestige", "perks-and-prestige", "mejoras-y-prestigio"),
+      page("work-orders", "work-orders", "ordenes-de-trabajo"),
+    ],
+  },
+  {
+    label: { en: "Server", es: "Servidor" },
+    pages: [
+      page("editors", "editors", "editores"),
+      page("migration", "migration", "migracion"),
+      page("integrations", "integrations", "integraciones"),
+      page("network", "network", "red"),
+    ],
+  },
+  {
+    label: { en: "Reference", es: "Referencia" },
+    pages: [
+      page("commands", "commands", "comandos"),
+      page("permissions", "permissions", "permisos"),
+      page("placeholders", "placeholders", "placeholders"),
+      page("configuration", "configuration", "configuracion"),
+      page("api", "api", "api"),
+      page("faq", "faq", "faq"),
+    ],
+  },
+];
+
 const WARZONE_NAV: NavGroup[] = [
   {
     label: { en: "Getting started", es: "Empezar" },
@@ -2372,6 +2415,28 @@ export const plugins: Plugin[] = [
       { en: "Folia", es: "Folia" },
     ],
     nav: SPAWNERS_NAV,
+  },
+  {
+    id: "exyliajobs",
+    name: "ExyliaJobs",
+    tagline: { en: "Jobs that guard the server economy", es: "Trabajos que protegen la economía del servidor" },
+    summary: {
+      en: "Twelve ready jobs with 21 action types, an economy guard (budget pacing, market rate with warm-up, fatigue, caps, dashboard and weekly Discord report), anti-exploit rules, levels, slots and auto-join, perks written as data with prestige stars, work orders with escrow and server orders, in-game and web editors, importers from Jobs Reborn, EcoJobs, ExcellentJobs and AdvancedJobs, and network support.",
+      es: "Doce trabajos listos con 21 tipos de acción, una guardia económica (ritmo de presupuesto, tasa de mercado con calentamiento, fatiga, límites, panel e informe semanal de Discord), reglas antiexploit, niveles, ranuras y unión automática, mejoras definidas como datos con estrellas de prestigio, órdenes de trabajo con depósito en custodia y órdenes del servidor, editores en el juego y web, importadores desde Jobs Reborn, EcoJobs, ExcellentJobs y AdvancedJobs, y soporte de red.",
+    },
+    version: "1.0.0",
+    purchase: "https://builtbybit.com/resources/exylia-jobs.136377/",
+    status: "beta",
+    category: { en: "Survival", es: "Survival" },
+    minecraft: "1.21.1+",
+    banner: "https://s3.exylia.net/exylia-plugins/public/static/images/plugins/jobs/ExyliaJobsBanner.webp",
+    tags: [
+      { en: "Jobs", es: "Trabajos" },
+      { en: "Economy", es: "Economía" },
+      { en: "Network", es: "Red" },
+      { en: "Folia", es: "Folia" },
+    ],
+    nav: JOBS_NAV,
   },
   {
     id: "exyliawarzone",

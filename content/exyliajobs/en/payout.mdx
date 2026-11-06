@@ -1,0 +1,34 @@
+---
+title: "Payout pipeline"
+description: "What happens between an action and money in the wallet: guards, the ordered steps, the event and the deposit."
+---
+
+Every action runs the same path, once for each job the player holds that pays for it.
+
+1. **Guards.** The action is refused unless the player is in survival or adventure, not vanished, holds `exyliajobs.use`, is outside `anti-exploit.disabled-worlds` and `disabled-regions`, is not paused by an admin, and every integration check allows it ([Anti-exploit](/docs/exyliajobs/anti-exploit), [Integrations](/docs/exyliajobs/integrations)). Idle players are skipped unless the job allows them.
+2. **The steps**, in order:
+
+| # | Step | What it does | Touches |
+|---|---|---|---|
+| 1 | `base` | The rule's money times the amount, or `price-share` times the item's sell price; the rule's xp; both times the origin share (placed, spawner, bone meal, TNT). | money, xp |
+| 2 | `level` | `1 + income-bonus x (level - 1)` for money, `1 + xp-bonus x (level - 1)` for xp. | money, xp |
+| 3 | `modifiers` | ExyliaLib modifiers: boosters and ranks, type `money` or `xp`, source `jobs`, scope `job:<id>`. Prestige stars also act here. | money, xp |
+| 4 | `market` | The target's market rate. | money |
+| 5 | `fatigue` | The player's fatigue in this area. | money, xp |
+| 6 | `budget` | The global pacing factor. | money |
+| 7 | `caps` | The player's soft and hard caps. | money |
+
+3. **`JobPayoutEvent`** fires after every step. A plugin may change the money and experience, or cancel it. See [API](/docs/exyliajobs/api).
+4. Every step records what it needs, perks fire (`JOB_<ACTION>` triggers), the money joins the wallet and the experience goes to the job.
+
+Mines can zero a job's pay at the end of the chain when the job is not allowed there, and ExyliaStaff or protections are decided in the guards.
+
+## The wallet
+
+Money is added up per player and job and deposited once per `feedback.window` (5 seconds), with one summary, never a chat line per block. The deposit is made with the default currency under the reason `jobs:job:<id>` and recorded in the ExyliaLib ledger as created money for that job. Amounts below the currency's decimals carry to the next deposit; a player who leaves keeps nothing below one decimal. `feedback.mode` chooses the summary: `TOAST` (default), `BOSS_BAR`, `ACTION_BAR` or `NONE`.
+
+With no economy plugin, the console warns once and experience is still paid.
+
+## Menu quotes
+
+The **Actions and rates** screen shows each target's pay now by running the same steps without side effects, with an arrow when the market, fatigue, budget or caps differ from the base.
