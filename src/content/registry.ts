@@ -1749,11 +1749,13 @@ const SCREENS_NAV: NavGroup[] = [
     label: { en: "Menus", es: "Menús" },
     pages: [
       page("screens", "screens", "pantallas"),
+      page("examples", "examples", "ejemplos"),
       page("chest-menus", "chest-menus", "menus-de-cofre"),
       page("3d-menus", "3d-menus", "menus-3d"),
       page("opening-and-fallbacks", "opening-and-fallbacks", "apertura-y-alternativas"),
       page("actions-and-requirements", "actions-and-requirements", "acciones-y-requisitos"),
       page("styling", "styling", "estilo"),
+      page("motion", "motion", "movimiento"),
       page("translations", "translations", "traducciones"),
       page("player-data", "player-data", "datos-del-jugador"),
       page("open-items", "open-items", "objetos-de-apertura"),

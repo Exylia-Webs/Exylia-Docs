@@ -1,0 +1,168 @@
+---
+title: "Motion"
+description: "Arrivals, staggered lists, looping and one-shot animations, words that type themselves out, and what each costs."
+---
+
+Everything on a screen can move, and none of it needs Java. Motion is written in CSS, like the rest of the look,
+plus one action, `animate`, that plays an animation when something is clicked.
+
+Motion is cheap because the **client** does the moving: the server sends where a box should go and how long to
+take, and the player's game glides it there. A whole screen arriving, a grid filling in card by card, or a badge
+pulsing for a minute costs a few dozen small packets, not one per frame.
+
+<Callout type="note" title="Needs ExyliaLib 1.565.0">
+`stagger`, `text-reveal`, the `animate` action, the `bounce` and `elastic` easings, animation delays, counts and
+`alternate`, and the shipped keyframes arrived in ExyliaLib 1.565.0. Arrivals, hover lifts and looping
+animations are older.
+</Callout>
+
+## The five kinds of motion
+
+| What | Written as | Plays |
+|---|---|---|
+| A change | `transition: transform 3t ease-out;` | when a value changes: a hover, a click, a page |
+| An arrival | `enter: translateY(8px) 5t back;` | when a box first shows |
+| A departure | `leave: scale(0.94) 3t ease-in;` | when a box goes away |
+| A loop or a sequence | `animation: float 60t ease-in-out infinite;` | for as long as the box is shown |
+| A reaction | `action="animate pop"` | once, when the action runs |
+
+Each one moves the **transform** of a box: `translate(x, y)`, `translateX`, `translateY` (pixels, y down),
+`scale(s)` and `scaleX(s)` (narrowing across, which is how a card flips). A box carries everything inside it.
+
+```css
+card { transition: transform 3t ease-out; }
+card:hover { transform: translateY(-3px); }          /* lifts under the cursor */
+card:active { transform: scale(0.96); }              /* pressed for a moment */
+.page { enter: translateX(16px) 6t ease-out; leave: translateX(-12px) 3t ease-in; }
+```
+
+Times are ticks (`4t`, or a bare `4`), milliseconds (`200ms`) or seconds (`0.3s`). Twenty ticks are one second.
+
+Easings: `linear`, `ease-in`, `ease-out` (or `ease`), `ease-in-out`, `back` (goes a little past and settles),
+`bounce` (lands and bounces twice) and `elastic` (springs and wobbles into place).
+
+## Lists that fill in one by one
+
+`stagger` on a box makes its children arrive one after another instead of all at once:
+
+```css
+.modes { stagger: 4t; }
+.mode { enter: translateY(12px) scale(0.94) 7t back; }
+```
+
+The first card arrives at once, the second 4 ticks later, and so on. Each one waits shrunk to nothing until its
+turn, then plays its own `enter`. Rows that only lay things out (a grid's lines) are seen through, so a `grid`
+with `stagger` fills in cell by cell. The wait stops growing after two seconds, so a long list fills in quickly
+rather than trickling.
+
+Animations start as far apart, which turns a loop into a wave: give the cards of a staggered row
+`animation: float 60t ease-in-out infinite` and they bob one after another.
+
+## Animations
+
+```css
+.badge { animation: pulse 40t ease-in-out infinite; }
+@keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.06); } 100% { transform: scale(1); } }
+```
+
+The full shorthand is `animation: <keyframes> <duration> [easing] [delay] [count | infinite] [alternate]`:
+
+| Word | Means |
+|---|---|
+| The first time | How long one play lasts. |
+| A second time | How long it waits before it starts, holding its first frame. |
+| A number | How many times it plays (once when left out). |
+| `infinite` | Plays for as long as the box is shown. |
+| `alternate` | Every second play runs backwards, so a loop swings to and fro. |
+
+`animation-delay`, `animation-iteration-count` and `animation-direction` set the same things one at a time and win
+over the shorthand.
+
+### Keyframes every screen has
+
+ExyliaLib's base theme ships these, so any screen can name them without writing its own:
+
+| Name | Does | Good for |
+|---|---|---|
+| `shake` | A quick side to side | a refused click |
+| `pop` | Swells and settles | a purchase, a claim |
+| `pulse` | A gentle swell | something waiting for the player |
+| `float` | Rises and sinks | icons, art |
+| `nudge` | A small push to the right | an arrow saying "this way" |
+| `jump` | A hop and a little one | a notification |
+| `flip` | Narrows to its edge and back | a card turning over |
+| `drop-in` | Falls a little into place | a single arrival |
+
+The classes `.anim-float`, `.anim-pulse` and `.anim-nudge` loop the first three. A sheet that declares a keyframes
+of the same name uses its own.
+
+## Animations from a click
+
+The `animate` action plays an animation once, on top of whatever the box already does:
+
+```html
+<card id="buy-sword"
+      require="balance() >= 1000"
+      deny="animate shake; sound entity.villager.no 0.4; toast error 'Not enough coins'"
+      action="[MONEY] take 1000; [CONSOLE] give %player_name% diamond_sword; animate pop; toast success 'Bought'">
+```
+
+`animate pop` plays on the clicked element, which needs an `id`. `animate #balance jump` plays on another one.
+After the name you may add a duration and an easing (`animate pop 8t back`); without them it lasts 10 ticks.
+
+A refusal that shakes and a success that pops is the house feel: use it on every card that can say no.
+
+## Words that type themselves
+
+```css
+.headline { text-reveal: 1t; }
+```
+
+The words appear one character per tick, after the box has arrived, and again whenever they change (a page turn,
+a new value). `2t` types at half the speed. It is inherited, so on a box it types all the text inside, and
+together with `stagger` the lines type one after another:
+
+```css
+.words { stagger: 10t; }
+.words h2, .words p { text-reveal: 1t; }
+```
+
+Keep it for titles and lines of a few words: a paragraph of 90 characters takes four and a half seconds,
+and a number that changes every second would type out every second.
+
+## What it costs
+
+| Motion | Cost |
+|---|---|
+| A transition, an arrival or a departure | One packet per box, two to four for an eased one (eight for `bounce`/`elastic`). |
+| A staggered list | The same as arriving together, spread over time. |
+| A looping animation | One packet per box every 2 to 10 ticks while shown. |
+| `animate` | A handful of packets, then nothing. |
+| `text-reveal` | One text update every 2 ticks while typing. |
+
+`screens.yml` `motion-ceiling` caps the motion packets a viewer gets each second; past it, glides go straight and
+animations wait. A player who turned on **Reduced motion** in `/settings` (or a server with `motion: REDUCED`)
+gets no arrivals, departures, animations or typing: the screen is simply there.
+
+## The player's frame rate
+
+Motion is nearly free for the player's game; what a screen **shows** is not. Every box, text and item is a
+display entity the client draws each frame, and a picture (`<img>`, a face, a body, a background image) is the
+heaviest of all: each of its pixels is a glyph the client lays out four times. On a mid-range card (RTX 3050,
+1080p) every shipped example holds the game near 120 frames a second; the daily rewards, the
+heaviest, keep the card 64% busy, and 40% with Lighter screens on.
+
+- `/screens check` lists every screen that has been heavy for a player since the server started, with its
+  displays and picture glyphs. Fewer or smaller pictures help most.
+- A player with a weak computer can turn on **Lighter screens** in `/settings` → Interface: every screen draws
+  its items as 3D items and leaves decoration out, for them only.
+
+## What Minecraft cannot draw
+
+Boxes are flat rectangles drawn by the game itself, with no resource pack. These do **not** exist: rotation,
+fading in or out, colours that glide, rounded corners, shadows around boxes and blur. A fade is written as a
+scale from almost nothing (`enter: scale(0.6) 6t back`), and a colour change (a hover) happens in steps.
+
+## Next
+
+The shipped [example screens](/docs/exyliascreens/examples) use every kind of motion on this page.

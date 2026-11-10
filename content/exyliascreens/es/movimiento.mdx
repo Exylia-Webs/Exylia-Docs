@@ -1,0 +1,169 @@
+---
+title: "Movimiento"
+description: "Entradas, listas que aparecen una a una, animaciones en bucle o de una sola vez, texto que se escribe solo y lo que cuesta cada cosa."
+---
+
+Todo en una pantalla puede moverse, y nada de eso necesita Java. El movimiento se escribe en CSS, como el resto del aspecto,
+más una acción, `animate`, que reproduce una animación al hacer clic.
+
+El movimiento es barato porque lo hace el **cliente**: el servidor envía hacia dónde va una caja y cuánto debe tardar,
+y el juego del jugador la desliza hasta allí. Una pantalla entera que aparece, una cuadrícula que se llena tarjeta a tarjeta
+o una insignia que late durante un minuto cuestan unas decenas de paquetes pequeños, no uno por fotograma.
+
+<Callout type="note" title="Requiere ExyliaLib 1.565.0">
+`stagger`, `text-reveal`, la acción `animate`, las curvas `bounce` y `elastic`, los retrasos, repeticiones y
+`alternate` de las animaciones, y los keyframes incluidos llegaron en ExyliaLib 1.565.0. Las entradas, los
+levantamientos al pasar el cursor y las animaciones en bucle son anteriores.
+</Callout>
+
+## Los cinco tipos de movimiento
+
+| Qué | Se escribe | Se reproduce |
+|---|---|---|
+| Un cambio | `transition: transform 3t ease-out;` | cuando cambia un valor: un hover, un clic, una página |
+| Una entrada | `enter: translateY(8px) 5t back;` | cuando una caja aparece por primera vez |
+| Una salida | `leave: scale(0.94) 3t ease-in;` | cuando una caja desaparece |
+| Un bucle o una secuencia | `animation: float 60t ease-in-out infinite;` | mientras la caja se muestre |
+| Una reacción | `action="animate pop"` | una vez, cuando se ejecuta la acción |
+
+Cada uno mueve la **transformación** de una caja: `translate(x, y)`, `translateX`, `translateY` (píxeles, la y va hacia abajo),
+`scale(s)` y `scaleX(s)` (se estrecha a lo ancho, así es como una tarjeta se da la vuelta). Una caja arrastra todo lo que lleva dentro.
+
+```css
+card { transition: transform 3t ease-out; }
+card:hover { transform: translateY(-3px); }          /* se levanta bajo el cursor */
+card:active { transform: scale(0.96); }              /* pulsada un instante */
+.page { enter: translateX(16px) 6t ease-out; leave: translateX(-12px) 3t ease-in; }
+```
+
+Los tiempos son ticks (`4t`, o un simple `4`), milisegundos (`200ms`) o segundos (`0.3s`). Veinte ticks son un segundo.
+
+Curvas: `linear`, `ease-in`, `ease-out` (o `ease`), `ease-in-out`, `back` (se pasa un poco y se asienta),
+`bounce` (cae y rebota dos veces) y `elastic` (se estira y oscila hasta quedar en su sitio).
+
+## Listas que se llenan una a una
+
+`stagger` en una caja hace que sus hijos lleguen uno tras otro en lugar de todos a la vez:
+
+```css
+.modes { stagger: 4t; }
+.mode { enter: translateY(12px) scale(0.94) 7t back; }
+```
+
+La primera tarjeta llega de inmediato, la segunda 4 ticks después, y así. Cada una espera reducida a nada hasta que le
+toca, y entonces reproduce su propio `enter`. Las filas que solo organizan el diseño (las líneas de una cuadrícula) se
+atraviesan, así que un `grid` con `stagger` se llena celda a celda. La espera deja de crecer a los dos segundos, de modo
+que una lista larga se llena rápido en lugar de gotear.
+
+Las animaciones empiezan igual de separadas, lo que convierte un bucle en una ola: da a las tarjetas de una fila con
+`stagger` `animation: float 60t ease-in-out infinite` y se mecerán una tras otra.
+
+## Animaciones
+
+```css
+.badge { animation: pulse 40t ease-in-out infinite; }
+@keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.06); } 100% { transform: scale(1); } }
+```
+
+La forma completa es `animation: <keyframes> <duración> [curva] [retraso] [repeticiones | infinite] [alternate]`:
+
+| Palabra | Significa |
+|---|---|
+| El primer tiempo | Cuánto dura una reproducción. |
+| Un segundo tiempo | Cuánto espera antes de empezar, manteniendo su primer fotograma. |
+| Un número | Cuántas veces se reproduce (una sola si se omite). |
+| `infinite` | Se reproduce mientras la caja se muestre. |
+| `alternate` | Una de cada dos reproducciones va al revés, así que el bucle va y viene. |
+
+`animation-delay`, `animation-iteration-count` y `animation-direction` fijan lo mismo de una en una y ganan
+a la forma abreviada.
+
+### Keyframes que tiene toda pantalla
+
+El tema base de ExyliaLib trae estos, así que cualquier pantalla puede usarlos por su nombre sin escribir los suyos:
+
+| Nombre | Hace | Bueno para |
+|---|---|---|
+| `shake` | Un temblor rápido de lado a lado | un clic rechazado |
+| `pop` | Se hincha y se asienta | una compra, un cobro |
+| `pulse` | Un latido suave | algo que espera al jugador |
+| `float` | Sube y baja | iconos, ilustraciones |
+| `nudge` | Un pequeño empujón a la derecha | una flecha que dice "por aquí" |
+| `jump` | Un salto grande y uno pequeño | una notificación |
+| `flip` | Se estrecha hasta el borde y vuelve | una tarjeta que se da la vuelta |
+| `drop-in` | Cae un poco hasta su sitio | una entrada suelta |
+
+Las clases `.anim-float`, `.anim-pulse` y `.anim-nudge` repiten en bucle las tres primeras. Una hoja que declare unos
+keyframes con el mismo nombre usa los suyos.
+
+## Animaciones desde un clic
+
+La acción `animate` reproduce una animación una vez, encima de lo que la caja ya haga:
+
+```html
+<card id="buy-sword"
+      require="balance() >= 1000"
+      deny="animate shake; sound entity.villager.no 0.4; toast error 'Not enough coins'"
+      action="[MONEY] take 1000; [CONSOLE] give %player_name% diamond_sword; animate pop; toast success 'Bought'">
+```
+
+`animate pop` se reproduce en el elemento pulsado, que necesita un `id`. `animate #balance jump` lo hace en otro.
+Después del nombre puedes añadir una duración y una curva (`animate pop 8t back`); sin ellas dura 10 ticks.
+
+Un rechazo que tiembla y un éxito que se hincha es la sensación de la casa: úsalo en cada tarjeta que pueda decir que no.
+
+## Texto que se escribe solo
+
+```css
+.headline { text-reveal: 1t; }
+```
+
+Las palabras aparecen un carácter por tick, cuando la caja ya ha llegado, y otra vez cada vez que cambian (un cambio de
+página, un valor nuevo). `2t` escribe a la mitad de velocidad. Se hereda, así que en una caja escribe todo el texto que
+lleva dentro, y junto con `stagger` las líneas se escriben una tras otra:
+
+```css
+.words { stagger: 10t; }
+.words h2, .words p { text-reveal: 1t; }
+```
+
+Resérvalo para títulos y frases de pocas palabras: un párrafo de 90 caracteres tarda cuatro segundos y medio,
+y un número que cambia cada segundo se escribiría de nuevo cada segundo.
+
+## Lo que cuesta
+
+| Movimiento | Coste |
+|---|---|
+| Una transición, una entrada o una salida | Un paquete por caja, de dos a cuatro si lleva curva (ocho con `bounce`/`elastic`). |
+| Una lista con `stagger` | Lo mismo que si llegara toda junta, repartido en el tiempo. |
+| Una animación en bucle | Un paquete por caja cada 2 a 10 ticks mientras se muestre. |
+| `animate` | Un puñado de paquetes y luego nada. |
+| `text-reveal` | Una actualización de texto cada 2 ticks mientras se escribe. |
+
+`motion-ceiling` en `screens.yml` limita los paquetes de movimiento que recibe cada jugador por segundo; al pasarlo, los
+deslizamientos van directos y las animaciones esperan. Un jugador que activó **Movimiento reducido** en `/settings` (o un
+servidor con `motion: REDUCED`) no ve entradas, salidas, animaciones ni texto que se escribe: la pantalla simplemente está ahí.
+
+## Los FPS del jugador
+
+El movimiento casi no le cuesta nada al juego del jugador; lo que una pantalla **muestra**, sí. Cada caja, texto e
+ítem es una entidad display que el cliente dibuja en cada fotograma, y una imagen (`<img>`, una cara, un cuerpo,
+una imagen de fondo) es lo más pesado: cada uno de sus píxeles es un glifo que el cliente coloca cuatro veces. En
+una tarjeta gráfica media (RTX 3050, 1080p), todos los ejemplos incluidos mantienen el juego cerca de 120 fotogramas
+por segundo; las recompensas diarias, la más pesada, ocupan la tarjeta un 64 %, y un 40 % con Pantallas ligeras.
+
+- `/screens check` lista cada pantalla que ha sido pesada para algún jugador desde que arrancó el servidor, con
+  sus displays y glifos de imagen. Lo que más ayuda es usar menos imágenes o más pequeñas.
+- Un jugador con un ordenador modesto puede activar **Pantallas ligeras** en `/settings` → Interfaz: cada
+  pantalla dibuja sus ítems como ítems 3D y deja fuera la decoración, solo para él.
+
+## Lo que Minecraft no puede dibujar
+
+Las cajas son rectángulos planos que dibuja el propio juego, sin resource pack. Estas cosas **no** existen: rotación,
+fundidos de entrada o salida, colores que se deslizan, esquinas redondeadas, sombras alrededor de las cajas y desenfoque.
+Un fundido se escribe como una escala desde casi nada (`enter: scale(0.6) 6t back`), y un cambio de color (un hover) ocurre
+de golpe.
+
+## Siguiente
+
+Las [pantallas de ejemplo](/docs/exyliascreens/ejemplos) incluidas usan todos los tipos de movimiento de esta página.
