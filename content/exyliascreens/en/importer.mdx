@@ -1,0 +1,65 @@
+---
+title: "Importer"
+description: "Converting DeluxeMenus and zMenu menus into a screen and the chest menu it falls back to, and what does not map."
+---
+
+Two commands convert menus from other plugins. Neither plugin is needed afterwards.
+
+| Command | Reads |
+|---|---|
+| `/screens import deluxemenus [file]` | `plugins/DeluxeMenus/gui_menus/` (subfolders too), or one file. |
+| `/screens import zmenu [file]` | `plugins/zMenu/inventories/` (subfolders too), or one file. |
+
+`/screens import deluxemenus servers` converts one file. Each menu `servers.yml` becomes:
+
+- `screens/servers.html`: the screen, its slots as cards in the chest's own layout, the item's name and lore as the card's tooltip.
+- `menus/servers_chest.yml`: the same menu as a chest, linked as the screen's `fallback`. A server that wants only chests moves the `command` onto it and deletes the HTML.
+
+An existing screen or chest file of the same id is **never replaced**: the file is skipped and says so. Everything that does not map exactly is listed in the console and in a comment at the top of the
+HTML, never silently dropped. zMenu takes the command and aliases from `plugins/zMenu/commands.yml` (or `commands/*.yml`).
+
+## What maps from DeluxeMenus
+
+| DeluxeMenus | Becomes |
+|---|---|
+| `menu_title`, `size` | Heading and rows of 9 slots; `title`, `size`. |
+| `open_command` | `command` and `aliases`. |
+| `open_requirement`, `open_commands` | `require`/`deny`, `on-open`. |
+| `args` | `args`; write each `{name}` as `${name}` in the screen, `%name%` in the chest. |
+| `slot`/`slots`, `priority` + `view_requirement` | A card in that slot; `if`/`else`; `priority`, `if`. |
+| `material`, `head-`, `basehead-`, `texture-` | `<item>` on the screen; `material`, `playerhead-`, `basehead-`, `urlhead-`. |
+| `display_name`, `lore`, `amount` | Tooltip and a small number; `name`, `lore`, `amount`. |
+| Click commands (left, right, shift) | `action`, `action-right`, `action-shift`; `click` lines. |
+| Click requirements and `deny_commands` | `require`/`deny` per click. |
+| `[player]`, `[console]`, `[message]`, `[connect]`, `[close]`, `[takemoney]`, `[givemoney]`, `[sound]`, `[openguimenu]` | The matching actions. |
+| `[giveexp]`, `[takeexp]` | A console `experience add`. |
+| `<delay=ticks>` | `[DELAY]`. |
+
+Requirement types: `has permission(s)` becomes `perm()`, `has money` `balance() >= n`, `has item` `has_item()` (material and amount only), `has exp` `level() >= n`, string equals and the comparison
+operators the same comparison; `!` negates.
+
+### What does not map (DeluxeMenus)
+
+- `javascript`, `regex matches`, `is near`, `has meta` and `is object` requirements are left out, so they pass.
+- `string contains` becomes `in`, a whole word of the text. `minimum_requirements` is read as all of them. `success_commands` are not run.
+- `[json]`, `[jsonbroadcast]`, `[broadcastsound]`, `[meta]` and `[placeholder]` are left out. `<chance=n>` always runs.
+- `middle_click_commands` have no screen equivalent; `shift_right` shares the shift click with `shift_left`.
+- Custom items (`itemsadder-`, `oraxen-`, `nexo-`, `hdb-`, `main_hand`) are drawn as a barrier. Enchantments, model data, NBT, banner and potion meta are not drawn on the screen.
+- An `inventory_type` other than chest is drawn as a chest of that many slots. Glass panes with a blank name and no actions are treated as background and left out of the screen.
+
+## What maps from zMenu
+
+`name`, `size`, `commands.yml` entries, `open-requirement`, slots, items (`material`, `playerHead`, `url`, name, lore, amount), `view-requirement` with `else`, `click-requirement` blocks (with `success`
+added to the click), `patterns`, `fillItem`, `JUMP` and `INVENTORY` buttons, and the actions `message`, `player_command`, `console_command`, `sound`, `close`, `inventory`, `connect` and `broadcast`.
+Requirement types `permission`, `placeholder` (all comparisons) and `item` are converted; `%player%` becomes `%player_name%`.
+
+### What does not map (zMenu)
+
+- Pages: `PREVIOUS`/`NEXT` buttons and buttons of page 2 and up are left out. Pagination over plugin data cannot be imported; the button stays a plain item.
+- `BACK` and `HOME` are drawn without an action: point them at a menu with `[SCREEN] <menu>`.
+- Requirement types such as `currency`, `regex` and `jobs`, and placeholder actions such as `STARTS_WITH`, are left out, so they always pass.
+- Several `click-requirement` blocks for one click are read as all of them. Clicks the screens do not have (middle, drop) lose their actions.
+- Other action types (`title`, `actionbar`, `give`), enchantments, flags, attributes, potions and translated names are not imported.
+- Custom items are drawn as a barrier; `glow`, model data and `item-model` show only in the chest menu. Buttons without a slot, and patterns whose file is missing, are left out.
+
+Run `/screens check` after an import and read the note at the top of each generated HTML.

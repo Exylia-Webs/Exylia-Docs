@@ -1736,6 +1736,45 @@ const JOBS_NAV: NavGroup[] = [
   },
 ];
 
+const SCREENS_NAV: NavGroup[] = [
+  {
+    label: { en: "Getting started", es: "Empezar" },
+    pages: [
+      page("introduction", "introduction", "introduccion"),
+      page("installation", "installation", "instalacion"),
+      page("first-steps", "first-steps", "primeros-pasos"),
+    ],
+  },
+  {
+    label: { en: "Menus", es: "Menús" },
+    pages: [
+      page("screens", "screens", "pantallas"),
+      page("chest-menus", "chest-menus", "menus-de-cofre"),
+      page("3d-menus", "3d-menus", "menus-3d"),
+      page("opening-and-fallbacks", "opening-and-fallbacks", "apertura-y-alternativas"),
+      page("actions-and-requirements", "actions-and-requirements", "acciones-y-requisitos"),
+      page("styling", "styling", "estilo"),
+      page("translations", "translations", "traducciones"),
+      page("player-data", "player-data", "datos-del-jugador"),
+      page("open-items", "open-items", "objetos-de-apertura"),
+    ],
+  },
+  {
+    label: { en: "Server", es: "Servidor" },
+    pages: [page("importer", "importer", "importador")],
+  },
+  {
+    label: { en: "Reference", es: "Referencia" },
+    pages: [
+      page("commands", "commands", "comandos"),
+      page("permissions", "permissions", "permisos"),
+      page("placeholders", "placeholders", "placeholders"),
+      page("configuration", "configuration", "configuracion"),
+      page("faq", "faq", "faq"),
+    ],
+  },
+];
+
 const WARZONE_NAV: NavGroup[] = [
   {
     label: { en: "Getting started", es: "Empezar" },
@@ -2437,6 +2476,27 @@ export const plugins: Plugin[] = [
       { en: "Folia", es: "Folia" },
     ],
     nav: JOBS_NAV,
+  },
+  {
+    id: "exyliascreens",
+    name: "ExyliaScreens",
+    tagline: { en: "Menus from files: screens, chests and 3D", es: "Menús desde archivos: pantallas, cofres y 3D" },
+    summary: {
+      en: "A DeluxeMenus replacement with no Java and no resource pack, in three forms: full-screen HTML and CSS menus with a mouse cursor (Java 1.20.2+), chest menus and 3D menus in the world (Java 1.21.4+). Fallbacks you write link the form a client cannot draw to one it can, with commands, requirements, actions, per-player values, items that open a menu, hot reload and importers from DeluxeMenus and zMenu.",
+      es: "Un reemplazo de DeluxeMenus sin Java y sin resource pack, en tres formas: menús HTML y CSS a pantalla completa con cursor de ratón (Java 1.20.2+), menús de cofre y menús 3D en el mundo (Java 1.21.4+). Las alternativas que escribes enlazan la forma que un cliente no puede dibujar con otra que sí, con comandos, requisitos, acciones, valores por jugador, objetos que abren un menú, recarga en caliente e importadores de DeluxeMenus y zMenu.",
+    },
+    version: "1.0.0",
+    status: "beta",
+    category: { en: "Utility", es: "Utilidad" },
+    minecraft: "1.21.4+",
+    banner: "https://s3.exylia.net/exylia-plugins/public/static/images/plugins/screens/ExyliaScreensBanner.webp",
+    tags: [
+      { en: "Menus", es: "Menús" },
+      { en: "3D", es: "3D" },
+      { en: "DeluxeMenus", es: "DeluxeMenus" },
+      { en: "Folia", es: "Folia" },
+    ],
+    nav: SCREENS_NAV,
   },
   {
     id: "exyliawarzone",
