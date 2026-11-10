@@ -1611,6 +1611,47 @@ const KILLCAM_NAV: NavGroup[] = [
   },
 ];
 
+const LOBBY_NAV: NavGroup[] = [
+  {
+    label: { en: "Getting started", es: "Empezar" },
+    pages: [
+      page("introduction", "introduction", "introduccion"),
+      page("installation", "installation", "instalacion"),
+      page("first-steps", "first-steps", "primeros-pasos"),
+    ],
+  },
+  {
+    label: { en: "The lobby", es: "El lobby" },
+    pages: [
+      page("modules", "modules", "modulos"),
+      page("areas", "areas", "areas"),
+    ],
+  },
+  {
+    label: { en: "Modules", es: "Módulos" },
+    pages: [
+      page("core", "core", "base"),
+      page("hotbar-and-movement", "hotbar-and-movement", "hotbar-y-movimiento"),
+      page("selector-and-hud", "selector-and-hud", "selector-y-hud"),
+      page("gadgets", "gadgets", "gadgets"),
+      page("parkour", "parkour", "parkour"),
+      page("lobby-pvp", "lobby-pvp", "pvp-del-lobby"),
+    ],
+  },
+  {
+    label: { en: "Reference", es: "Referencia" },
+    pages: [
+      page("commands", "commands", "comandos"),
+      page("permissions", "permissions", "permisos"),
+      page("placeholders", "placeholders", "placeholders"),
+      page("migration", "migration", "migracion"),
+      page("translations", "translations", "traducciones"),
+      page("api", "api", "api"),
+      page("faq", "faq", "faq"),
+    ],
+  },
+];
+
 const JOURNEY_NAV: NavGroup[] = [
   {
     label: { en: "Getting started", es: "Empezar" },
@@ -2652,6 +2693,28 @@ export const plugins: Plugin[] = [
       { en: "Folia", es: "Folia" },
     ],
     nav: KILLCAM_NAV,
+  },
+  {
+    id: "exylialobby",
+    name: "ExyliaLobby",
+    tagline: { en: "A complete lobby, one module at a time", es: "Un lobby completo, módulo a módulo" },
+    summary: {
+      en: "A modular lobby, free and open source: spawn and protection, a hotbar of buttons, double jump and launch pads, a server selector with live counts, sidebar and tab list, opt-in lobby PvP, parkour with endless modes and leaderboards, and gadgets. Sixteen modules switched on and off live, and everything edited in game.",
+      es: "Un lobby modular, gratuito y de código abierto: spawn y protección, una hotbar de botones, doble salto y plataformas de lanzamiento, un selector de servidores con contadores en vivo, scoreboard y lista de jugadores, PvP de lobby opcional, parkour con modos infinitos y clasificaciones, y gadgets. Dieciséis módulos que se activan y desactivan en vivo, y todo se edita en el juego.",
+    },
+    version: "1.0.0",
+    status: "beta",
+    category: { en: "Utility", es: "Utilidad" },
+    minecraft: "1.21.1+",
+    banner: "https://s3.exylia.net/exylia-plugins/public/static/images/plugins/lobby/ExyliaLobbyBanner.webp",
+    download: "https://github.com/Exylia-Plugins/ExyliaLobby/releases",
+    tags: [
+      { en: "Lobby", es: "Lobby" },
+      { en: "Parkour", es: "Parkour" },
+      { en: "Server selector", es: "Selector de servidores" },
+      { en: "Folia", es: "Folia" },
+    ],
+    nav: LOBBY_NAV,
   },
   {
     id: "exyliasandbox",

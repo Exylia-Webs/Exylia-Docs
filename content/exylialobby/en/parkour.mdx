@@ -1,0 +1,142 @@
+---
+title: "Parkour"
+description: "Courses built in game, medals, rewards, endless, sprint and daily modes, anti-cheat, leaderboards, holograms and settings."
+---
+
+The parkour module (`parkour`) has two kinds of run: **courses** you build in game, and three **endless
+modes** drawn block by block around the runner. Times and scores are stored in ExyliaLib's database, so
+lobbies that share it share their leaderboards.
+
+## Playing
+
+| Command | What it does |
+|---|---|
+| `/parkour` (alias `/pk`) | Opens the course list. |
+| `/parkour <course>` | Starts a course. |
+| `/parkour endless`, `sprint`, `daily` | Starts that endless mode, when enabled. |
+| `/parkour top [board]` | Opens a leaderboard (chat lines from the console). With no board it is `endless`. |
+| `/parkour leave` | Leaves the run. |
+
+Runs start only inside the lobby, and not while another module holds the player (a fight, for example).
+Starting a run while running replaces it. Runners get three hotbar items: **back to checkpoint**, **restart**
+and **leave**.
+
+## Courses
+
+A course has a start, ordered checkpoints and a finish. Stepping on the start starts or restarts a run;
+checkpoints must be reached in order and a run goes back to the last one reached when the runner touches a
+kill block, falls `course-fall-depth` blocks under their lowest point, or uses the back item. The finish
+records the time and the split at each checkpoint, and a better time replaces the old best.
+
+### Building one
+
+All in game, from `/lobbyadmin` → Parkour (the editor), or by command, standing where each point goes:
+
+```text
+/lobbyadmin parkour create <id>
+/lobbyadmin parkour setstart <course>
+/lobbyadmin parkour addcheckpoint <course>
+/lobbyadmin parkour setfinish <course>
+/lobbyadmin parkour addkill <course>
+/lobbyadmin parkour medals <course> <gold> <silver> <bronze>
+/lobbyadmin parkour delete <course>
+```
+
+A course can be run once start and finish are both placed. Ids are lower case letters, digits and dashes.
+`addkill` adds the block you look at to the course's kill blocks. Courses live in
+`modules/parkour/courses.yml`:
+
+| Key | What it does |
+|---|---|
+| `name`, `difficulty`, `icon` | The card: coloured name, a label such as Easy or Expert, and its icon. |
+| `enabled` | Players cannot start it while off. |
+| `start`, `checkpoints`, `finish`, `world` | The places. |
+| `kill-blocks` | Blocks that send a runner back to their last checkpoint, such as `LAVA` or `MAGMA_BLOCK`. |
+| `time-limit` | Seconds a run may last. 0 has no limit. |
+| `medals` | `gold`, `silver`, `bronze` targets in seconds; 0 means no such medal. A time earns the best medal it meets. |
+| `minimum-time` | A finish faster than this is refused and logged. 0 checks nothing. |
+| `first-rewards`, `repeat-rewards`, `repeat-cooldown` | Given the first time a course is finished; given on later finishes, at most once per cooldown (default 24h). |
+
+## Endless, sprint and daily
+
+| Mode | Rule | Board |
+|---|---|---|
+| `endless` | The score is how many jumps you make before falling. | `endless` |
+| `sprint` | As many jumps as you can before the clock runs out (`sprint-seconds`, default 60). | `sprint` |
+| `daily` | The same path for every player today, with its own board. | `daily` (daily only) |
+
+The path is generated ahead of the runner and cleared behind them, in a box you define:
+
+```text
+/lobbyadmin parkour endlessarea <name>
+```
+
+Make a selection of the box first, then stand where the run starts (the run starts where you stand). `start` is the block
+under the runner's feet and `heading` is where the path sets off: 0 east (+x), 1 south (+z), 2 west (-x), 3
+north (-z). Keep the box empty air. A runner gets one area at random; daily always uses the first. Endless
+parkour needs PacketEvents.
+
+Daily paths are seeded from the date and a secret in `modules/parkour/daily-secret.txt`. Lobbies that should
+share the daily path share that file; keep it private.
+
+Landings are confirmed by the server. A landing it cannot confirm (off the path, out of reach or too fast)
+ends the run unscored.
+
+### Endless tuning
+
+| Key | Default | What it does |
+|---|---|---|
+| `endless.areas` | none | The boxes, by name. |
+| `endless.ahead` / `behind` | `3` / `2` | Jumps drawn ahead (1-5) and kept behind (0-3). |
+| `endless.theme-every` | `25` | The block theme changes every this many jumps. 0 keeps one. Themes are in `themes.yml`. |
+| `endless.milestones` | 25, 50, 100, 150, 200 | Scores that show a title and play the milestone sound. |
+| `endless.fall-depth` | `4` | A run ends when the runner falls this far under the jump they stand on. |
+| `endless.best-marker` | `GOLD_BLOCK` | Marks where your best run ended. Blank draws none. |
+| `endless.milestone-rewards` | none | Rewards by score, same format as course rewards. |
+| `endless.milestone-period` | `DAILY` | How often each milestone pays again, per mode: `ALL` (once ever), `MONTHLY`, `WEEKLY` or `DAILY`. Daily always pays once a day. |
+| `endless.tuning` | built in | `weights` and `unlocks` per segment type, a `curve` of score to hardest difficulty (1-5), `rest-every` (20), `bonus-chance` (0.08), `bonus-from` (30), `bonus-points` (2), `turn-chance` (0.3). |
+
+## Anti-cheat
+
+Under `anti-cheat`, all on by default:
+
+| Key | Effect |
+|---|---|
+| `flight`, `elytra`, `riptide`, `pearls`, `vehicles` | Flight is switched off for the run, and the others are refused. Doing it anyway ends the run. |
+| `game-mode`, `teleports` | A game mode change, or a teleport this module did not make, ends the run. |
+| `launches` | Launch pads, double jumps and knockback are refused while running. |
+| `effects`, `blocked-effects` | The listed effects (default speed, jump boost, levitation, slow falling, dolphin's grace) are taken away and refused. |
+| `minimum-time` | A course finished under its minimum time is refused and logged. |
+
+A run ended this way records nothing and tells the runner why.
+
+## Leaderboards and holograms
+
+A board is a course id or a mode, optionally with a period: `tower`, `tower-weekly`, `endless-monthly`,
+`daily`. Periods are `all`, `monthly`, `weekly` and `daily`. Courses rank fastest first; modes rank highest
+first.
+
+Place a leaderboard hologram with `/lobbyadmin parkour board <board>` (needs the holograms module). The spots
+are kept in `boards`.
+
+| Key | Default | What it does |
+|---|---|---|
+| `tops.size` / `refresh-seconds` | `100` / `60` | Places kept per board, and how often they are read again. |
+| `periods.timezone` | server's | Time zone of the resets, such as `Europe/Madrid`. |
+| `periods.reset-hour` | `0` | The hour a new day starts at. |
+| `periods.week-start` | `MONDAY` | The day a new week starts on. |
+
+## Other settings
+
+| Key | Default | What it does |
+|---|---|---|
+| `command` | `[parkour, pk]` | Labels of the player command. Empty removes it. |
+| `modes.endless` / `sprint` / `daily` | `true` | Which modes players can start. |
+| `modes.sprint-seconds` | `60` | How long a sprint lasts. |
+| `hide-runners` | `true` | Hide runners from everyone else (needs PacketEvents). |
+| `checkpoint-beacon` | `true` | A beam over the next checkpoint (needs PacketEvents). |
+| `run-items` | `true` | The back, restart and leave items (needs PacketEvents). |
+| `course-fall-depth` | `8` | Blocks under the lowest point before a course run falls back to its checkpoint. 0 never. |
+| `sounds` | short UI sounds | `start`, `checkpoint`, `finish`, `record`, `milestone`, `fail`, each `NAME|volume|pitch`, played to the runner only. Blank plays nothing. |
+
+Placeholders are on the [placeholders page](/docs/exylialobby/placeholders).
