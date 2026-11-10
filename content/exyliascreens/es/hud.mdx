@@ -1,0 +1,98 @@
+---
+title: "HUD"
+description: "hud.yml: texto que se queda en la pantalla del jugador mientras juega, widgets con condiciones y avisos ante eventos del juego."
+---
+
+`hud.yml` mantiene texto en la pantalla de los jugadores mientras juegan, sin quitarles nunca el control: una esquina con su nivel y su mundo, un aviso de "spawn · zona segura", una alerta de vida baja y avisos que entran deslizándose cuando pasa algo (una kill, una subida de nivel, la primera entrada).
+
+- No tiembla al caminar ni al saltar, y se queda en su sitio al esprintar.
+- Se aparta mientras hay una screen abierta, durante una cinemática, al morir y en modo espectador.
+- Cada jugador puede apagarlo en `/settings` (**Mostrar HUD**); la elección se guarda entre reinicios.
+- Un display por bloque de texto y nada superpuesto: una esquina de tres líneas le cuesta al cliente tres entidades.
+
+```yaml
+widgets:
+  low_health:
+    anchor: above-hotbar
+    when: "health() < 7"
+    every: 5
+    text: "{error}❤ {letters}Vida baja {letters_black}· {error}busca refugio"
+  level:
+    anchor: top-left
+    every: 20
+    text:
+      - "{primary}✦ {letters}Nivel{letters_black}: {info}%player_level%"
+      - "{primary}♦ {letters}Mundo{letters_black}: {info}%player_world%"
+notices:
+  kill:
+    event: kill
+    group: kill
+    text: "{error}⚔ {letters}Derrotaste a {highlight}%victim%"
+  level_up:
+    event: level-up
+    moment: true
+    text: "{highlight}&lNIVEL %level%"
+```
+
+El archivo de ejemplo trae todas las entradas con `enabled: false`: activa las que quieras.
+
+## Widgets
+
+Un widget se queda en pantalla. Su texto se vuelve a leer cada `every` ticks, así que los placeholders se mantienen al día.
+
+| Clave | Qué hace | Por defecto |
+| --- | --- | --- |
+| `anchor` | dónde se coloca (ver abajo) | `top-left` |
+| `text` | una línea o una lista de líneas; funcionan colores, `{icon:...}` y placeholders | |
+| `when` | solo se muestra mientras se cumple, escrito como el `require:` de un menú (`health() < 7`, `world() == 'spawn'`, `perm('vip')`, `balance() >= 100`) | siempre |
+| `order` | su lugar en la pila de su anclaje; el más bajo, más cerca del borde | `0` |
+| `every` | cada cuánto se vuelve a leer, en ticks (20 es un segundo) | `10` |
+| `permission` | solo lo ven los jugadores con ese permiso | todos |
+| `worlds` | solo en estos mundos | todos los mundos |
+| `scale` | su tamaño, `1` el normal | `1` |
+| `panel` | `false` lo dibuja sin el panel oscuro detrás | `true` |
+| `enabled` | `false` lo deja escrito pero no se lo muestra a nadie | `true` |
+
+Un widget cuya condición deja de cumplirse sale deslizándose, y vuelve a entrar cuando se cumple de nuevo.
+
+## Avisos
+
+Un aviso entra deslizándose cuando ocurre su evento, se queda unos segundos y sale. Los más nuevos quedan más cerca del borde; con más de cinco en un mismo anclaje, el más antiguo se va antes.
+
+| Clave | Qué hace | Por defecto |
+| --- | --- | --- |
+| `event` | `join`, `first-join`, `death`, `kill`, `world-change`, `level-up`, `advancement` | |
+| `text` | lo que dice; `%killer%` en `death`, `%victim%` en `kill`, `%world%`, `%level%`, `%advancement%` | |
+| `group` | las repeticiones del mismo grupo se juntan en una línea que las cuenta (`×3`) | ninguno |
+| `moment` | `true` lo dibuja grande sobre la mira, de uno en uno | `false` |
+| `seconds` | cuánto tiempo se queda | `3` (`2` para un momento) |
+| `anchor`, `permission`, `worlds`, `enabled` | como en los widgets | `top-right` (`center` para un momento) |
+
+Un aviso de muerte espera a que el jugador reaparezca.
+
+Cualquier acción de un menú o de una screen también puede mostrar uno:
+
+```yaml
+actions:
+  - "[HUD] {success}+50 {letters}monedas;group:coins;seconds:4"
+  - "[MOMENT] {highlight}&lJACKPOT"
+```
+
+## Anclajes
+
+| Anclaje | Dónde |
+| --- | --- |
+| `top-left` | la esquina superior izquierda, libre en vanilla |
+| `top` | arriba en el centro, bajo una barra de jefe |
+| `top-right` | arriba a la derecha, bajo los iconos de efectos |
+| `left` | el borde izquierdo, por encima del chat |
+| `center` | justo encima de la mira |
+| `right` | el borde derecho, donde va la sidebar |
+| `above-hotbar` | sobre la hotbar, los corazones y la barra de experiencia |
+| `bottom-right` | la esquina inferior derecha |
+
+<Callout type="warning">Un ítem en la mano principal tapa `bottom-right`: el juego dibuja la mano por encima de todo lo demás. Con la mano vacía no pasa.</Callout>
+
+Las posiciones se miden en una ventana 16:9 con el campo de visión por defecto de 70. Un campo de visión más amplio lo dibuja todo un poco más cerca del centro, nunca fuera de la pantalla; una ventana 4:3 puede cortar los anclajes laterales.
+
+`/screens check` lista lo que no se puede leer en `hud.yml` (un evento o anclaje desconocido, una condición con una errata), y el archivo se recarga solo a los dos segundos de guardarlo. También se puede editar desde el navegador con el editor web.

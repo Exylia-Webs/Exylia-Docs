@@ -1800,6 +1800,7 @@ const SCREENS_NAV: NavGroup[] = [
       page("translations", "translations", "traducciones"),
       page("player-data", "player-data", "datos-del-jugador"),
       page("open-items", "open-items", "objetos-de-apertura"),
+      page("hud", "hud", "hud"),
     ],
   },
   {
