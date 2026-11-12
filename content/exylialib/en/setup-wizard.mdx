@@ -1,0 +1,63 @@
+---
+title: "Setup wizard"
+description: "The first-run setup offered to admins after a fresh install: language, menu style, colours and a tested shared database for the whole network."
+---
+
+`/exylialib setup` (since 1.572.0) walks an admin through the choices every Exylia plugin follows: language, menu
+style, look and database. Everything is chosen from screens in game and applied the moment it is clicked.
+
+| Command | Does |
+|---|---|
+| `/exylialib setup` | Opens the hub at any time. Needs `exylialib.admin`. |
+| `/exylialib setup later` | The invitation's LATER button. |
+
+## When it is offered
+
+Only after a **fresh install**: ExyliaLib starting with no `config.yml`. That start writes
+`plugins/ExyliaLib/setup.yml` with `status: pending`, and every admin who joins is sent a centred invitation once
+per start, with **[✔ SET UP]** and **[✘ LATER]**. LATER asks again after the next restart; the hub's **Finish**
+card writes `status: done` and the invitations stop. A server that ran the library before 1.572.0 is never
+invited, but the command still works there.
+
+## The four steps
+
+| Step | Writes | Applied |
+|---|---|---|
+| Language (en, es, pt, fr, ru, tr) | `config.yml` `language` | At once for the library; plugins on `default` follow on their next restart. |
+| Menus (chest windows, screens, players choose) | `screens.yml` `default-style` and `player-choice`; *players choose* also turns `settings.command.enabled` on | At once; the `/settings` command after a restart. |
+| Look (five colour themes, small capitals, server address) | `colors.yml` identity colours and `server-ip`, `config.yml` `small-text` | At once, every plugin repaints. |
+| Database (this server only, or a network) | Every Exylia plugin's `database.yml`, `config.yml` `share-database` | On the next restart. |
+
+A theme changes the five identity colours only. `error`, `success`, `warning` and `info` keep their meaning, and a
+palette that matches no theme shows as *Custom* and is never overwritten unless a theme is clicked.
+
+## Moving to a shared database
+
+Choosing **Network** asks, in a form (a dialog on 1.21.6+, chat questions before) for the engine (MySQL, MariaDB,
+PostgreSQL, MongoDB), host, port, database, user, this server's name on the proxy, its optional
+[network group](/docs/exylialib/minigame-modules#network-groups) and how servers talk (through the database, or Redis). The
+password is asked as a hidden input and never reaches chat, logs or a Discord bridge.
+
+The values are tested off the main thread before anything is saved: a pool is opened, MongoDB or Redis is pinged.
+A failure names the cause with passwords masked and the form reopens with what was typed. The test also refuses a
+server name that a running server of that database already uses, since two servers under one name would both
+own the same balances and places.
+
+- **Nothing in the database yet** (the first server): one confirm, *Move N plugins to MySQL?*.
+- **Some plugins already have rows** (a second server joining): one form asks, per plugin, *Add mine, the
+  network's wins on a clash* (default), *Use the network's, keep mine in my file* or *Do not move this plugin*.
+- Two moving plugins that share a table name get a warning, since their rows would mix.
+
+The setup then records each move in `plugins/ExyliaLib/moves.yml`, points ExyliaLib's and each plugin's
+`database.yml` at the shared database (comments and other keys kept), turns `share-database` on so plugins
+installed later start there too, and leaves a plugin already on a database server alone.
+
+Rows follow without a bulk import: each table is copied from the plugin's old H2 file **the moment the plugin
+first opens it** (1.581.0), before its first read. A plugin never sees an empty table and seeds defaults into it,
+and a module turned on a week later still brings its rows. The old file is only read and stays as a copy.
+**This server only** puts ExyliaLib and the moved plugins back on H2 after a restart; what they saved in the
+shared database stays there.
+
+`share-database: true` in `config.yml` makes a plugin with no `database.yml` start with a copy of ExyliaLib's when
+that names a database server. An existing `database.yml` is never touched. It is off by default; the setup turns
+it on for a network.

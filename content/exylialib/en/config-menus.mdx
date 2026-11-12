@@ -7,6 +7,13 @@ description: "Change every plugin's settings and content catalogues from a menu 
 [web editor](/docs/exylialib/web-editor) edits. The plugin writes no menu code. Players only: the console is
 pointed at `/exylialib editor`.
 
+<Callout type="note" title="Plugins design their own settings screens first">
+Since 1.555.0 a plugin's admin hub carries settings pages it designs itself: only what an admin really tunes,
+grouped by purpose, each card saying what the value does. The tree below draws every key of every file in
+file order, so it stays behind `/exylialib config` as a power tool, and opening it from a plugin's hub with
+`ConfigMenus.of(...)` is deprecated.
+</Callout>
+
 | Command | Opens |
 |---|---|
 | `/exylialib config` | The plugins with settings. |
@@ -31,7 +38,57 @@ subject and was not excluded by the plugin. Messages and menus are not shown. Co
 registers with `WebEditor.of(plugin).yaml(id, path)` follow, each with its own checker that refuses only what
 the plugin would not load.
 
-## For plugin developers
+## Your own settings screens
+
+`ConfigEdits` (`net.exylia.lib.config`, since 1.555.0) is the plumbing; the plugin writes the screen (an ordinary
+admin menu) and decides what is on it. Each card is written by the plugin for what the value does; the library
+writes the rest in the server's language: the current value, its default and the click lines.
+
+```java
+ConfigEdits fees = ConfigEdits.of(plugin, AuctionHouseDefaults::file);
+
+// every editable key as a live value, such as %ah_settings_listing_fee_percent%
+menus.open(admin, "menus/admin/settings_ah", fees.placeholders("ah_"));
+
+// one action for every card
+actions.registerSync("setting", "myplugin.admin.settings", (ctx, args) -> {
+    fees.card(ctx.player(), args.string(1, ""), ctx.get(UiKeys.CLICK).orElse(null), () -> reopen(ctx.player()));
+    return ActionResult.success();
+});
+```
+
+| Call | Does |
+|---|---|
+| `ConfigEdits.of(plugin, file)` | The edits of one `Configs.define` file. The file is read on every call, so a reload is followed. |
+| `value(key)` / `live(key)` | A key's value as screens show it, coloured (`Enabled`, `48h`, money in its currency, percent). `live` is a lambda for a menu context. |
+| `defaultValue(key)` | The value the record's no-argument constructor gives (1.562.0). |
+| `hint(key)` | The card's translated click lines, with the reset click while the value differs from its default (1.562.0). |
+| `placeholders(prefix)` | Every editable key as a live value: `prefix` plus the key with `.` and `-` as `_`, and the same name with `_default` and `_click`. `placeholders(prefix, keys)` (1.573.0) limits it to some keys, since every value is read on each redraw. |
+| `card(viewer, key, click, back)` | The one click handler every card needs (1.562.0): shift-right-click resets, a number or amount is typed prefilled (`10k`, `2.5M`), a switch flips, a choice steps, and a time, text, item, currency or item list is asked for. |
+| `reset(viewer, key)`, `tone(tone)` | Put a key back to its default; change the colour of the click lines (1.562.0). |
+
+Every change is checked against `@Menu.Range`, `AtLeast` and `AtMost`, written with `ConfigFile.set` (comments
+and order kept) and followed by the plugin's `Reloads`.
+
+The record's annotations decide how a value reads (1.562.0):
+
+- `@Menu.Format(value = MONEY, currency = "currency")` shows the amount in the currency the sibling key names.
+- `@Menu.Currency` on a text key opens a pick from the server's currencies.
+- `@Menu.Material` on a `List<String>` asks to add an item (the icon picker), remove one or edit as text.
+
+What goes on a settings screen and what stays in the file:
+
+- **In game:** what an admin changes while the server runs: fees, taxes, limits, prices, durations, switches,
+  blocked items, currencies, module switches.
+- **In the file:** database and network, intervals, sounds, debug, anti-abuse thresholds, layout numbers.
+- **Shape:** an admin hub card opens a settings hub with one card per module, each opening a sub-page of hand-written
+  cards. Module switches apply on the next restart, and the hub says how many changes wait
+  (`PluginModules.pendingRestart()`).
+
+The repository's `tools/settings-cards/settings_cards.py` turns a short spec (key, label, icon, two or three
+lines) into the English YAML of a hub and its pages, ready to translate.
+
+## The generic tree for developers
 
 A plugin can add a *Settings* button to its own admin hub and keep BACK pointing at it:
 
@@ -44,3 +101,8 @@ ConfigMenus.of(plugin)
 
 Optional `Menu` annotations on the record give labels, ranges and formats. The list of every plugin always
 needs `exylialib.config`.
+
+`ConfigMenus.of(plugin).permission(p).back(b).file(name).open(viewer)` opens one settings file straight away,
+by the name handed to `Configs.define` (such as `modules/hotbar/config`). That file is then the top screen:
+BACK runs `back(...)` and the button reads *Previous screen*. A name the plugin did not define, or one whose
+module is off, opens the plugin's settings as if no file had been asked for.

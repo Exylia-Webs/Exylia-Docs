@@ -12,6 +12,11 @@ Todos los módulos se alcanzan igual: una clase estática con el nombre del mód
 - [Pantallas en el mundo y utilidades](/docs/exylialib/pantallas-en-el-mundo-y-utilidades): menús espaciales, stage, escena de cajas, guide, habilidades, barras de acción, zonas de construcción, comandos dinámicos.
 - [Ajustes en el juego](/docs/exylialib/ajustes-en-el-juego): `/exylialib config`.
 - [Versiones de servidor](/docs/exylialib/versiones-de-servidor): soporte de Paper 1.21.1.
+- [Asistente de configuración](/docs/exylialib/asistente-de-configuracion): `/exylialib setup`, el traslado de base de datos y compartir una base.
+- [Pantallas](/docs/exylialib/pantallas) y [marcado de pantallas](/docs/exylialib/marcado-de-pantallas): menús 2D por paquetes con cursor, estilo de menú, XHTML y CSS.
+- [HUD](/docs/exylialib/hud): widgets, avisos y momentos que nunca quitan los controles.
+- [Clasificaciones](/docs/exylialib/clasificaciones): tablas que se mantienen solas por día, semana, mes, año y de siempre.
+- [Herramientas de lobby y economía](/docs/exylialib/herramientas-de-lobby-y-economia): hotbars, doble salto, plataformas de salto, diálogos, sala de kits, libro mayor.
 
 ## Fundamentos
 
@@ -139,6 +144,10 @@ Reloads.of(this)
 Cada paso informa por sí mismo: uno que lance se nombra en consola y al emisor se le dice cuántos
 salieron bien. Un plugin recargado a medias que no dice nada es peor que uno que nombra lo que falló.
 
+Cuando `/exylialib reload` ve que cambió el idioma de un plugin (`language: default` siguiendo un idioma nuevo de la librería),
+ejecuta una vez todo su `Reloads` declarado, así menús, mensajes y catálogos leen el idioma nuevo sin un segundo comando
+(1.534.0+). Los plugins van por turnos, uno cada pocos ticks, para que el servidor siga corriendo mientras se extiende el idioma (1.542.0+).
+
 El `Reloads` que un plugin declaró por última vez es también lo que se ejecuta después de que
 `/exylialib updates apply` o el [editor web](/docs/exylialib/editor-web) escriben uno de sus archivos, así que
 el cambio queda activo sin recargar a mano. Decláralo una vez, en un campo, en vez de construirlo dentro del
@@ -191,6 +200,26 @@ public final class AuctionsModule extends PluginModule {
 | **Comandos** | `commandHandlers()` devuelve objetos handler simples para que el plugin los registre con su propio Lamp. `registerCommands(lamp)` está obsoleto. |
 
 Al desactivar, `disableAll()` desactiva los módulos en marcha en orden inverso.
+
+### Cambiar un módulo en caliente
+
+Desde 1.557.0, `modules.setEnabled("auctions", false)` enciende o apaga un módulo sin reiniciar y devuelve un `ModuleToggle`
+(`succeeded()`, `changed()`, `missing()`, `menus()`). Guardar el interruptor es cosa del plugin.
+
+| Estado | Significado |
+|---|---|
+| `ENABLED` / `DISABLED` | ahora corre, o está apagado; `changed()` guarda los dependientes que se movieron con él |
+| `UNCHANGED` | ya estaba en ese estado |
+| `BLOCKED` | sigue apagado: `missing()` nombra los plugins o módulos que necesita y no corren |
+| `FAILED` | lanzó al activarse, se liberó y sigue apagado |
+| `UNKNOWN` | ningún módulo tiene ese id |
+
+- **Apagar:** todo módulo en marcha que lo necesita se apaga antes, el último registrado primero: se quitan los listeners de
+  `onEnable`, paran los temporizadores y corre `onDisable`. **Encender:** `registerConfigs`, `onEnable`, acciones, jugadores
+  conectados, temporizadores, y luego vuelven los dependientes cuyo interruptor está activo. El interruptor pedido gana el resto de la ejecución.
+- Las **acciones** de un módulo apagado responden `stop("switched off")` (`actions.onlyWhile(module::isEnabled)`), así los menús compilados siguen valiendo.
+- Los **comandos** no se pueden desregistrar en Lamp: registra `modules.allCommandHandlers()` y rechaza los comandos de un módulo
+  apagado con una `commandCondition` que use `modules.offModuleOf(method)`.
 
 ## Salida de depuración
 

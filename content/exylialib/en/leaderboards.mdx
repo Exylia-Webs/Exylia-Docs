@@ -1,0 +1,112 @@
+---
+title: "Leaderboards"
+description: "Leaderboards that keep themselves: kills, money or playtime, of all time and per day, week, month and year, offline players included."
+---
+
+Who has the most kills, money or playtime, of all time and today, this week, this month and this year, offline players
+included, with no stats plugin behind them. A hologram, a menu and a scoreboard all ask "who is first, and where am I";
+this module answers it once, from memory. Since 1.563.0, in `net.exylia.lib.leaderboard`.
+
+```java
+private Leaderboards boards;
+
+@Override
+public void onEnable() {
+    boards = Leaderboards.of(this);
+    boards.clock(PeriodClock.of("Europe/Madrid", 5, DayOfWeek.MONDAY));
+    boards.track("kills", LeaderboardSource.statistic(Statistic.PLAYER_KILLS));
+    boards.track("diamonds", LeaderboardSource.statistic(Statistic.MINE_BLOCK, Material.DIAMOND_ORE));
+    boards.track("money", LeaderboardSource.balance());
+    boards.track("playtime", LeaderboardSource.playtime());
+    boards.track("level", LeaderboardSource.placeholder("%player_level%"));
+}
+```
+
+There is one set of boards per server, shared by every plugin that calls `of`. The first plugin to open it hosts it: the
+tables live in its database and its scheduler runs the timers. When the host is disabled, what was sampled is written and
+the next enabled plugin that opened it takes over. A board belongs to the plugin that tracked it and is dropped when that
+plugin is disabled; its rows stay. Point the plugins of every server at one database and the boards are network-wide.
+
+## Sources
+
+| `LeaderboardSource` | Ranks by | Offline players | Per server |
+| --- | --- | --- | --- |
+| `statistic(Statistic)` | a vanilla statistic with no sub-type (`PLAYER_KILLS`, `DEATHS`) | yes | yes |
+| `statistic(Statistic, Material)` | blocks mined, items crafted, used, broken, picked up, dropped | yes | yes |
+| `statistic(Statistic, EntityType)` | mobs killed, killed by | yes | yes |
+| `balance()` / `balance(currency)` | the lib economy's default currency, or one by id | yes | no |
+| `playtime()` | playtime, in milliseconds | yes | no |
+| `placeholder(text)` | any placeholder, the lib's or PlaceholderAPI's | no, ranked as they join | no |
+
+A statistic with the wrong sub-type throws `IllegalArgumentException`. A placeholder ignores colours, spaces and thousands
+separators and reads `1.5K` as 1500.
+
+**One value everywhere, or one per server.** A statistic lives in each server's world folder, so each server keeps its own
+row and the board adds them up: kills on the whole network. A balance, playtime and a placeholder are taken to read the same
+everywhere, so the server a player is on writes their one row. `source.perServer()` makes any source the first kind.
+
+## Spans
+
+`ALL_TIME` is the source's value now; `DAILY`, `WEEKLY`, `MONTHLY` and `YEARLY` are what was gained since that period of the
+clock began. Periods follow the `PeriodClock` set with `boards.clock(...)` (default: midnight in the server's zone, weeks from
+Monday). Give every server of a network the same clock; changing it renames the current periods, which start over. Players
+who count zero in a span are not ranked.
+
+## Reading
+
+`boards.view(id, span)` returns a `LeaderboardView`. Every call reads the last sort from memory: safe from any thread, every
+tick. A view of a board nobody tracks yet is empty and fills once it is tracked.
+
+| Member | Answers |
+|---|---|
+| `List<Entry> top(int count)` | the first players, best first |
+| `Optional<Entry> at(int rank)` | the player in a place, from 1 |
+| `Optional<Entry> entryOf(UUID)` | a player's entry |
+| `OptionalInt rankOf(UUID)` | a player's place: each viewer sees their own |
+| `OptionalDouble valueOf(UUID)` | a player's value in the span |
+| `int size()` | how many are ranked |
+| `Optional<Duration> remaining()` | until the span starts over; empty for all time |
+
+Places are never shared: a tie goes to whoever reached the value first, then the lower id, so the order never flickers.
+`entry.formatted(style)` writes a value: blank (`12,345`), `compact` (`1.2K`, following `formats.yml`), `money`, `duration`
+(`1d 4h 12m`, for `playtime()`), or any `DecimalFormat` pattern.
+
+```java
+LeaderboardView weekly = boards.view("kills", Span.WEEKLY);
+String first = weekly.at(1).map(e -> e.name() + " " + e.formatted("compact")).orElse("—");
+```
+
+## Boards
+
+| Member | Does |
+|---|---|
+| `track(id, source)` | starts keeping a board, or changes what it ranks by. Ids are 1-48 of `A-Z a-z 0-9 _ . : -`, the same on every server |
+| `untrack(id)` | stops keeping it here; the rows stay |
+| `tracked()` | the ids tracked on this server, by any plugin |
+| `reset(id)` | starts a board over on every server. All time follows the source, so it comes back as players are read: a rebuild, not a zeroing |
+| `reset(id, span)` | starts one span over on every server; all time and the other spans are untouched |
+| `sampleEvery(Duration)` | how often online players are read; default one minute |
+| `sortEvery(Duration)` | how often boards are reloaded and sorted; default 30 seconds |
+| `clock(PeriodClock)` | the clock every board follows |
+
+The settings are shared by every plugin: the last call wins. Changing a board to a source that reads something else mixes old
+rows with new ones: reset it.
+
+## How it works
+
+- **Sampling:** every interval each online player is read on their own thread, and once more when they leave. A row is
+  written only when it changed, in one batch.
+- **Periods:** each row keeps, per period, the key and the value it started from, so money paid to somebody offline over the
+  reset counts for the new period, and a server that was down over a reset needs no catch-up.
+- **Sorting:** every sort interval each board's rows are read from the database (so other servers' players appear) and every
+  span is sorted off the server thread.
+- **Offline players:** a new board whose source can read them is filled from everybody who ever played here, in small batches
+  (ten statistic files a second, or twenty balance or playtime reads a second). A placeholder board fills as players join.
+- **Cost:** one timer a second, one entity task per online player per sample interval, one query per board per sort, nothing
+  on a view call.
+
+## Storage
+
+`exylia_leaderboard_values` (one row per board, player and scope) and `exylia_leaderboards` (one row per board ever reset).
+Both are `PROGRESS` and owned by `player`, so `/exylialib wipe` and `resetplayer` cover them. Neither goes through the Redis
+row cache.

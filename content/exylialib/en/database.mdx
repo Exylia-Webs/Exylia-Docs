@@ -374,6 +374,47 @@ Every call is a network round trip and blocks, so it belongs on an async thread.
 is off or unreachable: ask `available()` first, and build keys from `prefix()` so every server agrees.
 Rows still belong in a repository; this is a wire, not storage.
 
+## Sharing a database across a network
+
+- **Groups.** A table's scope comes from [`NetworkGroups`](/docs/exylialib/minigame-modules#network-groups) (1.576.0):
+  `repository(type, NetworkGroups.scope(plugin, setting))`. The plugin's setting only says `default`, `global`,
+  `server` or another group's name; the server's own group is written once in ExyliaLib's `config.yml`.
+- **Places keep their rows.** For data tied to one place (arenas, spawns, regions), `repository(type, scope, true)`
+  (1.581.0) starts a new scoped table from the rows under a previous `server-id`'s scope, or else the plain table.
+  Never use it for valuables: two servers would each start with a copy.
+- **Moved plugins.** When the [setup wizard](/docs/exylialib/setup-wizard) points a plugin at a shared database, each
+  table is copied from the old H2 file the first time it is prepared, before any operation runs (1.581.0). On a
+  clash `merge` adds the keys the network lacks and keeps the network's row; `network` adds nothing. A failed copy
+  is retried on the next start.
+- **Renaming a table.** `@Table(value = "clan_player_stats", previous = "player_stats")` copies the rows of the
+  first old name that exists and has every declared column into the new table (1.581.0).
+- **Name clashes.** Two plugins opening one table name with different records log an error naming both, since
+  their rows would mix. Rename one with `previous`. The library's own `exylia_*` tables are shared by design.
+- **Without Redis.** `cross-server: database` in `database.yml` (1.561.0; default `redis`) carries channels,
+  `Network`, the proxy bridge, cross-server teleports, `RedisKeys` and `onRemoteChange` through the shared
+  database, for a network with no Redis server. Servers poll every 250 ms (PostgreSQL is woken at once),
+  rows are read straight from the database with no cache, and `h2` with `database` is refused. ExyliaProxyUtils
+  needs the same setting. Redis stays the recommended network.
+- **Redis login.** `redis.username` (ACL user, Redis 6+) and `redis.ssl` (TLS) exist since 1.484.0.
+
+## Reading another plugin's database
+
+`ForeignDatabase` (1.480.0) lets an importer read the plugin it replaces from that plugin's SQLite file or MySQL
+server, **read-only**. Every call blocks, so run it in `Tasks.runAsync`.
+
+```java
+try (ForeignDatabase old = ForeignDatabase.sqlite(jobsFolder.resolve("jobs.sqlite.db"))) {
+    String table = old.table("jobs");                      // real name, any case; null when absent
+    for (Map<String, Object> row : old.rows(table)) {
+        UUID player = UUID.fromString(ForeignDatabase.text(row, "player_uuid"));
+    }
+}
+```
+
+`sqlite(path)` throws on a missing file rather than creating one; `mysql(host[:port], database, user, password)`
+opens MySQL or MariaDB; `tables()`, `table(name)`, `rows(table)`, `query(sql, params…)` and the static readers
+`text`, `number`, `decimal`, `bytes` cover the rest.
+
 ## Threads
 
 Database work runs on the server's own async pool — no executor of its own — and at most 32 tasks are

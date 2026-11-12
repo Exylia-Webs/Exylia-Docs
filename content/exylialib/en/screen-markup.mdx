@@ -1,0 +1,136 @@
+---
+title: "Screen markup"
+description: "Write a screen as XHTML and CSS: tags, attributes, the CSS subset, expressions, actions, components and words."
+---
+
+`ScreenMarkup` (since 1.485.0) reads a screen from a well-formed XHTML file and CSS sheets. Doctypes and external
+entities are refused; only markup that is not well-formed throws. `problems()` lists everything outside the subset
+(unknown tag or property, a pager with no grid, an unregistered action) once each, with `file:line:col`
+(`/exylialib screens check`). See [Screens](/docs/exylialib/screens) for opening, input and routing.
+
+```html
+<screen size="400x225">
+  <panel>
+    <tabs state="tab" default="play">
+      <tab value="play">Play</tab>
+      <tab value="settings">Settings</tab>
+    </tabs>
+    <column if="tab == 'play'">
+      <grid source="kits" columns="4" rows="2">
+        <card action="queue %kit_id%" selected="%kit_queued%">
+          <icon>%kit_icon%</icon><b>%kit_name%</b><small>%kit_playing% playing</small>
+        </card>
+        <empty>No kits in this category</empty>
+      </grid>
+      <pager for="kits"/>
+    </column>
+  </panel>
+</screen>
+```
+
+```css
+card:hover { outline: 1px var(--primary); }
+card[selected] { outline: 1px var(--success); background: var(--success)18; }
+```
+
+Shipped files use palette tokens, never hex, so `colors.yml` restyles every screen. In a `.css` file or a `style`
+attribute write colours as CSS: `var(--primary)`, `var(--letters-black)`, an optional hex alpha after it, and
+`#rrggbb`/`#rrggbbaa` literals. MiniMessage text inside the markup keeps `{token}`.
+
+## Tags
+
+| Tag | Does |
+|---|---|
+| `screen` | The root: `size="WxH"`, `backdrop`, `wheel`, `scene`, `parallax`, `routes`, `keys="navigate"`. |
+| `panel`, `column`, `row`, `box` | Boxes; `panel` is a themed column. |
+| `text`, `h1`, `h2`, `b`, `small`, `p`, `span`, `label` | Text; `p` wraps onto lines. `<nl>` starts a new line. |
+| `button`, `card` | Themed boxes with an `action`. |
+| `tabs`/`tab`, `chips`/`chip` | Option groups: a child with `value` sets the parent's `state` on click and gets `[selected]`. |
+| `grid`, `list` | Repeat children over a `source`; `columns` and `rows` make a window a `pager` moves. `track="%id%"` keeps rows' identity so they glide when reordered. |
+| `empty` | Shown by a repeating parent with no rows. |
+| `toggle`, `checkbox` | On/off, local with `state` or `checked="%field%"` with an `action`. |
+| `pager` | `for="<source>"`: previous, `page / pages`, next. |
+| `icon`, `item`, `item3d` | An item sprite, a real item model, a lit 3D model; `material=`, `head=`, `texture=` or `url=`. |
+| `img` | A picture: `src="img/x.png"`, `skin="<player>"` (whole body) or `face="<player>"`. |
+| `progress` | `value` and `max`: a bar filled with the CSS `color`. |
+| `modal` | A dialog while its `if` holds; `dismiss` runs on a click outside. |
+| `search` | A field that asks for a typed search on click and stores it in `state`. |
+| `window`, `canvas` | A live preview looking into the world; a sprite layer a plugin moves from Java. |
+| `if` / `else`, `switch`/`case`, `for`, `fragment` | Choose or repeat what is drawn. `<for each="i in 1..5">` takes a range. |
+| `template`, `include`, `slot` | Components (below). |
+
+## Attributes on any tag
+
+- `id`, `class` (also `class="card ${owned ? 'owned' : 'locked'}"`), `if`, `else`, `priority="low"` (left out first
+  when over budget), `refresh="5t"` (redraw this often, for a countdown), `key="w|a|s|d|space"`.
+- `action="name arg ..."` with built-ins `close`, `back`, `set <key> <value>`, `toggle <key>`, `clear <key>`,
+  `toast [success|error|info|warning] <text>`, `sound <key> [volume] [pitch]`,
+  `confirm '<question>' [dangerous] then <actions>` and `input text <key> '<prompt>' then <actions>`. Steps split by
+  `;` run in order, then the plugin's own `action(...)`, then a namespaced ExyliaLib action (`practice:join_queue boxing`).
+  A word is one argument after placeholders fill, so values with spaces never split; quote a word to keep spaces.
+- `action-right`, `action-shift` (sprint-click) and `action-hover` run instead for those events.
+- `require="<expression>"` gates every click (`require-right`, `require-shift`); when false, `deny` runs, or a quiet
+  refusal sound. `disabled`, `selected`, `checked` add CSS flags.
+- `state` + `default` (what a group remembers); `persist="player"` keeps the choice across sessions and restarts.
+- `%name%` is a row field, a registered value or session state, then any server placeholder. `${expression}` works
+  in text and attributes. `t="key"` and `t-<attribute>="key"` read [words](#words).
+- `tooltip`, `tooltip-item`, `assist="false"`.
+
+## Commands, messages and requirements
+
+Any action step that is an [interaction line](/docs/exylialib/actions) runs as one, in a list so `[DELAY]` waits and a
+refused command or an unaffordable charge stops everything after it: `[console] ...`, `[player] ...`, `[MONEY] take|give
+<amount> [currency]`, `[MESSAGE]`, `[TITLE]`, `[SERVER]`, `[TELEPORT]`, `[ACTION]`, `[DELAY]` (1.501.0).
+
+```html
+<card action="[MONEY] take 250; [console] give %player_name% diamond 16; toast success Bought"
+      require="balance() >= 250" deny="toast error 'You need 250 coins'">
+```
+
+## CSS subset
+
+Selectors: tag, `#id`, `.class`, `[selected]`/`[disabled]`/`[checked]`, `:hover`, `:focus`, `:active`, `:root`,
+`>` child, `:first-child`, `:last-child`, `:nth-child(odd|even|n)`, `:not(...)`, compounds and comma lists. Custom
+properties `--name: value` inherit and read with `var(--name, fallback)`.
+
+Properties: `flex-direction`, `display: none`, `gap`, `width`, `height`, `padding`, `margin`, `flex-grow`,
+`align-items`, `justify-content`, `background` (colour, gradient or `url(...)`), `outline`/`border`, `color`,
+`font-size`, `font-weight`, `text-align`, `position: absolute` with `top/right/bottom/left`, `z-index`, `max-width`,
+`white-space`, `text-shadow`, `border-radius` (HUD only), and `transform`, `transition`, `enter`, `leave`, `animation`
+with `@keyframes`.
+
+## Expressions
+
+`${...}` in text or attributes, and all of `if`, `else if` and `switch on`:
+
+| | |
+|---|---|
+| Values | `'text'`, numbers, `true`, `false`, `null`, `%placeholder%`, names (`kills`, `loop.index`). |
+| Operators | `?:`, `or`/`and`/`not`, `== != < <= > >=`, `in`, `+ - * / %`, parentheses. |
+| Functions | `min`, `max`, `abs`, `round`, `floor`, `ceil`, `len`, `upper`, `lower`, `plural(n, 'one', 'many')`, `t(key, fallback)`, `fmt.number`, `fmt.percent`, `fmt.time`. |
+| About the viewer | `perm('node')`, `balance()`, `balance('points')`, `has_item('diamond', 16)`, `level()`, `world()`. |
+| Text and chance (1.552.0) | `contains(text, 'part')`, `matches(text, 'regex')`, `chance(30)`. |
+
+A plugin adds its own with `ExpressionFunctions.register(plugin, "data", (viewer, args) -> ...)`; it is released when
+the plugin disables.
+
+## Words
+
+One HTML serves every language: an element with `t="key"` shows the word from `lang/<code>/screens/<id>.yml` (the
+server's language, then English), and the written text if neither has it. `t-on`, `t-off`, `t-title` do the same for
+attributes. Words may hold colour tokens, placeholders and `${...}`. Text on a screen takes `{icon:...}` as lore does
+(1.568.0): write a sprite such as `{icon:search}`, never a bare symbol like `⌕`.
+
+## Components
+
+```html
+<template name="stat" props="label value tone=info">
+  <row class="stat"><small t="${label}"><slot/></small><b>{${tone}}${value}</b></row>
+</template>
+<stat label="stats.kills" value="%me_kills%" tone="success">Kills</stat>
+```
+
+`components/*.html` next to a screen are known to every screen of the folder; `<include src="parts/x.html"/>` inlines a
+file of the same folder (never outside it). Values a player chose (a name, a typed search) must never restyle a
+screen: register them with `text(name, ...)` or as `rows(name, ...)` of `UiEntry`s with `with(...)` (drawn as written),
+and use `withFormatted(...)` only for text the plugin controls. `ScreenEvent#row()` is the row of the clicked box.

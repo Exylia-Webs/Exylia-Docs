@@ -1,0 +1,138 @@
+---
+title: "Lobby and economy tools"
+description: "Hotbars, double jump and jump pads, dialogues, the kit room and the economy ledger."
+---
+
+Small services that several plugins share. Hotbars, movement and dialogues are for lobbies and story content; the kit room
+and the ledger serve PvP and economy plugins.
+
+## Hotbars
+
+A lobby hotbar (1.559.0): named sets of buttons drawn in a player's inventory, each with its slot, look, clicks, permission
+and cooldown, frozen in place. `net.exylia.lib.hotbar.Hotbars`.
+
+```java
+hotbars = Hotbars.of(this, actions)                  // actions: the namespace the lines compile in
+        .register(HotbarSet.of("lobby", List.of(
+                HotbarItem.of("selector", 0, selectorItem)
+                        .withActions(List.of("right: lobby:selector"))
+                        .withCooldown(Duration.ofMillis(500)),
+                HotbarItem.of("cosmetics", 4, cosmeticsItem)
+                        .withPermission("lobby.cosmetics", lockedCosmeticsItem)   // null: hidden instead
+                        .withCommands(List.of("right: player: cosmetics")))))
+        .onCooldown((player, left) -> messages.send(player, "hotbar-wait", left));
+
+hotbars.show(player, "lobby");    // entering the lobby
+hotbars.hide(player);             // leaving it
+hotbars.refresh(player);          // a permission or a button's state changed
+```
+
+- A button's `actions` and `commands` are click-prefixed lines as a menu or overlay item writes them (`right:`, `left:`,
+  `shift_right:`, `drop:`, `swap:`, no prefix for every click). Every line compiles at `register`; an unregistered action
+  fails there.
+- `HotbarSet.of(name, items)` is the lobby default: every slot frozen, the rest blank, no pickups, never redrawn.
+  `withInventory(lock, hideRest, pickup)` and `withRefresh(UiRefresh)` change it.
+- Built on [overlays](/docs/exylialib/overlays): nothing is written into the real inventory, so a crash can never leave a
+  working button behind as a real item. It needs PacketEvents (`Hotbars.isAvailable()`).
+- **A button is drawn, not held.** Hitting with one hits like a bare hand. Combat gear must be real items the plugin gives.
+- A cooldown (through the shared cooldowns) plays the refusal sound and calls `onCooldown`. A button with a permission is
+  drawn only for holders; the others see its `locked` look or an empty slot. Permissions are re-read every two seconds.
+
+## Movement
+
+A lobby's two ways of getting around faster (1.559.0): `DoubleJump` and `JumpPads` in `net.exylia.lib.movement`.
+
+```java
+doubleJump = DoubleJump.of(this)
+        .forward(0.9).vertical(0.75)              // the defaults
+        .cooldown(Duration.ofSeconds(1))
+        .permission("lobby.doublejump")           // optional
+        .when(player -> lobby.contains(player))
+        .start();
+
+pads = JumpPads.of(this).cooldown(Duration.ofSeconds(1)).when(lobby::contains).pads(settings.pads()).start();
+pads.put(JumpPad.of("east", PadTrigger.at(target.getLocation()), 1.6, 0.9).towards(-90f));
+```
+
+- **Double jump** uses the flight toggle: an eligible player on the ground may fly, and pressing jump in the air is cancelled
+  and turned into the launch. It only touches its own flight (creative, spectator and `/fly` are left alone), takes it off
+  when the player stops being eligible, and cancels the fall damage of the landing. The predicate runs on every block crossed
+  on the player's thread: read memory.
+- **Jump pads** fire from a `PadTrigger`: `at(location)`, `materials(pad[, below])` or `plates(below)`. `JumpPad(id, trigger,
+  power, vertical, yaw, effect)` throws the player the way they look, or at a fixed yaw with `towards(yaw)`.
+- The pads are the plugin's data: nothing is saved here. Hand the list in at start and after every edit (`put`, `remove`,
+  `set`); `padAt(location)` answers "which pad is this?".
+- Creative and spectator players, players failing the permission or predicate and anyone in the cooldown are never thrown.
+
+## Dialogues
+
+RPG conversations in a box at the bottom of the screen (1.590.0), with no resource pack: the speaker's name and face, each line
+typed out, answers under the last line. `net.exylia.lib.dialogue`.
+
+```java
+Component guide = Text.of("{highlight}Guide").build();
+Dialogue talk = Dialogue.of(List.of(
+                Dialogue.Line.of(Text.of("{letters}Welcome, traveller.").build()).speaker(guide).face("Notch"),
+                Dialogue.Line.of(Text.of("{letters}Shall I show you around?").build()).speaker(guide).face("Notch")))
+        .answers(List.of(Text.of("{letters}Lead the way").build(), Text.of("{letters}Not now").build()))
+        .onLine(index -> playVoice(player, index));
+
+Dialogues.of(this).open(player, talk).thenAccept(result -> {
+    if (result.finished() && result.answer() == 0) tour(player);
+});
+```
+
+| `mode` | Where | How the player answers |
+|---|---|---|
+| `HUD` (default) | a [HUD](/docs/exylialib/hud) widget over the hotbar | They keep walking. A sneak or click goes on (the first press finishes the line); under the last line the wheel moves the choice, a number key picks, a sneak or click confirms. |
+| `SCREEN` | a [screen](/docs/exylialib/screens) with a cursor | They stand still. A click on the box goes on; under the last line they click an answer. Closing cancels. |
+
+- One conversation per player across plugins; opening another, `Dialogues.close(player)`, quitting or dying ends the first
+  with `Result.CANCELLED`.
+- `onLine(index)` runs on the player's thread as each line starts: sounds, actions, a camera cue.
+- Bedrock, a server without PacketEvents, and (in `HUD` mode) a player who hid their HUD read every line in chat and answer in
+  a choice input.
+- `width` (pixels the text wraps at, 220) and `speed` (letters a second, 40; 0 shows lines whole); `hints(...)` replaces the
+  small line under the box.
+
+## Kit room
+
+Categories of items players take copies of to build their own kits (1.511.0). Staff fill the room in game; every click hands
+a copy into the player's inventory; the plugin checks what they built before saving, so a kit only holds what the room offered.
+
+```java
+KitRoom room = KitRooms.of(plugin);
+room.edit(admin, () -> AdminHub.open(admin));        // staff: categories and their items
+room.open(player, List.of("gear", "potions"));      // players: take copies; empty list = every category
+if (!room.allows(items, List.of("gear", "potions"))) refuse();   // before saving a build
+```
+
+- Per plugin: each keeps its own categories in its own database (`exylia_kitroom`, `DataKind.SETUP`). An empty room starts
+  with defaults (gear in three tiers, consumables, splash potions and arrows).
+- A click takes one stack, shift a full stack, F puts it in the off hand. Amounts are not checked: the room limits *which*
+  items, not how many.
+- `KitRooms.of(plugin, seed)` fills the room from `seed` the first time its table is empty, to move a room a plugin kept itself.
+- Always a chest window, in the SCREEN menu style too. Saving a build, and where it is built, is the plugin's job.
+
+## Ledger
+
+How much money the server's plugins created and took out of the economy, per hour, plugin and source (1.478.0).
+`net.exylia.lib.ledger.Ledger`.
+
+```java
+Ledger ledger = Ledger.of(this);
+Ledger.created(this, "daily-reward", player.getUniqueId(), amount);
+Ledger.sunk(this, "order-tax", player.getUniqueId(), tax);
+
+long now = Ledger.currentHour();
+ledger.top(Ledger.Flow.CREATED, null, now - 24, now + 1, 10).thenAccept(top -> ...);   // top earners, last day
+```
+
+- **Created** is money that enters from nothing (a job payout, a sell to the server); **sunk** is money that leaves (a tax, a
+  fee). A transfer between players is neither. Every `Modifiers.pay` that deposits is recorded as created, under the calling
+  plugin; sinks are recorded with `Ledger.sunk`.
+- Reads: `day(day)`, `hour(hour)` (every `Entry`, all servers), `top(flow, currency, fromHour, toHour, limit)` (at most 31 days),
+  `player(uuid, flow, currency, from, to)` and the per-plugin overload that a plugin caps its own payouts on.
+- Nothing is recorded until a plugin opens the ledger. Counts are kept in memory and written every minute with atomic
+  increments, so servers sharing a database add up. Amounts keep two decimals. Rows older than 90 days are purged.
+- Tables `exylia_ledger` and `exylia_ledger_players` (`HISTORY`, owned by `player`) are covered by `/exylialib wipe`.

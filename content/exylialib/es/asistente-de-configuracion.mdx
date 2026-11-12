@@ -1,0 +1,67 @@
+---
+title: "Asistente de configuración"
+description: "La configuración inicial que se ofrece a los admins tras una instalación nueva: idioma, estilo de menús, colores y una base de datos compartida probada para toda la red."
+---
+
+`/exylialib setup` (desde 1.572.0) guía a un admin por las elecciones que siguen todos los plugins de Exylia:
+idioma, estilo de menús, aspecto y base de datos. Todo se elige desde pantallas del juego y se aplica en cuanto
+se pulsa.
+
+| Comando | Hace |
+|---|---|
+| `/exylialib setup` | Abre el hub en cualquier momento. Requiere `exylialib.admin`. |
+| `/exylialib setup later` | El botón MÁS TARDE de la invitación. |
+
+## Cuándo se ofrece
+
+Solo tras una **instalación nueva**: ExyliaLib arrancando sin `config.yml`. Ese arranque escribe
+`plugins/ExyliaLib/setup.yml` con `status: pending`, y cada admin que entra recibe una invitación centrada una
+vez por arranque, con **[✔ CONFIGURAR]** y **[✘ MÁS TARDE]**. MÁS TARDE vuelve a preguntar tras el siguiente
+reinicio; la tarjeta **Finalizar** del hub escribe `status: done` y las invitaciones paran. Un servidor que ya usaba la
+librería antes de 1.572.0 nunca es invitado, pero el comando sigue funcionando.
+
+## Los cuatro pasos
+
+| Paso | Escribe | Se aplica |
+|---|---|---|
+| Idioma (en, es, pt, fr, ru, tr) | `language` en `config.yml` | Al instante para la librería; los plugins en `default` lo siguen en su próximo reinicio. |
+| Menús (ventanas de cofre, pantallas, que elija el jugador) | `default-style` y `player-choice` en `screens.yml`; *que elija el jugador* también activa `settings.command.enabled` | Al instante; el comando `/settings` tras un reinicio. |
+| Aspecto (cinco temas de color, versalitas, dirección del servidor) | Los colores de identidad y `server-ip` en `colors.yml`, `small-text` en `config.yml` | Al instante, todos los plugins se repintan. |
+| Base de datos (solo este servidor, o una red) | El `database.yml` de cada plugin de Exylia, `share-database` en `config.yml` | En el siguiente reinicio. |
+
+Un tema cambia solo los cinco colores de identidad. `error`, `success`, `warning` e `info` conservan su
+significado, y una paleta que no coincide con ningún tema aparece como *Personalizada* y no se sobrescribe salvo
+que se pulse un tema.
+
+## Pasar a una base de datos compartida
+
+Elegir **Red** pregunta, en un formulario (un diálogo en 1.21.6+, preguntas en el chat antes), el motor (MySQL,
+MariaDB, PostgreSQL, MongoDB), host, puerto, base de datos, usuario, el nombre de este servidor en el proxy, su
+[grupo de red](/docs/exylialib/minijuegos-y-red#grupos-de-red) opcional y cómo se hablan los servidores (por la base de datos o
+Redis). La contraseña se pide en una entrada oculta y nunca llega al chat, a los logs ni a un puente de Discord.
+
+Los valores se prueban fuera del hilo principal antes de guardar nada: se abre un pool, se hace ping a MongoDB o
+Redis. Un fallo nombra la causa con las contraseñas enmascaradas y el formulario se reabre con lo escrito. La
+prueba también rechaza un nombre de servidor que ya usa un servidor en marcha de esa base de datos, porque dos
+servidores con un mismo nombre poseerían los mismos saldos y lugares.
+
+- **Aún nada en la base de datos** (el primer servidor): una confirmación, *¿Mover N plugins a MySQL?*.
+- **Algunos plugins ya tienen filas** (un segundo servidor que se une): un formulario pregunta, por plugin,
+  *Añadir lo mío, gana lo de la red en un choque* (por defecto), *Usar lo de la red, conservar lo mío en mi
+  archivo* o *No mover este plugin*.
+- Dos plugins que se mueven y comparten nombre de tabla reciben un aviso, porque sus filas se mezclarían.
+
+Después el asistente anota cada movimiento en `plugins/ExyliaLib/moves.yml`, apunta el `database.yml` de
+ExyliaLib y de cada plugin a la base compartida (se conservan comentarios y demás claves), activa
+`share-database` para que los plugins instalados más tarde arranquen allí también, y deja en paz a un plugin que
+ya está en un servidor de base de datos.
+
+Las filas siguen sin importación masiva: cada tabla se copia del antiguo archivo H2 del plugin **en el momento en
+que el plugin la abre por primera vez** (1.581.0), antes de su primera lectura. Un plugin nunca ve una tabla vacía
+ni siembra valores por defecto en ella, y un módulo activado una semana después sigue trayendo sus filas. El
+archivo viejo solo se lee y queda como copia. **Solo este servidor** devuelve a H2 ExyliaLib y los plugins movidos
+tras un reinicio; lo que guardaron en la base compartida se queda allí.
+
+`share-database: true` en `config.yml` hace que un plugin sin `database.yml` arranque con una copia del de
+ExyliaLib cuando este nombra un servidor de base de datos. Un `database.yml` existente nunca se toca. Está
+apagado por defecto; el asistente lo activa para una red.

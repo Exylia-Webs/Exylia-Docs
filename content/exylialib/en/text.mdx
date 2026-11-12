@@ -88,8 +88,12 @@ and changing one recolours every plugin in the ecosystem at once:
 | `{letters}` | `#e7cfff` | `{neutral}` | `#6c757d` |
 | `{letters_black}` | `#a89ab5` | `{highlight}` | `#ffd700` |
 | `{error}` | `#a33b53` | `{muted}` | `#868e96` |
+| `{error_light}` | `#d4617d` | | |
 | `{success}` | `#8fffc1` | `{warning}` | `#ff9500` |
 | `{success_light}` | `#a1ffc3` | `{warning_light}` | `#ffd2a8` |
+
+`{error_light}` (1.477.0) is the light end of an error gradient and is added to an existing `colors.yml` with
+its default.
 
 `colors.yml` also holds `server-ip`, written `{server-ip}` in any message, so the address on every
 scoreboard and message changes in one place. `Colors.get(token)` reads a colour as a `TextColor`, and
@@ -263,6 +267,76 @@ so a renamed key still reads old files.
 
 Only lines that actually mention the multi-line value are stretched, and the rest of the template
 repeats around each one — so a bullet stays a bullet on the second line.
+
+## Palette tokens in gradients (since 1.477.0)
+
+A token written as a tag's argument is the bare colour, so gradients follow the palette: `{primary}` is
+`<#8a51c4>` in text and `#8a51c4` inside `<gradient:…>`, `<transition:…>`, `<color:…>` or `<shadow:…>`.
+
+```yaml
+name: '{letters}Queue {letters_black}▸ <gradient:{info}:{info_light}>%kit_name%</gradient>'
+```
+
+A gradient around a value (`%kit_name%`) is painted once the value is in, across its real letters. Bold and other
+decorations written inside it are kept; only the gradient's colours are read.
+
+## Moving text (since 1.579.0)
+
+The colour and text effects of hologram lines work in any text the library parses: sidebar titles and lines, boss
+bars, action bars and titles. They are read from the very start of the text and move all of it.
+
+| Tag | Effect |
+|---|---|
+| `<flow>` / `<flow:8>` | The text's own colours flow along it, in characters a second (default 4). |
+| `<shine>` | A band of light sweeps over it every few seconds (`speed`, `pause`, `width` options). |
+| `<rainbow>` / `<rainbow:10>` | A soft rainbow runs along it (default 6 characters a second). |
+| `<frames>` / `<frames:1.5>` | The text is split by `||` into frames that take turns. |
+| `<marquee:20>` | Shows 20 characters of a longer text at a time, scrolling. |
+| `<blink>` / `<blink:0.5>` | Shows and hides every that many seconds. |
+
+The frame comes from the clock. A sidebar sends a moving line again only when its frame changed, so a smooth flow
+wants `update.interval: 2` (or `1`); at the default `20` it moves in one-second steps. Text drawn once (chat, lore,
+item names) shows one frame. Fade, scramble, typewriter and the motion tags need a display entity and stay
+hologram-only.
+
+## Icons (since 1.477.0)
+
+`{icon:name}` draws a game sprite inside a line, eight pixels square: `{icon:clock}`, `{icon:kills}`,
+`{icon:heart}`, `{icon:gold}`, `{icon:pickaxe}`, `{icon:click}` and more. Any sprite works as
+`{icon:items:item/diamond|♦}` (atlas, id, then the glyph that stands in), and `|tint` draws it in the colour around it.
+
+- Write the colour first, so the stand-in glyph is right everywhere: `{info}{icon:clock} {letters}Played`.
+- A server or client older than 1.21.9 gets the glyph. With PacketEvents, a pre-1.21.9 client behind ViaBackwards
+  gets it swapped on item names, lore and sidebars (1.541.0).
+- Icons belong in item names and lore, scoreboard lines (1.541.0) and screen text (1.568.0). Titles, chat, action
+  bars, boss bars and Discord keep plain text, and time there keeps the literal ⌚.
+- Interface icons (1.487.0): `click` and `right_click` open action lines, `on` and `off` and `locked` and
+  `unlocked` show states, `up` and `down` trends, `warning` a problem on a card, `signal_1`…`signal_5` five-step levels.
+
+## Card lore in code: `Lore` (since 1.477.0)
+
+Lore a plugin builds in Java follows the card layout its YAML menus use, and `Lore` writes the strings so code and
+files cannot drift apart.
+
+```java
+String name = Lore.name(Lore.Tone.PRIMARY, "Mine", "%mine_name%");
+List<String> lore = Lore.of(Lore.Tone.PRIMARY)
+        .subtitle("Mine setting")
+        .section("Information").text("How and when this mine").text("refills its blocks.")
+        .section("✦", "Status").stat("clock", "info", "Interval", "%interval%")
+        .click("Left-click", "edit interval")
+        .lines();
+```
+
+`Tone` picks the colour pair: `PRIMARY`, `INFO`, `SUCCESS`, `HIGHLIGHT`, `WARNING`, `ERROR`, `ACCENT`.
+
+## Writing a line out and countdowns
+
+- `Typewriter.of(component, lineWidth)` (1.528.0) wraps a line once; `frame(n)` is the line with its first `n`
+  characters written and spaces as wide as the rest, so a centred panel keeps its size.
+- `TimeTokens.resolve(text)` (1.563.0) fills `{countdown:2026-12-01 18:00 Europe/Madrid|{success}now!}` (time left,
+  leading zero units dropped, the text after `|` once passed) and `{date:HH:mm}` (now, in a `DateTimeFormatter`
+  pattern) before the text is parsed. Without a zone it uses the server's. Holograms re-render such a line every second.
 
 ## Performance
 

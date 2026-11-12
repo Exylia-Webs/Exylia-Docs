@@ -91,8 +91,12 @@ Los mensajes nombran un rol, no un valor hexadecimal. Vienen dieciséis roles, d
 | `{letters}` | `#e7cfff` | `{neutral}` | `#6c757d` |
 | `{letters_black}` | `#a89ab5` | `{highlight}` | `#ffd700` |
 | `{error}` | `#a33b53` | `{muted}` | `#868e96` |
+| `{error_light}` | `#d4617d` | | |
 | `{success}` | `#8fffc1` | `{warning}` | `#ff9500` |
 | `{success_light}` | `#a1ffc3` | `{warning_light}` | `#ffd2a8` |
+
+`{error_light}` (1.477.0) es el extremo claro de un degradado de error y se añade con su valor por defecto a un
+`colors.yml` existente.
 
 `colors.yml` también guarda `server-ip`, escrito `{server-ip}` en cualquier mensaje, así que la
 dirección de cada scoreboard y mensaje cambia en un solo lugar. `Colors.get(token)` lee un color como
@@ -272,6 +276,76 @@ probando cada clave en orden para que una clave renombrada siga leyendo archivos
 
 Solo se estiran las líneas que mencionan el valor multilínea, y el resto de la plantilla se repite
 alrededor de cada una — así que una viñeta sigue siendo una viñeta en la segunda línea.
+
+## Tokens de la paleta en degradados (desde 1.477.0)
+
+Un token escrito como argumento de una etiqueta es el color en bruto, así que los degradados siguen la paleta:
+`{primary}` es `<#8a51c4>` en texto y `#8a51c4` dentro de `<gradient:…>`, `<transition:…>`, `<color:…>` o `<shadow:…>`.
+
+```yaml
+name: '{letters}Queue {letters_black}▸ <gradient:{info}:{info_light}>%kit_name%</gradient>'
+```
+
+Un degradado alrededor de un valor (`%kit_name%`) se pinta una vez puesto el valor, a lo largo de sus letras reales.
+La negrita y otras decoraciones escritas dentro se conservan; solo se leen los colores del degradado.
+
+## Texto en movimiento (desde 1.579.0)
+
+Los efectos de color y texto de las líneas de holograma funcionan en cualquier texto que la librería procesa: títulos
+y líneas de scoreboard, bossbars, action bars y títulos. Se leen desde el principio del texto y mueven todo.
+
+| Etiqueta | Efecto |
+|---|---|
+| `<flow>` / `<flow:8>` | Los colores del texto fluyen a lo largo de él, en caracteres por segundo (4 por defecto). |
+| `<shine>` | Una banda de luz lo recorre cada pocos segundos (opciones `speed`, `pause`, `width`). |
+| `<rainbow>` / `<rainbow:10>` | Un arcoíris suave lo recorre (6 caracteres por segundo por defecto). |
+| `<frames>` / `<frames:1.5>` | El texto se divide por `||` en fotogramas que se turnan. |
+| `<marquee:20>` | Muestra 20 caracteres de un texto largo cada vez, desplazándose. |
+| `<blink>` / `<blink:0.5>` | Se muestra y oculta cada tantos segundos. |
+
+El fotograma sale del reloj. Un scoreboard reenvía una línea en movimiento solo cuando cambió su fotograma, así que un
+flujo suave pide `update.interval: 2` (o `1`); con el `20` por defecto avanza a saltos de un segundo. El texto que se
+dibuja una vez (chat, lore, nombres de objetos) muestra un fotograma. Fundido, scramble, máquina de escribir y las
+etiquetas de movimiento necesitan una entidad display y siguen siendo solo de hologramas.
+
+## Iconos (desde 1.477.0)
+
+`{icon:nombre}` dibuja un sprite del juego dentro de una línea, de ocho píxeles: `{icon:clock}`, `{icon:kills}`,
+`{icon:heart}`, `{icon:gold}`, `{icon:pickaxe}`, `{icon:click}` y más. Cualquier sprite sirve como
+`{icon:items:item/diamond|♦}` (atlas, id y el glifo que lo sustituye), y `|tint` lo dibuja en el color que lo rodea.
+
+- Escribe antes el color, para que el glifo sustituto sea correcto en todas partes: `{info}{icon:clock} {letters}Jugado`.
+- Un servidor o cliente anterior a 1.21.9 recibe el glifo. Con PacketEvents, un cliente anterior a 1.21.9 tras
+  ViaBackwards lo recibe cambiado en nombres de objetos, lore y scoreboards (1.541.0).
+- Los iconos van en nombres y lore de objetos, líneas de scoreboard (1.541.0) y texto de pantallas (1.568.0). Títulos,
+  chat, action bars, bossbars y Discord mantienen texto plano, y el tiempo ahí conserva el ⌚ literal.
+- Iconos de interfaz (1.487.0): `click` y `right_click` abren las líneas de acción, `on`/`off` y `locked`/`unlocked`
+  muestran estados, `up`/`down` tendencias, `warning` un problema en una tarjeta, `signal_1`…`signal_5` niveles de cinco pasos.
+
+## Lore de tarjetas en código: `Lore` (desde 1.477.0)
+
+El lore que un plugin construye en Java sigue el diseño de tarjeta de sus menús YAML, y `Lore` escribe las cadenas
+para que código y archivos no se desincronicen.
+
+```java
+String name = Lore.name(Lore.Tone.PRIMARY, "Mine", "%mine_name%");
+List<String> lore = Lore.of(Lore.Tone.PRIMARY)
+        .subtitle("Mine setting")
+        .section("Information").text("How and when this mine").text("refills its blocks.")
+        .section("✦", "Status").stat("clock", "info", "Interval", "%interval%")
+        .click("Left-click", "edit interval")
+        .lines();
+```
+
+`Tone` elige el par de colores: `PRIMARY`, `INFO`, `SUCCESS`, `HIGHLIGHT`, `WARNING`, `ERROR`, `ACCENT`.
+
+## Escribir una línea y cuentas atrás
+
+- `Typewriter.of(component, lineWidth)` (1.528.0) ajusta una línea una vez; `frame(n)` es la línea con sus primeros
+  `n` caracteres escritos y espacios igual de anchos para el resto, así un panel centrado conserva su tamaño.
+- `TimeTokens.resolve(text)` (1.563.0) rellena `{countdown:2026-12-01 18:00 Europe/Madrid|{success}now!}` (tiempo
+  restante, sin unidades iniciales a cero, y el texto tras `|` una vez pasado) y `{date:HH:mm}` (ahora, con un patrón
+  de `DateTimeFormatter`) antes de procesar el texto. Sin zona usa la del servidor. Los hologramas reprocesan esa línea cada segundo.
 
 ## Rendimiento
 

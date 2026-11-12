@@ -1,0 +1,138 @@
+---
+title: "Marcado de pantallas"
+description: "Escribe una pantalla como XHTML y CSS: etiquetas, atributos, el subconjunto de CSS, expresiones, acciones, componentes y palabras."
+---
+
+`ScreenMarkup` (desde 1.485.0) lee una pantalla de un archivo XHTML bien formado y hojas CSS. Los doctypes y las entidades
+externas se rechazan; solo lanza el marcado mal formado. `problems()` lista una vez cada cosa fuera del subconjunto (etiqueta
+o propiedad desconocida, un pager sin grid, una acción sin registrar) con `archivo:línea:col`
+(`/exylialib screens check`). Mira [Pantallas](/docs/exylialib/pantallas) para abrir, entrada y rutas.
+
+```html
+<screen size="400x225">
+  <panel>
+    <tabs state="tab" default="play">
+      <tab value="play">Play</tab>
+      <tab value="settings">Settings</tab>
+    </tabs>
+    <column if="tab == 'play'">
+      <grid source="kits" columns="4" rows="2">
+        <card action="queue %kit_id%" selected="%kit_queued%">
+          <icon>%kit_icon%</icon><b>%kit_name%</b><small>%kit_playing% playing</small>
+        </card>
+        <empty>No kits in this category</empty>
+      </grid>
+      <pager for="kits"/>
+    </column>
+  </panel>
+</screen>
+```
+
+```css
+card:hover { outline: 1px var(--primary); }
+card[selected] { outline: 1px var(--success); background: var(--success)18; }
+```
+
+Los archivos entregados usan tokens de paleta, nunca hex, así `colors.yml` reestiliza todas las pantallas. En un `.css` o un
+atributo `style` los colores se escriben como CSS: `var(--primary)`, `var(--letters-black)`, alfa hex opcional detrás, y
+literales `#rrggbb`/`#rrggbbaa`. El texto MiniMessage dentro del marcado conserva `{token}`.
+
+## Etiquetas
+
+| Etiqueta | Hace |
+|---|---|
+| `screen` | La raíz: `size="WxH"`, `backdrop`, `wheel`, `scene`, `parallax`, `routes`, `keys="navigate"`. |
+| `panel`, `column`, `row`, `box` | Cajas; `panel` es una columna con tema. |
+| `text`, `h1`, `h2`, `b`, `small`, `p`, `span`, `label` | Texto; `p` parte en líneas. `<nl>` empieza línea nueva. |
+| `button`, `card` | Cajas con tema y una `action`. |
+| `tabs`/`tab`, `chips`/`chip` | Grupos de opciones: un hijo con `value` fija el `state` del padre al pulsar y recibe `[selected]`. |
+| `grid`, `list` | Repiten hijos sobre un `source`; `columns` y `rows` hacen una ventana que mueve un `pager`. `track="%id%"` mantiene la identidad de las filas para que se deslicen al reordenar. |
+| `empty` | Lo muestra un padre repetidor sin filas. |
+| `toggle`, `checkbox` | Sí/no, local con `state` o `checked="%campo%"` con una `action`. |
+| `pager` | `for="<source>"`: anterior, `página / páginas`, siguiente. |
+| `icon`, `item`, `item3d` | Un sprite de ítem, un modelo real de ítem, un modelo 3D iluminado; `material=`, `head=`, `texture=` o `url=`. |
+| `img` | Una imagen: `src="img/x.png"`, `skin="<jugador>"` (cuerpo entero) o `face="<jugador>"`. |
+| `progress` | `value` y `max`: una barra rellena con el `color` de CSS. |
+| `modal` | Un diálogo mientras su `if` se cumple; `dismiss` corre al pulsar fuera. |
+| `search` | Un campo que pide una búsqueda escrita al pulsar y la guarda en `state`. |
+| `window`, `canvas` | Una vista previa en vivo hacia el mundo; una capa de sprites que un plugin mueve desde Java. |
+| `if` / `else`, `switch`/`case`, `for`, `fragment` | Eligen o repiten lo dibujado. `<for each="i in 1..5">` admite un rango. |
+| `template`, `include`, `slot` | Componentes (abajo). |
+
+## Atributos en cualquier etiqueta
+
+- `id`, `class` (también `class="card ${owned ? 'owned' : 'locked'}"`), `if`, `else`, `priority="low"` (se omite primero si
+  se pasa del presupuesto), `refresh="5t"` (redibujar con esa frecuencia, para una cuenta atrás), `key="w|a|s|d|space"`.
+- `action="nombre arg ..."` con los integrados `close`, `back`, `set <clave> <valor>`, `toggle <clave>`, `clear <clave>`,
+  `toast [success|error|info|warning] <texto>`, `sound <clave> [volumen] [tono]`,
+  `confirm '<pregunta>' [dangerous] then <acciones>` e `input text <clave> '<aviso>' then <acciones>`. Los pasos separados
+  por `;` corren en orden, luego el `action(...)` propio del plugin, luego una acción de ExyliaLib con espacio de nombres
+  (`practice:join_queue boxing`). Una palabra es un argumento tras rellenar placeholders, así que valores con espacios nunca
+  se parten; entrecomilla una palabra para conservar espacios.
+- `action-right`, `action-shift` (clic con sprint) y `action-hover` corren en su lugar para esos eventos.
+- `require="<expresión>"` condiciona cada clic (`require-right`, `require-shift`); si es falso corre `deny`, o un sonido de
+  rechazo discreto. `disabled`, `selected`, `checked` añaden banderas CSS.
+- `state` + `default` (lo que recuerda un grupo); `persist="player"` conserva la elección entre sesiones y reinicios.
+- `%nombre%` es un campo de fila, un valor registrado o estado de sesión, y luego cualquier placeholder del servidor.
+  `${expresión}` vale en texto y atributos. `t="clave"` y `t-<atributo>="clave"` leen las [palabras](#palabras).
+- `tooltip`, `tooltip-item`, `assist="false"`.
+
+## Comandos, mensajes y requisitos
+
+Cualquier paso de acción que sea una [línea de interacción](/docs/exylialib/actions) corre como tal, en una lista donde
+`[DELAY]` espera y un comando rechazado o un cobro que no se puede pagar detiene todo lo siguiente: `[console] ...`,
+`[player] ...`, `[MONEY] take|give <cantidad> [moneda]`, `[MESSAGE]`, `[TITLE]`, `[SERVER]`, `[TELEPORT]`, `[ACTION]`,
+`[DELAY]` (1.501.0).
+
+```html
+<card action="[MONEY] take 250; [console] give %player_name% diamond 16; toast success Bought"
+      require="balance() >= 250" deny="toast error 'You need 250 coins'">
+```
+
+## Subconjunto de CSS
+
+Selectores: etiqueta, `#id`, `.clase`, `[selected]`/`[disabled]`/`[checked]`, `:hover`, `:focus`, `:active`, `:root`, `>`
+hijo, `:first-child`, `:last-child`, `:nth-child(odd|even|n)`, `:not(...)`, compuestos y listas con comas. Las propiedades
+personalizadas `--nombre: valor` se heredan y se leen con `var(--nombre, respaldo)`.
+
+Propiedades: `flex-direction`, `display: none`, `gap`, `width`, `height`, `padding`, `margin`, `flex-grow`, `align-items`,
+`justify-content`, `background` (color, degradado o `url(...)`), `outline`/`border`, `color`, `font-size`, `font-weight`,
+`text-align`, `position: absolute` con `top/right/bottom/left`, `z-index`, `max-width`, `white-space`, `text-shadow`,
+`border-radius` (solo HUD), y `transform`, `transition`, `enter`, `leave`, `animation` con `@keyframes`.
+
+## Expresiones
+
+`${...}` en texto o atributos, y todo `if`, `else if` y `switch on`:
+
+| | |
+|---|---|
+| Valores | `'texto'`, números, `true`, `false`, `null`, `%placeholder%`, nombres (`kills`, `loop.index`). |
+| Operadores | `?:`, `or`/`and`/`not`, `== != < <= > >=`, `in`, `+ - * / %`, paréntesis. |
+| Funciones | `min`, `max`, `abs`, `round`, `floor`, `ceil`, `len`, `upper`, `lower`, `plural(n, 'uno', 'varios')`, `t(clave, respaldo)`, `fmt.number`, `fmt.percent`, `fmt.time`. |
+| Sobre quien mira | `perm('nodo')`, `balance()`, `balance('points')`, `has_item('diamond', 16)`, `level()`, `world()`. |
+| Texto y azar (1.552.0) | `contains(texto, 'parte')`, `matches(texto, 'regex')`, `chance(30)`. |
+
+Un plugin añade las suyas con `ExpressionFunctions.register(plugin, "data", (viewer, args) -> ...)`; se liberan al
+desactivarse el plugin.
+
+## Palabras
+
+Un HTML sirve a todos los idiomas: un elemento con `t="clave"` muestra la palabra de `lang/<código>/screens/<id>.yml` (el
+idioma del servidor, luego inglés), y el texto escrito si ninguno la tiene. `t-on`, `t-off`, `t-title` hacen lo mismo con
+atributos. Las palabras pueden llevar tokens de color, placeholders y `${...}`. El texto de una pantalla admite `{icon:...}`
+como el lore (1.568.0): escribe un sprite como `{icon:search}`, nunca un símbolo suelto como `⌕`.
+
+## Componentes
+
+```html
+<template name="stat" props="label value tone=info">
+  <row class="stat"><small t="${label}"><slot/></small><b>{${tone}}${value}</b></row>
+</template>
+<stat label="stats.kills" value="%me_kills%" tone="success">Kills</stat>
+```
+
+Los `components/*.html` junto a una pantalla los conocen todas las pantallas de la carpeta; `<include src="parts/x.html"/>`
+inserta un archivo de la misma carpeta (nunca fuera). Los valores que eligió un jugador (un nombre, una búsqueda escrita) no
+deben reestilizar una pantalla: regístralos con `text(nombre, ...)` o como `rows(nombre, ...)` de `UiEntry` con `with(...)`
+(se dibujan tal cual), y usa `withFormatted(...)` solo para texto que controla el plugin. `ScreenEvent#row()` es la fila de
+la caja pulsada.

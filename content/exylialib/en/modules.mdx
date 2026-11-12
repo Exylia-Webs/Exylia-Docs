@@ -116,6 +116,11 @@ handing back a view that belongs to your plugin.
 - [In-world screens and utilities](/docs/exylialib/in-world-and-utilities): spatial menus, stage, crate scene, guide, abilities, action bars, build zones, runtime commands.
 - [In-game settings](/docs/exylialib/config-menus): `/exylialib config`.
 - [Server versions](/docs/exylialib/server-versions): Paper 1.21.1 support.
+- [Setup wizard](/docs/exylialib/setup-wizard): `/exylialib setup`, the database move and sharing one database.
+- [Screens](/docs/exylialib/screens) and [screen markup](/docs/exylialib/screen-markup): packet-only 2D menus with a cursor, menu style, XHTML and CSS.
+- [HUD](/docs/exylialib/hud): widgets, notices and moments that never take the controls.
+- [Leaderboards](/docs/exylialib/leaderboards): self-keeping tops per day, week, month, year and all time.
+- [Lobby and economy tools](/docs/exylialib/lobby-and-economy-tools): hotbars, double jump, jump pads, dialogues, kit room, ledger.
 
 ## Not a module
 
@@ -138,6 +143,10 @@ Reloads.of(this)
 
 Each step reports for itself: one that throws is named in the console and the sender is told how many
 succeeded. A half-reloaded plugin that says nothing is worse than one that names what failed.
+
+When `/exylialib reload` finds a plugin's language changed (`language: default` following a new library language), it runs
+that plugin's whole declared `Reloads` once, so menus, messages and catalogues read the new language without a second command
+(1.534.0+). Plugins take turns, one every few ticks, so the server keeps running while the language spreads (1.542.0+).
 
 The `Reloads` a plugin declared last is also what runs after `/exylialib updates apply` or the
 [web editor](/docs/exylialib/web-editor) writes one of its files, so the change is live without a manual
@@ -181,7 +190,7 @@ public final class AuctionsModule extends PluginModule {
 
 | | |
 |---|---|
-| **A switch is read at startup** | A module whose id has no switch in the config stays off and is reported, so a misspelt key never fails silently. A switch changed later is only reported by `pendingRestart()`. |
+| **A switch is read at startup** | A module whose id has no switch in the config stays off and is reported, so a misspelt key never fails silently. A switch changed later is only reported by `pendingRestart()`, unless the plugin switches it live with `setEnabled` (below). |
 | **Requirements** | `requiredPlugins()` and `requiredModules()` keep a module off, with a console line, while what it needs is missing. |
 | **One module never takes the others down** | A module that throws while enabling has its new listeners removed, gets its own `onDisable`, and stays off; the rest still start. |
 | **Lookups answer only for running modules** | `getModule(id)` and `isEnabled(id)` are empty for a module that is off, missing a requirement or failed. |
@@ -189,6 +198,26 @@ public final class AuctionsModule extends PluginModule {
 | **Commands** | `commandHandlers()` returns plain handler objects for the plugin to register with its own Lamp. `registerCommands(lamp)` is deprecated. |
 
 On disable, `disableAll()` disables the running modules in reverse order.
+
+### Switching a module live
+
+Since 1.557.0, `modules.setEnabled("auctions", false)` turns a module on or off without a restart and returns a `ModuleToggle`
+(`succeeded()`, `changed()`, `missing()`, `menus()`). Persisting the switch is the plugin's job.
+
+| Status | Meaning |
+|---|---|
+| `ENABLED` / `DISABLED` | it runs, or is off, now; `changed()` holds the dependants that moved with it |
+| `UNCHANGED` | it already was in that state |
+| `BLOCKED` | it stays off: `missing()` names the plugins or modules it needs that are not running |
+| `FAILED` | it threw while enabling, was released and stays off |
+| `UNKNOWN` | no module has that id |
+
+- **Off:** every running module that needs it goes off first, last registered first: listeners from `onEnable` are
+  unregistered, timers stop, `onDisable` runs. **On:** `registerConfigs`, `onEnable`, actions, online players, timers, then the
+  dependants whose switch is on come back. The switch asked for wins for the rest of the run.
+- **Actions** of an off module answer `stop("switched off")` (`actions.onlyWhile(module::isEnabled)`), so compiled menus keep working.
+- **Commands** cannot be unregistered in Lamp: register `modules.allCommandHandlers()` and refuse an off module's commands
+  with one `commandCondition` using `modules.offModuleOf(method)`.
 
 ## Debug output
 

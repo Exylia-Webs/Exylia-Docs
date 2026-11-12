@@ -1,0 +1,112 @@
+---
+title: "Clasificaciones"
+description: "Clasificaciones que se mantienen solas: bajas, dinero o tiempo de juego, de siempre y por día, semana, mes y año, con jugadores desconectados incluidos."
+---
+
+Quién tiene más bajas, dinero o tiempo de juego, de siempre y hoy, esta semana, este mes y este año, incluidos los jugadores
+desconectados, sin un plugin de estadísticas detrás. Un holograma, un menú y un scoreboard preguntan lo mismo, "quién va
+primero y dónde estoy yo"; este módulo lo responde una vez, desde memoria. Desde 1.563.0, en `net.exylia.lib.leaderboard`.
+
+```java
+private Leaderboards boards;
+
+@Override
+public void onEnable() {
+    boards = Leaderboards.of(this);
+    boards.clock(PeriodClock.of("Europe/Madrid", 5, DayOfWeek.MONDAY));
+    boards.track("kills", LeaderboardSource.statistic(Statistic.PLAYER_KILLS));
+    boards.track("diamonds", LeaderboardSource.statistic(Statistic.MINE_BLOCK, Material.DIAMOND_ORE));
+    boards.track("money", LeaderboardSource.balance());
+    boards.track("playtime", LeaderboardSource.playtime());
+    boards.track("level", LeaderboardSource.placeholder("%player_level%"));
+}
+```
+
+Hay un único conjunto de tablas por servidor, compartido por todos los plugins que llaman a `of`. El primer plugin que lo abre
+lo aloja: las tablas viven en su base de datos y su scheduler corre los temporizadores. Cuando el anfitrión se desactiva, lo
+muestreado se escribe y el siguiente plugin activo que lo abrió toma el relevo. Una tabla pertenece al plugin que la siguió y se
+descarta al desactivarse; sus filas se quedan. Apunta los plugins de todos los servidores a una base y las tablas valen para toda la red.
+
+## Fuentes
+
+| `LeaderboardSource` | Clasifica por | Desconectados | Por servidor |
+| --- | --- | --- | --- |
+| `statistic(Statistic)` | una estadística vanilla sin subtipo (`PLAYER_KILLS`, `DEATHS`) | sí | sí |
+| `statistic(Statistic, Material)` | bloques minados, ítems fabricados, usados, rotos, recogidos, tirados | sí | sí |
+| `statistic(Statistic, EntityType)` | mobs matados, muerto por | sí | sí |
+| `balance()` / `balance(currency)` | la moneda por defecto de la economía de la librería, o una por id | sí | no |
+| `playtime()` | tiempo de juego, en milisegundos | sí | no |
+| `placeholder(text)` | cualquier placeholder, de la librería o de PlaceholderAPI | no, se clasifican al entrar | no |
+
+Una estadística con el subtipo equivocado lanza `IllegalArgumentException`. Un placeholder ignora colores, espacios y
+separadores de miles y lee `1.5K` como 1500.
+
+**Un valor para todos, o uno por servidor.** Una estadística vive en la carpeta de mundo de cada servidor, así que cada uno
+guarda su fila y la tabla las suma: bajas en toda la red. Un saldo, el tiempo de juego y un placeholder se toman como iguales
+en todas partes, así que escribe su única fila el servidor donde está el jugador. `source.perServer()` convierte cualquier fuente en la primera clase.
+
+## Periodos
+
+`ALL_TIME` es el valor actual de la fuente; `DAILY`, `WEEKLY`, `MONTHLY` y `YEARLY` son lo ganado desde que empezó ese periodo
+del reloj. Los periodos siguen el `PeriodClock` fijado con `boards.clock(...)` (por defecto: medianoche en la zona del servidor,
+semanas desde el lunes). Da el mismo reloj a todos los servidores de una red; cambiarlo renombra los periodos actuales, que
+empiezan de nuevo. Quien cuenta cero en un periodo no se clasifica.
+
+## Lectura
+
+`boards.view(id, span)` devuelve un `LeaderboardView`. Cada llamada lee la última ordenación de memoria: segura desde cualquier
+hilo, cada tick. Una vista de una tabla que nadie sigue aún está vacía y se llena cuando se sigue.
+
+| Miembro | Responde |
+|---|---|
+| `List<Entry> top(int count)` | los primeros jugadores, el mejor primero |
+| `Optional<Entry> at(int rank)` | el jugador en un puesto, desde 1 |
+| `Optional<Entry> entryOf(UUID)` | la entrada de un jugador |
+| `OptionalInt rankOf(UUID)` | el puesto de un jugador: cada espectador ve el suyo |
+| `OptionalDouble valueOf(UUID)` | el valor de un jugador en el periodo |
+| `int size()` | cuántos están clasificados |
+| `Optional<Duration> remaining()` | hasta que el periodo empiece de nuevo; vacío para siempre |
+
+Los puestos nunca se comparten: un empate lo gana quien llegó antes al valor, luego el id menor, así el orden no parpadea.
+`entry.formatted(style)` escribe un valor: vacío (`12,345`), `compact` (`1.2K`, según `formats.yml`), `money`, `duration`
+(`1d 4h 12m`, para `playtime()`), o cualquier patrón `DecimalFormat`.
+
+```java
+LeaderboardView weekly = boards.view("kills", Span.WEEKLY);
+String first = weekly.at(1).map(e -> e.name() + " " + e.formatted("compact")).orElse("—");
+```
+
+## Tablas
+
+| Miembro | Hace |
+|---|---|
+| `track(id, source)` | empieza a mantener una tabla, o cambia por qué clasifica. Los ids son de 1-48 de `A-Z a-z 0-9 _ . : -`, iguales en todos los servidores |
+| `untrack(id)` | deja de mantenerla aquí; las filas se quedan |
+| `tracked()` | los ids seguidos en este servidor, por cualquier plugin |
+| `reset(id)` | reinicia una tabla en todos los servidores. El histórico sigue a la fuente, así que vuelve al leer a los jugadores: una reconstrucción, no un cero |
+| `reset(id, span)` | reinicia un periodo en todos los servidores; el histórico y los demás periodos no se tocan |
+| `sampleEvery(Duration)` | cada cuánto se leen los jugadores conectados; por defecto un minuto |
+| `sortEvery(Duration)` | cada cuánto se recargan y ordenan las tablas; por defecto 30 segundos |
+| `clock(PeriodClock)` | el reloj que siguen todas las tablas |
+
+Los ajustes los comparten todos los plugins: gana la última llamada. Cambiar una tabla a una fuente que lee otra cosa mezcla
+filas viejas con nuevas: reiníciala.
+
+## Cómo funciona
+
+- **Muestreo:** cada intervalo se lee a cada jugador conectado en su propio hilo, y una vez más al salir. Una fila se escribe
+  solo si cambió, en un único lote.
+- **Periodos:** cada fila guarda, por periodo, la clave y el valor del que partió, así el dinero pagado a alguien desconectado
+  durante el reinicio cuenta para el periodo nuevo, y un servidor caído durante un reinicio no necesita ponerse al día.
+- **Ordenación:** cada intervalo se leen las filas de cada tabla de la base de datos (así aparecen los jugadores de otros
+  servidores) y se ordena cada periodo fuera del hilo del servidor.
+- **Desconectados:** una tabla nueva cuya fuente puede leerlos se llena con todos los que jugaron aquí, en lotes pequeños
+  (diez archivos de estadísticas por segundo, o veinte lecturas de saldo o tiempo por segundo). Una tabla de placeholder se llena según entran jugadores.
+- **Coste:** un temporizador por segundo, una tarea de entidad por jugador conectado y por intervalo de muestreo, una consulta
+  por tabla y ordenación, nada en una llamada a la vista.
+
+## Almacenamiento
+
+`exylia_leaderboard_values` (una fila por tabla, jugador y ámbito) y `exylia_leaderboards` (una fila por tabla alguna vez
+reiniciada). Ambas son `PROGRESS` y pertenecen a `player`, así que `/exylialib wipe` y `resetplayer` las cubren. Ninguna pasa
+por la caché de filas de Redis.

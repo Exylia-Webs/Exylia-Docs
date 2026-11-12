@@ -1,0 +1,134 @@
+---
+title: "HUD"
+description: "Texto en la pantalla del jugador que nunca le quita los controles: widgets, avisos y grandes momentos, widgets diseñados, anclas y el minimapa."
+---
+
+Texto en la pantalla del jugador que nunca le quita los controles: widgets que se quedan (dinero, vida, un rastreador de
+misión, un temporizador de combate), avisos que entran y salen ("+120 monedas", una baja) y grandes momentos sobre la mira
+("DOUBLE KILL"). Desde 1.566.0, en `net.exylia.lib.hud` (`Huds`, `HudWidget`, `HudNotice`, `HudAnchor`). Comparte la
+maquinaria de displays de texto de las [Pantallas](/docs/exylialib/pantallas).
+
+```java
+Huds huds = Huds.of(this);
+
+HudHandle money = huds.show(player, HudWidget.of("money", HudAnchor.TOP_LEFT,
+        p -> Text.of("{success}♦ {letters}" + Formats.money(balance(p))).build()));
+money.refresh();   // lee el texto ya, en vez de en su próximo periodo
+money.remove();
+
+huds.notify(player, HudNotice.of(Text.of("{success}+120 {letters}coins").build()).group("coins"));
+huds.notify(player, HudNotice.moment(Text.of("{error}&lDOUBLE KILL").build()));
+```
+
+Todo método es seguro desde cualquier hilo. Sin PacketEvents no se dibuja nada y los handles siguen funcionando, así que
+quien llama nunca ramifica según el soporte.
+
+## Widgets
+
+`HudWidget.of(id, anchor, text)` se queda hasta que se quita. Mostrar otro con el mismo id lo sustituye en su sitio.
+
+| Campo | Copia | Por defecto |
+| --- | --- | --- |
+| `text` (`Function<Player, Component>`) | | se lee cada `every` ticks |
+| `when` (`Predicate<Player>`) | `when(condition)` | siempre |
+| `order` (lugar en la pila del ancla, el menor junto al borde) | `order(n)` | 0 |
+| `every` (ticks entre lecturas, mínimo 2) | `every(ticks)` | 10; un `Component` fijo 1200 |
+| `background` (ARGB, `0` ninguno) | `background(argb)` | `0`; `HudWidget.PANEL` es el panel de la paleta |
+| `scale` | `scale(size)` | 1 |
+
+- `text` y `when` corren en el hilo del propio jugador: lee memoria, nunca una base de datos. Un texto igual al de pantalla no envía nada.
+- Un texto `null` o vacío, o una condición `false`, encoge el widget hasta quitarlo y reaparece cuando tiene algo que decir:
+  "en combate", "poca vida", "dentro de una región".
+- Las líneas solo se parten donde el texto tiene `\n`. Una esquina mide como una quinta parte de la pantalla antes de llegar al centro.
+
+## Widgets diseñados
+
+Desde 1.582.0 un widget se diseña como una pantalla: cajas con fondos, degradados y contornos, filas y columnas, barras
+`progress` e imágenes `img`, colocadas por el flexbox de las pantallas ([marcado](/docs/exylialib/marcado-de-pantallas)).
+
+```java
+ScreenMarkup vitals = ScreenMarkup.load(folder.resolve("vitals.html"), folder.resolve("vitals.css"));
+huds.show(player, HudWidget.markup("vitals", HudAnchor.TOP_LEFT, vitals).every(4));
+
+// o un árbol construido en Java, null para ocultarlo
+huds.show(player, HudWidget.layout("boss", HudAnchor.TOP, p -> Node.column(...)));
+```
+
+```html
+<column class="hud-card">
+  <row class="line"><text>{error}❤ {letters}Health</text><text>{error}${round(health())}</text></row>
+  <progress value="${health()}" max="20"/>
+</column>
+```
+
+- El árbol se vuelve a leer cada `every` ticks en el hilo del jugador. Un layout igual al de pantalla no envía nada.
+- `hud-card` está en el tema base: el panel oscuro translúcido con contorno fino que se lee sobre cualquier cielo. El **kit de
+  HUD** (1.585.0) añade `hud-row`, `hud-stack`, `hud-chip`, `hud-banner`, `hud-objective`, `hud-alert`, `hud-level` con
+  `hud-bar`, `hud-profile`, `hud-panel` con `hud-panel-title` y `hud-map`.
+- `border-radius: 2px` corta cada esquina en escalones de píxel sin costura. Solo un HUD lo dibuja.
+- **Minimapa:** `<img map="40" zoom="1" round ring="{primary}"/>` es el suelo alrededor del jugador, girado para que hacia donde
+  mira quede arriba, con una flecha en medio: el color de mapa del bloque superior de cada columna, sombreado por altura. Cuatro
+  displays sea cual sea su tamaño (8 a 64); solo lee chunks cargados que posee la región del jugador. Dale `every: 10` o más.
+- Clics, hovers, `transition`, `animation` y `enter` no hacen nada en un HUD; `item`, `item3d`, `window` y cuerpos que giran se
+  omiten, y las sombras de texto nunca se dibujan.
+- **Coste:** un display por rectángulo, por texto y cuatro por imagen; un contorno son cuatro. Un elemento dibuja como máximo 64,
+  así que mantén los diseños pequeños. Las capas se crean de atrás adelante porque el cliente dibuja los displays translúcidos
+  en orden de aparición.
+
+## Avisos
+
+`HudNotice.of(text)` entra arriba a la derecha, dura tres segundos y se encoge. Los más nuevos quedan junto al borde; pasados
+cinco en un ancla, el más viejo se va antes.
+
+| Campo | Copia | Por defecto |
+| --- | --- | --- |
+| `anchor` | `anchor(where)` | `TOP_RIGHT` |
+| `seconds` | `seconds(time)` | 3 |
+| `group` | `group(key)` | ninguno |
+| `scale` | `scale(size)` | 1 |
+
+Un aviso cuyo `group` coincide con uno aún visible lo sustituye, cuenta (`×3`), entra de nuevo y reinicia su tiempo: tres bajas
+seguidas son una línea. `HudNotice.moment(text)` es el doble de grande, sin panel, justo sobre la mira durante dos segundos; un
+momento nuevo sustituye al que hay.
+
+## Anclas
+
+| Ancla | Dónde | Apila |
+| --- | --- | --- |
+| `TOP_LEFT` | la esquina superior izquierda, libre en vanilla | abajo |
+| `TOP` | el centro superior, bajo una boss bar | abajo |
+| `TOP_RIGHT` | arriba a la derecha, bajo los iconos de poción; avisos | abajo |
+| `LEFT` | el borde izquierdo, sobre el chat | abajo |
+| `CENTER` | justo sobre la mira; momentos | abajo |
+| `RIGHT` | el borde derecho, donde va el sidebar | abajo |
+| `ABOVE_HOTBAR` | sobre la hotbar, corazones y barra de experiencia | arriba |
+| `BOTTOM_RIGHT` | la esquina inferior derecha | arriba |
+
+`HudAnchor.parse("top-left")` lee los nombres que escribe un archivo. El ítem en mano cubre `BOTTOM_RIGHT` (el cliente dibuja
+la mano al final), así que resérvala para lo que pueda esperar. Las posiciones se miden en una ventana 16:9 a FOV 70.
+
+## Cómo se mantiene en su sitio
+
+Cada elemento es un display de texto sentado en el jugador solo para su cliente, con un billboard hacia la cámara dieciséis
+bloques delante, así que caminar, saltar y girar no cuestan ningún paquete. Solo un texto cambiado, una condición que cambia,
+una pila reordenada o un paso de pitch (3°) envía algo.
+
+- **Ajustado a la ventana** (1.584.0): las esquinas se colocan para el FOV y la forma de ventana del propio jugador, los que
+  ajustó en su primera pantalla o HUD, y los elementos se dibujan más grandes en la misma proporción
+  ([Pantallas](/docs/exylialib/pantallas#el-botón-de-ajustes-y-el-ajuste-a-la-ventana)).
+- **Correr** estrecha un poco el HUD hacia el centro junto con el mundo; no se compensa.
+- **Una pila por ancla entre plugins:** dos plugins en la misma ancla se apilan uno tras otro.
+- **Se aparta** mientras hay una pantalla abierta, suena un plano de cámara, el jugador está muerto o en espectador, y cuando el
+  jugador desactivó *Mostrar HUD* en `/settings` (`Huds.hidden(player, hide)` desde código).
+- Solo animan traslación y escala: los elementos crecen desde su centro, se deslizan al reordenar su pila y se encogen (1.588.0).
+- **Quién lo ve** (1.591.0): `Huds.supports(player)` es un cliente Java 1.20.2 o superior con PacketEvents en el servidor;
+  `Huds.visible(player)` añade "y no lo desactivó". Un widget mostrado a alguien no `visible` simplemente no se dibuja; ramifica
+  solo para mostrar otra cosa en su lugar (un sidebar, una boss bar). `%player_hud%` da la misma respuesta a los archivos de otros plugins.
+
+Pruébalo con `/exylialib hudtest show|notice [group]|moment|hide`.
+
+## Desde un archivo
+
+Cualquier lista de interacción (clics de menú, acciones de pantalla, ítems de apertura) puede escribir
+`[HUD] {success}+120 {letters}coins;group:coins;seconds:4` y `[MOMENT] {error}&lDOUBLE KILL`. Las opciones son las partes
+finales `;clave:valor` (`anchor`, `seconds`, `group`); el resto es el texto, con los placeholders del jugador.

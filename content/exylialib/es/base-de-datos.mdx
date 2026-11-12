@@ -390,6 +390,48 @@ está apagado o inalcanzable: pregunta antes `available()`, y construye las clav
 que todos los servidores coincidan. Las filas siguen yendo en un repositorio; esto es un cable, no
 almacenamiento.
 
+## Compartir una base de datos en una red
+
+- **Grupos.** El ámbito de una tabla sale de [`NetworkGroups`](/docs/exylialib/minijuegos-y-red#grupos-de-red) (1.576.0):
+  `repository(type, NetworkGroups.scope(plugin, setting))`. El ajuste del plugin solo dice `default`, `global`,
+  `server` o el nombre de otro grupo; el grupo del propio servidor se escribe una vez en el `config.yml` de ExyliaLib.
+- **Los lugares conservan sus filas.** Para datos ligados a un lugar (arenas, spawns, regiones),
+  `repository(type, scope, true)` (1.581.0) crea una tabla con ámbito nueva a partir de las filas del ámbito de un
+  `server-id` anterior, o si no de la tabla normal. Nunca para valores: dos servidores empezarían cada uno con una copia.
+- **Plugins movidos.** Cuando el [asistente de configuración](/docs/exylialib/asistente-de-configuracion) apunta un
+  plugin a una base compartida, cada tabla se copia del antiguo H2 la primera vez que se prepara, antes de cualquier
+  operación (1.581.0). En un choque `merge` añade las claves que la red no tiene y conserva la fila de la red;
+  `network` no añade nada. Una copia fallida se reintenta en el siguiente arranque.
+- **Renombrar una tabla.** `@Table(value = "clan_player_stats", previous = "player_stats")` copia las filas del
+  primer nombre antiguo que exista y tenga todas las columnas declaradas a la nueva tabla (1.581.0).
+- **Choques de nombre.** Dos plugins que abren un mismo nombre de tabla con records distintos registran un error
+  que nombra a ambos, porque sus filas se mezclarían. Renombra uno con `previous`. Las tablas `exylia_*` de la
+  librería se comparten por diseño.
+- **Sin Redis.** `cross-server: database` en `database.yml` (1.561.0; por defecto `redis`) lleva canales, `Network`,
+  el puente del proxy, teletransportes entre servidores, `RedisKeys` y `onRemoteChange` por la base compartida, para
+  una red sin servidor Redis. Los servidores consultan cada 250 ms (PostgreSQL se despierta al instante), las filas
+  se leen directamente de la base sin caché, y `h2` con `database` se rechaza. ExyliaProxyUtils necesita el mismo
+  ajuste. Redis sigue siendo la red recomendada.
+- **Login de Redis.** `redis.username` (usuario ACL, Redis 6+) y `redis.ssl` (TLS) existen desde 1.484.0.
+
+## Leer la base de datos de otro plugin
+
+`ForeignDatabase` (1.480.0) permite que un importador lea el plugin al que sustituye desde su archivo SQLite o su
+servidor MySQL, en **solo lectura**. Cada llamada bloquea, así que ejecútala en `Tasks.runAsync`.
+
+```java
+try (ForeignDatabase old = ForeignDatabase.sqlite(jobsFolder.resolve("jobs.sqlite.db"))) {
+    String table = old.table("jobs");                      // nombre real, cualquier caja; null si falta
+    for (Map<String, Object> row : old.rows(table)) {
+        UUID player = UUID.fromString(ForeignDatabase.text(row, "player_uuid"));
+    }
+}
+```
+
+`sqlite(path)` lanza error si el archivo no existe en vez de crear uno; `mysql(host[:port], database, user, password)`
+abre MySQL o MariaDB; `tables()`, `table(name)`, `rows(table)`, `query(sql, params…)` y los lectores estáticos
+`text`, `number`, `decimal`, `bytes` cubren el resto.
+
 ## Hilos
 
 El trabajo de base de datos corre en el pool asíncrono del propio servidor — sin executor propio — y

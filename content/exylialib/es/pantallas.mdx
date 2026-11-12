@@ -1,0 +1,175 @@
+---
+title: "Pantallas"
+description: "Menús 2D a pantalla completa con cursor de ratón, dibujados con displays por paquetes y sin resource pack: abrir una, entrada, preferencias, estilo de menú y rutas de menús de cofre."
+---
+
+Una pantalla es un menú a pantalla completa dibujado delante del jugador con un cursor de ratón. No hay resource pack:
+cada caja es un display de texto solo por paquetes, así que la pantalla existe únicamente en el cliente de quien la ve.
+Necesita PacketEvents y un cliente Java 1.20.2 o superior; el resto sigue con ventanas de cofre. El código vive en
+`net.exylia.lib.screen` (`Screens`, `Screen`, `Node`, `ScreenSession`, `ScreenEvent`, `ScreenMarkup`).
+
+Una pantalla se construye en Java con `Node`, o se escribe en XHTML y CSS para que el dueño del servidor la reestilice sin
+tocar Java: mira [Marcado de pantallas](/docs/exylialib/marcado-de-pantallas). Su hermano de texto en pantalla que nunca
+toma los controles es el [HUD](/docs/exylialib/hud).
+
+```java
+Screen hub = Screen.of(session -> {
+    String tab = session.state("tab", "queue");
+    return Node.column(
+            Node.text("{letters}Practice").scale(1.4),
+            Node.row(Node.text("{letters}Queue").padding(5, 12).background("var(--primary)40")
+                            .onClick(event -> event.session().set("tab", "queue")))
+                    .gap(4),
+            Node.text("{letters_black}Open: " + tab))
+        .padding(12).gap(8).align(Node.Align.CENTER).justify(Node.Justify.CENTER);
+});
+Screens.of(plugin).open(player, hub);          // en el hilo del jugador
+```
+
+## Cómo se dibuja
+
+- La función de render corre al abrir, tras cada clic, tras `session.set(...)` y una vez por segundo. Lee un valor que se
+  mueve (una cuenta atrás, el tamaño de una cola) dentro de ella y se mantiene al día. Los redibujados dentro de un tick se
+  juntan, y un render idéntico al anterior no envía nada.
+- Corre en el hilo del jugador: lee memoria, nunca una base de datos. Devuelve un árbol `Node` nuevo; solo se envía lo que
+  cambió, y la fila de una lista cuya longitud cambia necesita un `id(...)`.
+- Como máximo 400 displays por pantalla; lo que pase se omite y se registra una vez.
+- El layout es un flexbox pequeño en píxeles de pantalla sobre un área de 400 x 225. `Node` tiene `row`, `column`, `text`,
+  `box`, `grow`, `padding`, `gap`, `align`, `justify`, `background`, `hover`, `onClick`, `onScroll`, `item`, `image`,
+  `overlay` (diálogos), transformaciones, transiciones y animaciones.
+- Los colores se escriben como en CSS: la paleta es `var(--primary)` con alfa hex opcional (`var(--primary)40`), los
+  literales son `#rrggbb` o `#rrggbbaa` (alfa al final, 1.592.0). `{token}` sigue valiendo dentro del texto MiniMessage.
+
+## Entrada
+
+- **Cursor:** el ratón del jugador. Su vista no se mueve; el giro entre paquetes de rotación mueve el cursor.
+- **Clics:** izquierdo y derecho, mediante una caja de interacción invisible a la altura de los ojos, así que un clic nunca
+  llega al mundo. Mantén sprint (Ctrl) al hacer clic para un shift-clic; Shift por sí solo cierra la pantalla.
+- **Rueda:** desactivada por defecto (al cliente se le muestra como espectador); `Screen#wheel(true)` conserva el modo
+  real para que la rueda desplace, a costa de la mano y la mira.
+- **Teclas:** `W A S D` y Espacio pulsan la caja ligada con `key=`. `<screen keys="navigate">` hace que las teclas de
+  movimiento muevan el cursor entre cajas pulsables sin ratón.
+- **Mientras está abierta:** el jugador queda congelado, todo lo demás del mundo (jugadores, mobs, hologramas) se le oculta,
+  el sidebar se oculta (`hide-sidebar`, activado por defecto) y el chat se retiene hasta que se cierra (`quiet-chat`,
+  activado por defecto; un toast muestra una línea que llega en el segundo siguiente a un clic). Los enlaces de una línea
+  retenida se vuelven un toast pulsable que abre un diálogo nativo en 1.21.6+.
+- **Cierre:** daño, muerte, cambio de mundo, un teletransporte de más de un bloque, salir, u otra pantalla que se abre (una
+  por jugador entre todos los plugins). Un plano de cámara o replay que sujeta al jugador hace que `Screens.open` devuelva `null`.
+- **Anticheats** (1.564.0): todo flag de GrimAC, Vulcan, Spartan y Matrix sobre un jugador se cancela mientras hay una
+  pantalla abierta o una cámara lo sujeta, y durante 3 segundos después. Cualquier otro anticheat necesita sus checks exentos.
+
+### Modos de cursor y asistencia
+
+Cada jugador elige un cursor en el panel de ajustes; `cursor-mode` en `screens.yml` es la elección de quien no eligió
+(1.546.0). Solo cambia el dibujo; los clics siempre leen el puntero real.
+
+| Modo | Comportamiento |
+|---|---|
+| `NORMAL` (por defecto) | Se desliza un tick a cada sitio nuevo: el más suave, sin pasarse. |
+| `RAW` | Aterriza al instante: menor retardo en el cliente de pruebas, saltos visibles. |
+| `PREDICTION` | Se desliza hacia donde va el ratón, hasta 10 píxeles de layout por delante; se pasa del sitio en una parada brusca. |
+
+La **asistencia del cursor** (1.547.0, `cursor-assist`, desactivada por defecto) mueve un poco el puntero real: fricción
+sobre cajas pulsables en movimientos lentos, un leve imán a menos de 12 píxeles, y un clic hasta 8 píxeles pasado de una caja
+recién dejada que aún la alcanza. Nunca actúa dentro de `<game-frame>`, escenas, un confirm peligroso, ni en cajas con
+`assist="false"`.
+
+## El botón de ajustes y el ajuste a la ventana
+
+Toda pantalla dibuja un pequeño botón de ajustes abajo a la derecha, fuera del layout. Abre un panel con **Ajustar a la
+ventana**, **Velocidad del cursor** (0.1 a 10, por defecto 3), **Cursor**, **Asistencia del cursor**, **Movimiento
+reducido** y, mientras `player-choice` está activo, **Estilo de menú**. Sprint y salto a la vez (Ctrl + Espacio) lo abren
+desde cualquier sitio. Las mismas opciones están en `/settings` → Interfaz.
+
+Las preferencias son ajustes de la librería guardados en `exylia_player_settings` en la base de datos propia de ExyliaLib
+(1.556.0): apunta el `database.yml` de todos los servidores a una misma base y las elecciones de un jugador le siguen por
+la red. Quien nunca eligió sigue `screens.yml`.
+
+**Ajustar a tu ventana** (1.584.0): el cliente nunca envía su FOV ni la forma de su ventana, así que la primera vez que un
+jugador se topa con una pantalla de vista de cámara o con su HUD, se dibujan líneas donde estarían los bordes de su ventana a
+FOV 70 y las arrastra a los bordes reales. Toda pantalla se dibuja entonces más grande por `tan(fov/2) / tan(35°)` para
+ocupar la misma parte de cualquier ventana, y las esquinas del HUD caen en las de la ventana. Ninguna pantalla se dibuja más
+ancha ni alta que el 96% de la ventana ajustada (1.586.0). `first-screen-setup: false` desactiva la pregunta. `screen-size`
+(porcentaje, 50 a 250) es el tamaño para todos; la elección de tamaño por jugador se eliminó en 1.587.0.
+
+## Ventanas de cofre o pantallas: estilo de menú
+
+Los menús de cofre de cualquier plugin pueden abrirse como pantallas sin código propio (1.495.0). `Menus.of(plugin).open*`
+consulta a `MenuStyles` en cada apertura; en estilo `SCREEN` el menú de cofre sigue corriendo como siempre pero una pantalla
+lo dibuja:
+
+- una pantalla enrutada a ese id de menú, cuando el plugin la tiene; si no,
+- la **piel de cofre**: el título como cabecera, los ítems como tarjetas en la posición de su slot, cristal y slots vacíos
+  omitidos. La última fila pasa a ser una barra fija (1.562.0): columna 4, el botón de volver, en el centro exacto, las
+  flechas de página a su lado, columnas 0-2 desde la izquierda y 6-8 desde la derecha. Nombre y lore del ítem son el tooltip.
+
+**Los menús de admin siguen siendo ventanas de cofre** (1.562.0) salvo que `screens.yml` diga `admin-style: FOLLOW`: un menú
+es de admin cuando una parte de su id es `admin` o empieza o acaba en `admin_`/`_admin`, y para las pantallas de ajustes de
+la librería. Los menús con slots de entrada, inventarios que no son de cofre y la sala de kits son siempre ventanas, y un
+cliente que no puede dibujar pantallas siempre recibe ventanas.
+
+**Quién decide** (gana la primera regla que responde): un cliente que no puede dibujar pantallas; un override de staff con
+`/exylialib style`; la elección del propio jugador en `/settings` (solo con `player-choice` activo); el `menu-style` del
+propio plugin (`MenuStyles.of(this).defaultStyle(...)`); la entrada del servidor para ese plugin en `screens.yml`; el
+`default-style` del servidor (`CLASSIC` de fábrica).
+
+```yaml title="plugins/ExyliaLib/screens.yml"
+default-style: CLASSIC     # CLASSIC o SCREEN
+player-choice: true        # los jugadores eligen el suyo en /settings
+plugins: {}                # ExyliaJobs: SCREEN
+chest-skin: true           # off: los menús sin pantalla propia siguen como ventanas
+cursor-mode: NORMAL        # NORMAL, RAW o PREDICTION
+cursor-assist: false
+admin-style: CLASSIC       # o FOLLOW
+```
+
+### Enrutar un id de menú a una pantalla
+
+Una pantalla puede nombrar los ids de menú que representa, con el estado escrito tras el id. `%nombre%` se rellena desde el
+contexto del menú.
+
+```html
+<screen routes="player/queue_category:tab=play
+                player/queue_kit:tab=play,category=%category_id%">
+```
+
+Una pantalla enrutada lee los mismos datos que el menú de cofre: `%nombre%` recurre al contexto del menú, `source="main"` o
+`<for each="x in main">` lee las filas del menú, `<item row/>` dibuja el ítem que dibujaría el cofre para esa fila, y las
+acciones `ns:id` corren igual que desde un cofre. Las comprobaciones propias del plugin (permiso, "ya estás en una partida")
+corren antes de abrir el menú.
+
+## Comandos
+
+| Comando | Hace |
+|---|---|
+| `/exylialib style <classic\|screen\|default> [jugador] [plugin]` | Cambia al instante el estilo de menú de un jugador, sin editar config. Requiere `exylialib.admin`. El staff que ejecuta `/exylialib style screen` ve también los menús de admin como pantallas. |
+| `/exylialib style game screen\|3d\|default [jugador] [plugin]` | Prueba en qué forma se juega un juego (1.531.0), hasta limpiarlo o que el jugador salga. |
+| `/exylialib screens check [plugin]` | Lista cada problema de marcado con `archivo:línea:col`. |
+| `/exylialib screens reload [plugin]` | Vuelve a leer las pantallas. |
+| `/exylialib screentest open\|markup [spectator\|wheel]` | Abre una pantalla de demostración. |
+
+## Más que menús
+
+- **Movimiento** (1.496.0): transiciones, `enter`/`leave`, animaciones por fotogramas clave y un levantamiento al pasar el
+  ratón, todo interpolación en el cliente, así que el coste son paquetes por cambio y nunca por frame. `movimiento reducido` lo apaga.
+- **Fondos** (1.497.0): `linear-gradient(...)`, `background-image: url(...)` y una escena con parallax tras la pantalla.
+- **Cuerpos con un kit** (1.498.0): `<img skin="%me_name%" turn wearing="diamond_helmet iron_sword">` pone el cuerpo del
+  jugador con armadura y un ítem en la mano, con las texturas del propio juego.
+- **Ítems 3D** (1.499.0): `<item3d material="diamond_sword" spin/>`, iluminado, con brillo.
+- **Escenas y juegos** (1.500.0): un `<canvas id="table"/>` donde un plugin mueve sprites desde Java, para juegos en solitario
+  y de casa, con la puntuación y los botones como marcado. Un juego elige su forma con `MenuStyles.of(plugin).gameForm(player)`
+  (pantalla o mundo), y `SharedMatch` (1.533.0) deja que varios jugadores jueguen cada uno en su pantalla.
+- **Ventanas** (1.538.0): `<window preview="...">` es un hueco en el panel que mira una vista previa reproducida de verdad
+  en un escenario detrás, para cosméticos, así que ningún efecto necesita versión en sprites.
+- **Tooltips** (1.513.0): `tooltip="Título<nl>Línea"`, o `tooltip-item` para mostrar nombre, encantamientos y lore de un ítem.
+- **Entradas** iniciadas con una pantalla abierta la apartan y la devuelven; un confirm para un jugador con pantallas se
+  dibuja como diálogo de pantalla (1.517.0).
+
+## Archivos de autor
+
+Un plugin entrega pantallas con un `ScreenSet` (`Screens.of(plugin).files(MyPlugin.class, "screens")`): la carpeta
+`screens/` del jar se instala y mantiene al día con `BundledFiles` (un archivo editado se queda, la versión nueva llega como
+`<nombre>.new` y espera en `/exylialib updates`). Las hojas se apilan en este orden, ganando la última: el tema base,
+`plugins/ExyliaLib/screens/theme.css` (un aspecto para toda la red), `theme.css`, `<id>.css`, y luego el `custom.css` del
+dueño, que una actualización nunca toca. Las ediciones se ven en pantallas abiertas en dos segundos (recarga en caliente).
+Las palabras viven en `lang/<código>/screens/<id>.yml`, así un HTML sirve a todos los idiomas.

@@ -1,0 +1,139 @@
+---
+title: "Herramientas de lobby y economía"
+description: "Hotbars, doble salto y plataformas de salto, diálogos, la sala de kits y el libro mayor de la economía."
+---
+
+Pequeños servicios que comparten varios plugins. Hotbars, movimiento y diálogos son para lobbies y contenido narrativo; la sala
+de kits y el libro mayor sirven a plugins de PvP y economía.
+
+## Hotbars
+
+Una hotbar de lobby (1.559.0): conjuntos con nombre de botones dibujados en el inventario del jugador, cada uno con su slot,
+aspecto, clics, permiso y cooldown, congelados en su sitio. `net.exylia.lib.hotbar.Hotbars`.
+
+```java
+hotbars = Hotbars.of(this, actions)                  // actions: el espacio de nombres en que compilan las líneas
+        .register(HotbarSet.of("lobby", List.of(
+                HotbarItem.of("selector", 0, selectorItem)
+                        .withActions(List.of("right: lobby:selector"))
+                        .withCooldown(Duration.ofMillis(500)),
+                HotbarItem.of("cosmetics", 4, cosmeticsItem)
+                        .withPermission("lobby.cosmetics", lockedCosmeticsItem)   // null: se oculta
+                        .withCommands(List.of("right: player: cosmetics")))))
+        .onCooldown((player, left) -> messages.send(player, "hotbar-wait", left));
+
+hotbars.show(player, "lobby");    // al entrar al lobby
+hotbars.hide(player);             // al salir
+hotbars.refresh(player);          // cambió un permiso o el estado de un botón
+```
+
+- Las `actions` y `commands` de un botón son líneas con prefijo de clic como las escribe un ítem de menú u overlay (`right:`,
+  `left:`, `shift_right:`, `drop:`, `swap:`, sin prefijo para cualquier clic). Cada línea se compila en `register`; una acción
+  sin registrar falla ahí.
+- `HotbarSet.of(name, items)` es el valor por defecto de lobby: todos los slots congelados, el resto en blanco, sin recoger
+  ítems, nunca se redibuja. `withInventory(lock, hideRest, pickup)` y `withRefresh(UiRefresh)` lo cambian.
+- Se apoya en los [overlays](/docs/exylialib/overlays): no se escribe nada en el inventario real, así que un fallo nunca deja un
+  botón funcional como ítem real. Necesita PacketEvents (`Hotbars.isAvailable()`).
+- **Un botón se dibuja, no se sostiene.** Golpear con uno golpea como con la mano vacía. El equipo de combate deben ser ítems reales que da el plugin.
+- Un cooldown (mediante los cooldowns compartidos) suena el rechazo y llama a `onCooldown`. Un botón con permiso solo se dibuja
+  a quien lo tiene; el resto ve su aspecto `locked` o un slot vacío. Los permisos se releen cada dos segundos.
+
+## Movimiento
+
+Las dos formas de moverse más rápido en un lobby (1.559.0): `DoubleJump` y `JumpPads` en `net.exylia.lib.movement`.
+
+```java
+doubleJump = DoubleJump.of(this)
+        .forward(0.9).vertical(0.75)              // los valores por defecto
+        .cooldown(Duration.ofSeconds(1))
+        .permission("lobby.doublejump")           // opcional
+        .when(player -> lobby.contains(player))
+        .start();
+
+pads = JumpPads.of(this).cooldown(Duration.ofSeconds(1)).when(lobby::contains).pads(settings.pads()).start();
+pads.put(JumpPad.of("east", PadTrigger.at(target.getLocation()), 1.6, 0.9).towards(-90f));
+```
+
+- El **doble salto** usa el interruptor de vuelo: un jugador apto en el suelo puede volar, y pulsar saltar en el aire se cancela
+  y se convierte en el impulso. Solo toca su propio vuelo (creativo, espectador y `/fly` se respetan), lo quita cuando el
+  jugador deja de ser apto, y cancela el daño de caída del aterrizaje. El predicado corre en cada bloque cruzado en el hilo
+  del jugador: lee memoria.
+- Las **plataformas de salto** se activan con un `PadTrigger`: `at(location)`, `materials(pad[, below])` o `plates(below)`.
+  `JumpPad(id, trigger, power, vertical, yaw, effect)` lanza al jugador hacia donde mira, o con un yaw fijo con `towards(yaw)`.
+- Las plataformas son datos del plugin: aquí no se guarda nada. Pasa la lista al arrancar y tras cada edición (`put`, `remove`,
+  `set`); `padAt(location)` responde "¿qué plataforma es esta?".
+- Nunca se lanza a jugadores en creativo o espectador, a quien no cumple el permiso o el predicado, ni a nadie en cooldown.
+
+## Diálogos
+
+Conversaciones de RPG en una caja al pie de la pantalla (1.590.0), sin resource pack: nombre y cara de quien habla, cada línea
+escrita letra a letra y respuestas bajo la última línea. `net.exylia.lib.dialogue`.
+
+```java
+Component guide = Text.of("{highlight}Guide").build();
+Dialogue talk = Dialogue.of(List.of(
+                Dialogue.Line.of(Text.of("{letters}Welcome, traveller.").build()).speaker(guide).face("Notch"),
+                Dialogue.Line.of(Text.of("{letters}Shall I show you around?").build()).speaker(guide).face("Notch")))
+        .answers(List.of(Text.of("{letters}Lead the way").build(), Text.of("{letters}Not now").build()))
+        .onLine(index -> playVoice(player, index));
+
+Dialogues.of(this).open(player, talk).thenAccept(result -> {
+    if (result.finished() && result.answer() == 0) tour(player);
+});
+```
+
+| `mode` | Dónde | Cómo responde el jugador |
+|---|---|---|
+| `HUD` (por defecto) | un widget de [HUD](/docs/exylialib/hud) sobre la hotbar | Sigue caminando. Agacharse o hacer clic avanza (la primera pulsación termina la línea); bajo la última línea la rueda mueve la elección, una tecla numérica elige, agacharse o clic confirma. |
+| `SCREEN` | una [pantalla](/docs/exylialib/pantallas) con cursor | Se queda quieto. Un clic en la caja avanza; bajo la última línea hace clic en una respuesta. Cerrar cancela. |
+
+- Una conversación por jugador entre plugins; abrir otra, `Dialogues.close(player)`, salir o morir termina la primera con
+  `Result.CANCELLED`.
+- `onLine(index)` corre en el hilo del jugador al empezar cada línea: sonidos, acciones, una señal de cámara.
+- Bedrock, un servidor sin PacketEvents y (en modo `HUD`) un jugador que ocultó su HUD leen cada línea en el chat y responden
+  con una entrada de elección.
+- `width` (píxeles a los que se parte el texto, 220) y `speed` (letras por segundo, 40; 0 muestra las líneas enteras);
+  `hints(...)` sustituye la línea pequeña bajo la caja.
+
+## Sala de kits
+
+Categorías de ítems de los que los jugadores toman copias para montar sus kits (1.511.0). El staff llena la sala en el juego;
+cada clic entrega una copia al inventario del jugador; el plugin comprueba lo que montaron antes de guardar, así un kit solo
+contiene lo que ofrecía la sala.
+
+```java
+KitRoom room = KitRooms.of(plugin);
+room.edit(admin, () -> AdminHub.open(admin));        // staff: categorías y sus ítems
+room.open(player, List.of("gear", "potions"));      // jugadores: toman copias; lista vacía = todas las categorías
+if (!room.allows(items, List.of("gear", "potions"))) refuse();   // antes de guardar un montaje
+```
+
+- Por plugin: cada uno guarda sus categorías en su base de datos (`exylia_kitroom`, `DataKind.SETUP`). Una sala vacía arranca
+  con valores por defecto (equipo en tres niveles, consumibles, pociones arrojadizas y flechas).
+- Un clic toma una pila, shift una pila completa, F la pone en la mano secundaria. Las cantidades no se comprueban: la sala
+  limita *qué* ítems, no cuántos.
+- `KitRooms.of(plugin, seed)` llena la sala desde `seed` la primera vez que su tabla está vacía, para mover una sala que el plugin guardaba por su cuenta.
+- Siempre es una ventana de cofre, también en el estilo de menú SCREEN. Guardar un montaje, y dónde se monta, es cosa del plugin.
+
+## Libro mayor
+
+Cuánto dinero crearon y sacaron de la economía los plugins del servidor, por hora, plugin y origen (1.478.0).
+`net.exylia.lib.ledger.Ledger`.
+
+```java
+Ledger ledger = Ledger.of(this);
+Ledger.created(this, "daily-reward", player.getUniqueId(), amount);
+Ledger.sunk(this, "order-tax", player.getUniqueId(), tax);
+
+long now = Ledger.currentHour();
+ledger.top(Ledger.Flow.CREATED, null, now - 24, now + 1, 10).thenAccept(top -> ...);   // quienes más ganaron, último día
+```
+
+- **Creado** es dinero que entra de la nada (un pago de trabajo, una venta al servidor); **sumidero** es dinero que sale (un
+  impuesto, una tasa). Una transferencia entre jugadores no es ninguno. Todo `Modifiers.pay` que ingresa se registra como
+  creado, bajo el plugin que lo llamó; los sumideros se registran con `Ledger.sunk`.
+- Lecturas: `day(day)`, `hour(hour)` (cada `Entry`, todos los servidores), `top(flow, currency, fromHour, toHour, limit)` (como
+  máximo 31 días), `player(uuid, flow, currency, from, to)` y la sobrecarga por plugin sobre la que un plugin limita sus propios pagos.
+- No se registra nada hasta que un plugin abre el libro. Los recuentos se guardan en memoria y se escriben cada minuto con
+  incrementos atómicos, así los servidores que comparten base suman. Los importes conservan dos decimales. Las filas de más de 90 días se purgan.
+- Las tablas `exylia_ledger` y `exylia_ledger_players` (`HISTORY`, pertenecen a `player`) las cubre `/exylialib wipe`.

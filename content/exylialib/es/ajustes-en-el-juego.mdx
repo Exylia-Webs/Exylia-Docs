@@ -7,6 +7,13 @@ description: "Cambia los ajustes y catálogos de cada plugin desde un menú con 
 records que edita el [editor web](/docs/exylialib/editor-web). El plugin no escribe código de menú. Solo
 jugadores: a la consola se la remite a `/exylialib editor`.
 
+<Callout type="note" title="Los plugins diseñan primero sus propias pantallas de ajustes">
+Desde 1.555.0 el hub de admin de un plugin lleva páginas de ajustes que diseña él mismo: solo lo que un admin
+ajusta de verdad, agrupado por finalidad, con cada tarjeta explicando qué hace el valor. El árbol de abajo dibuja
+todas las claves de todos los archivos en el orden del archivo, así que queda tras `/exylialib config` como
+herramienta avanzada, y abrirlo desde el hub de un plugin con `ConfigMenus.of(...)` está obsoleto.
+</Callout>
+
 | Comando | Abre |
 |---|---|
 | `/exylialib config` | Los plugins con ajustes. |
@@ -31,7 +38,57 @@ editor web y el plugin no haya excluido. Los mensajes y menús no se muestran. L
 plugin registra con `WebEditor.of(plugin).yaml(id, ruta)` van después, cada uno con su propio comprobador, que
 solo rechaza lo que el plugin no cargaría.
 
-## Para desarrolladores de plugins
+## Tus propias pantallas de ajustes
+
+`ConfigEdits` (`net.exylia.lib.config`, desde 1.555.0) es la fontanería; el plugin escribe la pantalla (un menú
+de admin normal) y decide qué lleva. Cada tarjeta la escribe el plugin con lo que hace el valor; la librería
+escribe el resto en el idioma del servidor: el valor actual, el de por defecto y las líneas de clic.
+
+```java
+ConfigEdits fees = ConfigEdits.of(plugin, AuctionHouseDefaults::file);
+
+// cada clave editable como valor vivo, como %ah_settings_listing_fee_percent%
+menus.open(admin, "menus/admin/settings_ah", fees.placeholders("ah_"));
+
+// una acción para todas las tarjetas
+actions.registerSync("setting", "myplugin.admin.settings", (ctx, args) -> {
+    fees.card(ctx.player(), args.string(1, ""), ctx.get(UiKeys.CLICK).orElse(null), () -> reopen(ctx.player()));
+    return ActionResult.success();
+});
+```
+
+| Llamada | Hace |
+|---|---|
+| `ConfigEdits.of(plugin, file)` | Las ediciones de un archivo de `Configs.define`. El archivo se lee en cada llamada, así que sigue a un reload. |
+| `value(key)` / `live(key)` | El valor de una clave como lo muestran las pantallas, con color (`Activado`, `48h`, dinero en su moneda, porcentaje). `live` es una lambda para el contexto de un menú. |
+| `defaultValue(key)` | El valor que da el constructor sin argumentos del record (1.562.0). |
+| `hint(key)` | Las líneas de clic traducidas de la tarjeta, con el clic de reinicio mientras el valor difiera del de por defecto (1.562.0). |
+| `placeholders(prefix)` | Cada clave editable como valor vivo: `prefix` más la clave con `.` y `-` como `_`, y el mismo nombre con `_default` y `_click`. `placeholders(prefix, keys)` (1.573.0) lo limita a algunas claves, ya que cada valor se lee en cada redibujado. |
+| `card(viewer, key, click, back)` | El único manejador de clic que necesita toda tarjeta (1.562.0): Mayús + clic derecho reinicia, un número o cantidad se escribe con el valor actual (`10k`, `2.5M`), un interruptor se invierte, una opción avanza, y un tiempo, texto, objeto, moneda o lista de objetos se pregunta. |
+| `reset(viewer, key)`, `tone(tone)` | Devuelven una clave a su valor por defecto; cambian el color de las líneas de clic (1.562.0). |
+
+Cada cambio se comprueba contra `@Menu.Range`, `AtLeast` y `AtMost`, se escribe con `ConfigFile.set` (se
+conservan comentarios y orden) y lo sigue el `Reloads` del plugin.
+
+Las anotaciones del record deciden cómo se lee un valor (1.562.0):
+
+- `@Menu.Format(value = MONEY, currency = "currency")` muestra la cantidad en la moneda que nombra la clave hermana.
+- `@Menu.Currency` en una clave de texto abre una elección entre las monedas del servidor.
+- `@Menu.Material` en una `List<String>` pide añadir un objeto (el selector de iconos), quitar uno o editar como texto.
+
+Qué va en una pantalla de ajustes y qué se queda en el archivo:
+
+- **En el juego:** lo que un admin cambia con el servidor en marcha: tasas, impuestos, límites, precios,
+  duraciones, interruptores, objetos bloqueados, monedas, interruptores de módulo.
+- **En el archivo:** base de datos y red, intervalos, sonidos, depuración, umbrales antiabuso, números de diseño.
+- **Forma:** una tarjeta del hub de admin abre un hub de ajustes con una tarjeta por módulo, cada una con una
+  subpágina de tarjetas escritas a mano. Los interruptores de módulo se aplican en el siguiente reinicio, y el
+  hub dice cuántos cambios esperan (`PluginModules.pendingRestart()`).
+
+`tools/settings-cards/settings_cards.py`, del repositorio, convierte una especificación corta (clave, etiqueta,
+icono, dos o tres líneas) en el YAML en inglés de un hub y sus páginas, listo para traducir.
+
+## El árbol genérico, para desarrolladores
 
 Un plugin puede añadir un botón *Ajustes* a su propio hub de admin y dejar ATRÁS apuntando a él:
 
@@ -44,3 +101,8 @@ ConfigMenus.of(plugin)
 
 Las anotaciones opcionales `Menu` en el record dan etiquetas, rangos y formatos. La lista de todos los plugins
 siempre requiere `exylialib.config`.
+
+`ConfigMenus.of(plugin).permission(p).back(b).file(name).open(viewer)` abre un archivo de ajustes directamente,
+por el nombre pasado a `Configs.define` (como `modules/hotbar/config`). Ese archivo es entonces la pantalla
+superior: ATRÁS ejecuta `back(...)` y el botón dice *Pantalla anterior*. Un nombre que el plugin no definió, o cuyo
+módulo está apagado, abre los ajustes del plugin como si no se hubiera pedido ningún archivo.
