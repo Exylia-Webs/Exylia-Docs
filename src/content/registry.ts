@@ -2362,10 +2362,10 @@ export const plugins: Plugin[] = [
   {
     id: "exyliarandomkits",
     name: "ExyliaRandomKitsCore",
-    tagline: { en: "Drop-in PvP arenas where every life rolls a new kit", es: "Arenas PvP listas para usar donde cada vida tira un kit nuevo" },
+    tagline: { en: "Drop-in PvP arenas where every life rolls new gear", es: "Arenas PvP listas para usar donde cada vida tira equipo nuevo" },
     summary: {
-      en: "Drop-in PvP arenas where every life starts with a random kit rolled by rarity, procedural kits whose slots roll their own variants, amounts and enchantments, random or draft arenas with rerolls and saved hotbar layouts, streaks that evolve the kit, levels, prestige, upgrades, kit mastery, perks and missions, events and seasons, kit balance from real K/D, servers of a network run as one pool, a Random kit in ExyliaDuels, the web editor and kits imported from EssentialsX and the Exylia plugins.",
-      es: "Arenas PvP listas para usar donde cada vida empieza con un kit aleatorio tirado por rareza, kits procedurales cuyas ranuras tiran sus propias variantes, cantidades y encantamientos, arenas aleatorias o de draft con rerolls y distribuciones de la barra guardadas, rachas que hacen evolucionar el kit, niveles, prestigio, mejoras, maestría de kits, perks y misiones, eventos y temporadas, balance de kits a partir del K/D real, servidores de una red funcionando como uno solo, un kit aleatorio en ExyliaDuels, el editor web y kits importados de EssentialsX y de los plugins de Exylia.",
+      en: "Drop-in PvP arenas where every life rolls its items piece by piece from one item pool by rarity, random or draft arenas with rerolls and saved hotbar layouts, streaks that raise the gear, levels, prestige, upgrades, perks and missions, events and seasons, servers of a network run as one pool, a Random kit in ExyliaDuels and the web editor.",
+      es: "Arenas PvP listas para usar donde cada vida tira sus objetos pieza a pieza de un único conjunto por rareza, arenas aleatorias o de draft con rerolls y distribuciones de la barra guardadas, rachas que mejoran el equipo, niveles, prestigio, mejoras, perks y misiones, eventos y temporadas, servidores de una red funcionando como uno solo, un kit aleatorio en ExyliaDuels y el editor web.",
     },
     version: "1.0.0",
     purchase: "https://builtbybit.com/resources/exylia-randomkitscore.134730/",
