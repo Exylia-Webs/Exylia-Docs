@@ -1,0 +1,119 @@
+---
+title: "Leaderboards"
+description: "Turning a hologram into a top list that keeps its own values: stats, periods, the board's lines, per-viewer places, placeholders and resets."
+---
+
+Any hologram can become a **leaderboard**: a top list of kills, play time, a balance, any statistic or any
+placeholder. The plugin keeps the values itself, so no stats plugin is needed behind it, and offline
+players are ranked too.
+
+## Turning one on
+
+| From | How |
+|---|---|
+| The editor | **LEADERBOARD** on the hologram's screen: left-click opens its window (stats, periods and rows), right-click turns it on or off. |
+| A command | `/holo <name> leaderboard on` (the first stat of `leaderboards.yml` if it names none) and `off`. |
+| The file | A `leaderboard` section on the hologram, below. |
+
+While a hologram is a leaderboard its lines are written from the section; the lines it had are kept for
+when it is turned off. `/holo <name> leaderboard flatten` turns the board into plain lines you can edit one
+by one; the places still read the board.
+
+```yaml title="plugins/ExyliaDisplays/holograms.yml"
+holograms:
+  top:
+    leaderboard:
+      enabled: true
+      stats: [kills, playtime]        # ids from leaderboards.yml
+      spans: [weekly, all-time]       # all-time, daily, weekly, monthly, yearly
+      rows: 10                        # 1 to 30
+      header: ['<size:1.6><shine:highlight>{highlight}&lTOP %stat%', '%resets%']
+      row: '{highlight}%rank%. {letters}%name% {letters_black}· {info}%value%'
+      empty-row: '{muted}%rank%. ---'
+      you: '{success}You {letters_black}· {highlight}#%rank% {letters_black}· {info}%value%'
+      you-unranked: '{muted}You are not on this board yet'
+      footer: ['<size:0.4> ']
+      stat-button: '{info}◀ {letters}%stat% {info}▶'
+      span-button: '{info}◀ {letters}%span% {info}▶'
+```
+
+| Key | Does |
+|---|---|
+| `stats` | What it ranks by. With more than one, a button turns through them. |
+| `spans` | The periods shown. With more than one, a button turns through them. |
+| `rows` | How many places, 1 to 30. |
+| `header` | Lines above the places. `%stat%` is the stat's name, `%span%` the period's, `%resets%` when it starts over. |
+| `row` | A place somebody holds: `%rank%`, `%name%`, `%value%`. `<head:%name%>` draws their face (1.21.9+ servers and clients). |
+| `empty-row` | A place nobody holds yet: `%rank%`. |
+| `you` | The viewer's own place, under the others: `%rank%`, `%value%`, `%name%`. Empty leaves it out. |
+| `you-unranked` | The viewer when they hold no place in this period yet. |
+| `footer` | Lines below the places, before the buttons. |
+| `stat-button` · `span-button` | The buttons that turn the stat / the period (left-click next, right-click back). Empty for none. |
+
+Every stat and period is a page. The buttons turn the page for the player who clicked, and nobody else.
+Every viewer sees their own place under the others.
+
+From commands:
+
+| Command | Does |
+|---|---|
+| `/holo <name> leaderboard` | The leaderboard window (players). |
+| `/holo <name> leaderboard stats <ids>` | The stats, by id, separated by commas: `kills,deaths`. |
+| `/holo <name> leaderboard spans <periods>` | The periods: `all-time,weekly`. |
+| `/holo <name> leaderboard rows <n>` | Places shown, 1 to 30. |
+| `/holoadmin leaderboard reset <stat> [period]` | Starts a board over on every server: one period, or every value when none is named. |
+
+## What can be ranked
+
+`leaderboards.yml` defines the stats and when periods start over:
+
+```yaml title="plugins/ExyliaDisplays/leaderboards.yml"
+time-zone: 'Europe/Madrid'   # empty for the server's own
+day-starts-at: 0             # the hour a day starts, 0-23
+week-starts-on: MONDAY
+sample-every: 1m             # how often online players are read
+sort-every: 30s              # how often the boards are sorted again
+stats:
+  kills: {name: Kills, source: 'statistic:PLAYER_KILLS'}
+  playtime: {name: Play time, source: playtime, format: duration}
+  money: {name: Balance, source: balance, format: money}
+  level: {name: Level, source: 'placeholder:%player_level%'}
+```
+
+Shipped stats: `kills`, `deaths`, `mobs`, `playtime`, `money`, `diamonds`, `jumps`.
+
+| Key | Does |
+|---|---|
+| `time-zone` | The zone days, weeks, months and years are counted in. Give every server of a network the same one. |
+| `day-starts-at` | At 5, 03:00 still counts as yesterday. |
+| `week-starts-on` | `MONDAY`, `SUNDAY`... |
+| `sample-every` / `sort-every` | How often online players are read / boards are sorted again, so new values show. |
+| `stats.<id>.name` | What players read. |
+| `stats.<id>.source` | `statistic:PLAYER_KILLS`, `statistic:MINE_BLOCK:DIAMOND_ORE`, `statistic:KILL_ENTITY:ZOMBIE`, `playtime`, `balance`, `balance:<currency>`, `placeholder:%some_placeholder%`. |
+| `stats.<id>.format` | Empty (`12,345`), `compact` (`1.2K`), `money`, `duration` (for play time) or a pattern such as `#,##0.#`. |
+| `stats.<id>.per-server` | Each server keeps its own value and the board adds them up (statistics always do). |
+
+Statistics, play time and balances count players who are offline too: they are read once, in the
+background, the first time a stat is tracked. A placeholder only counts players as they join. A period
+counts what was gained since it began. `time-zone`, `day-starts-at` and `week-starts-on` are also
+editable in game, in **Settings** on the hologram list.
+
+## Placeholders
+
+The same values work anywhere that reads placeholders (an NPC's skin included):
+
+| Placeholder | Gives |
+|---|---|
+| `%exyliadisplays_lb_<stat>:<period>:<place>:name%` | The name at that place. Also `value` and `taken` (`1` when someone holds it). |
+| `%exyliadisplays_lb_<stat>:<period>:me:rank%` | The viewer's place; `:me:value%` their value. |
+| `%exyliadisplays_lb_<stat>:<period>:resets%` | When the period starts over. |
+
+The period is `all-time`, `daily`, `weekly`, `monthly` or `yearly`. An NPC whose skin is
+`%exyliadisplays_lb_kills:weekly:1:name%` wears this week's best killer; see
+[Statues](/docs/exyliadisplays/npcs#statues).
+
+<Callout type="note" title="A switched-off module">
+With `modules.leaderboards: false` boards stop updating and show nothing, and the `leaderboard` commands
+answer that the module is off. The change needs a restart. The module's words are in
+`lang/<code>/messages/leaderboards.yml`.
+</Callout>

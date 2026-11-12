@@ -1,0 +1,119 @@
+---
+title: "Clasificaciones"
+description: "Convertir un holograma en un top que guarda sus propios valores: stats, periodos, las líneas del top, puestos por espectador, placeholders y reinicios."
+---
+
+Cualquier holograma puede ser una **clasificación**: un top de kills, tiempo de juego, un saldo, cualquier
+estadística o cualquier placeholder. El plugin guarda los valores él mismo, así que no hace falta un
+plugin de stats detrás, y los jugadores desconectados también se clasifican.
+
+## Activar una
+
+| Desde | Cómo |
+|---|---|
+| El editor | **CLASIFICACIÓN** en el menú del holograma: clic izquierdo abre su ventana (stats, periodos y filas), clic derecho la activa o desactiva. |
+| Un comando | `/holo <nombre> leaderboard on` (la primera stat de `leaderboards.yml` si no nombra ninguna) y `off`. |
+| El archivo | Una sección `leaderboard` en el holograma, más abajo. |
+
+Mientras un holograma es una clasificación, sus líneas se escriben desde la sección; las que tenía se
+conservan para cuando se desactive. `/holo <nombre> leaderboard flatten` convierte el top en líneas normales
+que puedes editar una a una; los puestos siguen leyendo el top.
+
+```yaml title="plugins/ExyliaDisplays/holograms.yml"
+holograms:
+  top:
+    leaderboard:
+      enabled: true
+      stats: [kills, playtime]        # ids de leaderboards.yml
+      spans: [weekly, all-time]       # all-time, daily, weekly, monthly, yearly
+      rows: 10                        # 1 a 30
+      header: ['<size:1.6><shine:highlight>{highlight}&lTOP %stat%', '%resets%']
+      row: '{highlight}%rank%. {letters}%name% {letters_black}· {info}%value%'
+      empty-row: '{muted}%rank%. ---'
+      you: '{success}Tú {letters_black}· {highlight}#%rank% {letters_black}· {info}%value%'
+      you-unranked: '{muted}Aún no estás en este top'
+      footer: ['<size:0.4> ']
+      stat-button: '{info}◀ {letters}%stat% {info}▶'
+      span-button: '{info}◀ {letters}%span% {info}▶'
+```
+
+| Clave | Hace |
+|---|---|
+| `stats` | Por qué se clasifica. Con más de una, un botón pasa de una a otra. |
+| `spans` | Los periodos mostrados. Con más de uno, un botón pasa de uno a otro. |
+| `rows` | Cuántos puestos, de 1 a 30. |
+| `header` | Líneas sobre los puestos. `%stat%` es el nombre de la stat, `%span%` el del periodo, `%resets%` cuándo vuelve a empezar. |
+| `row` | Un puesto que alguien ocupa: `%rank%`, `%name%`, `%value%`. `<head:%name%>` dibuja su cara (servidores y clientes 1.21.9+). |
+| `empty-row` | Un puesto que nadie ocupa aún: `%rank%`. |
+| `you` | El puesto del propio espectador, bajo los demás: `%rank%`, `%value%`, `%name%`. Vacío lo omite. |
+| `you-unranked` | El espectador cuando aún no ocupa puesto en este periodo. |
+| `footer` | Líneas bajo los puestos, antes de los botones. |
+| `stat-button` · `span-button` | Los botones que cambian la stat / el periodo (clic izquierdo siguiente, derecho anterior). Vacío para ninguno. |
+
+Cada stat y cada periodo es una página. Los botones cambian la página solo del jugador que hizo clic. Cada
+espectador ve su propio puesto bajo los demás.
+
+Desde comandos:
+
+| Comando | Hace |
+|---|---|
+| `/holo <nombre> leaderboard` | La ventana de la clasificación (jugadores). |
+| `/holo <nombre> leaderboard stats <ids>` | Las stats, por id, separadas por comas: `kills,deaths`. |
+| `/holo <nombre> leaderboard spans <periodos>` | Los periodos: `all-time,weekly`. |
+| `/holo <nombre> leaderboard rows <n>` | Puestos mostrados, de 1 a 30. |
+| `/holoadmin leaderboard reset <stat> [periodo]` | Reinicia un top en todos los servidores: un periodo, o todos los valores si no se nombra ninguno. |
+
+## Qué se puede clasificar
+
+`leaderboards.yml` define las stats y cuándo vuelven a empezar los periodos:
+
+```yaml title="plugins/ExyliaDisplays/leaderboards.yml"
+time-zone: 'Europe/Madrid'   # vacío para la del servidor
+day-starts-at: 0             # la hora en que empieza un día, 0-23
+week-starts-on: MONDAY
+sample-every: 1m             # cada cuánto se leen los jugadores conectados
+sort-every: 30s              # cada cuánto se reordenan los tops
+stats:
+  kills: {name: Kills, source: 'statistic:PLAYER_KILLS'}
+  playtime: {name: Tiempo de juego, source: playtime, format: duration}
+  money: {name: Saldo, source: balance, format: money}
+  level: {name: Nivel, source: 'placeholder:%player_level%'}
+```
+
+Stats incluidas: `kills`, `deaths`, `mobs`, `playtime`, `money`, `diamonds`, `jumps`.
+
+| Clave | Hace |
+|---|---|
+| `time-zone` | La zona en que se cuentan días, semanas, meses y años. Pon la misma en todos los servidores de una red. |
+| `day-starts-at` | Con 5, las 03:00 aún cuentan como ayer. |
+| `week-starts-on` | `MONDAY`, `SUNDAY`... |
+| `sample-every` / `sort-every` | Cada cuánto se leen los jugadores conectados / se reordenan los tops, para que salgan los valores nuevos. |
+| `stats.<id>.name` | Lo que leen los jugadores. |
+| `stats.<id>.source` | `statistic:PLAYER_KILLS`, `statistic:MINE_BLOCK:DIAMOND_ORE`, `statistic:KILL_ENTITY:ZOMBIE`, `playtime`, `balance`, `balance:<moneda>`, `placeholder:%algun_placeholder%`. |
+| `stats.<id>.format` | Vacío (`12,345`), `compact` (`1.2K`), `money`, `duration` (para tiempo de juego) o un patrón como `#,##0.#`. |
+| `stats.<id>.per-server` | Cada servidor guarda su propio valor y el top los suma (las estadísticas siempre lo hacen). |
+
+Las estadísticas, el tiempo de juego y los saldos cuentan también a los jugadores desconectados: se leen una
+vez, en segundo plano, la primera vez que se sigue una stat. Un placeholder solo cuenta a los jugadores
+cuando entran. Un periodo cuenta lo ganado desde que empezó. `time-zone`, `day-starts-at` y `week-starts-on`
+también se editan en el juego, en **Ajustes** de la lista de hologramas.
+
+## Placeholders
+
+Los mismos valores funcionan en cualquier sitio que lea placeholders (incluida la skin de un NPC):
+
+| Placeholder | Da |
+|---|---|
+| `%exyliadisplays_lb_<stat>:<periodo>:<puesto>:name%` | El nombre en ese puesto. También `value` y `taken` (`1` si alguien lo ocupa). |
+| `%exyliadisplays_lb_<stat>:<periodo>:me:rank%` | El puesto del espectador; `:me:value%` su valor. |
+| `%exyliadisplays_lb_<stat>:<periodo>:resets%` | Cuándo vuelve a empezar el periodo. |
+
+El periodo es `all-time`, `daily`, `weekly`, `monthly` o `yearly`. Un NPC cuya skin es
+`%exyliadisplays_lb_kills:weekly:1:name%` lleva al mejor asesino de la semana; ver
+[Estatuas](/docs/exyliadisplays/npcs#estatuas).
+
+<Callout type="note" title="Un módulo desactivado">
+Con `modules.leaderboards: false` los tops dejan de actualizarse y no muestran nada, y los comandos
+`leaderboard` responden que el módulo está apagado. El cambio necesita un reinicio. Las palabras del módulo
+están en `lang/<código>/messages/leaderboards.yml`.
+</Callout>
