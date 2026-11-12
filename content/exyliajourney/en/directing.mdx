@@ -1,0 +1,175 @@
+---
+title: "Directing a cinematic"
+description: "Cinematics that wait for the viewer: stops, click to continue, the typewriter, camera shakes, scenes written without times, actors on stage, and answers that branch the story."
+---
+
+A cinematic can play straight through, or take part in a conversation: it stops where the viewer should read,
+writes its lines out letter by letter, puts actors on stage and, at the end, asks a question whose answer
+decides what happens next. All of it lives in the same `cinematics/<id>.yml` file as
+[the basics](/docs/exyliajourney/cinematics), and all of it is for the viewer alone.
+
+## Stops
+
+A stop freezes the cinematic at a moment until the viewer clicks. The camera holds, drifts a little (`hold-drift`) so the picture stays alive, and a
+pulsing prompt invites the click. The first press finishes a line that is still being written out; the next
+goes on. Subtitles, title cards, actors and the cinematic's clock all wait with the camera.
+
+Four ways to make a stop:
+
+```yaml
+advance: CLICK                 # a stop after every subtitle
+keyframes:
+  - { at: 'world,0.00,70.00,0.00', time: 4.0, wait: true }       # stops once the camera has settled
+  - { at: 'world,5.00,70.00,0.00', time: 9.0, wait: { timeout: 20 } }
+waits:
+  - { time: 12.0, timeout: 30, text: '{letters}Press to continue' }
+  - { at: { keyframe: 3, offset: 1.0 } }
+```
+
+| Key | What it does |
+|---|---|
+| `advance` | `AUTO` (the default) plays through; `CLICK` puts a stop at the end of every subtitle. |
+| `wait` on a keyframe | `true` or a section with `timeout`: stops once the camera has settled there (it holds at least 0.2 s). `wait: false` is none. |
+| `waits` | A list of stops: `time`, or `at: { keyframe, offset }` to follow a keyframe when retimed; `timeout`; `text`. |
+
+`timeout` is the seconds until the cinematic goes on by itself. Without it, `cinematics.wait-timeout` applies
+(45 s by default); `0` waits for ever. This keeps nobody frozen and away from the keyboard.
+
+`text` on a stop is a line held on screen while it waits. The last subtitle that started before a stop is also
+kept on screen until the viewer goes on, so the line they are asked about is never already gone. Stops closer
+than 0.3 seconds are one.
+
+## Written-out lines
+
+Lines can appear as if typed, at `typewriter` characters a second:
+
+```yaml
+typewriter: 30     # this cinematic; 0 shows lines whole
+drift: 0.08        # blocks the camera breathes at a stop; 0 stands still
+```
+
+A quiet sound plays while a line is written out, and another when the viewer goes on. Without `typewriter`,
+`config.yml`'s applies.
+
+## Shakes
+
+```yaml
+shakes:
+  - { time: 6.0, length: 0.8, strength: 0.4 }
+```
+
+The camera is thrown about for `length` seconds (at least 0.05), dying away; `strength` is in blocks, 0 to 3,
+`0.25` by default.
+
+## Scenes
+
+`scenes` is a way to write a cinematic with no times in it. Each scene is a camera move and the lines said
+over it; the plugin works out the keyframes, line timings, stops and fades, and compiles them into the same
+keyframes, subtitles and stops every other cinematic is made of.
+
+```yaml
+typewriter: 35
+scenes:
+  - title: '{highlight}&lThe Capital'
+    from: { at: 'world,100.5,80.0,40.5', yaw: 140, pitch: 20 }
+    to:   { at: 'world,120.5,74.0,60.5', yaw: 160, pitch: 15 }
+    lines:
+      - 'Guide: Welcome to the capital.'
+      - '-: The city never sleeps.'
+    sounds:
+      - { sound: BLOCK_AMETHYST_BLOCK_CHIME, after: 0.5 }
+  - from: { at: 'world,0.5,70.0,0.5', yaw: 0, pitch: 10 }
+    look-at: 'npc:guide'
+    lines: ['Guide: This is where it begins.']
+    wait: false
+```
+
+| Key | Default | What it does |
+|---|---|---|
+| `from` | none | `{ at, yaw, pitch }`: where the camera starts. A scene without it is skipped. |
+| `to` | none | Where it ends. Without it the scene is a still shot. |
+| `lines` | none | `Speaker: line`; `-: line` is narration. Each is shown for its reading time, plus the time to write it out. |
+| `title`, `title-seconds` | none, `2.2` | A title card first. The lines start after it. |
+| `seconds` | until the first line has been read | How long the move takes. |
+| `easing` | `SMOOTH` | How it arrives at `to`. |
+| `look-at` | none | `world,x,y,z` or `npc:<id>`: aim here during the scene. |
+| `fade` | `0.8` | Black around the cut into this scene. Scenes after the first are cuts. |
+| `wait` | `true` | A stop after every line. `false` for none, or `{ timeout }`. |
+| `sounds` | none | `{ sound, after, volume, pitch }`, `after` counted from the scene's start. |
+| `run` | none | Interaction lines run when the scene starts. |
+
+A scenes cinematic types its lines out at `cinematics.scene-typewriter` (42 characters a second) unless
+`typewriter` says. Scenes can sit beside ordinary `keyframes`. The editor writes a scenes file back as
+keyframes.
+
+## Actors
+
+An actor is a body on stage that only the viewer sees: nothing stays in the world.
+
+```yaml
+actors:
+  - id: guide
+    name: '{highlight}Guide'
+    skin: viewer              # the viewer's own skin; a texture value; or empty for the default
+    at: 'world,10.5,70.0,3.5'
+    yaw: 180
+    held: DIAMOND_SWORD
+    cues:
+      - { time: 1.0, walk-to: 'world,14.5,70.0,3.5', seconds: 3 }
+      - { time: 4.5, look: camera }
+      - { time: 5.0, swing: true }
+      - { time: 6.0, pose: LYING }
+      - { time: 8.0, hide: true }
+```
+
+| Key | What it is |
+|---|---|
+| `id`, `name` | Its name in the file, and the name drawn over it (blank for none). |
+| `skin` | `viewer`, a texture value, or blank. |
+| `at`, `yaw` | Where it stands and which way it faces at the start. `at` is required. |
+| `held` | A material in its hand. |
+| `cues` | What it does, in time order. |
+
+Each cue has a `time` and one of `walk-to` (with `seconds`; by default 3 blocks a second), `look` (`camera` or
+`world,x,y,z`), `pose` (`STANDING`, `LYING`, `CRAWLING`, `SNEAKING` or `SPINNING`), `swing: true`, `hurt: true` or
+`hide: true`. A cue that says none of them is reported and skipped. Actors follow the cinematic's own clock, so
+they stand still while it waits at a stop.
+
+## Answers and branches
+
+A cinematic can end by asking something:
+
+```yaml
+choice-prompt: '{letters}What do you do?'
+choices:
+  - { text: '{success}Follow the guide', next: follow-guide, key: followed }
+  - { text: '{error}Stay behind', key: stayed }
+```
+
+| Key | What it does |
+|---|---|
+| `text` | The answer. One without text is skipped. |
+| `next` | Another cinematic to play right away. Without it, the cinematic's own `next`, else nothing. |
+| `key` | Fires the custom key `choice:<key>` for the player. |
+| `choice-prompt` | The question, else `messages.yml`'s. |
+
+The screen goes dark behind the question. Closing it takes the first answer, so nobody is left out of the
+story. A step can wait for an answer with a `CUSTOM` objective on `choice:followed`, so the two answers can lead
+to different things (see [Steps](/docs/exyliajourney/steps)). Bedrock
+players, who cannot draw the camera, are not asked.
+
+Each stop a viewer reaches, goes on from (pressing or by timeout) or leaves at is counted in the plugin's
+stats.
+
+## Defaults
+
+In `config.yml`, under `cinematics`:
+
+| Key | Default | What it does |
+|---|---|---|
+| `typewriter` | `0` | Characters a second lines are written at; `0` shows them whole. |
+| `scene-typewriter` | `42` | The same for scenes. |
+| `typewriter-sound` | `BLOCK_NOTE_BLOCK_HAT;0.12;1.9` | A quiet sound while writing, `sound;volume;pitch`; empty for none. |
+| `continue-sound` | `UI_BUTTON_CLICK;0.25;1.5` | When the viewer goes on from a stop; empty for none. |
+| `wait-timeout` | `45` | Seconds before a stop goes on by itself; `0` waits for ever. A stop's own `timeout` wins. |
+| `hold-drift` | `0.04` | Blocks the camera breathes at a stop; `0` stands still. |

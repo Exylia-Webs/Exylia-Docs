@@ -1,0 +1,176 @@
+---
+title: "Dirigir una cinemática"
+description: "Cinemáticas que esperan a quien las ve: paradas, clic para continuar, máquina de escribir, sacudidas de cámara, escenas escritas sin tiempos, actores en escena y respuestas que ramifican la historia."
+---
+
+Una cinemática puede reproducirse de un tirón o formar parte de una conversación: se para donde quien la ve
+debe leer, escribe sus líneas letra a letra, pone actores en escena y, al final, hace una pregunta cuya
+respuesta decide lo que pasa después. Todo vive en el mismo archivo `cinematics/<id>.yml` que
+[lo básico](/docs/exyliajourney/cinematicas), y todo es solo para quien la ve.
+
+## Paradas
+
+Una parada congela la cinemática en un momento hasta que quien la ve hace clic. La cámara se mantiene, se
+desplaza un poco (`hold-drift`) para que la imagen siga viva, y un aviso pulsante invita al clic. La primera
+pulsación termina una línea que aún se está escribiendo; la siguiente continúa. Los subtítulos, los títulos, los
+actores y el reloj de la cinemática esperan con la cámara.
+
+Cuatro formas de hacer una parada:
+
+```yaml
+advance: CLICK                 # una parada tras cada subtítulo
+keyframes:
+  - { at: 'world,0.00,70.00,0.00', time: 4.0, wait: true }       # se para cuando la cámara se ha asentado
+  - { at: 'world,5.00,70.00,0.00', time: 9.0, wait: { timeout: 20 } }
+waits:
+  - { time: 12.0, timeout: 30, text: '{letters}Press to continue' }
+  - { at: { keyframe: 3, offset: 1.0 } }
+```
+
+| Clave | Qué hace |
+|---|---|
+| `advance` | `AUTO` (por defecto) se reproduce seguida; `CLICK` pone una parada al final de cada subtítulo. |
+| `wait` en un fotograma | `true` o una sección con `timeout`: se para cuando la cámara se ha asentado allí (se queda al menos 0,2 s). `wait: false` es ninguna. |
+| `waits` | Una lista de paradas: `time`, o `at: { keyframe, offset }` para seguir a un fotograma al reajustar tiempos; `timeout`; `text`. |
+
+`timeout` son los segundos hasta que la cinemática sigue sola. Sin él se aplica `cinematics.wait-timeout` (45 s
+por defecto); `0` espera para siempre. Así nadie se queda congelado y lejos del teclado.
+
+`text` en una parada es una línea que se mantiene en pantalla mientras espera. El último subtítulo que empezó
+antes de una parada también se mantiene hasta que quien la ve sigue, así que la línea por la que se le
+pregunta nunca ha desaparecido ya. Dos paradas a menos de 0,3 segundos son una.
+
+## Líneas escritas
+
+Las líneas pueden aparecer como si se tecleasen, a `typewriter` caracteres por segundo:
+
+```yaml
+typewriter: 30     # esta cinemática; 0 muestra las líneas enteras
+drift: 0.08        # bloques que respira la cámara en una parada; 0 se queda quieta
+```
+
+Suena un sonido suave mientras se escribe una línea, y otro cuando quien la ve continúa. Sin `typewriter`, se
+aplica el de `config.yml`.
+
+## Sacudidas
+
+```yaml
+shakes:
+  - { time: 6.0, length: 0.8, strength: 0.4 }
+```
+
+La cámara se sacude durante `length` segundos (al menos 0,05), apagándose; `strength` está en bloques, de 0 a
+3, `0.25` por defecto.
+
+## Escenas
+
+`scenes` es una forma de escribir una cinemática sin tiempos. Cada escena es un movimiento de cámara y las
+líneas dichas sobre él; el plugin calcula los fotogramas, los tiempos de las líneas, las paradas y los
+fundidos, y los compila en los mismos fotogramas, subtítulos y paradas de cualquier otra cinemática.
+
+```yaml
+typewriter: 35
+scenes:
+  - title: '{highlight}&lThe Capital'
+    from: { at: 'world,100.5,80.0,40.5', yaw: 140, pitch: 20 }
+    to:   { at: 'world,120.5,74.0,60.5', yaw: 160, pitch: 15 }
+    lines:
+      - 'Guide: Welcome to the capital.'
+      - '-: The city never sleeps.'
+    sounds:
+      - { sound: BLOCK_AMETHYST_BLOCK_CHIME, after: 0.5 }
+  - from: { at: 'world,0.5,70.0,0.5', yaw: 0, pitch: 10 }
+    look-at: 'npc:guide'
+    lines: ['Guide: This is where it begins.']
+    wait: false
+```
+
+| Clave | Por defecto | Qué hace |
+|---|---|---|
+| `from` | ninguno | `{ at, yaw, pitch }`: dónde empieza la cámara. Una escena sin ella se omite. |
+| `to` | ninguno | Dónde acaba. Sin ella la escena es un plano fijo. |
+| `lines` | ninguno | `Speaker: línea`; `-: línea` es narración. Cada una se muestra su tiempo de lectura, más el de escribirla. |
+| `title`, `title-seconds` | ninguno, `2.2` | Un título primero. Las líneas empiezan después. |
+| `seconds` | hasta leer la primera línea | Cuánto dura el movimiento. |
+| `easing` | `SMOOTH` | Cómo llega a `to`. |
+| `look-at` | ninguno | `world,x,y,z` o `npc:<id>`: apunta ahí durante la escena. |
+| `fade` | `0.8` | Negro alrededor del corte hacia esta escena. Las escenas tras la primera son cortes. |
+| `wait` | `true` | Una parada tras cada línea. `false` para ninguna, o `{ timeout }`. |
+| `sounds` | ninguno | `{ sound, after, volume, pitch }`, con `after` contado desde el inicio de la escena. |
+| `run` | ninguno | Líneas de interacción que se ejecutan al empezar la escena. |
+
+Una cinemática con escenas teclea sus líneas a `cinematics.scene-typewriter` (42 caracteres por segundo) salvo
+que `typewriter` diga otra cosa. Las escenas pueden convivir con `keyframes` normales. El editor reescribe un
+archivo de escenas como fotogramas.
+
+## Actores
+
+Un actor es un cuerpo en escena que solo ve quien la mira: nada queda en el mundo.
+
+```yaml
+actors:
+  - id: guide
+    name: '{highlight}Guide'
+    skin: viewer              # la skin de quien la ve; un valor de textura; o vacío para la de por defecto
+    at: 'world,10.5,70.0,3.5'
+    yaw: 180
+    held: DIAMOND_SWORD
+    cues:
+      - { time: 1.0, walk-to: 'world,14.5,70.0,3.5', seconds: 3 }
+      - { time: 4.5, look: camera }
+      - { time: 5.0, swing: true }
+      - { time: 6.0, pose: LYING }
+      - { time: 8.0, hide: true }
+```
+
+| Clave | Qué es |
+|---|---|
+| `id`, `name` | Su nombre en el archivo, y el nombre dibujado sobre él (vacío para ninguno). |
+| `skin` | `viewer`, un valor de textura, o vacío. |
+| `at`, `yaw` | Dónde está y hacia dónde mira al empezar. `at` es obligatorio. |
+| `held` | Un material en la mano. |
+| `cues` | Qué hace, en orden de tiempo. |
+
+Cada señal tiene un `time` y una de estas: `walk-to` (con `seconds`; por defecto 3 bloques por segundo), `look`
+(`camera` o `world,x,y,z`), `pose` (`STANDING`, `LYING`, `CRAWLING`, `SNEAKING` o `SPINNING`), `swing: true`,
+`hurt: true` o `hide: true`. Una señal que no dice ninguna se reporta y se omite. Los actores siguen el reloj de
+la cinemática, así que se quedan quietos mientras espera en una parada.
+
+## Respuestas y ramas
+
+Una cinemática puede acabar con una pregunta:
+
+```yaml
+choice-prompt: '{letters}What do you do?'
+choices:
+  - { text: '{success}Follow the guide', next: follow-guide, key: followed }
+  - { text: '{error}Stay behind', key: stayed }
+```
+
+| Clave | Qué hace |
+|---|---|
+| `text` | La respuesta. Una sin texto se omite. |
+| `next` | Otra cinemática que se reproduce al instante. Sin ella, el `next` de la propia cinemática, si no nada. |
+| `key` | Dispara la clave personalizada `choice:<key>` para el jugador. |
+| `choice-prompt` | La pregunta, si no la de `messages.yml`. |
+
+La pantalla se oscurece tras la pregunta. Cerrarla toma la primera respuesta, así que nadie queda fuera de la
+historia. Un paso puede esperar una respuesta con un objetivo `CUSTOM` sobre `choice:followed`, de modo que las
+dos respuestas lleven a cosas distintas (consulta [Pasos](/docs/exyliajourney/pasos)). Los jugadores de Bedrock,
+que no pueden dibujar la cámara, no reciben la pregunta.
+
+Cada parada a la que llega quien la ve, desde la que sigue (pulsando o por tiempo) o que abandona se cuenta en
+las estadísticas del plugin.
+
+## Valores por defecto
+
+En `config.yml`, bajo `cinematics`:
+
+| Clave | Por defecto | Qué hace |
+|---|---|---|
+| `typewriter` | `0` | Caracteres por segundo a los que se escriben las líneas; `0` las muestra enteras. |
+| `scene-typewriter` | `42` | Lo mismo para las escenas. |
+| `typewriter-sound` | `BLOCK_NOTE_BLOCK_HAT;0.12;1.9` | Un sonido suave al escribir, `sonido;volumen;tono`; vacío para ninguno. |
+| `continue-sound` | `UI_BUTTON_CLICK;0.25;1.5` | Cuando quien la ve continúa tras una parada; vacío para ninguno. |
+| `wait-timeout` | `45` | Segundos antes de que una parada siga sola; `0` espera para siempre. El `timeout` propio de una parada manda. |
+| `hold-drift` | `0.04` | Bloques que respira la cámara en una parada; `0` se queda quieta. |

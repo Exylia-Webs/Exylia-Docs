@@ -1,0 +1,140 @@
+---
+title: "Dialogues"
+description: "RPG-style conversations in a dialogue box: standalone dialogues opened by NPCs, places, joins or commands, with answers that run actions, open another dialogue or start a journey."
+---
+
+A dialogue is a conversation shown in a box at the bottom of the screen, one line per press, optionally ending
+in answers. It needs no resource pack. There are two kinds:
+
+- **Standalone dialogues** in `dialogues/<id>.yml`. They are not part of a journey: an NPC, a place, a join,
+  a command or another dialogue opens them, and an answer may start a journey.
+- **A step's conversation**: a `DIALOGUE` step, or any step with a `dialogue` section. See
+  [below](#in-a-step).
+
+The file name is the dialogue's id: lower-case letters, digits, `-` and `_`. The plugin writes two examples,
+`dialogues/example.yml` and `dialogues/example_lore.yml`; every key below is explained there too.
+
+```yaml
+mode: screen
+triggers:
+  - { type: NPC_CLICK, npc: guide }
+  - { type: FIRST_JOIN, mode: hud, once: true }
+require: ''
+faces:
+  Guide: Notch
+lines:
+  - 'Guide: Welcome, traveller. This land is bigger than it looks.'
+  - text: 'Guide: Most people get lost on their first night.'
+    actions: ['[SOUND] BLOCK_NOTE_BLOCK_CHIME;0.6;1.2']
+  - 'Guide: How can I help you?'
+answers:
+  - text: 'Show me around'
+    actions: ['[MESSAGE] %prefix% {success}The guide nods and starts walking.']
+    journey: example
+  - text: 'Tell me about this place'
+    dialogue: example_lore
+  - text: 'Not now'
+```
+
+## Modes
+
+| Mode | What the player does |
+|---|---|
+| `hud` (default) | Keeps walking. The mouse wheel or the number keys pick an answer and a sneak confirms. |
+| `screen` | Stands still and clicks the box or an answer. |
+
+`mode` on the file is the default. A trigger's `mode`, or the one given to the command or the `[DIALOGUE]`
+line, wins for that opening only. A dialogue opened by an answer keeps the mode of the one before it. The hint
+under the box ("Sneak or click the air to continue", "Scroll to choose · sneak to answer", "Click an
+answer") comes from `messages.yml` (`dialogue.prompt`, `dialogue.choosing`, `dialogue.clicking`).
+
+## Lines
+
+Each entry of `lines` is one press.
+
+| Form | Result |
+|---|---|
+| `'Guide: words'` | The line, with `Guide` as the speaker's name. A name has no colours in it and is at most 32 characters. |
+| `'-: words'` or no name | Narration, with no speaker. |
+| `{ text: 'Guide: words', actions: [...] }` | The same, and the [interaction lines](/docs/exyliajourney/journeys#effect-lines) run as the line starts. |
+
+`faces` maps a speaker's name to the player name whose skin is drawn beside their lines.
+
+## Answers
+
+Shown under the last line. A dialogue with no `answers` closes on the last press. Every key is optional
+except `text`, and they run in this order:
+
+| Key | What it does |
+|---|---|
+| `text` | The answer's words. |
+| `require` | Shows the answer only to players who meet this condition, such as `'%player_level% >= 5'`. |
+| `actions` | Interaction lines run when it is chosen: `[MESSAGE]`, `[SOUND]`, `[MONEY]`, `[CONSOLE]`, `[ACTION]`... |
+| `journey` | Starts that journey for the player, as long as its own rules (enabled, requirements, cooldown, not already active) allow it. An unknown id is logged. |
+| `dialogue` | Opens that dialogue next. An unknown id is reported when journeys load. |
+
+An answer with none of the last three just closes the conversation.
+
+## Triggers
+
+`triggers` lists what opens the dialogue on its own.
+
+| Type | Key | Opens when |
+|---|---|---|
+| `NPC_CLICK` | `npc` | The player clicks that NPC. Any NPC of this plugin, ExyliaDisplays or another plugin. |
+| `REGION_ENTER` | `region`, or `location` + `radius` | The player enters that region, or comes within `radius` blocks (5) of `world,x,y,z`. |
+| `JOIN` | | The player joins. |
+| `FIRST_JOIN` | | The player joins for the first time. |
+| `JOURNEY_COMPLETE` | `journey` | The player completes that journey. |
+| `CUSTOM` | `key` | A custom key is fired. See [Integrations](/docs/exyliajourney/integrations). |
+
+`npc: [guide, merchant]` at the top of the file is short for one `NPC_CLICK` trigger per NPC. Any other trigger
+type is reported and skipped. Each trigger may also set:
+
+| Key | What it does |
+|---|---|
+| `mode` | `hud` or `screen`, for this way of opening only. |
+| `cooldown` | How long before this trigger opens it again for the same player: `30s`, `10m`, `1d`. |
+| `once` | `true` opens it through this trigger once per player. |
+
+Rules when something fires:
+
+- The first dialogue, by file name, with a matching trigger opens, and the others do not.
+- It opens only if the player meets the file's `require` and that trigger is not cooling down.
+- Nothing opens over another conversation or over a cinematic.
+- `once` is kept as a very long cooldown, so a wipe of the plugin's cooldowns opens it again.
+
+## Opening one by hand
+
+| Way | Where |
+|---|---|
+| `/journeyadmin dialogue open <id> [player] [hud\|screen]` | Opens it for you, or for another player; the optional mode applies this time only. |
+| `/journeyadmin dialogue close <player>` | Closes whatever dialogue the player has open. |
+| `/journeyadmin dialogue list` | Lists every loaded dialogue with its mode, number of lines and answers, and triggers. |
+| `[DIALOGUE] <id> [hud\|screen]` | An interaction line, usable in a menu, a hologram, an NPC or another dialogue's `actions`. |
+
+## In a step
+
+A `DIALOGUE` step is done when its conversation ends. Any other step may carry a `dialogue` section too, and
+its answers can lead on:
+
+```yaml
+steps:
+  - id: ask
+    objective: { type: DIALOGUE }
+    dialogue:
+      lines: ['Guide: Which way?']
+      answers:
+        - { text: 'North', next: north }
+        - { text: 'South', next: south, key: went-south }
+  - id: north
+    objective: { type: REACH, location: 'world,0,64,200' }
+```
+
+`next` sends the journey to that step (`end` finishes it), and `key` fires a `choice:<key>` that a step's
+`branches` can read (`- { choice: went-south, next: south }`). `dialogue: ['line', ...]` is the short form with
+words only. The conversation plays once per visit to the step, while that journey is the one the player tracks and guidance is not hidden; if the player closes it unfinished it opens again
+on the next pass. It is taken down when the step ends some other way, and the step's guidance panel stays
+hidden while it plays.
+
+Answers that start journeys report the cause `dialogue` to [analytics](/docs/exyliajourney/analytics#exyliaanalytics).

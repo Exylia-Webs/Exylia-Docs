@@ -1,0 +1,141 @@
+---
+title: "Diálogos"
+description: "Conversaciones al estilo RPG en una caja de diálogo: diálogos independientes que abren NPCs, lugares, entradas o comandos, con respuestas que ejecutan acciones, abren otro diálogo o inician un recorrido."
+---
+
+Un diálogo es una conversación mostrada en una caja en la parte inferior de la pantalla, una línea por
+pulsación, que puede terminar en respuestas. No necesita resource pack. Hay dos clases:
+
+- **Diálogos independientes** en `dialogues/<id>.yml`. No forman parte de un recorrido: los abre un NPC, un
+  lugar, una entrada, un comando u otro diálogo, y una respuesta puede iniciar un recorrido.
+- **La conversación de un paso**: un paso `DIALOGUE`, o cualquier paso con una sección `dialogue`. Mira
+  [más abajo](#en-un-paso).
+
+El nombre del archivo es el id del diálogo: letras minúsculas, dígitos, `-` y `_`. El plugin escribe dos
+ejemplos, `dialogues/example.yml` y `dialogues/example_lore.yml`; cada clave de abajo está explicada también ahí.
+
+```yaml
+mode: screen
+triggers:
+  - { type: NPC_CLICK, npc: guide }
+  - { type: FIRST_JOIN, mode: hud, once: true }
+require: ''
+faces:
+  Guide: Notch
+lines:
+  - 'Guide: Welcome, traveller. This land is bigger than it looks.'
+  - text: 'Guide: Most people get lost on their first night.'
+    actions: ['[SOUND] BLOCK_NOTE_BLOCK_CHIME;0.6;1.2']
+  - 'Guide: How can I help you?'
+answers:
+  - text: 'Show me around'
+    actions: ['[MESSAGE] %prefix% {success}The guide nods and starts walking.']
+    journey: example
+  - text: 'Tell me about this place'
+    dialogue: example_lore
+  - text: 'Not now'
+```
+
+## Modos
+
+| Modo | Qué hace el jugador |
+|---|---|
+| `hud` (por defecto) | Sigue caminando. La rueda del ratón o las teclas numéricas eligen una respuesta y agacharse confirma. |
+| `screen` | Se queda quieto y hace clic en la caja o en una respuesta. |
+
+`mode` en el archivo es el valor por defecto. El `mode` de un disparador, o el que se pasa al comando o a la
+línea `[DIALOGUE]`, manda solo para esa apertura. Un diálogo abierto por una respuesta mantiene el modo del
+anterior. El texto bajo la caja ("Sneak or click the air to continue", "Scroll to choose · sneak to answer",
+"Click an answer") sale de `messages.yml` (`dialogue.prompt`, `dialogue.choosing`, `dialogue.clicking`).
+
+## Líneas
+
+Cada entrada de `lines` es una pulsación.
+
+| Forma | Resultado |
+|---|---|
+| `'Guide: palabras'` | La línea, con `Guide` como nombre del hablante. Un nombre no lleva colores y tiene como máximo 32 caracteres. |
+| `'-: palabras'` o sin nombre | Narración, sin hablante. |
+| `{ text: 'Guide: palabras', actions: [...] }` | Lo mismo, y las [líneas de interacción](/docs/exyliajourney/recorridos#líneas-de-efectos) se ejecutan al empezar la línea. |
+
+`faces` asocia el nombre de un hablante con el jugador cuya skin se dibuja junto a sus líneas.
+
+## Respuestas
+
+Se muestran bajo la última línea. Un diálogo sin `answers` se cierra en la última pulsación. Todas las claves
+son opcionales salvo `text`, y se ejecutan en este orden:
+
+| Clave | Qué hace |
+|---|---|
+| `text` | Las palabras de la respuesta. |
+| `require` | Muestra la respuesta solo a los jugadores que cumplen esta condición, como `'%player_level% >= 5'`. |
+| `actions` | Líneas de interacción que se ejecutan al elegirla: `[MESSAGE]`, `[SOUND]`, `[MONEY]`, `[CONSOLE]`, `[ACTION]`... |
+| `journey` | Inicia ese recorrido para el jugador, siempre que sus propias reglas (activado, requisitos, enfriamiento, no estar ya activo) lo permitan. Un id desconocido se registra en la consola. |
+| `dialogue` | Abre ese diálogo a continuación. Un id desconocido se reporta al cargar los recorridos. |
+
+Una respuesta sin ninguna de las tres últimas simplemente cierra la conversación.
+
+## Disparadores
+
+`triggers` enumera lo que abre el diálogo por sí solo.
+
+| Tipo | Clave | Se abre cuando |
+|---|---|---|
+| `NPC_CLICK` | `npc` | El jugador hace clic en ese NPC. Cualquier NPC de este plugin, de ExyliaDisplays o de otro plugin. |
+| `REGION_ENTER` | `region`, o `location` + `radius` | El jugador entra en esa región, o se acerca a `radius` bloques (5) de `world,x,y,z`. |
+| `JOIN` | | El jugador entra al servidor. |
+| `FIRST_JOIN` | | El jugador entra por primera vez. |
+| `JOURNEY_COMPLETE` | `journey` | El jugador completa ese recorrido. |
+| `CUSTOM` | `key` | Se dispara una clave personalizada. Mira [Integraciones](/docs/exyliajourney/integraciones). |
+
+`npc: [guide, merchant]` en la raíz del archivo equivale a un disparador `NPC_CLICK` por NPC. Cualquier otro
+tipo de disparador se reporta y se omite. Cada disparador puede además definir:
+
+| Clave | Qué hace |
+|---|---|
+| `mode` | `hud` o `screen`, solo para esta forma de abrirlo. |
+| `cooldown` | Cuánto tarda este disparador en volver a abrirlo para el mismo jugador: `30s`, `10m`, `1d`. |
+| `once` | `true` lo abre con este disparador una sola vez por jugador. |
+
+Reglas cuando algo se dispara:
+
+- Se abre el primer diálogo, por nombre de archivo, con un disparador coincidente; los demás no.
+- Solo se abre si el jugador cumple el `require` del archivo y ese disparador no está en enfriamiento.
+- Nada se abre encima de otra conversación ni de una cinemática.
+- `once` se guarda como un enfriamiento larguísimo, así que borrar los enfriamientos del plugin lo vuelve a abrir.
+
+## Abrirlo a mano
+
+| Forma | Dónde |
+|---|---|
+| `/journeyadmin dialogue open <id> [jugador] [hud\|screen]` | Lo abre para ti o para otro jugador; el modo opcional vale solo esta vez. |
+| `/journeyadmin dialogue close <jugador>` | Cierra el diálogo que el jugador tenga abierto. |
+| `/journeyadmin dialogue list` | Lista los diálogos cargados con su modo, número de líneas y respuestas, y disparadores. |
+| `[DIALOGUE] <id> [hud\|screen]` | Una línea de interacción, usable en un menú, un holograma, un NPC o las `actions` de otro diálogo. |
+
+## En un paso
+
+Un paso `DIALOGUE` se completa cuando termina su conversación. Cualquier otro paso puede llevar también una
+sección `dialogue`, y sus respuestas pueden hacer avanzar:
+
+```yaml
+steps:
+  - id: ask
+    objective: { type: DIALOGUE }
+    dialogue:
+      lines: ['Guide: Which way?']
+      answers:
+        - { text: 'North', next: north }
+        - { text: 'South', next: south, key: went-south }
+  - id: north
+    objective: { type: REACH, location: 'world,0,64,200' }
+```
+
+`next` envía el recorrido a ese paso (`end` lo termina), y `key` dispara un `choice:<key>` que los `branches`
+de un paso pueden leer (`- { choice: went-south, next: south }`). `dialogue: ['línea', ...]` es la forma corta,
+solo con palabras. La conversación suena una vez por visita al paso, mientras ese recorrido sea el que el
+jugador sigue y la guía no esté oculta; si el jugador la cierra sin terminar, se abre de nuevo en la siguiente
+pasada. Se retira si el paso termina de otra forma, y el panel de guía del paso permanece oculto mientras suena.
+
+Las respuestas que inician recorridos reportan la causa `dialogue` a la
+[analítica](/docs/exyliajourney/analitica#exyliaanalytics).
