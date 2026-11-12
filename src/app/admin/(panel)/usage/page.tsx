@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { getFormatter } from "next-intl/server";
-import { CellBar, ICONS } from "@exylia-webs/ui";
-import { AdminHeader, AdminTable } from "@exylia-webs/ui/admin";
+import { ICONS } from "@exylia-webs/ui";
+import { AdminHeader, AdminTable, LimitBar } from "@exylia-webs/ui/admin";
 import { fill } from "@/content/admin";
 import { requireAdmin } from "@/lib/admin-auth";
 import { adminText } from "@/lib/admin-i18n";
@@ -40,7 +40,7 @@ export default async function AdminUsage() {
             cells: {
               day: format.dateTime(row.day, { day: "numeric", month: "short", weekday: "short" }),
               tokens: n(row.tokens),
-              sofar: cap > 0 ? <CellBar value={sofar} max={cap} size="sm" label={`${n(sofar)} / ${n(cap)}`} /> : n(sofar),
+              sofar: <LimitBar value={sofar} limit={cap} />,
               calls: n(row.calls),
               hits: row.quotaHits ? <span className="text-warn">{n(row.quotaHits)}</span> : n(0),
             },
