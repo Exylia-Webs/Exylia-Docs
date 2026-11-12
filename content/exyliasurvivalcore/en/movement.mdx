@@ -12,10 +12,24 @@ A teleport that cannot happen at all says why instead of doing nothing. Spawn, h
 and portals share four lines in `messages.yml`: `errors.server-unreachable` (the place is on a server this
 one cannot reach), `errors.world-not-loaded`, `errors.player-not-found` and `errors.teleport-failed`.
 
+Three things apply to all of them:
+
+- **Combat.** With `combat-blocks-teleports: true` (the default, top level of `config.yml`), `/spawn`, `/home`,
+  `/warp`, `/rtp`, `/back`, `/tpa` and portal teleports are refused while the player is in combat, whichever
+  plugin tracks it, and the refusal says how long is left. A permission that skips the countdown does not skip
+  this. Teleports the server makes on its own (spawn on join, an admin's force) do not ask.
+- **Per-rank times.** A rank lowers a countdown or a wait with a permission number, and the **lowest** number a
+  player holds wins: `exyliasurvivalcore.<module>.warmup.<seconds>` for spawn, homes, warps, tpa, back and rtp,
+  `exyliasurvivalcore.warps.cooldown.<seconds>`, `exyliasurvivalcore.rtp.cooldown.<seconds>` (lowers a world's
+  own cooldown, never raises it) and `exyliasurvivalcore.tpa.cooldown.<seconds>`. The module's bypass node
+  still skips the countdown entirely.
+- **Menu buttons** (rename, icon, delete, teleport) are gated by the same node as the command they stand for.
+
 ## Spawn
 
-`/spawn` teleports to the server spawn. `/spawn set` stores it, and needs
-`exyliasurvivalcore.spawn.set`.
+`/spawn` teleports to the server spawn and needs `exyliasurvivalcore.spawn` (granted to everyone). `/spawn set`
+stores it through a placement wizard and needs `exyliasurvivalcore.spawn.set`; `/setspawn` and
+`/survivalcoreadmin setspawn` do the same.
 
 | Setting | Default | What it does |
 |---|---|---|
@@ -28,7 +42,7 @@ one cannot reach), `errors.world-not-loaded`, `errors.player-not-found` and `err
 | `respawn-at-spawn` | `true` | Death sends them to spawn |
 | `override-bed-spawn` | `true` | Even when they have a bed |
 
-`/spawn` itself checks **no permission**. The spawn is also pushed to clients as a waypoint where
+The spawn is also pushed to clients as a waypoint where
 Apollo or Feather is installed.
 
 Every server keeps its **own** spawn. The row is named after the server, so servers sharing one database
@@ -38,8 +52,9 @@ world is not loaded on that server, `respawn-at-spawn` leaves the respawn point 
 
 ## Homes
 
-Personal named locations. `/sethome [name]`, `/home [name]`, and `/homes` for the menu — rename,
-re-icon, teleport, delete.
+Personal named locations. `/sethome [name]`, `/home [name]`, `/delhome <name>`, and `/homes` for the menu —
+rename, re-icon, teleport, delete. `/homes set|del|tp` are the long forms of the same three. Deleting a home
+gives a slot back, so `/delhome` asks for no node.
 
 | Setting | Default | What it does |
 |---|---|---|
@@ -48,6 +63,9 @@ re-icon, teleport, delete.
 | `default-icon` | `GRASS_BLOCK` | The icon a new home gets |
 | `home-name-max-length` | 16 | Longest name |
 | `warmup-seconds` and friends | 3 | As above |
+| `permission-bypass-warmup` | `exyliasurvivalcore.homes.bypass` | The node that skips the countdown |
+| `blacklisted-worlds` | `[]` | Worlds `/sethome` and `/home` refuse from |
+| `waypoint-colour` | `85,255,85` | Colour of the home markers on the client, as R,G,B |
 
 How many homes a player gets is a permission tier: `exyliasurvivalcore.homes.max_homes.<n>`, and the
 **highest** node they hold wins. `max-homes` is only what somebody with no node gets.
@@ -63,10 +81,11 @@ than leaving callers to read the coordinates.
 
 ## Warps
 
-Server-wide named locations, built from `/warpadmin`. Each one has a display name, an icon, a cost, an
-optional permission and a location.
+Server-wide named locations, built from `/warpadmin` (`exyliasurvivalcore.warps.admin`). Each one has a display
+name, an icon, a cost, an optional permission and a location, placed through a wizard.
 
-`/warp` opens the list of the ones a player may use; `/warp <id>` goes straight there. Warps also cross
+`/warp` (or `/warps`) opens the list of the ones a player may use; `/warp <id>` goes straight there. A warp
+without a permission of its own needs `exyliasurvivalcore.warps.use` (granted to everyone). Warps also cross
 the network.
 
 | Bypass node | What it skips |
@@ -83,6 +102,7 @@ the network.
 | `cancel-on-move`, `cancel-on-damage` | `true` | What stops it |
 | `cooldown-seconds` | 0 | Seconds before the same player may use the same warp again. `0` turns it off |
 | `blacklisted-worlds` | `[]` | Worlds `/warp` refuses from |
+| `currency` | empty | The currency costs are charged in: an id from ExyliaLib's `economy.yml`, items and experience included. Empty is the default currency |
 
 The cooldown is counted **per player and per warp**, and it is stored in the database (`sc_warp_cooldowns`),
 so a warp that puts the player on another server does not hand them a fresh cooldown there.
@@ -97,8 +117,8 @@ every start.
 
 ## TPA
 
-`/tpa <player>` asks to go to them; `/tpahere <player>` asks them to come to you. `/tpaccept` and
-`/tpadeny` answer, with an optional name to pick which request. With no name they answer the newest one.
+`/tpa <player>` asks to go to them; `/tpahere <player>` asks them to come to you. `/tpaccept` (also `/tpyes`) and
+`/tpadeny` (also `/tpno`) answer, with an optional name to pick which request. With no name they answer the newest one.
 
 `/tpacancel [player]` takes back a request you sent and have not had answered yet, the newest one when no
 name is given. It needs `exyliasurvivalcore.tpa.cancel`. Tab completion only offers names that mean
@@ -134,6 +154,9 @@ default. A line you rewrote stays yours.
 | `send-confirm-default` | `true` | Whether a confirmation screen is shown before sending |
 | `tpa-enabled-default` | `true` | Whether players accept requests at all to begin with |
 | `auto-accept-default` | `false` | Whether requests are accepted without asking |
+| `request-cooldown-seconds` | 10 | Seconds before the same player may send another request to the same target. `0` turns it off |
+| `warmup-seconds` | 3 | Countdown after a request is accepted |
+| `blacklisted-worlds` | `[]` | Worlds where requests cannot be sent or accepted |
 
 `/tpatoggle` flips whether they receive requests; `/tpatoggle autoaccept` and `/tpatoggle confirm`
 flip the other two. `/autotpaaccept` exists as well and is an exact duplicate of `/tpatoggle
@@ -151,8 +174,9 @@ All three of these preferences are also on the `/settings` screen, reading and w
 | `save-on-teleport` | `true` |
 | `save-on-portal` | `false` |
 | `blacklisted-worlds` | `[]` |
+| `warmup-seconds` | 3 |
 
-One place is remembered per player, and it is stored in the database (`sc_back`). It survives a restart,
+`exyliasurvivalcore.back.bypass` skips the countdown. One place is remembered per player, and it is stored in the database (`sc_back`). It survives a restart,
 and it follows the player to another server: the place they left on one server is the one `/back` offers
 on the next. It stops being offered after `teleport.back-history-minutes` in `config.yml`, 30 by default.
 
@@ -175,6 +199,13 @@ server reads the row as they join, so it is written before they leave.
 | `cooldown` | Seconds, or `-1` to use the module's own |
 | `biome-blacklist` | Biomes a landing spot may not be in |
 
+| Module setting | Default | What it does |
+|---|---|---|
+| `warmup` | 3 | Countdown, in seconds |
+| `cooldown` | 300 | Seconds between uses; a world's own `cooldown` overrides it |
+| `max-attempts` | 15 | Tries to find a safe spot before giving up |
+| `cancel-on-move`, `cancel-on-damage` | `true` | What stops the countdown |
+
 A **pool** keeps safe locations ready in advance, so `/rtp` is instant rather than a search:
 
 ```yaml
@@ -189,15 +220,16 @@ Pre-generating the world's chunks — with Chunky, for instance — collapses th
 fill.
 
 <Callout type="note" title="The RTP bypass nodes are config strings">
-`bypass-cooldown-permission` and `bypass-price-permission` both ship as `survivalcore.rtp.bypass` —
-note the short prefix. They are whatever you write there, not fixed nodes.
+`bypass-cooldown-permission` and `bypass-price-permission` both ship as `exyliasurvivalcore.rtp.bypass`.
+They are whatever you write there; `exyliasurvivalcore.rtp.bypass` always works.
 </Callout>
 
-`/rtpadmin forcertp <player> <world>` sends somebody, and `/rtpadmin pool` reports the pool.
+`/rtpadmin` (alias `/rtpa`) needs `exyliasurvivalcore.rtp.admin`: `forcertp <player> <world>` (also needs
+`exyliasurvivalcore.rtp.admin.forcertp`) sends somebody, and `pool` reports the pool.
 
 ## Near
 
-`/near` lists nearby players with their distance and a compass direction.
+`/near` (`exyliasurvivalcore.near`) lists nearby players with their distance and a compass direction.
 
 | Setting | Default | What it does |
 |---|---|---|
@@ -213,7 +245,7 @@ horizontal.
 
 ## The `teleport` section
 
-`config.yml` has a `teleport` section, handed to ExyliaLib on start and again on every `/sc reload`. It holds
+`config.yml` has a `teleport` section, handed to ExyliaLib on start and again on every `/survivalcoreadmin reload`. It holds
 the defaults for any teleport that does not set its own, plus what cross-server handovers share.
 
 ```yaml

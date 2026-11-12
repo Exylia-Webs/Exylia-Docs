@@ -25,6 +25,14 @@ Nueve comandos, un nodo cada uno, todos bajo `exyliasurvivalcore.playerutils.`:
 | `heal-cooldown-seconds` | 0 |
 | `feed-cooldown-seconds` | 0 |
 
+Los cooldowns de `/heal` y `/feed` también van por rango: concede
+`exyliasurvivalcore.playerutils.heal.cooldown.<segundos>` o `.feed.cooldown.<segundos>` y gana el número
+**más bajo** que tenga el jugador sobre el ajuste de arriba. Los cooldowns sobreviven a un relog y a un
+cambio de servidor.
+
+`/fly` se quita en combate y dentro de una protección bajo asedio, y se devuelve después. `/heal` se
+rechaza en combate. `/hat` respeta la lista de objetos bloqueados.
+
 El vuelo y la visión nocturna se recuerdan entre sesiones.
 
 ## Reparar
@@ -38,6 +46,9 @@ y `/reparar` son alias.
 | `default-hand-cooldown` | 120 |
 | `default-all-price` | 200.0 |
 | `default-all-cooldown` | 120 |
+| `currency` | vacío (la moneda por defecto) |
+
+`currency` es cualquier id del `economy.yml` de ExyliaLib, objetos y experiencia incluidos.
 
 `modules/repair/groups.yml` los sobrescribe por grupo de permisos. Viene **vacío**, con un ejemplo `vip`
 comentado:
@@ -51,16 +62,17 @@ groups:
 
 Un jugador de ese grupo necesita `exyliasurvivalcore.repair.group.vip`.
 
-<Callout type="warning" title="Los grupos se resuelven en orden de archivo, no por precio">
-Aplica el **primer** grupo del archivo cuyo nodo tenga el jugador. Alguien con dos grupos recibe el que
-esté escrito más arriba, aunque el otro sea más barato. Escribe primero el mejor grupo.
+<Callout type="note" title="Gana el grupo más barato">
+Un jugador con varios grupos recibe, para cada tipo de reparación, el **más barato**; el cooldown más corto
+desempata. El precio de un grupo sustituye al del defecto en vez de competir con él, así que un grupo con
+precio superior al de los defectos hace pagar más a sus jugadores.
 </Callout>
 
 `/repair hand <jugador>` y `/repair all <jugador>` reparan a otro, con `.repair.hand.others` y
 `.repair.all.others`. `/repair lock` y `/repair unlock` protegen un objeto de ser reparado.
 `exyliasurvivalcore.repair.bypass.price` y `.bypass.cooldown` se saltan los dos costes.
 
-Un `/repair` a secas imprime la línea de uso del framework de comandos: no hay forma raíz.
+Un `/repair` a secas imprime la línea de uso del framework de comandos: no hay forma raíz. Quien ejecuta el comando paga y espera, también al reparar a otro.
 
 ## Entrada y salida
 
@@ -97,6 +109,12 @@ groups:
 Gana el grupo de **mayor prioridad** cuyo permiso tenga el jugador. Ojo: el ejemplo que viene nombra
 `survivalcore.joinleave.vip` — con el prefijo corto — así que dalo exactamente así o cambia la cadena.
 
+<Callout type="note" title="ExyliaLobby toma el relevo">
+Con ExyliaLobby instalado y activado, este módulo se queda apagado y ExyliaLobby gestiona los mensajes de
+entrada y salida, junto a los jumpads y los portales. Pon `defer-to-exylia-lobby: false` en el `config.yml`
+del plugin para conservar las versiones de este plugin y reinicia. El módulo spawn no se ve afectado.
+</Callout>
+
 Los mensajes de entrada y salida son uno de los anuncios que un jugador puede apagar en
 [`/settings`](#preferencias-del-jugador).
 
@@ -109,70 +127,60 @@ sections:
   resource_drop:
     enabled: true
     interval: 1800
-    commands:
-      - "broadcast <#fbbf24>[Event] A resource drop is happening now!"
-    broadcast: ""
+    network: false
+    per-player: false
+    commands: []
+    broadcast: "{highlight}[Event] {letters}A resource drop is happening now!"
   daily_bonus:
     enabled: false
     interval: 86400
+    network: false
+    per-player: true
     commands:
-      - "eco give @a 50"
-    broadcast: "<#4ade80>Pay day! Everyone gets <#fbbf24>1000 shards!"
+      - "eco give %player_name% 50"
+    broadcast: "{success}Pay day! {letters}Everyone online gets {highlight}50{letters}."
 ```
 
-`interval` va en segundos. `broadcast` se envía a todos cuando se ejecutan los comandos; déjalo vacío para
-no anunciar nada. El archivo se escribe una vez, cuando falta: nada de lo que añadas se poda, nada de lo que
-borres vuelve, y un servidor que ya lo tiene conserva lo que tenía.
+| Clave | Qué hace |
+|---|---|
+| `interval` | Segundos entre ejecuciones. La última se recuerda entre reinicios, y una sección nueva se ejecuta por primera vez tras un intervalo completo |
+| `broadcast` | Se envía a quien tenga activados los anuncios de eventos del servidor; déjalo vacío para no anunciar nada |
+| `network` | `true` ejecuta la sección una vez para toda la red, y su anuncio llega a los jugadores de todos los servidores. `false` hace que cada servidor la ejecute por su cuenta |
+| `per-player` | `true` ejecuta los comandos una vez por cada jugador conectado, rellenando `%player_name%` (o `%player%`). Se activa solo cuando una línea usa `%player_name%`. Con `network: true` son los jugadores del servidor que la ejecutó |
 
-<Callout type="note" title="El `daily_bonus` que viene anuncia más de lo que da">
-Su comando da `50` y su anuncio dice `1000 shards`. La sección viene desactivada. Corrige una de las dos
-cosas antes de encenderla.
-</Callout>
+Un comando que falle no detiene el resto de la sección. El archivo se escribe una vez, cuando falta: nada de
+lo que añadas se poda, nada de lo que borres vuelve. Los ejemplos sin tocar de versiones antiguas se
+actualizan.
 
 ## Preferencias del jugador
 
-`/settings` — alias `/preferences` y `/options` — es una pantalla que tiene cada jugador. Veintiún
-interruptores deciden qué le llega.
+`/settings` — alias `/preferences` y `/options` — es una pantalla que tiene cada jugador, construida sobre el
+módulo de ajustes de ExyliaLib. Trece interruptores deciden qué le llega.
 
 | Ajuste | Id | Qué apaga |
 |---|---|---|
 | Mensajes de muerte | `death-messages` | El anuncio de muerte del plugin |
 | Mensajes de entrada y salida | `join-leave-messages` | Los dos sentidos |
 | Anuncios de rankup | `rankup-announcements` | Que otro suba de rango |
-| Anuncios de bajas | `kill-announcements` | Los hitos de racha |
-| Anuncios de recompensas | `bounty-announcements` | Recompensas puestas y cobradas |
-| Anuncios de cajas | `crate-announcements` | Premios de caja de un tier que anuncia |
 | Anuncios de compra | `purchase-announcements` | Los anuncios de reclaim |
-| Anuncios de duelos | `duel-announcements` | Que alguien gane una [sala de duelo](/docs/exyliasurvivalcore/salas-de-duelo) |
 | Anuncios de misiones | `mission-announcements` | Que alguien termine una [misión](/docs/exyliasurvivalcore/misiones-y-temporadas) semanal |
-| Anuncios del mercado | `market-announcements` | Los anuncios del [mercado](/docs/exyliasurvivalcore/mercado) |
-| Anuncios de subastas | `auction-announcements` | Los anuncios de la [casa de subastas](/docs/exyliasurvivalcore/mercado) |
-| Anuncios de potenciadores | `booster-announcements` | Que empiece o acabe un [potenciador](/docs/exyliasurvivalcore/economia) global |
-| Anuncios de votos | `vote-announcements` | Que alguien [vote](/docs/exyliasurvivalcore/recompensas-y-votos), y que empiece la fiesta de votos |
+| Anuncios de potenciadores | `booster-announcements` | Que empiece o acabe un potenciador global |
+| Anuncios de proyectos | `project-announcements` | Que se complete un proyecto comunitario y empiece el siguiente |
 | Anuncios de temporadas | `season-announcements` | Que cierre una [temporada](/docs/exyliasurvivalcore/misiones-y-temporadas) y quién la ganó |
-| Mensajes de protecciones | `protection-messages` | Los títulos y saludos al entrar y salir de [protecciones](/docs/exyliasurvivalcore/protecciones) |
-| Anuncios de asaltos | `raid-announcements` | Que una protección sea [asaltada](/docs/exyliasurvivalcore/asaltos-a-protecciones), y que se abran y cierren las ventanas de asedio |
+| Anuncios de eventos del servidor | `scheduled-announcements` | Lo que anuncia una sección de [comandos programados](#comandos-programados) |
+| Mensajes de protecciones | `protection-messages` | Los títulos y saludos al entrar y salir de protecciones |
+| Anuncios de asaltos | `raid-announcements` | Que una protección sea asaltada, y que se abran y cierren las ventanas de asedio |
 | Peticiones de TPA | `tpa-requests` | Si recibe peticiones |
 | Auto-aceptar TPA | `tpa-auto-accept` | Aceptar sin preguntar |
 | Confirmar TPA | `tpa-confirm` | La confirmación antes de enviar una |
-| Peticiones de intercambio | `trade-requests` | Si otros jugadores pueden pedirle [intercambiar](/docs/exyliasurvivalcore/intercambio-y-baules) |
-| Autoventa | `autosell` | Si lo que rompe [se vende por él](/docs/exyliasurvivalcore/economia). Solo hace algo para quien tenga `exyliasurvivalcore.sellwands.autosell`, y `/autosell` cambia el mismo interruptor |
 
-La pantalla es una cuadrícula. Las dos filas de arriba son anuncios del servidor, los mensajes de
-protecciones y los anuncios de asaltos van en la fila de debajo, y la fila de abajo es cómo te llegan otros
-jugadores: los tres interruptores de TPA, las peticiones de intercambio y la autoventa. Un interruptor
-encendido brilla. No hay botón de cerrar.
+<Callout type="note" title="Interruptores que se han ido">
+Los interruptores de bajas, recompensas, cajas, duelos, mercado, subastas, votos, intercambio y autoventa se
+fueron con sus funciones. Esas filas ya no se ofrecen aquí.
+</Callout>
 
-`modules/player-settings/menus/settings.yml` es tuyo para editar. Cada interruptor es un objeto con la acción
-`survivalcore:settings_toggle <id>`, y puede leer `%<id>_state%` y `%<id>_glow%`, con los guiones del id
-escritos como guiones bajos. `%<id>_glow%` vale `true` mientras el interruptor está encendido y su módulo
-está cargado. Quitar un objeto quita el interruptor de la pantalla; la preferencia se queda como la dejó el
-jugador.
-
-El archivo lleva un `menu-version`, 4 en esta versión. Lo que edites se conserva entre actualizaciones.
-Cuando una versión sube ese número, el archivo se sustituye y el tuyo se guarda al lado como
-`settings.yml.v<versión anterior>`. Así es como un servidor con un archivo antiguo recibe la cuadrícula nueva,
-con los interruptores de protecciones.
+Los interruptores cuyas funciones viven en otro plugin (las protecciones, por ejemplo) siguen apareciendo
+aquí mientras su módulo esté cargado. Un interruptor encendido brilla. No hay botón de cerrar.
 
 <Callout type="note" title="Todo viene encendido, y solo se guardan las excepciones">
 La fila guarda los ajustes que el jugador ha **apagado**, así que una preferencia añadida en una

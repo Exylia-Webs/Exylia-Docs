@@ -1,6 +1,6 @@
 ---
 title: "Progression"
-description: "The rank ladder and its prestige, playtime rewards, farming milestones and the /reclaim sections."
+description: "The rank ladder and its prestige, farming milestones and the /reclaim sections. Playtime rewards live in ExyliaRewards."
 ---
 
 ## Rankup
@@ -34,7 +34,7 @@ the menu instead of a generated one.
 
 | `type` | Field | Meaning |
 |---|---|---|
-| `money` | `amount` | A balance, through the economy |
+| `money` | `amount` (and an optional `currency`) | A balance, through the economy. `currency` is an id from ExyliaLib's `economy.yml`; left out, the default currency |
 | `playtime` | `time` | Time played — `30m`, `1h`, `5h` |
 | `placeholder` | `condition` | A PlaceholderAPI comparison |
 | `permission` | `node` | A permission node they must hold |
@@ -42,23 +42,14 @@ the menu instead of a generated one.
 A `money` amount grows with prestige: it is multiplied by `prestige.cost-multiplier` once per prestige
 level the player holds, and the menu shows the amount they actually need.
 
-<Callout type="danger" title="`ranks.yml`'s own header lists two types that do not exist">
-The shipped comment mentions `kills` and `level`. Neither is real. A requirement whose `type` is not
-one of the four above is **dropped silently** when the file is read — so a rank whose only requirement
-was `kills` costs nothing at all.
-</Callout>
+A requirement whose `type` is not one of the four above is reported in the console and ignored, so a rank
+whose only requirement has an unknown type costs nothing.
 
-<Callout type="warning" title="The shipped ladder charges twice on `/rankup claim`, and nothing on an automatic one">
-`/rankup claim` takes every `money` requirement out of the balance itself, scaled for prestige, before
-the reward runs. The shipped ranks also carry `eco take %player% <amount>` in their reward commands, so
-a player climbing the default ladder by hand pays each rank twice.
-
-An automatic rank-up — `settings.auto-rankup` or a rank's own `auto-rankup` — charges nothing and fires
-no `RankUpEvent`: only the reward commands run. So on the default ladder an automatic promotion pays
-once, through `eco take`, at the unscaled amount.
-
-Keep the `eco take` lines on ranks that promote automatically, and remove them from ranks players claim.
-</Callout>
+Every rank-up, asked for with `/rankup claim` or automatic (`settings.auto-rankup`, or a rank's own
+`auto-rankup`), takes the same path: `RankUpEvent` fires first (a cancelled one costs nothing), then every
+`money` requirement is charged, scaled for prestige and one currency after another or none of them, then the
+reward runs. If the promotion loses a race, the charge is refunded. The shipped ranks no longer carry
+`eco take` lines; a rank's reward commands only hand out the reward.
 
 ### Prestige
 
@@ -74,6 +65,7 @@ The `prestige` section of `modules/rankup/config.yml`:
 | `enabled` | `true` | Whether anyone can prestige |
 | `max-level` | 0 | Highest prestige level. `0` means no limit |
 | `cost` | 25000 | Money charged to prestige. `0` is free |
+| `cost-currency` | empty | The currency `cost` is charged in: an id from ExyliaLib's `economy.yml`. Empty is the default currency |
 | `cost-multiplier` | 1.5 | Applied to every `money` requirement once per level: a $1,000 rank costs $1,500 on prestige 1 and $2,250 on prestige 2. `1.0` keeps the ladder the same |
 | `reward-commands` | `lp user %player% parent set member` | Console commands. `%player%` is the player, `%level%` the level just reached |
 | `reward-broadcast` | `{highlight}✦ {letters}%player% {muted}reached prestige {highlight}%level%{muted}!` | Sent to everyone with rank-up announcements on. Empty for none |
@@ -84,37 +76,24 @@ already at `max-level`, and when they cannot pay — including when `cost` is ab
 available. The menu's star shows the current and next level, the cost (`Free` at 0) and which of those
 applies. `%exyliasurvivalcore_rankup_can_prestige%` answers `yes` or `no`.
 
-`/rankupadmin prestige <player> <level>` sets a prestige level directly; `/rankupadmin set` and `reset`
-move a player around the ladder, and `/rankupadmin info` reports where they are. A rank id that is not
-in the file is refused.
+`/rankupadmin` (alias `/rua`, `survivalcore.rankup.admin`) has `prestige <player> <level>` to set a prestige
+level directly, `set <player> <rank>` to move a player around the ladder, and `info <player>` to report where
+they are; `prestige` and `set` need `survivalcore.rankup.admin.set`. A rank id that is not in the file is
+refused. Wiping a player's progress is `/exylialib resetplayer`.
 
 `settings.notify-on-login` tells a player on join when they can rank up.
 
-## Playtime rewards
-
-Rewards unlocked by time played, claimed from `/playtime`.
-
-```yaml
-rewards:
-  newcomer:   { display-name: "…", icon: …, required-playtime: "30m",  commands: [], auto-claim: false }
-  first_hour: { required-playtime: "1h",  … }
-  five_hours: { required-playtime: "5h",  … }
-  veteran:    { required-playtime: "25h", … }
-  legend:     { required-playtime: "100h", … }
-```
-
-| Setting | Default | What it does |
-|---|---|---|
-| `notify-on-login` | `true` | Tell them on join what is claimable |
-| `notify-on-unlock` | `true` | Tell them the moment one unlocks |
-| `global-auto-claim` | `false` | Claim everything automatically, overriding each reward's own flag |
-
-<Callout type="warning" title="`/playtime <rewardId>` claims, and checks no permission">
-The bare `/playtime` opens the menu, but the command takes an optional reward id and claiming is what
-it does with it. There is no node on the command — only the playtime itself stops a player.
+<Callout type="note" title="Playtime rewards moved to ExyliaRewards">
+There is no playtime module or `/playtime` command here any more: playtime tiers are
+[ExyliaRewards](/docs/exyliarewards/rewards). Time played is tracked by ExyliaLib's playtime service, which the
+`playtime` rank requirement and the `PLAYTIME` stat read.
 </Callout>
 
 ## Farming
+
+<Callout type="note" title="Farming steps aside for ExyliaJobs">
+While [ExyliaJobs](/docs/exyliajobs/introduction) is installed, this module stays off and Jobs pays for the same actions. It loads again if Jobs is removed.
+</Callout>
 
 Counts blocks broken or mobs killed, and pays per N and at milestones.
 
@@ -152,8 +131,11 @@ Every reward block — `reward`, each milestone and `infinite-milestone` — tak
 boosters for `farming` (see [Economy](/docs/exyliasurvivalcore/economy)); `%money%` is what was paid,
 after boosters. The shipped categories pay through `money` rather than `eco give` commands.
 
-`/farming` shows progress. `/farmingadmin set`, `reset`, `resetall` and `info` need
-`survivalcore.farming.admin`, and the three that write need `survivalcore.farming.admin.set`.
+A reward's `money` can name another currency: `money: {amount: 50, currency: gems}` (an id from ExyliaLib's
+`economy.yml`).
+
+`/farming` shows progress. `/farmingadmin` (alias `/fa`) has `set`, `reset` and `info`, all behind
+`survivalcore.farming.admin`; the two that write also need `survivalcore.farming.admin.set`.
 
 ## Reclaim
 
@@ -181,30 +163,28 @@ is the one that runs. So a VIP gets the VIP section and nothing else, not both.
 `each` is how often it may be run: `-1` means once ever, and anything else is a duration — `7d`, `12h`,
 `30m`, `45s`. `%player%` is substituted into every command.
 
-`/reclaimadmin reset <player>` and `resetsection <player> <section>` clear the record.
+`/reclaimadmin resetsection <player> <section>` (`exyliasurvivalcore.reclaim.admin`) clears one section's record.
 
-<Callout type="warning" title="`/reclaim` checks no permission of its own">
-Anyone can run it. What they get is decided entirely by which section permission they hold — a player
-holding none is told there is nothing for them. Grant `exyliasurvivalcore.reclaim.default` to the
-group that should have the default section, and nothing wider.
-</Callout>
+`/reclaim` needs `exyliasurvivalcore.reclaim` (granted to everyone), and each section also asks for its own
+node. A player holding no section node is told there is nothing for them. Grant
+`exyliasurvivalcore.reclaim.default` to the group that should have the default section, and nothing wider.
 
 <Callout type="note" title="Four modules used to lose a claim">
-Farming, playtime rewards, rankup and reclaim each saved a stale copy of the player's row alongside the
+Farming, playtime rewards, rankup and reclaim (playtime rewards have since moved to ExyliaRewards) each saved a stale copy of the player's row alongside the
 claim's own write, and when the stale save landed second the claim vanished and could be collected
 again on the next login. Fixed in 1.1.1; if you are on an older build, that is what you were seeing.
 </Callout>
 
 ## Counters
 
-These four modules count into the stats counters, which leaderboards, missions and seasons read — see
+These modules count into the stats counters, which leaderboards, missions and seasons read — see
 [Statistics](/docs/exyliasurvivalcore/combat#statistics).
 
 | Counter | What it counts |
 |---|---|
-| `rankup.ranks` | Ranks taken with `/rankup claim` or the menu. An automatic rank-up is not counted |
-| `playtime.rewards` | Playtime rewards claimed |
+| `rankup.ranks` | Ranks taken, by hand or automatically |
 | `farming.harvested` | Every block or mob a farming category counted |
 | `farming.<category>.harvested` | The same, for one category |
 | `reclaim.claimed` | Reclaim sections run |
 | `reclaim.<section>.claimed` | The same, for one section |
+| `rankup.prestiges` | Prestiges taken |

@@ -25,6 +25,13 @@ Nine commands, one node each, all under `exyliasurvivalcore.playerutils.`:
 | `heal-cooldown-seconds` | 0 |
 | `feed-cooldown-seconds` | 0 |
 
+`/heal` and `/feed` cooldowns also come per rank: grant `exyliasurvivalcore.playerutils.heal.cooldown.<seconds>`
+or `.feed.cooldown.<seconds>` and the **lowest** number a player holds wins over the setting above. The
+cooldowns survive a relog and a server switch.
+
+`/fly` is taken away in combat and inside a protection under siege, and is given back afterwards. `/heal` is
+refused in combat. `/hat` respects the blocked items list.
+
 Flight and night vision are remembered across sessions.
 
 ## Repair
@@ -38,6 +45,9 @@ and `/reparar` are aliases.
 | `default-hand-cooldown` | 120 |
 | `default-all-price` | 200.0 |
 | `default-all-cooldown` | 120 |
+| `currency` | empty (the default currency) |
+
+`currency` is any id from ExyliaLib's `economy.yml`, items and experience included.
 
 `modules/repair/groups.yml` overrides those per permission group. It ships **empty**, with a commented
 `vip` example:
@@ -51,17 +61,18 @@ groups:
 
 A player in that group needs `exyliasurvivalcore.repair.group.vip`.
 
-<Callout type="warning" title="Groups resolve in file order, not by price">
-The **first** group in the file whose node the player holds is the one that applies. A player holding
-two groups gets whichever is written higher up, even if the other is cheaper. Write the best group
-first.
+<Callout type="note" title="The cheapest group wins">
+A player holding several groups gets, for each kind of repair, the **cheapest** one; the shorter cooldown
+breaks a tie. A group's price replaces the default rather than competing with it, so a group priced above
+the defaults makes its players pay more than everybody else.
 </Callout>
 
 `/repair hand <player>` and `/repair all <player>` repair somebody else, with `.repair.hand.others` and
 `.repair.all.others`. `/repair lock` and `/repair unlock` protect an item from being repaired.
 `exyliasurvivalcore.repair.bypass.price` and `.bypass.cooldown` skip the two costs.
 
-Bare `/repair` prints the command framework's usage line — there is no root form.
+Bare `/repair` prints the command framework's usage line — there is no root form. Whoever runs the command
+pays and waits, also when repairing somebody else.
 
 ## Join and leave
 
@@ -99,6 +110,12 @@ The **highest priority** group whose permission the player holds wins. Note that
 names `survivalcore.joinleave.vip` — the short prefix — so grant it exactly as written or change the
 string.
 
+<Callout type="note" title="ExyliaLobby takes over">
+When ExyliaLobby is installed and enabled, this module stays off and ExyliaLobby handles join and leave
+messages, along with jumpads and portals. Set `defer-to-exylia-lobby: false` in the plugin's `config.yml`
+to keep this plugin's own versions, then restart. The spawn module is not affected.
+</Callout>
+
 Join and leave messages are one of the broadcasts a player can turn off in [`/settings`](#player-settings).
 
 ## Scheduled commands
@@ -110,67 +127,60 @@ sections:
   resource_drop:
     enabled: true
     interval: 1800
-    commands:
-      - "broadcast <#fbbf24>[Event] A resource drop is happening now!"
-    broadcast: ""
+    network: false
+    per-player: false
+    commands: []
+    broadcast: "{highlight}[Event] {letters}A resource drop is happening now!"
   daily_bonus:
     enabled: false
     interval: 86400
+    network: false
+    per-player: true
     commands:
-      - "eco give @a 50"
-    broadcast: "<#4ade80>Pay day! Everyone gets <#fbbf24>1000 shards!"
+      - "eco give %player_name% 50"
+    broadcast: "{success}Pay day! {letters}Everyone online gets {highlight}50{letters}."
 ```
 
-`interval` is in seconds. `broadcast` is sent to everybody when the commands run; leave it empty to
-announce nothing. The file is written once, when it is missing: nothing you add is pruned, nothing you
-delete comes back, and a server that already has it keeps what it had.
+| Key | What it does |
+|---|---|
+| `interval` | Seconds between runs. The last run is remembered across restarts, and a new section first runs one full interval after it was added |
+| `broadcast` | Sent to everybody who has server event announcements on; leave it empty to announce nothing |
+| `network` | `true` runs the section once for the whole network, and its broadcast reaches the players of every server. `false` makes each server run it on its own |
+| `per-player` | `true` runs the commands once for every online player, filling `%player_name%` (or `%player%`). It turns itself on when a line uses `%player_name%`. With `network: true` that is every player on the server that ran it |
 
-<Callout type="note" title="The shipped `daily_bonus` announces more than it gives">
-Its command gives `50`, and its broadcast says `1000 shards`. The section ships disabled. Fix one of the
-two before turning it on.
-</Callout>
+One failing command does not stop the rest of the section. The file is written once, when it is missing:
+nothing you add is pruned, nothing you delete comes back. Untouched examples from older releases are
+brought up to date.
 
 ## Player settings
 
-`/settings` — aliases `/preferences` and `/options` — is a screen every player owns. Twenty-one switches
-decide what reaches them.
+`/settings` — aliases `/preferences` and `/options` — is a screen every player owns, built on ExyliaLib's
+settings module. Thirteen switches decide what reaches them.
 
 | Setting | Id | What it turns off |
 |---|---|---|
 | Death messages | `death-messages` | The plugin's death broadcast |
 | Join and leave messages | `join-leave-messages` | Both directions |
 | Rankup announcements | `rankup-announcements` | Somebody else ranking up |
-| Kill announcements | `kill-announcements` | Kill streak milestones |
-| Bounty announcements | `bounty-announcements` | Bounties placed and claimed |
-| Crate announcements | `crate-announcements` | Crate wins of a broadcasting tier |
 | Purchase announcements | `purchase-announcements` | Reclaim broadcasts |
-| Duel announcements | `duel-announcements` | Somebody winning a [duel room](/docs/exyliasurvivalcore/duel-rooms) |
 | Mission announcements | `mission-announcements` | Somebody finishing a weekly [mission](/docs/exyliasurvivalcore/missions-and-seasons) |
-| Market announcements | `market-announcements` | The [market](/docs/exyliasurvivalcore/market)'s broadcasts |
-| Auction announcements | `auction-announcements` | The [auction house](/docs/exyliasurvivalcore/market)'s broadcasts |
-| Booster announcements | `booster-announcements` | A global [booster](/docs/exyliasurvivalcore/economy) starting or ending |
-| Vote announcements | `vote-announcements` | Somebody [voting](/docs/exyliasurvivalcore/rewards-and-votes), and the vote party starting |
+| Booster announcements | `booster-announcements` | A global booster starting or ending |
+| Project announcements | `project-announcements` | A community project completing and the next one starting |
 | Season announcements | `season-announcements` | A [season](/docs/exyliasurvivalcore/missions-and-seasons) closing and who won it |
-| Protection messages | `protection-messages` | Titles and greetings walking into and out of [protections](/docs/exyliasurvivalcore/protections) |
-| Raid announcements | `raid-announcements` | A protection [raided](/docs/exyliasurvivalcore/protection-raids), and siege windows opening and closing |
+| Server event announcements | `scheduled-announcements` | What a [scheduled command](#scheduled-commands) section broadcasts |
+| Protection messages | `protection-messages` | Titles and greetings walking into and out of protections |
+| Raid announcements | `raid-announcements` | A protection raided, and siege windows opening and closing |
 | TPA requests | `tpa-requests` | Whether they receive requests at all |
 | TPA auto-accept | `tpa-auto-accept` | Accept without asking |
 | TPA confirm | `tpa-confirm` | The confirmation before sending one |
-| Trade requests | `trade-requests` | Whether other players can ask them to [trade](/docs/exyliasurvivalcore/trade-and-vaults) |
-| Autosell | `autosell` | Whether what they break is [sold for them](/docs/exyliasurvivalcore/economy). It only does anything for a player holding `exyliasurvivalcore.sellwands.autosell`, and `/autosell` flips the same switch |
 
-The screen is a grid. The two upper rows are server announcements, protection messages and raid
-announcements sit in the row below them, and the bottom row is how other players reach you: the three TPA
-switches, trade requests and autosell. A switch that is on glows. There is no close button.
+<Callout type="note" title="Moved switches">
+The kill, bounty, crate, duel, market, auction, vote, trade and autosell switches left with their features.
+The old rows are no longer offered here.
+</Callout>
 
-`modules/player-settings/menus/settings.yml` is yours to edit. Every switch is one item with the action
-`survivalcore:settings_toggle <id>`, and it can read `%<id>_state%` and `%<id>_glow%`, with the dashes of
-the id written as underscores. `%<id>_glow%` is `true` while the switch is on and its module is loaded.
-Removing an item removes the switch from the screen; the preference stays whatever the player last chose.
-
-The file carries a `menu-version`, 4 in this release. Edits are kept across updates. When a release raises
-that number, the file is replaced and your previous one is kept next to it as `settings.yml.v<old version>`.
-A server upgrading from an older file gets the new grid, with the protection switches, this way.
+Switches whose features live in another plugin (protections, for one) still show here when that module
+is loaded. A switch that is on glows. There is no close button.
 
 <Callout type="note" title="Every setting is on by default, and only the exceptions are stored">
 The row stores the settings a player has turned **off**, so a preference added in a later release is on

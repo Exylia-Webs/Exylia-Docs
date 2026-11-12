@@ -1,6 +1,6 @@
 ---
 title: "Progresión"
-description: "La escalera de rangos y su prestigio, recompensas por tiempo jugado, hitos de farmeo y las secciones de /reclaim."
+description: "La escalera de rangos y su prestigio, hitos de farmeo y las secciones de /reclaim. Las recompensas por tiempo jugado viven en ExyliaRewards."
 ---
 
 ## Rankup
@@ -34,7 +34,7 @@ que se muestra en el menú en vez de una generada.
 
 | `type` | Campo | Significado |
 |---|---|---|
-| `money` | `amount` | Un saldo, a través de la economía |
+| `money` | `amount` (y un `currency` opcional) | Un saldo, a través de la economía. `currency` es un id del `economy.yml` de ExyliaLib; si falta, la moneda por defecto |
 | `playtime` | `time` | Tiempo jugado — `30m`, `1h`, `5h` |
 | `placeholder` | `condition` | Una comparación de PlaceholderAPI |
 | `permission` | `node` | Un nodo de permiso que debe tener |
@@ -42,23 +42,14 @@ que se muestra en el menú en vez de una generada.
 La cantidad de un `money` crece con el prestigio: se multiplica por `prestige.cost-multiplier` una vez
 por cada nivel de prestigio del jugador, y el menú enseña la cantidad que de verdad necesita.
 
-<Callout type="danger" title="La cabecera de `ranks.yml` lista dos tipos que no existen">
-El comentario que viene menciona `kills` y `level`. Ninguno es real. Un requisito cuyo `type` no sea uno
-de los cuatro de arriba se **descarta en silencio** al leer el archivo, así que un rango cuyo único
-requisito fuese `kills` sale gratis.
-</Callout>
+Un requisito cuyo `type` no sea uno de los cuatro de arriba se avisa en la consola y se ignora, así que un
+rango cuyo único requisito tenga un tipo desconocido sale gratis.
 
-<Callout type="warning" title="La escalera que viene cobra dos veces con `/rankup claim`, y nada en un ascenso automático">
-`/rankup claim` descuenta él mismo del saldo cada requisito `money`, ajustado al prestigio, antes de que
-se ejecute la recompensa. Los rangos que vienen llevan además `eco take %player% <cantidad>` en sus
-comandos de recompensa, así que quien sube a mano por la escalera por defecto paga cada rango dos veces.
-
-Un ascenso automático — `settings.auto-rankup` o el `auto-rankup` del propio rango — no cobra nada ni
-lanza `RankUpEvent`: solo se ejecutan los comandos de recompensa. En la escalera por defecto, una
-promoción automática paga una vez, por `eco take`, y la cantidad sin ajustar.
-
-Deja las líneas `eco take` en los rangos que ascienden solos y quítalas de los que se reclaman.
-</Callout>
+Todo ascenso, pedido con `/rankup claim` o automático (`settings.auto-rankup`, o el `auto-rankup` del propio
+rango), sigue el mismo camino: primero se lanza `RankUpEvent` (uno cancelado no cuesta nada), luego se
+cobra cada requisito `money`, ajustado al prestigio, moneda a moneda o ninguna, y por último se ejecuta la
+recompensa. Si la promoción pierde una carrera, el cobro se devuelve. Los rangos que vienen ya no llevan
+líneas `eco take`; los comandos de recompensa solo reparten la recompensa.
 
 ### Prestigio
 
@@ -74,6 +65,7 @@ La sección `prestige` de `modules/rankup/config.yml`:
 | `enabled` | `true` | Si se puede hacer prestigio |
 | `max-level` | 0 | Nivel de prestigio más alto. `0` es sin límite |
 | `cost` | 25000 | Dinero que cuesta el prestigio. `0` es gratis |
+| `cost-currency` | vacío | La moneda en que se cobra `cost`: un id del `economy.yml` de ExyliaLib. Vacío es la moneda por defecto |
 | `cost-multiplier` | 1.5 | Se aplica a cada requisito `money` una vez por nivel: un rango de 1.000 $ cuesta 1.500 $ en el prestigio 1 y 2.250 $ en el 2. `1.0` deja la escalera igual |
 | `reward-commands` | `lp user %player% parent set member` | Comandos de consola. `%player%` es el jugador y `%level%` el nivel alcanzado |
 | `reward-broadcast` | `{highlight}✦ {letters}%player% {muted}reached prestige {highlight}%level%{muted}!` | Se envía a quien tenga activados los anuncios de rango. Vacío para ninguno |
@@ -84,37 +76,24 @@ El prestigio se rechaza si está desactivado, si el jugador no está en el últi
 La estrella del menú enseña el nivel actual y el siguiente, el coste (`Free` si es 0) y cuál de esos
 casos aplica. `%exyliasurvivalcore_rankup_can_prestige%` responde `yes` o `no`.
 
-`/rankupadmin prestige <jugador> <nivel>` pone un nivel de prestigio directamente; `/rankupadmin set` y
-`reset` mueven a un jugador por la escalera, y `/rankupadmin info` dice dónde está. Un id de rango que
-no esté en el archivo se rechaza.
+`/rankupadmin` (alias `/rua`, `survivalcore.rankup.admin`) tiene `prestige <jugador> <nivel>` para poner un
+nivel de prestigio directamente, `set <jugador> <rango>` para mover a un jugador por la escalera e `info
+<jugador>` para ver dónde está; `prestige` y `set` necesitan `survivalcore.rankup.admin.set`. Un id de rango
+que no esté en el archivo se rechaza. Borrar el progreso de un jugador es `/exylialib resetplayer`.
 
 `settings.notify-on-login` avisa al jugador al entrar cuando puede subir de rango.
 
-## Recompensas por tiempo jugado
-
-Recompensas que se desbloquean con el tiempo jugado y se reclaman desde `/playtime`.
-
-```yaml
-rewards:
-  newcomer:   { display-name: "…", icon: …, required-playtime: "30m",  commands: [], auto-claim: false }
-  first_hour: { required-playtime: "1h",  … }
-  five_hours: { required-playtime: "5h",  … }
-  veteran:    { required-playtime: "25h", … }
-  legend:     { required-playtime: "100h", … }
-```
-
-| Ajuste | Por defecto | Qué hace |
-|---|---|---|
-| `notify-on-login` | `true` | Avisarles al entrar de qué pueden reclamar |
-| `notify-on-unlock` | `true` | Avisarles en cuanto se desbloquea una |
-| `global-auto-claim` | `false` | Reclamarlo todo automáticamente, por encima del `auto-claim` de cada recompensa |
-
-<Callout type="warning" title="`/playtime <rewardId>` reclama, y no comprueba ningún permiso">
-El `/playtime` a secas abre el menú, pero el comando acepta un id de recompensa y lo que hace con él es
-reclamarla. El comando no tiene nodo: lo único que frena a un jugador es el tiempo jugado.
+<Callout type="note" title="Las recompensas por tiempo jugado pasaron a ExyliaRewards">
+Aquí ya no hay módulo de tiempo jugado ni comando `/playtime`: los escalones de tiempo jugado son de
+[ExyliaRewards](/docs/exyliarewards/recompensas). El tiempo jugado lo lleva el servicio de tiempo jugado de
+ExyliaLib, que leen el requisito de rango `playtime` y la stat `PLAYTIME`.
 </Callout>
 
 ## Farmeo
+
+<Callout type="note" title="El farmeo se aparta ante ExyliaJobs">
+Mientras [ExyliaJobs](/docs/exyliajobs/introduccion) esté instalado, este módulo queda apagado y Jobs paga por las mismas acciones. Vuelve a cargar si quitas Jobs.
+</Callout>
 
 Cuenta bloques rotos o mobs matados, y paga por cada N y en los hitos.
 
@@ -153,8 +132,11 @@ potenciadores de dinero de `farming` (ver [Economía](/docs/exyliasurvivalcore/e
 lo que se pagó, con potenciadores incluidos. Las categorías que vienen pagan con `money` en vez de con
 comandos `eco give`.
 
-`/farming` muestra el progreso. `/farmingadmin set`, `reset`, `resetall` e `info` necesitan
-`survivalcore.farming.admin`, y los tres que escriben necesitan `survivalcore.farming.admin.set`.
+El `money` de una recompensa puede nombrar otra moneda: `money: {amount: 50, currency: gems}` (un id del
+`economy.yml` de ExyliaLib).
+
+`/farming` muestra el progreso. `/farmingadmin` (alias `/fa`) tiene `set`, `reset` e `info`, todos tras
+`survivalcore.farming.admin`; los dos que escriben necesitan además `survivalcore.farming.admin.set`.
 
 ## Reclaim
 
@@ -182,16 +164,14 @@ tenga el jugador. Así que un VIP recibe la sección VIP y ninguna más, no las 
 `each` es cada cuánto se puede ejecutar: `-1` significa una sola vez en la vida, y cualquier otra cosa
 es una duración — `7d`, `12h`, `30m`, `45s`. `%player%` se sustituye en cada comando.
 
-`/reclaimadmin reset <jugador>` y `resetsection <jugador> <sección>` borran el registro.
+`/reclaimadmin resetsection <jugador> <sección>` (`exyliasurvivalcore.reclaim.admin`) borra el registro de una sección.
 
-<Callout type="warning" title="`/reclaim` no comprueba ningún permiso propio">
-Lo puede ejecutar cualquiera. Lo que consigue lo decide únicamente qué permiso de sección tenga; a
-quien no tenga ninguno se le dice que no hay nada para él. Da
+`/reclaim` necesita `exyliasurvivalcore.reclaim` (concedido a todos), y cada sección pide además su propio
+nodo. A quien no tenga ningún nodo de sección se le dice que no hay nada para él. Da
 `exyliasurvivalcore.reclaim.default` al grupo que deba tener la sección por defecto, y nada más ancho.
-</Callout>
 
 <Callout type="note" title="Cuatro módulos perdían un reclamo">
-Farming, recompensas por tiempo jugado, rankup y reclaim guardaban una copia vieja de la fila del
+Farming, recompensas por tiempo jugado (que han pasado a ExyliaRewards), rankup y reclaim guardaban una copia vieja de la fila del
 jugador junto a la escritura del propio reclamo, y cuando la copia vieja llegaba la segunda el reclamo
 desaparecía y se podía volver a cobrar al siguiente login. Arreglado en 1.1.1; si estás en una build
 anterior, eso es lo que estabas viendo.
@@ -199,14 +179,14 @@ anterior, eso es lo que estabas viendo.
 
 ## Contadores
 
-Estos cuatro módulos suman a los contadores de estadísticas, que leen los rankings, las misiones y las
+Estos módulos suman a los contadores de estadísticas, que leen los rankings, las misiones y las
 temporadas — ver [Estadísticas](/docs/exyliasurvivalcore/combate#estadísticas).
 
 | Contador | Qué cuenta |
 |---|---|
-| `rankup.ranks` | Rangos subidos con `/rankup claim` o desde el menú. Un ascenso automático no cuenta |
-| `playtime.rewards` | Recompensas por tiempo jugado reclamadas |
+| `rankup.ranks` | Rangos subidos, a mano o automáticamente |
 | `farming.harvested` | Cada bloque o mob que ha contado una categoría de farmeo |
 | `farming.<categoría>.harvested` | Lo mismo, para una categoría |
 | `reclaim.claimed` | Secciones de reclaim ejecutadas |
 | `reclaim.<sección>.claimed` | Lo mismo, para una sección |
+| `rankup.prestiges` | Prestigios hechos |

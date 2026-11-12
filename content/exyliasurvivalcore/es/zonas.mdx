@@ -1,145 +1,24 @@
 ---
 title: "Zonas"
-description: "Minas que se reinician, zonas reconstruidas desde esquemas, zonas AFK que pagan, portales, plataformas de salto y power-ups."
+description: "Portales y plataformas de salto montados en el juego, que ceden el paso a ExyliaLobby cuando está instalado. Minas, regeneración, zonas AFK y power-ups viven en otros plugins."
 ---
 
-Seis módulos convierten una región del mundo en algo. Los seis se montan desde menús de administración
-y viven en la base de datos.
+Dos módulos convierten una región o un bloque del mundo en algo: los **portales** y las **plataformas de
+salto**. Ambos se montan desde menús de administración y viven en la base de datos, y ambos guardan el
+servidor que los creó: en una red cuyos servidores comparten base de datos, cada servidor carga solo los
+suyos. Una fila escrita antes de registrar servidores pertenece a todos los servidores que la lean.
 
-Las minas, las zonas de regeneración, las zonas AFK, las plataformas de salto y las zonas de power-ups
-guardan el servidor que las creó. En una red cuyos servidores comparten base de datos, cada servidor solo
-carga y lista las suyas. Una fila escrita antes de que se guardara el servidor pertenece a cualquier
-servidor que la lea. Los portales no guardan servidor.
-
-## Minas
-
-Una mina es una región que vuelve. Hay dos clases, y eliges cuál al crearla.
-
-### Clásica
-
-La región entera se reconstruye de golpe, a partir de una **composición**: una lista de materiales con
-pesos.
-
-| Ajuste | Por defecto | Qué hace |
-|---|---|---|
-| `default-reset-interval-seconds` | 300 | Tiempo entre reinicios |
-| `default-reset-warning-seconds` | 10 | Aviso antes de uno |
-| `resetThresholdPercentage` | por mina | Reiniciar antes cuando se haya picado este porcentaje |
-| `clean-entities-on-reset` | `true` | Quitar objetos tirados y mobs primero |
-
-Un jugador que esté dentro cuando se reinicia es un problema que la mina resuelve por ti:
-**teletransportar al aire** lo sube al bloque libre más cercano en vez de dejar que se asfixie, y
-además se puede fijar una posición de **teletransporte seguro**.
-
-### Realista
-
-Los bloques no vuelven todos a la vez. Cada bloque tiene **niveles**: una cadena de etapas de desgaste
-por las que pasa según se pica, cada una con su tiempo de regeneración, su loot y sus efectos.
-`mine_levels`, `mine_level_detail` y `mine_level_chain` en los menús de administración son donde se
-escribe esa cadena.
-
-`default-realistic-regen-seconds` son 60.
-
-Cada bloque que siga roto cuando arranca el módulo **se cura de golpe**, le quedara el tiempo que le
-quedara. Un reinicio no retoma los temporizadores. Un bloque cuyo chunk no está cargado sigue en
-seguimiento y se reintenta cada 10 segundos hasta que el chunk cargue; su fila solo se borra cuando el
-bloque ha vuelto. Las filas de una mina que este servidor no conoce no se tocan, porque en una base de datos
-compartida esa mina es de otro servidor.
-
-Las dos clases comparten: un teletransporte de entrada, un permiso, auto-recogida — los bloques picados
-van directos al inventario —, restringir el picado, que impide romper nada que no esté en la lista de la
-propia mina, y efectos de rotura.
-
-`visuals` lleva el título de aviso de reinicio, la barra de jefe del reinicio, el título de entrada y la
-barra de "próximo reinicio", con `%mine_name%`, `%seconds%`, `%next_reset%` y `%time%`.
-
-El "próximo reinicio" dentro de una mina clásica es una **barra de jefe**, `visuals.bossbar`, ya no una
-barra de acción. Se vacía según se acerca el reinicio y deja su sitio a la barra de cuenta atrás durante los
-segundos de aviso. Un `modules/mines/config.yml` existente conserva su texto: `visuals.actionbar.text` pasa a
-`visuals.bossbar.text`.
-
-### Romper un bloque en una mina
-
-Una rotura que es de la mina la hace el plugin, no el juego:
-
-- La experiencia va **directa a quien pica**, con Reparación incluida, en vez de soltar un orbe.
-- La herramienta se desgasta por el camino propio del servidor, así que Irrompibilidad aplica, salta
-  `PlayerItemDamageEvent` y la herramienta se rompe con su sonido.
-- Cada drop y cada objeto de loot se ofrece primero a la autoventa, para quien la tenga encendida. Ver
-  [Economía](/docs/exyliasurvivalcore/economia).
-
-Las herramientas de otros plugins rompen bloques de mina por el mismo camino. Un pico de 3x3 que llama a
-`breakMineBlock` de la [API](/docs/exyliasurvivalcore/api) recibe la comprobación de permiso de la mina, su
-loot y su regeneración en los nueve bloques. Antes de cada una de esas roturas se lanza un
-`MineBlockBreakEvent`, y cancelarlo deja el bloque como está.
-
-## Zonas de regeneración
-
-Una región guardada como esquema y pegada de vuelta sobre sí misma. Se monta desde `/regenzonesadmin`;
-el botón **schematic** del editor guarda la región tal y como está ahora mismo, que es el estado al que
-se restaurará.
-
-Dos modos:
-
-| Modo | Cuándo regenera |
-|---|---|
-| `FIXED` | Cada `interval-seconds`, con un aviso antes |
-| `IDLE` | `idle-delay-seconds` después de que salga el último jugador |
-
-El aviso solo aplica a `FIXED`.
-
-La pantalla de flags son las políticas de región de ExyliaLib, una fila por flag, ciclando **permitir →
-denegar → por defecto**. A su lado hay dos claves más: una lista de bloques permitidos y un valor en
-segundos para bloques temporales.
-
-ExyliaLib solo resuelve los flags; quien los hace cumplir es este plugin, en todas las regiones que
-registra. A un jugador en modo creativo no le afecta ninguno.
-
-| Flag | Qué cubre |
-|---|---|
-| `PVP` | Combate entre jugadores, comprobado donde están tanto el atacante como la víctima |
-| `BUILD`, `BREAK` | Colocar y romper bloques |
-| `INTERACT` | Usar bloques y entidades |
-| `PLAYER_BUILD_ONLY` | Solo se pueden romper bloques que haya puesto un jugador |
-| `ALLOWED_BLOCKS_ONLY`, `BREAKABLE_BLOCKS_ONLY` | Solo se pueden colocar, o romper, los materiales de la lista. Encendido, la lista es lo único que decide |
-| `TEMPORARY_BLOCKS` | Los bloques colocados desaparecen pasados los segundos indicados |
-| `RE_GIVE_BLOCKS` | Un bloque temporal se devuelve al desaparecer |
-| `REGION_MEMBERS_ONLY` | Estas regiones no tienen miembros, así que nadie puede construir ni usar bloques |
-| `ENTRY`, `EXIT` | Entrar o salir andando, perlas de ender, fruta coral y comandos escritos incluidos. Un teletransporte que hace un plugin pasa |
-| `ITEM_DROP`, `ITEM_PICKUP` | Tirar y recoger objetos |
-| `FALL_DAMAGE` | Recibir daño de caída |
-| `KEEP_INVENTORY` | Quien muere dentro conserva objetos y niveles y no suelta nada. Este es propio de ExyliaSurvivalCore |
-
-Los segundos de bloques temporales solo llegan a ExyliaLib mientras `TEMPORARY_BLOCKS` está encendido.
-
-<Callout type="warning" title="Sin esquemas de FastAsyncWorldEdit no hay regeneración">
-Si el soporte de esquemas no se puede usar, el plugin escribe `Regen zones are off: <razón>` una vez al
-arrancar. El módulo sigue activándose y los menús siguen funcionando, pero una regeneración no hace
-nada.
+<Callout type="note" title="ExyliaLobby toma el relevo en los lobbies">
+Con `defer-to-exylia-lobby: true` (el valor por defecto) en `config.yml`, los módulos `portals`, `jumpads`
+y `join-leave` se quedan apagados mientras [ExyliaLobby](/docs/exylialobby/introduccion) esté activo, porque
+sus áreas, su hotbar y sus funciones de movimiento los sustituyen. Pon `false` para mantener estos módulos
+junto a ExyliaLobby. El spawn no se ve afectado.
 </Callout>
 
-## Zonas AFK
-
-Estar en la región y cobrar en un temporizador. `/afkzone preview <id>` enseña lo que paga una zona.
-
-| Ajuste | Por defecto |
-|---|---|
-| `default-reward-interval-seconds` | 60 |
-
-Cada zona tiene su propio intervalo y su propia lista de recompensas. `visuals` cubre la barra de jefe,
-el título de entrada, el título de recompensa, la barra de acción y las dos líneas del resumen que
-recibe un jugador al salir, con `%zone_name%`, `%time_in_zone%`, `%next_reward%`, `%amount%` y
-`%reward_name%`.
-
-Las recompensas de objeto nunca se tiran al suelo. En el primer intervalo después de que se llene el
-inventario, se avisa al jugador con `afk-zones.inventory-full`, y los objetos de esa ronda se le guardan y
-se le entregan en su próxima entrada. Los intervalos siguientes se saltan las recompensas de objeto hasta
-que haga sitio. El dinero, los comandos, la experiencia y los mensajes no necesitan sitio y se pagan
-siempre.
-
-<Callout type="note" title="No existe un `/afkzone` a secas">
-Solo existe `/afkzone preview <id>`. `/afkzone` por su cuenta imprime la línea de uso del framework de
-comandos.
+<Callout type="note" title="Otras zonas se mudaron">
+Las minas son de [ExyliaMines](/docs/exyliamines/introduccion). Las zonas de regeneración, los power-ups y
+los cofres de botín son de [ExyliaWarzone](/docs/exyliawarzone/introduccion). Las zonas AFK son de
+[ExyliaRewards](/docs/exyliarewards/zonas-afk).
 </Callout>
 
 ## Portales
@@ -163,19 +42,18 @@ settings:
   cooldown-seconds: 2
 effects:
   enter-sound: "BLOCK_PORTAL_TRAVEL|0.4|1.6"
-  enter-title: { … }   # %portal% es el nombre del portal
 ```
 
 `cooldown-seconds` es cuánto espera el **mismo** portal antes de volver a llevar al mismo jugador, que es lo
 que impide que dos portales que apuntan el uno al otro lo tengan rebotando. `0` lo desactiva. La espera
-vive en memoria y se borra cuando el jugador sale del servidor.
+vive en memoria y se borra cuando el jugador sale del servidor. El título de entrada (`%portal%` es el nombre del portal) es `enter-title` en `modules/portals/messages.yml`.
 
 Un portal cuyo destino no se puede alcanzar le dice al jugador por qué, con las líneas de teletransporte
 descritas en [Movimiento](/docs/exyliasurvivalcore/movimiento).
 
 ## Plataformas de salto
 
-Un bloque que lanza a quien lo pise.
+Un bloque que lanza a quien lo pise. Se monta desde `/jumpadmin`.
 
 | Campo por plataforma | Qué hace |
 |---|---|
@@ -187,39 +65,3 @@ Un bloque que lanza a quien lo pise.
 `settings.launch-cooldown-ms` son 500 por defecto. Una plataforma con planeo espera a que el jugador
 deje el suelo antes de abrir el élitro, y una plataforma solo se busca cuando el jugador cambia de
 bloque, no en cada paquete de movimiento.
-
-## Power-ups
-
-Un objeto flotante que un jugador pisa para recibir un efecto de poción o una recompensa. Viven en
-**zonas**, y una zona los genera o bien en cualquier punto de un área o bien en una lista de posiciones
-fijas.
-
-| Campo por zona | Qué hace |
-|---|---|
-| Modo | Área, o lista de posiciones |
-| Intervalo de aparición | Segundos entre apariciones |
-| Máximo activo | Cuántos existen a la vez |
-| Vida | Segundos antes de que uno desaparezca |
-| Reaparición automática | Si un power-up recogido vuelve |
-| Selección aleatoria | Elegir entre las entradas al azar en vez de en orden |
-| Requiere sólido debajo, permitir en el aire | Dónde puede aterrizar una aparición |
-| Entradas | Los propios power-ups, cada uno con su peso |
-
-Cada power-up tiene icono, nombre, peso, efectos de poción, recompensas y un brillo con su propio color.
-
-| Ajuste | Por defecto |
-|---|---|
-| `pickup-radius` | 1.0 |
-| `item-scale` | 0.8 |
-| `view-distance` | 48.0 |
-| `rotation-speed-degrees` | 90.0 |
-| `particle-type` | `END_ROD` |
-| `area-max-attempts` | 20 |
-
-Los objetos flotantes se dibujan a nivel de paquete con PacketEvents, una dependencia dura del
-plugin.
-
-<Callout type="note" title="`modules/powerups/config.yml` no tiene comentarios">
-Es el único archivo generado sin ninguna explicación dentro: dieciséis claves a secas. La tabla de
-arriba es lo que significan.
-</Callout>

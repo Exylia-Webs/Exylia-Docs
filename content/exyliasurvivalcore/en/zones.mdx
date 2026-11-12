@@ -1,136 +1,24 @@
 ---
 title: "Zones"
-description: "Mines that reset, zones rebuilt from schematics, AFK zones that pay, portals, jump pads and power-ups."
+description: "Portals and jump pads built in game, which step aside for ExyliaLobby when it is installed. Mines, regeneration, AFK zones and power-ups live in other plugins."
 ---
 
-Six modules turn a region of the world into something. All six are built from admin menus and stored in
-the database.
+Two modules turn a region or a block of the world into something: **portals** and **jump pads**. Both
+are built from admin menus and stored in the database, and both record the server that created them: on a
+network whose servers share one database, each server loads only its own. A row written before servers
+were recorded belongs to every server that reads it.
 
-Mines, regenerating zones, AFK zones, jump pads and power-up zones record the server that created them.
-On a network whose servers share one database, each server loads and lists only its own. A row written
-before the server was recorded belongs to every server that reads it. Portals do not record a server.
-
-## Mines
-
-A mine is a region that comes back. There are two kinds, and you pick which when you create it.
-
-### Classic
-
-The whole region is rebuilt at once, from a **composition** — a weighted list of materials.
-
-| Setting | Default | What it does |
-|---|---|---|
-| `default-reset-interval-seconds` | 300 | Time between resets |
-| `default-reset-warning-seconds` | 10 | Warning before one |
-| `resetThresholdPercentage` | per mine | Reset early once this much is mined out |
-| `clean-entities-on-reset` | `true` | Remove dropped items and mobs first |
-
-A player standing inside when it resets is a problem the mine solves for you: **teleport to air** lifts
-them to the nearest open block instead of letting them suffocate, and a **safe teleport** location can
-be set as well.
-
-### Realistic
-
-Blocks do not come back all at once. Each block has **levels** — a chain of degrade stages it passes
-through as it is mined, each with its own regeneration time, loot and effects. `mine_levels`,
-`mine_level_detail` and `mine_level_chain` in the admin menus are where that chain is written.
-
-`default-realistic-regen-seconds` is 60.
-
-Every block still broken when the module starts is **healed at once**, whatever time it had left. A
-restart does not resume the timers. A block whose chunk is not loaded stays tracked and is retried every
-10 seconds until the chunk loads; its row is only deleted once the block is back. Rows for a mine this
-server does not know are left alone, since on a shared database that mine belongs to another server.
-
-Both kinds share: an entry teleport, a permission, auto-pickup — mined blocks go straight to the
-inventory — restrict-breaking, which stops anything not in the mine's own list from being broken, and
-break effects.
-
-`visuals` carries the reset warning title, the reset boss bar, the entry title and the "next reset" bar,
-with `%mine_name%`, `%seconds%`, `%next_reset%` and `%time%`.
-
-The "next reset" readout inside a classic mine is a **boss bar**, `visuals.bossbar`, no longer an action bar.
-It empties as the reset comes closer and gives way to the reset countdown bar for the warning seconds. An
-existing `modules/mines/config.yml` keeps its text: `visuals.actionbar.text` is moved to
-`visuals.bossbar.text`.
-
-### Breaking a block in a mine
-
-A break the mine owns is performed by the plugin, not by the game:
-
-- Experience goes **straight to the miner**, Mending included, instead of dropping an orb.
-- The tool takes damage through the server's own path, so Unbreaking applies, `PlayerItemDamageEvent` fires
-  and the tool breaks with its sound.
-- Each drop and each loot item is offered to autosell first, for a player who has it on. See
-  [Economy](/docs/exyliasurvivalcore/economy).
-
-Other plugins' tools break mine blocks through the same path. A 3x3 pickaxe calling
-`breakMineBlock` in the [API](/docs/exyliasurvivalcore/api) gets the mine's permission check, its loot and its
-regeneration on all nine blocks. A `MineBlockBreakEvent` is fired before every such break, and cancelling
-it leaves the block alone.
-
-## Regenerating zones
-
-A region saved as a schematic and pasted back over itself. Built from `/regenzonesadmin`; the
-**schematic** button in the editor saves the region as it stands right now, which is the state it will
-be restored to.
-
-Two modes:
-
-| Mode | When it regenerates |
-|---|---|
-| `FIXED` | Every `interval-seconds`, with a warning first |
-| `IDLE` | `idle-delay-seconds` after the last player leaves |
-
-The warning applies to `FIXED` only.
-
-The flags screen is ExyliaLib's region policies, one row per flag, cycling **allow → deny → default**.
-Two extra keys sit alongside them: an allowed-blocks list, and a seconds value for temporary blocks.
-
-ExyliaLib only resolves the flags; this plugin is what enforces them, in every region it registers. A player
-in creative mode is held by none of them.
-
-| Flag | What it covers |
-|---|---|
-| `PVP` | Combat between players, checked where both the attacker and the victim stand |
-| `BUILD`, `BREAK` | Placing and breaking blocks |
-| `INTERACT` | Using blocks and entities |
-| `PLAYER_BUILD_ONLY` | Only blocks a player placed may be broken |
-| `ALLOWED_BLOCKS_ONLY`, `BREAKABLE_BLOCKS_ONLY` | Only the materials on the list may be placed, or broken. When on, the list alone decides |
-| `TEMPORARY_BLOCKS` | Placed blocks disappear after the seconds value |
-| `RE_GIVE_BLOCKS` | A temporary block is given back when it goes |
-| `REGION_MEMBERS_ONLY` | These regions have no members, so nobody may build or use blocks |
-| `ENTRY`, `EXIT` | Walking in or out, ender pearls, chorus fruit and typed commands included. A teleport run by a plugin passes |
-| `ITEM_DROP`, `ITEM_PICKUP` | Dropping and picking up items |
-| `FALL_DAMAGE` | Taking fall damage |
-| `KEEP_INVENTORY` | A player dying inside keeps their items and levels and drops nothing. This one is ExyliaSurvivalCore's own |
-
-The temporary-blocks seconds only reach ExyliaLib while `TEMPORARY_BLOCKS` is on.
-
-<Callout type="warning" title="No FastAsyncWorldEdit schematics means no regeneration">
-If schematic support is not usable the plugin logs `Regen zones are off: <reason>` once at boot. The
-module still enables and the menus still work — but a regeneration silently does nothing.
+<Callout type="note" title="ExyliaLobby takes over on lobbies">
+With `defer-to-exylia-lobby: true` (the default) in `config.yml`, the `portals`, `jumpads` and
+`join-leave` modules stay off while [ExyliaLobby](/docs/exylialobby/introduction) is enabled, because its
+areas, hotbar and movement features replace them. Set it to `false` to keep these modules running next
+to ExyliaLobby. Spawn is not affected.
 </Callout>
 
-## AFK zones
-
-Stand in the region, get paid on a timer. `/afkzone preview <id>` shows what a zone pays.
-
-| Setting | Default |
-|---|---|
-| `default-reward-interval-seconds` | 60 |
-
-Each zone has its own interval and its own reward list. `visuals` covers the boss bar, the entry title,
-the reward title, the action bar, and the two lines of the summary a player gets when they leave, with
-`%zone_name%`, `%time_in_zone%`, `%next_reward%`, `%amount%` and `%reward_name%`.
-
-Item rewards are never dropped on the floor. On the first interval after a player's inventory fills up,
-they are told with `afk-zones.inventory-full`, and that round's items are kept for them and handed over on
-their next join. Every interval after that skips the item rewards until they make room. Money, commands,
-experience and messages need no room and are always paid.
-
-<Callout type="note" title="There is no bare `/afkzone`">
-Only `/afkzone preview <id>` exists. `/afkzone` on its own prints the command framework's usage line.
+<Callout type="note" title="Other zones moved out">
+Mines are [ExyliaMines](/docs/exyliamines/introduction). Regenerating zones, power-ups and loot chests are
+[ExyliaWarzone](/docs/exyliawarzone/introduction). AFK zones are
+[ExyliaRewards](/docs/exyliarewards/afk-zones).
 </Callout>
 
 ## Portals
@@ -154,19 +42,18 @@ settings:
   cooldown-seconds: 2
 effects:
   enter-sound: "BLOCK_PORTAL_TRAVEL|0.4|1.6"
-  enter-title: { … }   # %portal% is the portal's name
 ```
 
 `cooldown-seconds` is how long the **same** portal waits before it takes the same player again, which is
 what stops two portals pointed at each other bouncing somebody back and forth. `0` turns it off. The wait
-is kept in memory and cleared when the player leaves.
+is kept in memory and cleared when the player leaves. The entry title (`%portal%` is the portal's name) is `enter-title` in `modules/portals/messages.yml`.
 
 A portal whose destination cannot be reached tells the player why, with the teleport lines described in
 [Movement](/docs/exyliasurvivalcore/movement).
 
 ## Jump pads
 
-A block that launches whoever steps on it.
+A block that launches whoever steps on it. Built from `/jumpadmin`.
 
 | Per-pad field | What it does |
 |---|---|
@@ -178,38 +65,3 @@ A block that launches whoever steps on it.
 `settings.launch-cooldown-ms` is 500 by default. A gliding pad waits for the player to leave the ground
 before opening the elytra, and a pad is only looked up when a player changes block — not on every
 movement packet.
-
-## Power-ups
-
-A floating item a player walks over to get a potion effect or a reward. They live in **zones**, and a
-zone spawns them either anywhere inside an area or at a list of fixed locations.
-
-| Per-zone field | What it does |
-|---|---|
-| Mode | Area, or a location list |
-| Spawn interval | Seconds between spawns |
-| Max active | How many exist at once |
-| Lifetime | Seconds before one disappears |
-| Auto-respawn | Whether a taken power-up comes back |
-| Random selection | Pick from the entries at random rather than in order |
-| Require solid below, allow in air | Where a spawn is allowed to land |
-| Entries | The power-ups themselves, each with a weight |
-
-Each power-up has an icon, a name, a weight, potion effects, rewards, and a glow with a colour of its
-own.
-
-| Setting | Default |
-|---|---|
-| `pickup-radius` | 1.0 |
-| `item-scale` | 0.8 |
-| `view-distance` | 48.0 |
-| `rotation-speed-degrees` | 90.0 |
-| `particle-type` | `END_ROD` |
-| `area-max-attempts` | 20 |
-
-The floating items are drawn packet-level through PacketEvents, a hard dependency of the plugin.
-
-<Callout type="note" title="`modules/powerups/config.yml` has no comments">
-It is the one generated file with no explanation in it — sixteen bare keys. The table above is what
-they mean.
-</Callout>

@@ -839,10 +839,10 @@ const SURVIVALCORE_NAV: NavGroup[] = [
       page("modules", "modules", "modulos"),
       page("movement", "movement", "movimiento"),
       page("combat", "combat", "combate"),
-      page("duel-rooms", "duel-rooms", "salas-de-duelo"),
       page("progression", "progression", "progresion"),
       page("missions-and-seasons", "missions-and-seasons", "misiones-y-temporadas"),
-      page("rewards-and-votes", "rewards-and-votes", "recompensas-y-votos"),
+      page("reputation-and-projects", "reputation-and-projects", "reputacion-y-proyectos"),
+      page("economy", "economy", "economia"),
       page("kits-and-crates", "kits-and-crates", "kits-y-cajas"),
       page("zones", "zones", "zonas"),
       page("restrictions", "restrictions", "restricciones"),
@@ -850,24 +850,7 @@ const SURVIVALCORE_NAV: NavGroup[] = [
       page("optimization", "optimization", "optimizacion"),
     ],
   },
-  {
-    label: { en: "Economy", es: "Economía" },
-    pages: [
-      page("economy", "economy", "economia"),
-      page("shop", "shop", "tienda"),
-      page("market", "market", "mercado"),
-      page("trade-and-vaults", "trade-and-vaults", "intercambio-y-baules"),
-    ],
-  },
-  {
-    label: { en: "Protections", es: "Protecciones" },
-    pages: [
-      page("protections", "protections", "protecciones"),
-      page("protection-raids", "protection-raids", "asaltos-a-protecciones"),
-      page("protection-economy", "protection-economy", "economia-de-protecciones"),
-      page("protection-admin", "protection-admin", "administrar-protecciones"),
-    ],
-  },
+
   {
     label: { en: "Reference", es: "Referencia" },
     pages: [
@@ -879,6 +862,20 @@ const SURVIVALCORE_NAV: NavGroup[] = [
       page("database", "database", "base-de-datos"),
       page("api", "api", "api"),
       page("faq", "faq", "faq"),
+    ],
+  },
+  {
+    label: { en: "Moved to other plugins", es: "Movido a otros plugins" },
+    pages: [
+      page("duel-rooms", "duel-rooms", "salas-de-duelo"),
+      page("rewards-and-votes", "rewards-and-votes", "recompensas-y-votos"),
+      page("shop", "shop", "tienda"),
+      page("market", "market", "mercado"),
+      page("trade-and-vaults", "trade-and-vaults", "intercambio-y-baules"),
+      page("protections", "protections", "protecciones"),
+      page("protection-raids", "protection-raids", "asaltos-a-protecciones"),
+      page("protection-economy", "protection-economy", "economia-de-protecciones"),
+      page("protection-admin", "protection-admin", "administrar-protecciones"),
     ],
   },
 ];
@@ -2184,14 +2181,14 @@ export const plugins: Plugin[] = [
     id: "exyliasurvivalcore",
     name: "ExyliaSurvivalCore",
     tagline: {
-      en: "Fifty survival modules in one plugin",
-      es: "Cincuenta módulos de survival en un solo plugin",
+      en: "Survival essentials in one plugin",
+      es: "Lo esencial de survival en un solo plugin",
     },
     summary: {
-      en: "Homes, warps, TPA, RTP, kits, crates, mines, protections with raids and rent, an economy with its own currencies, a shop, a market, auctions, trades, missions, seasons, votes and duel rooms, each one a module that registers nothing at all when it is turned off.",
-      es: "Homes, warps, TPA, RTP, kits, cajas, minas, protecciones con asaltos y alquiler, una economía con monedas propias, tienda, mercado, subastas, intercambios, misiones, temporadas, votos y salas de duelo, cada uno un módulo que no registra absolutamente nada cuando está apagado.",
+      en: "Survival essentials in one plugin: spawn, homes, warps, TPA, RTP, kits, rank-up, farming, missions, seasons, reputation, projects, boosters, optimization and player utilities, with network sync, in-game settings screens and a public API.",
+      es: "Lo esencial de survival en un solo plugin: spawn, homes, warps, TPA, RTP, kits, rangos, cultivo, misiones, temporadas, reputación, proyectos, potenciadores, optimización y utilidades de jugador, con sincronización de red, pantallas de ajustes en el juego y una API pública.",
     },
-    version: "1.1.2",
+    version: "1.2.2",
     status: "stable",
     category: { en: "Survival", es: "Survival" },
     minecraft: "1.21+",

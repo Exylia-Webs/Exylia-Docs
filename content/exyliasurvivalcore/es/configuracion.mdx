@@ -1,211 +1,179 @@
 ---
 title: "Configuración"
-description: "Los archivos en disco, cómo se escribe y se actualiza cada clase, qué sobrevive a una edición, la sección teleport de config.yml y qué comentarios están desactualizados."
+description: "Los archivos en disco, cómo se escribe y se actualiza cada tipo, qué sobrevive a una edición, las claves de config.yml y su sección teleport, y la recarga."
 ---
 
-Todo vive en `plugins/ExyliaSurvivalCore/`. `config.yml`, `messages.yml` y el `config.yml` de cada
-módulo se generan desde el propio esquema del plugin en la primera ejecución, comentarios incluidos. Los
-menús y las escaleras por defecto — rangos, recompensas, categorías, misiones, votos, temporadas y el
-resto — vienen dentro del jar y se escriben desde él.
+Todo vive en `plugins/ExyliaSurvivalCore/`. `config.yml` y el `config.yml` de cada módulo se generan a
+partir del esquema del propio plugin en el primer arranque, comentarios incluidos. Los mensajes y los
+menús están traducidos y viven bajo `lang/<código>/`; las escaleras por defecto — rangos, categorías,
+misiones, temporadas y el resto — van dentro del jar y se escriben desde él.
 
-## Cinco clases de archivo
+Los módulos que pasaron a otros plugins ya no tienen archivos aquí.
 
-| Clase | Comportamiento | Qué archivos |
+## Tipos de archivo
+
+| Tipo | Comportamiento | Qué archivos |
 |---|---|---|
-| **Con esquema** | Claves fijas, generadas con comentarios. Una clave que el esquema no conoce se avisa una vez como `UNKNOWN_KEY` y se elimina | `config.yml`, `messages.yml`, cada `modules/<id>/config.yml`, `crates/tiers.yml`, `crates/animations.yml` |
-| **De formato libre** | Se escriben una vez con una cabecera y no se reescriben. No se poda nada, y lo que borres no vuelve | `modules/reclaim/config.yml`, `modules/scheduled-commands/config.yml`, `modules/blocked-items/rules.yml`, `modules/enchantments/rules.yml` |
-| **Sacados fuera** | Un mapa que no cabe en un record de esquema, guardado en un archivo hermano. Se escribe desde el jar en una instalación nueva y no se reescribe después | `farming/categories.yml`, `join-leave/groups.yml`, `kill-rewards/rewards.yml`, `missions/missions.yml`, `playtime-rewards/rewards.yml`, `rankup/ranks.yml`, `repair/groups.yml`, `rtp/worlds.yml`, `stats/stats.yml` |
-| **De serie con seguimiento** | Se escriben desde el jar y después se mantienen al día sin deshacer tus ediciones — mira más abajo | `votes/votes.yml`, `seasons/seasons.yml`, `trade/window.yml`, cada menú de `modules/<id>/menus/` y `menus/currency_select.yml` |
-| **Sustituidos** | Se borran y se escriben desde el jar en cada arranque y en cada recarga | Todo lo que hay bajo `menus/admin/` |
+| **Con esquema** | Claves fijas, generadas con comentarios. Una clave que el esquema no conoce se avisa una vez como `UNKNOWN_KEY` y se elimina | `config.yml` y cada `modules/<id>/config.yml` que tenga ajustes |
+| **De formato libre** | Se escribe una vez con una cabecera y no se reescribe nunca. Nada se poda, nada de lo que borres vuelve | `modules/reclaim/config.yml`, `modules/scheduled-commands/config.yml`, `modules/enchantments/rules.yml` |
+| **Extraído** | Una lista que no cabe dentro de un registro del esquema, guardada en un archivo hermano. Se escribe desde el jar en la primera instalación y no se reescribe después | `farming/categories.yml`, `join-leave/groups.yml`, `missions/missions.yml`, `projects/projects.yml`, `rankup/ranks.yml`, `repair/groups.yml`, `rtp/worlds.yml`, `seasons/seasons.yml`, `stats/stats.yml` |
+| **Traducido** | Mensajes y menús, una copia por idioma bajo `lang/<código>/` | `lang/<código>/messages.yml`, `lang/<código>/modules/<id>/messages.yml`, los menús bajo ellos |
 
-Un archivo sacado fuera que ya existe se trata como ya movido, así que uno que vaciaste a propósito se
-queda vacío en vez de recibir otra vez los valores por defecto encima.
+Un archivo extraído que ya existe se da por ya movido, así que uno que vaciaste a propósito se queda
+vacío en vez de que le escriban encima los valores por defecto. Todos salvo `repair/groups.yml` se
+traducen además por idioma: los rangos, categorías, misiones, temporadas, estadísticas y el resto se
+escriben en el idioma en el que corre el plugin.
+
+## Idiomas
+
+`config.yml` lleva `language`. `default` sigue el idioma de ExyliaLib; `en`, `es`, `fr`, `pt`, `ru` o
+`tr` fijan solo este plugin.
+
+- Los **mensajes** son `lang/<código>/messages.yml` para el núcleo y
+  `lang/<código>/modules/<id>/messages.yml` para cada módulo. Nada de lo que ve el jugador está en el código.
+- Los **menús** son `lang/<código>/menus/` y `lang/<código>/modules/<id>/menus/`. Los menús de
+  administración son `lang/<código>/menus/admin/*` y se regeneran desde el jar al arrancar; los menús de
+  jugador son tuyos para rediseñar.
+- Un servidor que ya usaba el plugin antes de que existieran los idiomas conserva sus archivos en `lang/custom/`.
+
+Una línea puede empezar con una etiqueta de efecto como `[sound:ENTITY_VILLAGER_NO|1.0|1.0]`, que es una
+instrucción y nunca llega a la pantalla. `%prefix%` se sustituye por el prefijo del plugin.
 
 ## Qué sobrevive a una edición
 
-Los archivos de serie con seguimiento se refrescan en cada arranque, y los menús, `votes.yml` y
-`seasons.yml` otra vez en cada recarga. Para cada archivo YAML el plugin compara tres cosas: tu archivo,
-el archivo de serie y los valores por defecto que revisaste por última vez, que se guardan en
-`.defaults/files/` dentro de la carpeta del plugin.
+Los archivos incluidos se refrescan en cada arranque. Para cada archivo YAML el plugin compara tres
+cosas: tu archivo, el archivo incluido y los valores por defecto que revisaste por última vez, que se
+guardan en `.defaults/files/` dentro de la carpeta del plugin.
 
-- **Un archivo que falta** se escribe, salvo que ya se hubiera instalado antes y lo borraras. Un menú
-  borrado sigue borrado, y la consola nombra el menú que no pudo registrar.
-- **Una clave que añade la versión nueva** se escribe en tu archivo en el acto, comentarios incluidos.
-- **Un valor por defecto que cambió o desapareció**, en una clave que sigue con el valor que revisaste por
-  última vez, se deja como está y aparece en `/exylialib updates`, donde lo aplicas o lo conservas.
+- **Un archivo que falta** se escribe — salvo que se instalara antes y lo borraras. Un menú borrado se
+  queda borrado, y la consola nombra el menú que no pudo registrar.
+- **Una clave que añade la nueva versión** se escribe en tu archivo al instante, con sus comentarios.
+- **Un valor por defecto que cambió o se eliminó**, en una clave que sigue con el valor que revisaste por
+  última vez, se deja como está y se lista en `/exylialib updates`, donde lo aplicas o lo mantienes.
 - **Todo lo que cambiaste o borraste** no se toca nunca.
-- **Un archivo cuyo `menu-version` (o `defaults-version`) de serie sea mayor que el tuyo** se sustituye
-  entero; tu archivo anterior se guarda al lado como `<nombre>.v<versión anterior>`.
+- **Un archivo cuyo `menu-version` (o `defaults-version`) incluido es mayor que el tuyo** se reemplaza
+  entero; tu archivo anterior se conserva al lado como `<nombre>.v<versión anterior>`.
 
-En un servidor que actualiza desde una versión que todavía no seguía nada, cada valor que ya está en
-disco cuenta como tuyo, y una clave que falte en tu archivo aparece en `/exylialib updates` en vez de
-añadirse, porque puede que la borraras a propósito. Un archivo que no se puede leer se deja intacto y se
-avisa.
-
-`trade/window.yml` va un paso más allá: la ventana lee primero la copia del jar y la tuya encima, así que
-un objeto que añade una versión nueva se dibuja aunque su entrada siga esperando en `/exylialib updates`.
+Un archivo que no se puede leer se deja intacto y se avisa.
 
 ## `config.yml`
 
-Tres bloques: `debug`, los cincuenta interruptores de módulo — mira
-[Módulos](/docs/exyliasurvivalcore/modulos) — y `teleport`.
+| Clave | Por defecto | Qué hace |
+|---|---|---|
+| `language` | `default` | Mira [Idiomas](#idiomas) |
+| `debug` | `false` | Salida extra por consola |
+| `defer-to-exylia-lobby` | `true` | Con ExyliaLobby activado, `jumpads`, `join-leave` y `portals` se quedan apagados y ExyliaLobby hace esos trabajos. El spawn no cambia. Necesita reinicio |
+| `modules` | todos `true` | Un interruptor por módulo — mira abajo |
+| `teleport` | | Mira [`teleport`](#teleport) |
+| `combat-blocks-teleports` | `true` | Rechaza `/spawn`, `/home`, `/warp`, `/rtp`, `/back`, `/tpa` y los teletransportes de portal durante el combate. Un permiso que se salta el warmup no se salta esto |
+| `idle-after-seconds` | `300` | Tiempo inactivo (`0`-`86400`) tras el cual las recompensas por tiempo jugado dejan de contar al jugador. `0` lo desactiva |
 
-Aquí **no hay sección de base de datos**. La base de datos se configura en `database.yml`, escrito por
-ExyliaLib.
+### `modules`
+
+Treinta interruptores, todos `true` por defecto: `spawn`, `tpa`, `homes`, `join-leave`, `rtp`,
+`scheduled-commands`, `rankup`, `player-utils`, `back`, `farming`, `reclaim`, `stats`, `portals`,
+`jumpads`, `kits`, `item-spawners`, `warps`, `near`, `repair`, `death`, `enchantments`,
+`player-settings`, `missions`, `boosters`, `seasons`, `optimization`, `item-updater`, `reputation`,
+`projects` y `mobs`.
+
+`mobs` es un interruptor heredado que no hace nada: los mobs personalizados pasaron a ExyliaMobs y
+ningún módulo lo registra. Sigue en el archivo para que las configuraciones antiguas se sigan leyendo.
+
+Un módulo también se queda apagado, diga lo que diga su interruptor, cuando otro plugin hace su trabajo:
+
+| Módulo | Se queda apagado mientras |
+|---|---|
+| `farming` | ExyliaJobs esté instalado |
+| `item-spawners` | ExyliaSpawners esté instalado |
+| `jumpads`, `join-leave`, `portals` | ExyliaLobby esté activado y `defer-to-exylia-lobby` sea `true` |
+
+Un interruptor cambiado necesita reinicio; `/survivalcoreadmin reload` nombra los módulos que lo esperan.
 
 ### `teleport`
 
-Cómo se comportan los teletransportes cuando nada pide otra cosa. El plugin le pasa esta sección a los
-teletransportes de ExyliaLib en cada arranque y en cada recarga.
-
-```yaml
-teleport:
-  warmup-seconds: 0.0
-  cancel-on-move: true
-  cancel-on-damage: true
-  safe-search-radius: 5
-  safe-max-attempts: 32
-  cross-server-ttl-seconds: 300
-  cross-server-settle-seconds: 0.5
-  back-history-size: 3
-  back-history-minutes: 30
-  tpa-expiry-seconds: 60
-  tpa-max-pending: 8
-  random-max-attempts: 16
-```
+Son los ajustes de teletransporte de ExyliaLib. El plugin se los entrega al módulo de teletransporte de
+ExyliaLib, que los aplica a cada movimiento que hace el plugin.
 
 | Clave | Por defecto | Rango | Qué hace |
 |---|---|---|---|
-| `warmup-seconds` | `0.0` | 0 o más | Cuánto espera un jugador antes de moverse. Admite decimales |
-| `cancel-on-move` | `true` | | Salir del bloque de partida durante la cuenta atrás la cancela |
-| `cancel-on-damage` | `true` | | Recibir daño durante la cuenta atrás la cancela |
-| `safe-search-radius` | `5` | 0–32 | Hasta dónde buscar un aterrizaje seguro alrededor del destino, cuando el teletransporte lo pide |
-| `safe-max-attempts` | `32` | 1–256 | Cuántos bloques puede revisar esa búsqueda antes de avisar de que no hay sitio seguro |
-| `cross-server-ttl-seconds` | `300` | 30–3600 | Cuánto dura un destino en cola para otro servidor |
-| `cross-server-settle-seconds` | `0.5` | 0.05–5 | Cuánto espera el servidor de destino tras la llegada de un jugador antes de moverlo |
-| `back-history-size` | `3` | 1–16 | Por cuántos sitios puede volver atrás un jugador |
-| `back-history-minutes` | `30` | 1–1440 | Cuánto tiempo se sigue ofreciendo cada uno de esos sitios |
-| `tpa-expiry-seconds` | `60` | 5–3600 | Cuánto tiempo sigue vigente una petición sin responder |
-| `tpa-max-pending` | `8` | 1–64 | Cuántas peticiones puede tener pendientes un jugador |
-| `random-max-attempts` | `16` | 1–64 | Cuántos sitios puede probar un teletransporte aleatorio antes de rendirse |
+| `warmup-seconds` | `0.0` | | Quedarse quieto antes del movimiento |
+| `cancel-on-move` | `true` | | Moverse cancela el warmup |
+| `cancel-on-damage` | `true` | | Recibir daño cancela el warmup |
+| `safe-search-radius` | `5` | 0-32 | Hasta dónde buscar suelo seguro |
+| `safe-max-attempts` | `32` | 1-256 | Intentos para encontrar suelo seguro |
+| `cross-server-ttl-seconds` | `300` | 30-3600 | Cuánto sigue siendo válido un movimiento a otro servidor |
+| `cross-server-settle-seconds` | `0.5` | 0.05-5 | Pausa tras llegar a otro servidor |
+| `back-history-size` | `3` | 1-16 | Ubicaciones que recuerda `/back` |
+| `back-history-minutes` | `30` | 1-1440 | Cuánto tiempo se recuerdan |
+| `tpa-expiry-seconds` | `60` | 5-3600 | Mira abajo |
+| `tpa-max-pending` | `8` | 1-64 | Peticiones en espera por jugador |
+| `random-max-attempts` | `16` | 1-64 | Intentos para una ubicación aleatoria |
 
-Un valor fuera de su rango se lleva al extremo más cercano; un warmup negativo se queda en `0`.
+El plugin solo lee `back-history-minutes` (para `/back`). Una petición de TPA caduca de verdad según
+`settings.request-expire-seconds` en `modules/tpa/config.yml` (60 por defecto), no según
+`tpa-expiry-seconds`.
 
-<Callout type="note" title="Los módulos conservan sus propios ajustes de teletransporte">
-Spawn, homes, back, TPA y warps siguen tomando su warmup, sus reglas de cancelación y sus efectos de su
-propio `config.yml`. `/back` lee `back-history-minutes` para decidir si el sitio que guardó se sigue
-ofreciendo. El módulo de TPA hace caducar sus peticiones con `settings.request-expire-seconds` de
-`modules/tpa/config.yml` (60 por defecto); nada en este plugin lee `tpa-expiry-seconds` ni
-`tpa-max-pending`.
-</Callout>
-
-## `messages.yml`
-
-Un `prefix` y cincuenta y una secciones: `errors`, `admin` y una por cada módulo salvo `join-leave`. Cada
-línea que manda el plugin está en este archivo; no queda nada escrito a fuego.
-
-`errors` es el bloque compartido: `module-disabled`, `no-permission`, `player-not-found`,
-`invalid-number`, `world-blacklisted`. `admin.restart-required` es la línea con la que termina
-`/sc reload` cuando un interruptor de módulo espera un reinicio.
-
-Una línea puede empezar por una etiqueta de efecto como `[sound:ENTITY_VILLAGER_NO|1.0|1.0]`, que es
-una instrucción y no llega nunca a la pantalla. `%prefix%` se sustituye desde la clave `prefix`.
+No hay sección de base de datos en `config.yml`: la base de datos se configura una sola vez para todos
+los plugins en el `database.yml` de ExyliaLib.
 
 ## Formas compartidas
 
-Varios módulos dibujan las mismas tres cosas, y aceptan las mismas claves en todos lados.
+Varios módulos dibujan las mismas tres cosas, y en todas partes llevan las mismas claves.
 
 | Forma | Claves |
 |---|---|
 | Título | `text`, `subtitle`, `fade-in`, `stay`, `fade-out`, `time-style` |
-| Barra de acción | `text`, `duration`, `time-style` |
-| Barra de jefe | `text`, `colour`, `overlay`, `count-up`, `progress`, `time-style` |
+| Action bar | `text`, `duration`, `time-style` |
+| Boss bar | `text`, `colour`, `overlay`, `count-up`, `progress`, `time-style` |
 
-`colour` acepta `PINK`, `BLUE`, `RED`, `GREEN`, `YELLOW`, `PURPLE` o `WHITE`. `overlay` acepta
-`PROGRESS`, `NOTCHED_6`, `NOTCHED_10`, `NOTCHED_12` o `NOTCHED_20`. `time-style` acepta `auto`,
+`colour` admite `PINK`, `BLUE`, `RED`, `GREEN`, `YELLOW`, `PURPLE` o `WHITE`. `overlay` admite
+`PROGRESS`, `NOTCHED_6`, `NOTCHED_10`, `NOTCHED_12` o `NOTCHED_20`. `time-style` admite `auto`,
 `seconds`, `tenths`, `hundredths`, `clock` o `full`. Un `stay` o `duration` de `0` significa "hasta que
-algo lo pare".
+algo lo detenga".
 
-Los sonidos son siempre `NOMBRE_SONIDO|VOLUMEN|TONO`, y una cadena vacía desactiva uno.
+Los sonidos son siempre `NOMBRE_DEL_SONIDO|VOLUMEN|TONO`, y una cadena vacía lo desactiva.
 
 ## Archivos por módulo
 
+Los ids de módulo usan guiones: `join-leave`, `item-spawners`, `player-utils`, `scheduled-commands`. Los
+archivos de un módulo están en `modules/<id>/`.
+
 | Módulo | Archivos |
 |---|---|
-| `spawn`, `tpa`, `homes`, `back`, `warps` | `config.yml` — el warmup, el nodo de bypass, los mundos vetados, los sonidos y los efectos |
+| `spawn`, `tpa`, `homes`, `back`, `warps` | `config.yml` — el warmup, el nodo de bypass, los mundos en lista negra, los sonidos y los efectos |
 | `rtp` | `config.yml` más `worlds.yml` |
 | `join-leave` | `config.yml` más `groups.yml` |
-| `kill-rewards` | `config.yml` más `rewards.yml` |
-| `playtime-rewards` | `config.yml` más `rewards.yml` |
 | `rankup` | `config.yml` más `ranks.yml` |
 | `farming` | `config.yml` más `categories.yml` |
 | `stats` | `config.yml` más `stats.yml` |
 | `missions` | `config.yml` más `missions.yml` |
-| `repair` | `config.yml` más `groups.yml` |
-| `crates` | `config.yml` más `tiers.yml` y `animations.yml` |
-| `enchantments` | `config.yml` más `rules.yml` |
-| `votes` | `config.yml` más `votes.yml` |
 | `seasons` | `config.yml` más `seasons.yml` |
-| `trade` | `config.yml` más `window.yml` |
-| `blocked-items` | Solo `rules.yml` |
-| `reclaim`, `scheduled-commands` | Solo `config.yml`, de formato libre |
-| `player-utils`, `near`, `jumpads`, `kits`, `bounties`, `afk-zones`, `item-spawners`, `loot-chests`, `death`, `powerups`, `mines`, `portals`, `duel-rooms`, `graves`, `vaults`, `market`, `auctions`, `orders`, `shop`, `rewards`, `boosters`, `sell-wands`, `optimization`, `protections` | Solo `config.yml` |
-| `regen-zones` | `modules/regenzones/config.yml` — **sin guion en el nombre de la carpeta** |
-| `economy` | **Ningún archivo de configuración.** Las monedas y los ajustes de economía viven en la base de datos y se editan con `/economyadmin`. Un `modules/economy/currencies.yml` se lee una sola vez, la primera vez que esas tablas están vacías, y se renombra a `currencies.yml.imported`; un servidor que todavía tenga `plugins/ExyliaLib/currencies.yml` y no este recibe antes una copia de ese archivo |
+| `repair` | `config.yml` más `groups.yml` |
+| `enchantments` | `config.yml` más `rules.yml` |
+| `reclaim`, `scheduled-commands` | solo `config.yml`, de formato libre |
+| `player-utils`, `near`, `jumpads`, `kits`, `item-spawners`, `death`, `boosters`, `portals`, `optimization`, `reputation` | solo `config.yml` |
+| `projects` | solo `projects.yml` |
 | `player-settings`, `item-updater` | **Ningún archivo de configuración** |
 
-Qué hace cada clave está en la página de su módulo:
-[Movimiento](/docs/exyliasurvivalcore/movimiento), [Combate](/docs/exyliasurvivalcore/combate),
-[Salas de duelo](/docs/exyliasurvivalcore/salas-de-duelo),
+Lo que hace cada clave está en la página de ese módulo: [Movimiento](/docs/exyliasurvivalcore/movimiento),
 [Progresión](/docs/exyliasurvivalcore/progresion),
 [Misiones y temporadas](/docs/exyliasurvivalcore/misiones-y-temporadas),
-[Recompensas y votos](/docs/exyliasurvivalcore/recompensas-y-votos),
 [Kits y cajas](/docs/exyliasurvivalcore/kits-y-cajas), [Zonas](/docs/exyliasurvivalcore/zonas),
-[Restricciones](/docs/exyliasurvivalcore/restricciones), [Comodidad](/docs/exyliasurvivalcore/utilidades),
-[Optimización](/docs/exyliasurvivalcore/optimizacion), [Economía](/docs/exyliasurvivalcore/economia),
-[Tienda](/docs/exyliasurvivalcore/tienda), [Mercado](/docs/exyliasurvivalcore/mercado),
-[Intercambio y baúles](/docs/exyliasurvivalcore/intercambio-y-baules) y
-[Protecciones](/docs/exyliasurvivalcore/protecciones).
+[Restricciones](/docs/exyliasurvivalcore/restricciones),
+[Utilidades](/docs/exyliasurvivalcore/utilidades),
+[Optimización](/docs/exyliasurvivalcore/optimizacion) y
+[Reputación y proyectos](/docs/exyliasurvivalcore/reputacion-y-proyectos).
 
-## Comentarios desactualizados
+## Recarga
 
-Los archivos generados llevan sus propias explicaciones, y cuatro de ellas son falsas. Están aquí para
-que un archivo que contradiga esta documentación no sea una sorpresa.
+`/survivalcoreadmin reload`, desde la consola o en el juego, ejecuta tres pasos en orden:
 
-<Callout type="danger" title="`menus/admin/` no es tuyo, diga lo que diga su cabecera">
-Los cuarenta y nueve archivos de menú de administración empiezan con *"This file is yours to edit…
-written once, when it is missing, and never overwritten"*. El directorio se sustituye desde el jar en
-**cada** arranque y **cada** `/sc reload`.
-</Callout>
+1. **configs** — `config.yml` incluidos `debug` y `teleport`, y cada archivo de módulo con esquema.
+2. **módulos** — cada módulo activado declara de nuevo sus archivos y vuelve a leer lo que guarda:
+   escaleras, reglas, `missions.yml`, `seasons.yml` y el resto.
+3. **menús** — los menús se refrescan como se describe arriba y cada menú se compila otra vez. Este paso
+   también se ejecuta con `/exylialib reload`.
 
-<Callout type="warning" title="`ranks.yml` lista tipos de requisito que no existen">
-Su cabecera lista `money`, `playtime`, `kills` y `level`. El conjunto real es `money`, `playtime`,
-`placeholder` y `permission`; un requisito de cualquier otro tipo se descarta en silencio al leer el
-archivo.
-</Callout>
-
-<Callout type="note" title="`admin.usage` nombra dos subcomandos que `/survivalcore` no tiene">
-La línea dice *"Subcommands: reload, delhome, listhomes"*. `/survivalcore` solo tiene `reload`;
-`delhome` y `listhomes` están en `/homesadmin`.
-</Callout>
-
-<Callout type="note" title="Ocho valores por defecto siguen en español">
-Una instalación nueva muestra el texto de warmup en español para spawn, homes, back, TPA y RTP:
-*"Teleportando en %time%"*, *"Teleportando a %world%"*, *"Buscando…"*. Son valores de configuración
-normales; edítalos en el `config.yml` de cada módulo.
-</Callout>
-
-## Recargar
-
-`/survivalcore reload`, desde consola o en el juego, ejecuta tres pasos por orden:
-
-1. **configs** — `config.yml` incluidos `debug` y `teleport`, `messages.yml` y el prefijo, y cada archivo
-   de módulo con esquema.
-2. **modules** — cada módulo encendido vuelve a declarar sus archivos y relee lo que guarda: escaleras,
-   reglas, `missions.yml`, `votes.yml`, `seasons.yml` y el resto.
-3. **menus** — `menus/admin/` se sustituye desde el jar, los demás menús se refrescan como se describe
-   arriba y todos se vuelven a compilar. Este paso también se ejecuta con `/exylialib reload`.
-
-Un paso que falla se avisa por su nombre y los siguientes se ejecutan igual. La recarga **no** aplica un
-interruptor de módulo; cuando uno ya no coincide con lo que está funcionando, termina nombrando los
-módulos que necesitan reinicio.
+Un paso que falla se avisa por su nombre y los siguientes se ejecutan igualmente. La recarga **no** aplica
+un interruptor de módulo; cuando uno ya no coincide con lo que está en marcha, termina nombrando los
+módulos que necesitan un reinicio.

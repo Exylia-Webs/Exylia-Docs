@@ -1,0 +1,138 @@
+---
+title: "Reputation and projects"
+description: "Players rate each other after real deals and a good score gives back part of the sales tax; the whole network builds community projects with donated materials."
+---
+
+Two small modules built around other players: **reputation**, which turns finished deals into a score,
+and **projects**, a goal the whole network builds together. Each is switched in `config.yml` under
+`modules:` as `reputation` and `projects`.
+
+## Reputation
+
+Players rate each other after a real deal. A rating is `+1` or `-1`, and a player's score is positive
+minus negative. A finished trade, a market purchase or a won auction opens one rating for the buyer (or
+for the player who received the items) to give to the other side. A filled buy order is never rated: the
+player who fills it did not choose the other party.
+
+### What counts as a rating
+
+- A deal can be rated **once**, by the one player it was opened for, for `rating-days` days.
+- A deal worth less than `min-deal-value` (in the default currency) opens nothing. For a trade, the value
+  is the default-currency money in it plus what the server shop pays for its items. Market and auction
+  deals in another currency can always be rated.
+- No rating is opened between two accounts that share an address, on any server. When that cannot be
+  answered, nothing is opened.
+- A rating from one player to the same player only counts again after `pair-cooldown-hours`.
+
+The prompt to rate, the note that somebody rated you and the refund line travel over a network channel, so
+the player sees them on whichever server they are on.
+
+### Tiers and the tax refund
+
+A score falls in a **tier**, and each tier gives back a share of the sales tax the player pays as a
+seller on the market, on auctions and on buy orders. The refund is deposited right after the sale in the
+currency the tax was taken in, and money boosters do not apply to it.
+
+| Tier | From score | Refund |
+|---|---|---|
+| Untrusted | -5 | 0% |
+| Newcomer | -4 | 0% |
+| Trusted | 10 | 10% |
+| Respected | 30 | 25% |
+| Renowned | 75 | 50% |
+
+A player is in the highest tier whose `min-score` their score reaches, or the lowest one when it reaches
+none. This needs [ExyliaMarket](/docs/exyliamarket/introduction) for the sales and ExyliaEconomy for the
+payout; without them ratings still work.
+
+When a trade request involves a player whose score is `warn-at-or-below` or lower, the other side gets a
+warning with it.
+
+### Configuration
+
+`modules/reputation/config.yml`:
+
+| Setting | Default | What it does |
+|---|---|---|
+| `settings.rating-days` | `3` | Days a deal can still be rated |
+| `settings.pair-cooldown-hours` | `24` | Hours before a rating of the same player counts again |
+| `settings.min-deal-value` | `10.0` | The smallest deal that can be rated |
+| `settings.warn-at-or-below` | `-5` | Score at or under which trade requests carry a warning |
+| `settings.remind-on-join` | `true` | Remind players with deals left to rate as they join |
+| `tiers.<id>` | five tiers above | `min-score`, `name` and `tax-rebate-percent` (0 to 100) |
+
+Messages are in `modules/reputation/messages.yml`. The values staff tune are also editable in game from
+the admin settings screen for reputation.
+
+### Commands and permission
+
+| Command | Aliases | What it does |
+|---|---|---|
+| `/reputation [player]` | `/rep` | Shows your score, tier and refund, or another player's |
+| `/reputation pending` | | Lists the deals you can still rate (the latest five) |
+| `/reputation rate <deal> <up\|down>` | | Rates a deal. It is the target of the buttons in the prompt |
+
+All of them need `exyliasurvivalcore.reputation`.
+
+### Placeholders and statistics
+
+| Placeholder | Returns |
+|---|---|
+| `%exyliasurvivalcore_reputation_score%` | The reader's score |
+| `%exyliasurvivalcore_reputation_positive%` | Positive ratings received |
+| `%exyliasurvivalcore_reputation_negative%` | Negative ratings received |
+| `%exyliasurvivalcore_reputation_tier%` | The tier name |
+| `%exyliasurvivalcore_reputation_rebate%` | The tier's refund percentage |
+
+They answer `0` (and the lowest score's tier) until the player's row is read on join. Ratings also count
+the [stat counters](/docs/exyliasurvivalcore/missions-and-seasons#which-counters-can-be-named)
+`reputation.positive`, `reputation.negative`, `reputation.score` and `reputation.given`, so a mission or
+season can use them.
+
+## Projects
+
+A community project is a goal the **whole network** builds at a time: the first project in the file that
+is not completed. Players give materials, and when every requirement is in, the project completes on one
+server, runs its commands once, pays its contributors and the next project starts.
+
+Only plain items count: a renamed or enchanted stack stays in the inventory. Whatever a project has no
+room for any more, because another server filled it first, comes back to the player through the reward
+queue.
+
+### projects.yml
+
+`modules/projects/projects.yml`, yours to edit. The shipped file has the *Iron Forge* (x1.5 money for
+three days) and the *Great Library* (x1.5 experience for three days). Reload the plugin to apply an edit.
+
+| Key | What it does |
+|---|---|
+| `name`, `icon` | How the menu shows it |
+| `description` | What it is, one line each |
+| `perk` | What completing it does, as the menu tells it |
+| `requirements` | `MATERIAL: amount` |
+| `commands` | Run once, from the console, as it completes (the shipped ones use `boostersadmin global ...`) |
+| `min-items` | Items a player must have given to be paid `contributors` |
+| `contributors` | Paid to each of them: `money`, `rewards`, `message` |
+| `top` | Paid to the largest contributors by place (`'1'`, `'2'`, ...) with the same fields |
+
+Money is in the default currency and multiplied by money boosters for `projects`; another currency is
+written `money: {amount: 500, currency: gems}`. Message placeholders: `%player%`, `%project%`, `%money%`,
+`%amount%` and `%place%`. Contributors are paid by id, so a player who is offline or on another server is
+still paid, and every step is claimed so it happens once however many servers take part.
+
+### Menu and commands
+
+`/project` opens the menu: the project with its progress bar, one item per material (click to give yours),
+**Give everything**, **Your part** and **Top builders**. The menu file is `modules/projects/menus/project.yml`.
+
+| Command | Aliases | Permission | What it does |
+|---|---|---|---|
+| `/project` | `/projects` | `exyliasurvivalcore.projects` | Opens the menu |
+| `/project give` | | `exyliasurvivalcore.projects` | Gives everything the project still needs |
+| `/projectadmin reset <project> [confirm]` | `/projecta` | `exyliasurvivalcore.projects.admin` | Opens a project again from nothing; progress, contributions and completion go |
+
+### Placeholders and statistics
+
+`%exyliasurvivalcore_projects_name%` is the current project's name and `%exyliasurvivalcore_projects_percent%`
+its progress as a whole percentage. Giving counts `projects.donated`, and starting and completing count
+`projects.started` and `projects.completed`.

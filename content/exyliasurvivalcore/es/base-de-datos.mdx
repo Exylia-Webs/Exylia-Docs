@@ -1,210 +1,130 @@
 ---
 title: "Base de datos"
-description: "Las setenta y dos tablas, qué módulo posee cada una, qué guardan y las rarezas de esquema que conviene saber."
+description: "Las treinta y ocho tablas, qué módulo posee cada una, qué guardan, cómo las lee el wipe de la librería y las rarezas de esquema que conviene saber."
 ---
 
 Cada módulo que guarda algo abre sus propias tablas, y un módulo apagado no crea ninguna. Todas pasan
-por una sola conexión, configurada en `database.yml`.
+por una sola conexión, configurada en `database.yml` (el archivo es de ExyliaLib; el motor y el bloque
+de Redis se describen en la [página de base de datos de la librería](/docs/exylialib/database)).
 
 Las tablas se crean desde las definiciones de los records con `CREATE TABLE IF NOT EXISTS`, la primera
 vez que se abre cada repositorio. No hay ningún esquema que aplicar ni migración que ejecutar.
 
+Cada tabla declara qué guarda (`@Table(data = …)`) y qué columna es el jugador, así que
+`/exylialib wipe` y `/exylialib resetplayer` las cubren sin ningún comando propio de este plugin. La
+columna **Tipo** es esa declaración (`account`, `progress`, `history`, `world`, `setup` o `cache`), que
+es lo que usa el wipe de la librería para decidir qué borrar.
+
+<Callout type="note" title="Tablas de módulos que se fueron">
+Los suministros, power-ups, cofres de botín, zonas de regeneración, salas de duelo, recompensas por
+cabeza, cajas, tienda, mercado, baúles, tumbas, protecciones, recompensas, votos, minas, zonas AFK y la
+economía ya no los crea este plugin. Sus antiguas tablas `sc_*` y `exylia_*` siguen en la base de datos
+sin tocar; los plugins que los heredaron las leen, así que no las borres. Mira la documentación de cada
+plugin, como [ExyliaEconomy](/docs/exyliaeconomy/introduction),
+[ExyliaMarket](/docs/exyliamarket/introduction) y [ExyliaCrates](/docs/exyliacrates/introduction).
+</Callout>
+
 ## Movimiento
 
-| Tabla | Clave | Guarda |
-|---|---|---|
-| `spawn_data` | `id` | La posición del spawn. Una fila |
-| `homes` | `id` = un UUID | Dueño (indexado), nombre, posición e icono |
-| `sc_warps` | `id` | Nombre visible, activado, coste, permiso, icono, posición |
-| `sc_warp_cooldowns` | `<playerUuid>:<warpId>` | Cuándo usó el jugador ese warp por última vez |
-| `tpa_settings` | `playeruuid` | Si acepta peticiones, auto-aceptar y confirmar |
-| `rtp_cooldowns` | `id` | Jugador (indexado), mundo y cuándo se usó |
-| `sc_back` | el UUID del jugador | Desde dónde salió por última vez, y cuándo |
+| Tabla | Tipo | Clave | Guarda |
+|---|---|---|---|
+| `spawn_data` | setup | `id` | La posición del spawn. Una fila |
+| `sc_spawn_seen` | progress | el UUID del jugador | Que el jugador ya entró en algún servidor de la red, y cuántas veces. Es lo que responde "primera conexión", así que saltar a otro servidor no cuenta como jugador nuevo |
+| `homes` | progress | `id` = un UUID | Dueño (indexado), nombre, posición e icono |
+| `sc_warps` | setup | `id` | Nombre visible, activado, coste, permiso, icono, posición |
+| `sc_warp_cooldowns` | cache | `<playerUuid>:<warpId>` | Cuándo usó el jugador ese warp por última vez |
+| `tpa_settings` | account | `playeruuid` | Si acepta peticiones, auto-aceptar y confirmar |
+| `rtp_cooldowns` | cache | `id` | Jugador (indexado), mundo y cuándo se usó |
+| `sc_back` | cache | el UUID del jugador | Desde dónde salió por última vez, y cuándo |
+| `survival_portals` | setup | `id` | La región, el destino y la lista de comandos (solo con el módulo `portals` activo) |
+| `sc_jumpads` | setup | `id` | Servidor, potencia, dirección, planeo y las posiciones de bloque (solo con `jumpads` activo) |
 
 `/back` y los cooldowns de warp son filas y no memoria porque un warp puede llevar al jugador a otro
-servidor, y el servidor al que llega tiene que conocer los dos.
+servidor, y el servidor al que llega tiene que conocer los dos. `survival_portals` es la única tabla con
+el prefijo `survival_` en lugar de `sc_`.
 
-## Combate
+## Estadísticas
 
-| Tabla | Clave | Guarda |
-|---|---|---|
-| `player_stats` | `playeruuid` | Nombre, bajas, muertes, mejor racha |
-| `stat_cache` | `<uuid>:<statId>` | Un valor de stat cacheado por jugador, para los rankings |
-| `sc_stat_counters` | `<uuid>:<clave>` | Cada contador que lleva un módulo: nombre del jugador, clave del contador, cantidad |
-| `sc_bounties` | `id` | Objetivo, quien la puso, cantidad, cuándo se puso, cuándo caduca, anónima |
-| `sc_graves` | `id` | Dueño, quien le mató, posición, el bloque que sustituyó la tumba, los objetos, la experiencia, cuándo caduca y hasta cuándo está protegida |
+| Tabla | Tipo | Clave | Guarda |
+|---|---|---|---|
+| `player_stats` | progress | `playeruuid` | Nombre, bajas, muertes, mejor racha |
+| `stat_cache` | cache | `<uuid>:<statId>` | Un valor de estadística en caché por jugador, para las clasificaciones |
+| `sc_stat_counters` | progress | `<uuid>:<key>` | Todos los contadores que lleva un módulo: nombre del jugador, clave del contador, cantidad |
 
-`player_stats` lleva tres índices descendentes — sobre bajas, muertes y mejor racha — así que un ranking
-es una lectura acotada. `sc_stat_counters` es lo que leen una stat `COUNTER` de `stats.yml`, una misión y
-una temporada, así que contar algo nuevo nunca necesita una tabla propia.
-
-Los objetos de una tumba viven en su fila y en ningún otro sitio: recogerla borra la fila, y solo paga la
-recogida cuyo borrado eliminó algo.
-
-## Salas de duelo
-
-| Tabla | Clave | Guarda |
-|---|---|---|
-| `sc_duel_rooms` | `id` | Servidor, nombre visible, región, posición de salida, jugadores necesarios, material del borde, efectos, recompensas, activada |
-| `sc_duel_room_borders` | el id de la sala | El mundo, el material y los bloques del borde |
+`player_stats` lleva tres índices descendentes — en bajas, muertes y mejor racha — para que una
+clasificación sea una lectura acotada. `sc_stat_counters` es lo que leen una estadística `COUNTER` de
+`stats.yml`, una misión y una temporada, así que contar algo nuevo nunca necesita una tabla propia.
 
 ## Progresión
 
-| Tabla | Clave | Guarda |
-|---|---|---|
-| `rankup_data` | `playeruuid` | Rango actual, rangos completados, nivel de prestigio |
-| `playtime_data` | `playeruuid` | Tiempo jugado total y las recompensas reclamadas |
-| `farming_data` | `playeruuid` | Cuentas por categoría e hitos reclamados |
-| `reclaim_data` | `playeruuid` | Lo reclamado una vez, y el último reclamo por sección |
-| `player_join_data` | `id` = el UUID del jugador | Primer login, número de entrada, entradas totales |
+| Tabla | Tipo | Clave | Guarda |
+|---|---|---|---|
+| `rankup_data` | progress | `playeruuid` | Rango actual, rangos completados, nivel de prestigio |
+| `farming_data` | progress | `playeruuid` | Conteos por categoría |
+| `sc_farming_claims` | progress | `<playerUuid>:<category>:<milestone>` | Un hito de agricultura de un jugador: reclamado o no, y cuándo |
+| `reclaim_data` | progress | `playeruuid` | Lo que se reclamó una sola vez |
+| `sc_reclaim_claims` | progress | `<playerUuid>:<section>` | Cuándo reclamó el jugador una sección por última vez (`0` significa nunca, o reiniciada) |
+| `player_join_data` | progress | el UUID del jugador | Primera entrada, número de entrada, entradas totales |
+| `sc_scheduled_runs` | setup | `<server>:<section>` o `network:<section>` | Cuándo se ejecutó por última vez una sección de comandos programados |
 
-## Misiones y temporadas
+Los hitos de agricultura y las secciones de reclamo son una fila cada uno, y no una lista dentro de la
+fila del jugador, así que dos servidores que compiten por el mismo reclamo no pueden pagarlo dos veces:
+de las dos escrituras condicionales, solo una entra.
 
-| Tabla | Clave | Guarda |
-|---|---|---|
-| `sc_missions` | `<uuid>\|<pool>\|<periodo>\|<missionId>` | Una misión que le tocó a un jugador: pool, periodo, misión, el valor del contador del que partió, el objetivo, reclamada |
-| `sc_seasons` | `<track>:<periodo>` | La temporada que está contando un track ahora mismo, y cuándo empezó |
-| `sc_season_results` | `<seasonId>:<posición>` | El ranking de una temporada cerrada: track, periodo, posición, jugador, puntuación, cuándo se cerró |
+## Misiones, temporadas, proyectos y reputación
 
-## Recompensas y votos
+| Tabla | Tipo | Clave | Guarda |
+|---|---|---|---|
+| `sc_missions` | progress | `<uuid>\|<pool>\|<period>\|<missionId>` | Una misión repartida a un jugador: grupo, periodo, misión, el valor del contador del que partió, el objetivo, reclamada |
+| `sc_seasons` | world | `<track>:<period>` | La temporada que una pista está contando ahora, y cuándo empezó |
+| `sc_season_results` | history | `<seasonId>:<position>` | La clasificación de una temporada cerrada: pista, periodo, posición, jugador, puntuación, cuándo se cerró |
+| `sc_projects` | world | el id del proyecto | Si el proyecto está abierto, completado o liquidado, y cuándo |
+| `sc_project_progress` | world | id compuesto (proyecto y material) | Cuánto ha recibido el proyecto de un material |
+| `sc_project_contributions` | world | id compuesto (proyecto y jugador) | Cuántos objetos dio un jugador a un proyecto (indexada para leer de mayor a menor) |
+| `sc_project_payouts` | world | id compuesto (proyecto y jugador) | Si un contribuyente de un proyecto completado ya cobró |
+| `sc_reputation` | progress | el UUID del jugador | Nombre, valoraciones positivas y negativas recibidas |
+| `sc_reputation_pairs` | cache | `<rater>:<target>` | Cuándo contó por última vez la valoración de un jugador a otro |
+| `sc_reputation_tickets` | cache | un id generado | Un trato que quien valora aún puede valorar: objetivo, dónde ocurrió (`trade`, `market` o `auctions`), cuándo |
 
-| Tabla | Clave | Guarda |
-|---|---|---|
-| `sc_rewards` | `id` | Nombre visible, descripción, permiso, tipo, cooldown, reclamos máximos, activada, objetos, comandos, icono, orden |
-| `sc_reward_claims` | `<playerId>:<rewardId>` | Último reclamo, número de reclamos, racha, el último periodo reclamado |
-| `sc_voters` | el UUID del jugador | Nombre, votos totales, racha, mejor racha, el último día que votó, la hora del último voto |
-| `sc_votes` | `id` | Un voto aún sin pagar: usuario, servicio, cuándo, la fiesta para la que cuenta |
-| `sc_vote_log` | `id` | Cada voto recibido: usuario, servicio, cuándo, número de fiesta |
-| `sc_vote_party` | el número de fiesta | Cuándo empezó la fiesta que se está llenando |
+Ver [Reputación y proyectos](/docs/exyliasurvivalcore/reputacion-y-proyectos).
 
-## Kits y cajas
+## Kits, boosters y herramientas
 
-| Tabla | Clave | Guarda |
-|---|---|---|
-| `sc_kits` | `id` | El kit entero: objetos, comandos, cooldown, usos, icono, orden, banderas |
-| `sc_kit_player_data` | `<playerId>:<kitId>` | Último reclamo y número de usos. Jugador indexado |
-| `sc_crates` | `id` | Premios, animación, icono y nombre de llave, pity, los desplazamientos del icono y el holograma |
-| `sc_crate_blocks` | `id` | De qué caja es un bloque colocado |
-| `sc_crate_players` | `<uuid>:<crateId>` | Llaves, aperturas desde el pity, total abierto. Jugador indexado |
-| `sc_crate_openings` | `id` | El historial: quién, qué caja, qué premio, qué tier, cuándo. Jugador indexado |
-| `sc_loot_chest_templates` | `id` | La tabla de loot y quién la hizo |
-| `sc_loot_chests` | `id` | Un cofre colocado: servidor, plantilla, posición, cooldown, último relleno |
-| `sc_item_spawners` | `id` | Servidor, posiciones, el rango de intervalo y la tabla de loot |
-
-## Zonas
-
-| Tabla | Clave | Guarda |
-|---|---|---|
-| `sc_mines` | `id` | Servidor, la región, tipo, composición, niveles, ajustes de reinicio, teletransportes, banderas |
-| `sc_mine_broken_blocks` | `id` | Una fila por bloque a medio regenerar en una mina realista. Mina indexada |
-| `sc_regen_zones` | `id` | Servidor, la región, modo, intervalos y banderas |
-| `sc_afk_zones` | `id` | Servidor, la región, el intervalo de recompensa y la lista de recompensas |
-| `survival_portals` | `id` | La región, el destino y la lista de comandos |
-| `sc_jumpads` | `id` | Servidor, potencia, dirección, planeo y las posiciones de los bloques |
-| `sc_powerup_zones` | `id` | Servidor, modo, área o posiciones, tiempos y las entradas de power-up |
-
-`survival_portals` es la única tabla con el prefijo `survival_` en vez de `sc_`.
-
-## Economía
-
-| Tabla | Clave | Guarda |
-|---|---|---|
-| `sc_currencies` | `id` | Una moneda tal y como se configuró en el juego: tipo, orden, nombres, símbolo, icono, decimales, formatos, alias, objeto, saldo inicial y máximo, permiso, reglas de transferencia y cambio, ranking, en red, comandos |
-| `sc_economy_settings` | una fila | La experiencia como moneda, la moneda que se publica en Vault y si se fuerza, si el libro de movimientos está activado |
-| `exylia_balances` | `<uuid>\|<moneda>` | El saldo de un jugador en una moneda guardada: jugador, nombre, moneda, cantidad |
-| `exylia_balance_pending` | un número generado | Un cambio que otro servidor no pudo aplicar por sí mismo: jugador, moneda, cantidad, si sustituye el saldo, motivo, quién lo hizo |
-| `exylia_ledger` | un número generado | Cada operación guardada: jugador, moneda, cambio, el saldo después, motivo, quién la hizo, servidor, cuándo |
-| `sc_boosters` | `id` | Dueño (vacío en un potenciador global), tipo, fuente, multiplicador, duración, cuándo caduca (`0` mientras no ha empezado), quién lo dio |
-
-Un `sc_economy_settings` vacío es un servidor cuyas monedas aún no se han configurado. Una fila de saldo
-solo la escribe el servidor en el que está su jugador; cualquier otro servidor deja una fila pendiente,
-que ese servidor incorpora y borra. Consulta [Economía](/docs/exyliasurvivalcore/economia).
-
-## Tienda
-
-| Tabla | Clave | Guarda |
-|---|---|---|
-| `sc_shop_categories` | `id` | Nombre visible, descripción, icono, posición, permiso, moneda, rotación, descuento, activada |
-| `sc_shop_products` | `id` | Categoría, posición, tipo, objeto o comandos, moneda, precios de compra y venta, precio dinámico, stock y reposición, límites de compra y venta, permiso, descuento, activado |
-| `sc_shop_limits` | `id` | Cuánto compró y vendió un jugador de un producto en el periodo de límite actual |
-| `sc_shop_log` | `id` | Cada compra y venta: jugador, producto, categoría, acción, cantidad, precio unitario, total, moneda, cuándo |
-
-## Mercado
-
-| Tabla | Clave | Guarda |
-|---|---|---|
-| `sc_market_listings` | `id` | Vendedor, objeto, cantidad, precio, material, moneda, cuándo caduca |
-| `sc_auctions` | `id` | Vendedor, objeto, cantidad, material, moneda, precio de salida, compra inmediata, puja más alta y quién la hizo, pujas, cuándo termina |
-| `sc_orders` | `id` | Comprador, objeto, material, cantidad pedida, entregada, recogida, precio, moneda, cerrado, cuándo caduca |
-| `sc_order_locks` | el id del pedido | Una fila vacía. Quien la borra puede cambiar el pedido, y después la vuelve a escribir |
-
-## Intercambio y baúles
-
-| Tabla | Clave | Guarda |
-|---|---|---|
-| `sc_vaults` | `<uuid>\|<número>` | Un baúl de un jugador: dueño, su número (la columna `vault_number`), contenido |
-
-Un intercambio no guarda nada: vive en memoria hasta que se completa o se cancela.
-
-## Protecciones
-
-| Tabla | Clave | Guarda |
-|---|---|---|
-| `sc_protections` | `id` | Servidor, dueño, nombre, tier, mundo, límites, bloque núcleo, oculta, home, y en una sola columna `data` sus roles, miembros, clanes con acceso, excepciones por jugador, flags, acceso, estado de asalto, subregiones y alquileres |
-| `sc_protection_accounts` | el id de la protección | Saldo del banco, cuándo toca el siguiente pago de mantenimiento, cuándo se abandonó |
-| `sc_protection_account_locks` | el id de la protección | Una fila vacía. Quien la borra puede cambiar la cuenta |
-| `sc_protection_listings` | el id de la protección | Una protección a la venta: vendedor, precio, moneda |
-| `sc_protection_rent_offers` | `<protectionId>:<objetivo>` | Una parcela, o la protección entera, ofrecida en alquiler: dueño, precio, moneda, periodo, periodos máximos |
-| `sc_protection_logs` | `id` | Lo que pasó dentro de una protección: servidor, quién, acción (la columna `log_action`), detalle, dónde, el día y la hora |
-| `sc_protection_warps` | el id de la protección | El warp que publica una protección: nombre, icono, descripción, posición |
-| `sc_protection_warp_ratings` | `<warpId>:<jugador>` | Las estrellas de un jugador para un warp |
-| `sc_protection_warp_visits` | `<warpId>:<jugador>:<día>` | Una visita por jugador y día |
-| `sc_protection_seen` | el UUID del jugador | Cuándo entró o salió por última vez de cualquier servidor — así distingue el mantenimiento una protección abandonada de una tranquila |
-
-Consulta [Protecciones](/docs/exyliasurvivalcore/protecciones) y
-[Economía de protecciones](/docs/exyliasurvivalcore/economia-de-protecciones).
+| Tabla | Tipo | Clave | Guarda |
+|---|---|---|---|
+| `sc_kits` | setup | `id` | El kit entero: objetos, comandos, cooldown, usos, icono, orden, banderas |
+| `sc_kit_player_data` | progress | `<playerId>:<kitId>` | Último reclamo y número de usos. Jugador indexado |
+| `sc_boosters` | world | `id` | Dueño (vacío para un booster global), tipo, origen, multiplicador, duración, cuándo caduca (`0` mientras no ha empezado), quién lo concedió |
+| `sc_booster_presets` | setup | `id` | Un booster listo para entregar: nombre, icono, tipo, origen, multiplicador, duración. Entregar uno lo copia, así que editar un preset nunca cambia un booster ya entregado |
+| `sc_item_spawners` | setup | `id` | Servidor, posiciones, el rango de intervalo y la tabla de botín (solo sin ExyliaSpawners) |
+| `sc_item_updates` | setup | el nombre del grupo | El objeto que se sustituye y el objeto en que se convierte |
 
 ## Comodidad
 
-| Tabla | Clave | Guarda |
-|---|---|---|
-| `player_utils_data` | `playeruuid` | Si el vuelo y la visión nocturna están activos |
-| `sc_player_settings` | `playeruuid` | Las preferencias que el jugador ha **apagado** |
-
-## Optimización
-
-| Tabla | Clave | Guarda |
-|---|---|---|
-| `sc_item_updates` | el nombre del grupo | El objeto que se sustituye y el objeto en el que se convierte |
+| Tabla | Tipo | Clave | Guarda |
+|---|---|---|---|
+| `player_utils_data` | account | `playeruuid` | Si el vuelo y la visión nocturna están activados |
+| `sc_player_settings` | account | `playeruuid` | Las preferencias que el jugador ha **desactivado** |
 
 ## Módulos que no guardan nada
 
-`blocked-items`, `death`, `enchantments`, `kill-rewards`, `near`, `optimization`, `repair`,
-`scheduled-commands`, `sell-wands` y `trade`. Las rachas de bajas se cuentan en memoria y se pierden en
-un reinicio.
+`death`, `enchantments`, `near`, `optimization` y `repair`. Las rachas de bajas se cuentan en memoria y se
+pierden en un reinicio.
 
 ## Cosas que conviene saber antes de tocar una tabla a mano
 
 <Callout type="note" title="Una posición guardada puede nombrar otro servidor">
-Homes, warps, portales y bloques de caja guardan `servidor,mundo,x,y,z,yaw,pitch`, donde `-` significa
-"este servidor". Eso es lo que hace que `/home` y `/warp` funcionen en toda una red. Una fila que
-nombre un servidor que no es este no tiene posición local ninguna, que es por lo que la API ofrece un
-método de teletransporte en vez de coordenadas.
+Hogares, warps, portales y jumppads guardan `servidor,mundo,x,y,z,yaw,pitch`, donde `-` significa "este
+servidor". Eso es lo que hace que `/home` y `/warp` funcionen en una red. Una fila que nombra un servidor
+que no es este no tiene ninguna posición local, y por eso la API ofrece un método de teletransporte y no
+coordenadas. Los lugares guardados bajo un id de servidor anterior se leen como de este servidor.
 </Callout>
 
-<Callout type="warning" title="Dos tablas tienen `createdat` y `created_at` a la vez">
-`sc_bounties` y `sc_loot_chest_templates` llevan cada una dos columnas de fecha que se diferencian solo
-por un guion bajo, y guardan cosas distintas: la fecha del dominio — cuándo se puso la recompensa,
-cuándo se hizo la plantilla — y la fecha de creación de la fila. Lee la correcta.
-</Callout>
-
-<Callout type="danger" title="Algunas filas se reclaman borrándolas">
-Un voto se paga, una temporada se cierra, una fiesta de votos empieza, una tumba se recoge, una
-protección se compra o se alquila, y un pedido o la cuenta de una protección se cambian en el servidor
-que consigue **borrar** la fila primero — solo un borrado sale bien, y eso es lo que hace que cada una de
-esas cosas pase una sola vez en toda la red. Borrar una de esas filas a mano no es limpiar: no paga nada,
-no cierra nada, o destruye lo que guardaba la fila — y una fila de `sc_order_locks` borrada deja su
-pedido sin poder cambiarse hasta que el siguiente arranque vuelve a escribir el bloqueo.
+<Callout type="danger" title="Algunas filas se reclaman borrándolas o moviéndolas">
+Una temporada se cierra, un ticket de reputación se valora, una ejecución programada se toma y un
+proyecto se completa o se paga por el servidor que consiga **borrar o mover** la fila primero — solo una
+escritura tiene éxito, y eso es lo que hace que cada una de esas cosas pase una sola vez en toda la red.
+Editar una de esas filas a mano no es limpiar: no paga nada, no cierra nada, o ejecuta la acción dos veces.
 </Callout>
 
 Las tablas más antiguas del plugin llevan además `created_at` y `updated_at`; las más nuevas solo llevan
@@ -212,5 +132,7 @@ las columnas de arriba. Nada tiene una restricción de unicidad más allá de su
 
 ## Compartir entre servidores
 
-Apunta todos los servidores a la misma base de datos y se comparten homes, warps, kits, rangos,
-estadísticas, cajas, saldos, protecciones y el resto.
+Apunta todos los servidores a la misma base de datos y se comparten hogares, warps, kits, rangos,
+estadísticas, boosters, proyectos y el resto. Las tablas sin columna de servidor son de toda la red por
+diseño; las que sí la llevan (hogares, warps, jumppads, portales) también se comparten, pero cada fila
+recuerda dónde se fijó.

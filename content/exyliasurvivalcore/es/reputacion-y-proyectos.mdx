@@ -1,0 +1,140 @@
+---
+title: "Reputación y proyectos"
+description: "Los jugadores se valoran tras tratos reales y una buena puntuación devuelve parte del impuesto de ventas; toda la red construye proyectos comunitarios con materiales donados."
+---
+
+Dos módulos pequeños que giran en torno a otros jugadores: la **reputación**, que convierte los tratos
+cerrados en una puntuación, y los **proyectos**, una meta que construye toda la red junta. Cada uno se
+activa en `config.yml` bajo `modules:` como `reputation` y `projects`.
+
+## Reputación
+
+Los jugadores se valoran tras un trato real. Una valoración es `+1` o `-1` y la puntuación de un jugador
+es positivas menos negativas. Un intercambio terminado, una compra en el mercado o una subasta ganada abre
+una valoración para el comprador (o para quien recibió los objetos) sobre la otra parte. Un pedido de
+compra cumplido nunca se valora: quien lo cumple no eligió a la otra parte.
+
+### Qué cuenta como valoración
+
+- Un trato se valora **una vez**, por el único jugador para el que se abrió, durante `rating-days` días.
+- Un trato por debajo de `min-deal-value` (en la moneda por defecto) no abre nada. En un intercambio, el
+  valor es el dinero en moneda por defecto más lo que paga la tienda del servidor por sus objetos. Los
+  tratos de mercado y subasta en otra moneda siempre se pueden valorar.
+- No se abre ninguna valoración entre dos cuentas que comparten dirección, en ningún servidor. Si no se
+  puede saber, no se abre nada.
+- Una valoración de un jugador al mismo jugador solo vuelve a contar pasadas `pair-cooldown-hours`.
+
+El aviso para valorar, la nota de que alguien te valoró y la línea del reembolso viajan por un canal de la
+red, así que el jugador los ve en el servidor en que esté.
+
+### Niveles y reembolso del impuesto
+
+Una puntuación cae en un **nivel**, y cada nivel devuelve una parte del impuesto de ventas que el jugador
+paga como vendedor en el mercado, en las subastas y en los pedidos de compra. El reembolso se ingresa justo
+tras la venta, en la moneda en que se cobró el impuesto, y los potenciadores de dinero no se le aplican.
+
+| Nivel | Desde | Reembolso |
+|---|---|---|
+| Untrusted | -5 | 0% |
+| Newcomer | -4 | 0% |
+| Trusted | 10 | 10% |
+| Respected | 30 | 25% |
+| Renowned | 75 | 50% |
+
+Un jugador está en el nivel más alto cuyo `min-score` alcanza su puntuación, o en el más bajo si no alcanza
+ninguno. Necesita [ExyliaMarket](/docs/exyliamarket/introduccion) para las ventas y ExyliaEconomy para el
+pago; sin ellos las valoraciones siguen funcionando.
+
+Cuando una solicitud de intercambio implica a un jugador con puntuación `warn-at-or-below` o menor, la otra
+parte recibe un aviso.
+
+### Configuración
+
+`modules/reputation/config.yml`:
+
+| Ajuste | Por defecto | Qué hace |
+|---|---|---|
+| `settings.rating-days` | `3` | Días que un trato aún se puede valorar |
+| `settings.pair-cooldown-hours` | `24` | Horas antes de que otra valoración al mismo jugador cuente |
+| `settings.min-deal-value` | `10.0` | El trato más pequeño que se puede valorar |
+| `settings.warn-at-or-below` | `-5` | Puntuación con la que las solicitudes de intercambio llevan aviso |
+| `settings.remind-on-join` | `true` | Recuerda los tratos por valorar al entrar |
+| `tiers.<id>` | los cinco niveles de arriba | `min-score`, `name` y `tax-rebate-percent` (0 a 100) |
+
+Los mensajes están en `modules/reputation/messages.yml`. Los valores que ajusta el staff también se editan
+en el juego desde la pantalla de ajustes de reputación.
+
+### Comandos y permiso
+
+| Comando | Alias | Qué hace |
+|---|---|---|
+| `/reputation [jugador]` | `/rep` | Muestra tu puntuación, nivel y reembolso, o los de otro jugador |
+| `/reputation pending` | | Lista los tratos que aún puedes valorar (los últimos cinco) |
+| `/reputation rate <trato> <up\|down>` | | Valora un trato. Es el destino de los botones del aviso |
+
+Todos necesitan `exyliasurvivalcore.reputation`.
+
+### Placeholders y estadísticas
+
+| Placeholder | Devuelve |
+|---|---|
+| `%exyliasurvivalcore_reputation_score%` | La puntuación del lector |
+| `%exyliasurvivalcore_reputation_positive%` | Valoraciones positivas recibidas |
+| `%exyliasurvivalcore_reputation_negative%` | Valoraciones negativas recibidas |
+| `%exyliasurvivalcore_reputation_tier%` | El nombre del nivel |
+| `%exyliasurvivalcore_reputation_rebate%` | El porcentaje de reembolso del nivel |
+
+Responden `0` (y el nivel más bajo) hasta que se lee la fila del jugador al entrar. Las valoraciones
+también suman los [contadores](/docs/exyliasurvivalcore/misiones-y-temporadas#qué-contadores-se-pueden-usar)
+`reputation.positive`, `reputation.negative`, `reputation.score` y `reputation.given`, así que una misión o
+temporada puede usarlos.
+
+## Proyectos
+
+Un proyecto comunitario es una meta que **toda la red** construye de uno en uno: el primero del archivo que
+no está completado. Los jugadores entregan materiales y, cuando entra todo lo requerido, el proyecto se
+completa en un servidor, ejecuta sus comandos una vez, paga a sus contribuyentes y empieza el siguiente.
+
+Solo cuentan objetos simples: una pila renombrada o encantada se queda en el inventario. Lo que el proyecto
+ya no admite, porque otro servidor lo llenó antes, vuelve al jugador por la cola de recompensas.
+
+### projects.yml
+
+`modules/projects/projects.yml`, tuyo para editar. El archivo incluido trae la *Forja de Hierro* (x1.5 de
+dinero durante tres días) y la *Gran Biblioteca* (x1.5 de experiencia durante tres días). Recarga el plugin
+para aplicar un cambio.
+
+| Clave | Qué hace |
+|---|---|
+| `name`, `icon` | Cómo lo muestra el menú |
+| `description` | Qué es, una línea cada una |
+| `perk` | Qué hace al completarse, como lo cuenta el menú |
+| `requirements` | `MATERIAL: cantidad` |
+| `commands` | Se ejecutan una vez, desde la consola, al completarse (los incluidos usan `boostersadmin global ...`) |
+| `min-items` | Objetos que un jugador debe haber entregado para cobrar `contributors` |
+| `contributors` | Se paga a cada uno: `money`, `rewards`, `message` |
+| `top` | Se paga a los mayores contribuyentes por puesto (`'1'`, `'2'`, ...) con los mismos campos |
+
+El dinero va en la moneda por defecto y lo multiplican los potenciadores de dinero de `projects`; otra
+moneda se escribe `money: {amount: 500, currency: gems}`. Placeholders en los mensajes: `%player%`,
+`%project%`, `%money%`, `%amount%` y `%place%`. Los contribuyentes se pagan por id, así que quien está
+desconectado o en otro servidor cobra igual, y cada paso se reclama para que ocurra una vez aunque
+participen varios servidores.
+
+### Menú y comandos
+
+`/project` abre el menú: el proyecto con su barra de progreso, un objeto por material (clic para entregar
+lo tuyo), **Entregar todo**, **Tu parte** y **Mejores constructores**. El archivo del menú es
+`modules/projects/menus/project.yml`.
+
+| Comando | Alias | Permiso | Qué hace |
+|---|---|---|---|
+| `/project` | `/projects` | `exyliasurvivalcore.projects` | Abre el menú |
+| `/project give` | | `exyliasurvivalcore.projects` | Entrega todo lo que el proyecto aún necesita |
+| `/projectadmin reset <proyecto> [confirm]` | `/projecta` | `exyliasurvivalcore.projects.admin` | Reabre un proyecto desde cero; progreso, contribuciones y finalización desaparecen |
+
+### Placeholders y estadísticas
+
+`%exyliasurvivalcore_projects_name%` es el nombre del proyecto actual y `%exyliasurvivalcore_projects_percent%`
+su progreso en porcentaje entero. Entregar suma `projects.donated`; empezar y completar suman
+`projects.started` y `projects.completed`.
