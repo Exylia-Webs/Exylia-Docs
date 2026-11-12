@@ -2689,7 +2689,7 @@ export const plugins: Plugin[] = [
       en: "The seconds before a death, replayed to the victim after the respawn through the killer's eyes: slow motion before the blow, a cut to the falling body, the killer's kill effect once more and a summary of who, with what and from how far — no resource pack, no client mod, and duels and events left alone. Free and open source.",
       es: "Los segundos antes de una muerte, reproducidos a la víctima tras reaparecer a través de los ojos del asesino: cámara lenta antes del golpe, un corte al cuerpo que cae, el efecto de kill del asesino otra vez y un resumen de quién, con qué y desde qué distancia — sin resource pack, sin mod de cliente, y sin tocar duelos ni eventos. Gratis y de código abierto.",
     },
-    version: "1.0.0",
+    version: "1.10.0",
     status: "stable",
     category: { en: "PvP", es: "PvP" },
     minecraft: "1.21.4+",
