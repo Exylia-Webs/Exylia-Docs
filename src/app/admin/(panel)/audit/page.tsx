@@ -1,9 +1,8 @@
 import type { Metadata } from "next";
-import { PageHeader } from "@exylia-webs/ui";
+import { AdminHeader, pageHref, parsePage } from "@exylia-webs/ui/admin";
 import { requireAdmin } from "@/lib/admin-auth";
 import { adminText } from "@/lib/admin-i18n";
 import { AuditList } from "../AuditList";
-import { pageHref, parsePage } from "../paging";
 
 export async function generateMetadata(): Promise<Metadata> {
   const { a } = await adminText();
@@ -15,8 +14,8 @@ export default async function AdminAudit({ searchParams }: { searchParams: Promi
   const [, { a }, params] = await Promise.all([requireAdmin(), adminText(), searchParams]);
   return (
     <>
-      <PageHeader kicker={a.eyebrow} title={a.audit.title} description={a.audit.description} />
-      <AuditList page={parsePage(params.page)} href={(n) => pageHref("/admin/audit/", n)} />
+      <AdminHeader title={a.audit.title} description={a.audit.description} />
+      <AuditList page={parsePage(params.page)} href={(n) => pageHref("/admin/audit/", {}, n)} />
     </>
   );
 }

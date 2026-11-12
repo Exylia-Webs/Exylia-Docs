@@ -7,15 +7,7 @@ import type { Lang, Localized } from "./registry";
 type Tree = { [key: string]: Localized | Tree };
 
 export const adminDict = {
-  eyebrow: { en: "Super admin", es: "Superadmin" },
   back: { en: "Back to the app", es: "Volver a la app" },
-  nav: {
-    section: { en: "Admin", es: "Admin" },
-    overview: { en: "Overview", es: "Resumen" },
-    usage: { en: "AI usage", es: "Uso de IA" },
-    audit: { en: "Audit log", es: "Auditoría" },
-    settings: { en: "Settings", es: "Ajustes" },
-  },
   overview: {
     meta: { en: "Admin · Overview", es: "Admin · Resumen" },
     title: { en: "Overview", es: "Resumen" },
@@ -25,10 +17,8 @@ export const adminDict = {
     hits: { en: "Quota hits", es: "Límites alcanzados" },
     cap: { en: "Monthly cap", es: "Tope mensual" },
     alerts: {
-      title: { en: "Needs a look", es: "Requiere atención" },
-      none: { en: "Nothing needs a look.", es: "Nada requiere atención." },
       spent: { en: "The monthly cap is spent: the assistant refuses every question until next month", es: "El tope mensual está gastado: el asistente rechaza todas las preguntas hasta el mes que viene" },
-      quota: { en: "Questions were refused by the monthly cap this month: {count}", es: "Preguntas rechazadas por el tope mensual este mes: {count}" },
+      quota: { en: "Questions refused by the monthly cap this month", es: "Preguntas rechazadas por el tope mensual este mes" },
       aiOff: { en: "The assistant is switched off", es: "El asistente está apagado" },
       aiIncomplete: { en: "The assistant is on but has no model", es: "El asistente está activo pero sin modelo" },
     },
@@ -52,14 +42,6 @@ export const adminDict = {
     description: { en: "Every change made from this panel, with who made it.", es: "Cada cambio hecho desde este panel, con quién lo hizo." },
   },
   auditList: {
-    when: { en: "When", es: "Cuándo" },
-    actor: { en: "Admin", es: "Admin" },
-    action: { en: "Action", es: "Acción" },
-    target: { en: "Target", es: "Objetivo" },
-    details: { en: "Details", es: "Detalles" },
-    emptyTitle: { en: "No admin actions", es: "Sin acciones de admin" },
-    emptyDescription: { en: "Nothing recorded yet.", es: "Aún no hay nada registrado." },
-    meta: { en: "Changed fields", es: "Campos cambiados" },
     actions: {
       "settings.ai": { en: "Changed the AI settings", es: "Cambió los ajustes de IA" },
     },

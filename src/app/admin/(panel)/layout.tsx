@@ -1,5 +1,7 @@
 import { cookies } from "next/headers";
-import { AppFrame, buttonClass, Glyph, ICONS, type NavSection, UserMenu } from "@exylia-webs/ui";
+import { getTranslations } from "next-intl/server";
+import { AppFrame, buttonClass, Glyph, ICONS, UserMenu } from "@exylia-webs/ui";
+import { adminNav } from "@exylia-webs/ui/admin";
 import { LOCALES } from "@/i18n/request";
 import { requireAdmin } from "@/lib/admin-auth";
 import { adminText } from "@/lib/admin-i18n";
@@ -17,18 +19,10 @@ const FOLD_COOKIE = "docs_admin_fold";
  * docs are another stylesheet and another world, so they load whole.
  */
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
-  const [admin, jar, { a }] = await Promise.all([requireAdmin(), cookies(), adminText()]);
-  const sections: NavSection[] = [
-    {
-      title: a.nav.section,
-      items: [
-        { href: "/admin/", label: a.nav.overview, icon: "dashboard", exact: true },
-        { href: "/admin/usage/", label: a.nav.usage, icon: "ai" },
-        { href: "/admin/audit/", label: a.nav.audit, icon: "audit" },
-        { href: "/admin/settings/", label: a.nav.settings, icon: "settings" },
-      ],
-    },
-  ];
+  const [admin, jar, { a }, nav] = await Promise.all([requireAdmin(), cookies(), adminText(), getTranslations("ui.admin.nav")]);
+  // The docs use trailing slashes, so the shared hrefs get one for the active state to match.
+  const shared = adminNav(nav, { omit: ["workspaces", "activity", "accounts", "health", "ai"], product: [{ href: "/admin/usage", label: nav("ai"), icon: "ai" }] });
+  const sections = [{ ...shared, items: shared.items.map((item) => ({ ...item, href: `${item.href}/` })) }];
   return (
     <AppFrame
       product="docs"
