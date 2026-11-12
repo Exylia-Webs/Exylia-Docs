@@ -2135,7 +2135,7 @@ export const plugins: Plugin[] = [
       en: "Six editable classes entered by wearing an armour set: passive effects, conditional passives, right-click abilities, hold effects, an energy resource, and arrow marks or backstabs \u2014 all of it written in YAML files you can add to.",
       es: "Seis clases editables en las que se entra vistiendo una armadura: efectos pasivos, pasivas condicionales, habilidades de clic derecho, efectos al sostener, un recurso de energ\u00eda y marcas de flecha o apu\u00f1alamientos, todo escrito en archivos YAML a los que puedes a\u00f1adir m\u00e1s.",
     },
-    version: "1.0.0",
+    version: "1.9.0",
     status: "stable",
     category: { en: "Gamemode", es: "Modo de juego" },
     minecraft: "1.21+",
