@@ -1349,6 +1349,7 @@ const COMBAT_NAV: NavGroup[] = [
     pages: [
       page("stats", "stats", "estadisticas"),
       page("kill-rewards", "kill-rewards", "recompensas"),
+      page("bounties", "bounties", "recompensas-por-cabeza"),
     ],
   },
   {
@@ -1841,6 +1842,7 @@ const WARZONE_NAV: NavGroup[] = [
       page("loot-chests", "loot-chests", "cofres-de-botin"),
       page("regen-zones", "regen-zones", "zonas-de-regeneracion"),
       page("duel-rooms", "duel-rooms", "salas-de-duelo"),
+      page("banned-items", "banned-items", "objetos-prohibidos"),
     ],
   },
   {
@@ -2705,8 +2707,8 @@ export const plugins: Plugin[] = [
     name: "ExyliaLobby",
     tagline: { en: "A complete lobby, one module at a time", es: "Un lobby completo, módulo a módulo" },
     summary: {
-      en: "A modular lobby, free and open source: spawn and protection, a hotbar of buttons, double jump and launch pads, a server selector with live counts, sidebar and tab list, opt-in lobby PvP, parkour with endless modes and leaderboards, and gadgets. Sixteen modules switched on and off live, and everything edited in game.",
-      es: "Un lobby modular, gratuito y de código abierto: spawn y protección, una hotbar de botones, doble salto y plataformas de lanzamiento, un selector de servidores con contadores en vivo, scoreboard y lista de jugadores, PvP de lobby opcional, parkour con modos infinitos y clasificaciones, y gadgets. Dieciséis módulos que se activan y desactivan en vivo, y todo se edita en el juego.",
+      en: "A modular lobby, free and open source: spawn and protection, a hotbar of buttons, double jump and launch pads, a server selector with live counts, tab list and announcements, triggers that run actions from buttons, plates and areas, opt-in lobby PvP, parkour with endless modes and leaderboards, and gadgets. Sixteen modules switched on and off live, and everything edited in game.",
+      es: "Un lobby modular, gratuito y de código abierto: spawn y protección, una hotbar de botones, doble salto y plataformas de lanzamiento, un selector de servidores con contadores en vivo, lista de jugadores y anuncios, disparadores que ejecutan acciones desde botones, placas y zonas, PvP de lobby opcional, parkour con modos infinitos y clasificaciones, y gadgets. Dieciséis módulos que se activan y desactivan en vivo, y todo se edita en el juego.",
     },
     version: "1.0.0",
     status: "beta",
