@@ -18,10 +18,26 @@ Toda la configuración es un archivo, escrito en el primer arranque y nunca sobr
 redis.host=localhost
 redis.port=6379
 redis.password=
+# ACL user (Redis 6+), empty for the default user.
+redis.username=
+# true for a Redis with TLS on (rediss://), like the backends' database.redis.ssl.
+redis.ssl=false
 redis.database=0
 redis.key-prefix=exylia
 # New releases download at start and stop and load on the next restart.
 updates.enabled=true
+# redis (recommended), or database when the backends have cross-server: database.
+transport=redis
+# mysql, mariadb, postgresql or mongodb
+database.type=mysql
+database.host=localhost
+# 0 uses the engine's default port.
+database.port=0
+database.name=minecraft
+database.username=root
+database.password=
+# mongodb only: a full mongodb:// URI, which wins over the fields above.
+database.connection-string=
 ```
 
 Se lee una vez, al arrancar. Reinicia el proxy después de editarlo.
@@ -33,10 +49,18 @@ Se lee una vez, al arrancar. Reinicia el proxy después de editarlo.
 | `redis.password` | vacío | La contraseña; vacía si no hay. Se toma tal cual, espacios incluidos. |
 | `redis.database` | `0` | Qué base de datos numerada de Redis. Tiene que coincidir con la de los backends. |
 | `redis.key-prefix` | `exylia` | Con qué empieza cada clave y canal. Tiene que coincidir con el `key-prefix` de los backends. Vacío vuelve a `exylia`. |
+| `redis.username` | vacío | El usuario ACL de Redis (Redis 6+); vacío para el usuario por defecto. |
+| `redis.ssl` | `false` | `true` conecta por TLS (`rediss://`) a un Redis que lo tenga activado, con un certificado que Java acepte. Necesita ExyliaLib 1.484.0 o superior en los backends, con `database.redis.ssl: true`. |
+| `transport` | `redis` | `redis` o `database`. Mira [Sin Redis](#sin-redis-transportdatabase). |
+| `database.type` | `mysql` | `mysql`, `mariadb`, `postgresql` o `mongodb`. Solo se lee con `transport=database`. |
+| `database.host` / `database.port` | `localhost` / `0` | El servidor de base de datos; el puerto `0` es el del motor. |
+| `database.name` | `minecraft` | La base de datos que usan los backends. |
+| `database.username` / `database.password` | `root` / vacío | Sus credenciales. |
+| `database.connection-string` | vacío | Solo MongoDB: una URI `mongodb://` completa, que gana a los campos anteriores. |
 | `updates.enabled` | `true` | Instala versiones nuevas de la misma versión mayor al arrancar y al apagar. Solo `false` lo desactiva. Ver [Actualizaciones](/docs/exyliaproxyutils/actualizaciones). |
 
 Una clave que falte en el archivo toma su valor por defecto. Todos los valores salvo la contraseña se
-recortan.
+recortan. Un archivo escrito por una versión anterior no tiene las claves de usuario Redis, TLS ni `transport` y sigue como antes: al siguiente arranque se le añade la sección `transport` con `transport=redis`.
 
 ## Coincidir con los backends
 
@@ -69,6 +93,21 @@ del backend tiene que ser ese mismo `server-id`.
 El prefijo es lo que las separa. Dos redes con el mismo prefijo en el mismo Redis responden a los
 servidores de la otra y leen sus baneos.
 </Callout>
+
+## Sin Redis: `transport=database`
+
+Una red cuyos backends comparten una base de datos pero no usan Redis pone `cross-server: database` en su
+`database.yml` (ExyliaLib 1.555.0 o superior), y el proxy la sigue con `transport=database` y la misma
+base de datos en `database.type`, `database.host`, `database.port`, `database.name`, `database.username` y
+`database.password` (o `database.connection-string` para MongoDB). `redis.key-prefix` sigue nombrando la
+red.
+
+Todo funciona igual por ahí: peticiones, avisos, el espejo de baneos y el flujo de sanciones, a través de
+las tablas que mantiene el bus de base de datos de ExyliaLib (`exylia_bus_*`). El precio es la latencia:
+un mensaje tarda hasta un cuarto de segundo (PostgreSQL despierta al instante con `LISTEN/NOTIFY`), y cada
+servidor consulta la base de datos varias veces por segundo, así que Redis sigue siendo lo recomendado.
+Los drivers de MariaDB (que también habla MySQL), PostgreSQL y MongoDB van incluidos en el jar. El log de
+arranque indica que el proxy habla con los backends a través de la base de datos.
 
 ## Conexión
 

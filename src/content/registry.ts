@@ -2599,7 +2599,7 @@ export const plugins: Plugin[] = [
       en: "One jar for Velocity and BungeeCord that answers the backends over Redis: proxy commands from any Exylia plugin, cross-server teleports, network-wide lookups and kicks, punishments from LiteBans, LibertyBans, AdvancedBan or BanManager fed to ExyliaStaff, bans checked at login, and a jar that updates itself. Free.",
       es: "Un solo jar para Velocity y BungeeCord que responde a los backends por Redis: comandos en el proxy desde cualquier plugin de Exylia, teletransportes entre servidores, búsquedas y expulsiones en toda la red, sanciones de LiteBans, LibertyBans, AdvancedBan o BanManager enviadas a ExyliaStaff, baneos comprobados al entrar y un jar que se actualiza solo. Gratis.",
     },
-    version: "2.0.2",
+    version: "2.4.0",
     status: "stable",
     category: { en: "Library", es: "Librería" },
     minecraft: "Velocity 3.4+ · BungeeCord",

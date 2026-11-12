@@ -18,10 +18,26 @@ The whole configuration is one file, written on the first start and never overwr
 redis.host=localhost
 redis.port=6379
 redis.password=
+# ACL user (Redis 6+), empty for the default user.
+redis.username=
+# true for a Redis with TLS on (rediss://), like the backends' database.redis.ssl.
+redis.ssl=false
 redis.database=0
 redis.key-prefix=exylia
 # New releases download at start and stop and load on the next restart.
 updates.enabled=true
+# redis (recommended), or database when the backends have cross-server: database.
+transport=redis
+# mysql, mariadb, postgresql or mongodb
+database.type=mysql
+database.host=localhost
+# 0 uses the engine's default port.
+database.port=0
+database.name=minecraft
+database.username=root
+database.password=
+# mongodb only: a full mongodb:// URI, which wins over the fields above.
+database.connection-string=
 ```
 
 It is read once, at startup. Restart the proxy after editing it.
@@ -33,9 +49,17 @@ It is read once, at startup. Restart the proxy after editing it.
 | `redis.password` | empty | The password; empty for none. Taken as written, spaces included. |
 | `redis.database` | `0` | Which numbered Redis database. Must match the backends'. |
 | `redis.key-prefix` | `exylia` | What every key and channel starts with. Must match the backends' `key-prefix`. Empty falls back to `exylia`. |
+| `redis.username` | empty | The Redis ACL user (Redis 6+); empty for the default user. |
+| `redis.ssl` | `false` | `true` connects over TLS (`rediss://`) to a Redis that has it on, with a certificate Java trusts. Needs ExyliaLib 1.484.0 or newer on the backends, with `database.redis.ssl: true`. |
+| `transport` | `redis` | `redis` or `database`. See [Without Redis](#without-redis-transportdatabase). |
+| `database.type` | `mysql` | `mysql`, `mariadb`, `postgresql` or `mongodb`. Read only with `transport=database`. |
+| `database.host` / `database.port` | `localhost` / `0` | The database server; port `0` is the engine's default. |
+| `database.name` | `minecraft` | The database the backends use. |
+| `database.username` / `database.password` | `root` / empty | Its credentials. |
+| `database.connection-string` | empty | MongoDB only: a full `mongodb://` URI, which wins over the fields above. |
 | `updates.enabled` | `true` | Installs new releases of the same major at start and stop. Only `false` turns it off. See [Updates](/docs/exyliaproxyutils/updates). |
 
-A key left out of the file takes its default. Values other than the password are trimmed.
+A key left out of the file takes its default. Values other than the password are trimmed. A file written by an older version lacks the Redis user, TLS and `transport` keys and keeps the old behaviour: the `transport` section is appended to it on the next start, with `transport=redis`.
 
 ## Matching the backends
 
@@ -68,6 +92,21 @@ must be that same `server-id`.
 The key prefix is what keeps them apart. Two networks with the same prefix on the same Redis answer
 each other's servers and read each other's bans.
 </Callout>
+
+## Without Redis: `transport=database`
+
+A network whose backends share a database but run no Redis sets `cross-server: database` in their
+`database.yml` (ExyliaLib 1.555.0 or newer), and the proxy follows with `transport=database` and the same
+database in `database.type`, `database.host`, `database.port`, `database.name`, `database.username` and
+`database.password` (or `database.connection-string` for MongoDB). `redis.key-prefix` still names the
+network.
+
+Everything works the same over it: requests, pushes, the ban mirror and the punishment stream, through the
+tables ExyliaLib's database bus keeps (`exylia_bus_*`). The cost is latency: a message takes up to a
+quarter of a second (PostgreSQL wakes at once through `LISTEN/NOTIFY`), and every server polls the
+database a few times a second, so Redis stays the recommended setup. The MariaDB driver (which also
+speaks MySQL), PostgreSQL's and MongoDB's are bundled in the jar. The startup log says the proxy is
+talking to the backends through the database.
 
 ## Connection
 
