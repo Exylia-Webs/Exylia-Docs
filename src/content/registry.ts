@@ -2290,8 +2290,8 @@ export const plugins: Plugin[] = [
     name: "ExyliaCasino",
     tagline: { en: "Seventeen casino games against the house, drawn in 3D", es: "Diecisiete juegos de casino contra la casa, dibujados en 3D" },
     summary: {
-      en: "Mines, tower, crash, hi-lo, double or nothing, blackjack, baccarat, video poker, roulette, live roulette, a wheel of fortune, coinflip, slots, plinko, keno, scratch cards and horse races, played against the house in the server's currencies on 3D tables drawn in front of each player, each with its RTP shown, every stake held by an escrow that survives a restart, and one games catalogue and busy state shared with ExyliaTabletop.",
-      es: "Mines, tower, crash, hi-lo, double or nothing, blackjack, baccarat, video poker, ruleta, ruleta en directo, una rueda de la fortuna, cara o cruz, tragaperras, plinko, keno, rasca y gana y carreras de caballos, jugados contra la casa con las monedas del servidor en mesas 3D dibujadas delante de cada jugador, cada uno con su RTP a la vista, cada apuesta retenida por un depósito que sobrevive a un reinicio, y un catálogo de juegos y un estado de ocupado compartidos con ExyliaTabletop.",
+      en: "Nineteen games against the house, from Mines and Crash to Blackjack, Sic Bo and live roulette, played in the server's currencies on 3D tables or screens, with placed tables, live stations, a house bank, per-game permissions, each game's RTP shown and every stake held by an escrow that survives a restart.",
+      es: "Diecinueve juegos contra la casa, de Mines y Crash a Blackjack, Sic Bo y ruleta en vivo, jugados con las monedas del servidor en mesas 3D o pantallas, con mesas colocadas, estaciones en vivo, banco de la casa, permisos por juego, el RTP de cada juego a la vista y cada apuesta retenida por un depósito que sobrevive a un reinicio.",
     },
     version: "1.0.0",
     status: "beta",
