@@ -26,8 +26,9 @@ take over.
 | `/sell` | Opens the sell window. |
 | `/sell hand` | Sells the stack in your main hand. |
 | `/sell all` | Sells everything sellable in your inventory: the 27 storage slots, plus the hotbar when `sell-all-scope` is `ALL` (the default). |
+| `/sell sales` | Opens your sales of today (see [balancing](#balancing-sales-to-the-server)). |
 
-All three need `exyliamarket.shop.sell`. `/sell all` asks first when it would pay at least
+All of them need `exyliamarket.shop.sell`. `/sell all` asks first when it would pay at least
 `confirm-sell-all-above` of the default currency (5,000 by default, `-1` never asks).
 
 ### The sell window
@@ -88,7 +89,7 @@ default shop already buys back. After that it is yours and never overwritten.
 
 Edit it in game:
 
-- `/setworth <price> [material]` prices the item in hand or a named material. `0` removes it.
+- `/marketadmin setworth <price> [material]` (the old `/setworth` still works) prices the item in hand or a named material. `0` removes it.
 - `/marketadmin` → **Worth** opens the worth editor: add from a material picker, edit, remove, find any
   item. Nothing changes until it is saved.
 
@@ -144,15 +145,41 @@ In game, `/selladmin` and the **Price audit** card of `/marketadmin` open a scre
 first. Click one for its details, with a button that opens the shop product or the worth list where it is
 fixed; **Check again** runs the audit at once. From the console, the findings are printed as lines.
 
+## Balancing sales to the server
+
+Off by default. With `balance.enabled: true`, sales **to the server** cannot print money faster than the
+economy can take it. It covers `/sell` and its window, sell wands, autosell and the shop's own sell buttons,
+and only sales in the balanced currency (`balance.currency`, blank for the default currency).
+
+- **Daily tiers.** Per player and per item, the base value sold today (before bonuses and boosters) pays full
+  price up to `daily.tiers.full-up-to`, `reduced-percent` of it up to `reduced-up-to`, and `beyond-percent`
+  after that. Defaults: 250,000, 750,000, 50% and 20%. The player is told when a sale drops into a lower tier.
+  `daily.groups` count several materials together; a group with `own-tiers: true` uses its own tiers (the
+  default `nether-fungus` group does). The amounts start over at `reset-hour` (server time, default `0`).
+- **Rested bonus.** Every offline hour fills a pool by `rested.per-offline-hour-percent` of `full-up-to` (5%),
+  up to `rested.cap-days` days (1); sales it covers pay `rested.bonus-percent` more (20%).
+- **Market index.** One multiplier on every balanced sale, `(target-per-player / actual) ^ elasticity`, kept
+  between `index.min` and `index.max` and moving at most `max-daily-change-percent` a day. The actual money per
+  active player (seen within `active-days`) comes from ExyliaEconomy or any plugin that reports the money
+  supply; without data the index keeps its last value. Off by default: tune `target-per-player` first.
+- **Boosters.** With `boosters.first-tier-only` (default), the sell bonus and boosters multiply only the
+  first tier. Materials in `boosters.excluded` are never multiplied.
+
+A sale tried before the player's sales of today have been read (a moment after joining) is refused, never
+paid at full price. Staff with `exyliamarket.sell.admin` get the **Economy** card in `/marketadmin`: the payout,
+the market index and its trend, the top items and the top sellers. The tables are `market_sell_daily`,
+`market_sell_rest` and `market_sell_index`; daily rows older than `keep-days` (30) are deleted.
+
 ## Settings
 
-`modules/sell/config.yml`, editable in game from `/marketadmin`.
+`modules/sell/config.yml`, editable in game from `/marketadmin` (the balance has its own **Sales balance** page).
 
 | Key | Default | What it does |
 |---|---|---|
 | `settings.sell-all-scope` | `ALL` | `STORAGE` for the 27 storage slots, `ALL` to include the hotbar. Also what **Add sellable** takes from. |
 | `settings.sell-on-close` | `true` | Closing the window sells what is in it. |
 | `settings.confirm-sell-all-above` | `5000` | `/sell all` asks first from this much of the default currency. `-1` never asks. |
+| `balance.enabled` | `false` | Balance sales to the server, as above. The other `balance.*` keys are described there. |
 | `lore.enabled` | `true` | Draw the worth line under items. |
 | `lore.menus` | `false` | Also on items of plugin menus. |
 | `sounds.sold`, `failed`, `added`, `returned` | | `NAME\|volume\|pitch`. |

@@ -27,8 +27,9 @@ toma el relevo.
 | `/sell` | Abre la ventana de venta. |
 | `/sell hand` | Vende el stack de tu mano principal. |
 | `/sell all` | Vende todo lo vendible de tu inventario: las 27 ranuras de almacenamiento, más la barra rápida cuando `sell-all-scope` es `ALL` (por defecto). |
+| `/sell sales` | Abre tus ventas de hoy (ver [equilibrio](#equilibrar-las-ventas-al-servidor)). |
 
-Los tres necesitan `exyliamarket.shop.sell`. `/sell all` pide confirmación cuando pagaría al menos
+Todos necesitan `exyliamarket.shop.sell`. `/sell all` pide confirmación cuando pagaría al menos
 `confirm-sell-all-above` de la moneda por defecto (5.000 por defecto, `-1` nunca pregunta).
 
 ### La ventana de venta
@@ -92,7 +93,7 @@ material que la tienda por defecto ya compra. Después es tuyo y nunca se sobres
 
 Edítalo dentro del juego:
 
-- `/setworth <price> [material]` pone precio al objeto de la mano o a un material indicado. `0` lo quita.
+- `/marketadmin setworth <price> [material]` (el antiguo `/setworth` sigue funcionando) pone precio al objeto de la mano o a un material indicado. `0` lo quita.
 - `/marketadmin` → **Valores** abre el editor de valores: añadir desde un selector de materiales, editar,
   quitar, buscar cualquier objeto. No cambia nada hasta que se guarda.
 
@@ -151,15 +152,45 @@ hallazgo, primero los errores. Haz clic en uno para ver sus detalles, con un bot
 tienda o la lista de valores donde se corrige; **Revisar de nuevo** ejecuta la auditoría al momento. Desde
 la consola, los hallazgos se imprimen como líneas.
 
+## Equilibrar las ventas al servidor
+
+Desactivado por defecto. Con `balance.enabled: true`, las ventas **al servidor** no pueden imprimir dinero más
+rápido de lo que la economía puede absorber. Cubre `/sell` y su ventana, las varitas de venta, la venta
+automática y los botones de venta de la propia tienda, y solo las ventas en la moneda equilibrada
+(`balance.currency`, vacío para la moneda por defecto).
+
+- **Tramos diarios.** Por jugador y por objeto, el valor base vendido hoy (antes de bonus y potenciadores) paga
+  precio completo hasta `daily.tiers.full-up-to`, `reduced-percent` de él hasta `reduced-up-to`, y
+  `beyond-percent` a partir de ahí. Por defecto: 250.000, 750.000, 50% y 20%. Al jugador se le avisa cuando una
+  venta cae a un tramo inferior. `daily.groups` cuenta varios materiales juntos; un grupo con `own-tiers: true`
+  usa sus propios tramos (el grupo `nether-fungus` por defecto lo hace). Las cantidades se reinician a la hora
+  `reset-hour` (hora del servidor, por defecto `0`).
+- **Bonus de descanso.** Cada hora desconectado llena una reserva con `rested.per-offline-hour-percent` de
+  `full-up-to` (5%), hasta `rested.cap-days` días (1); las ventas que cubre pagan `rested.bonus-percent` más (20%).
+- **Índice de mercado.** Un multiplicador sobre cada venta equilibrada, `(target-per-player / actual) ^ elasticity`,
+  entre `index.min` e `index.max` y que se mueve como mucho `max-daily-change-percent` al día. El dinero real por
+  jugador activo (visto en `active-days`) viene de ExyliaEconomy o de cualquier plugin que informe de la masa
+  monetaria; sin datos, el índice conserva su último valor. Desactivado por defecto: ajusta antes
+  `target-per-player`.
+- **Potenciadores.** Con `boosters.first-tier-only` (por defecto), el bonus de venta y los potenciadores solo
+  multiplican el primer tramo. Los materiales de `boosters.excluded` nunca se multiplican.
+
+Una venta intentada antes de que se hayan leído las ventas de hoy del jugador (un instante tras entrar) se
+rechaza, nunca se paga a precio completo. El staff con `exyliamarket.sell.admin` tiene la tarjeta **Economía**
+en `/marketadmin`: el pago, el índice de mercado y su tendencia, los objetos más vendidos y los mayores vendedores.
+Las tablas son `market_sell_daily`, `market_sell_rest` y `market_sell_index`; las filas diarias de más de
+`keep-days` (30) días se borran.
+
 ## Ajustes
 
-`modules/sell/config.yml`, editable dentro del juego desde `/marketadmin`.
+`modules/sell/config.yml`, editable dentro del juego desde `/marketadmin` (el equilibrio tiene su propia página, **Equilibrio de ventas**).
 
 | Clave | Por defecto | Qué hace |
 |---|---|---|
 | `settings.sell-all-scope` | `ALL` | `STORAGE` para las 27 ranuras de almacenamiento, `ALL` para incluir la barra rápida. También de dónde toma **Añadir vendibles**. |
 | `settings.sell-on-close` | `true` | Cerrar la ventana vende lo que hay en ella. |
 | `settings.confirm-sell-all-above` | `5000` | `/sell all` pide confirmación a partir de esta cantidad de la moneda por defecto. `-1` nunca pregunta. |
+| `balance.enabled` | `false` | Equilibra las ventas al servidor, como arriba. Las demás claves `balance.*` se describen allí. |
 | `lore.enabled` | `true` | Dibujar la línea de valor bajo los objetos. |
 | `lore.menus` | `false` | También en los objetos de los menús de plugins. |
 | `sounds.sold`, `failed`, `added`, `returned` | | `NAME\|volume\|pitch`. |
