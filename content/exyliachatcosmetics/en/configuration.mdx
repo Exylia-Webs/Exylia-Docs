@@ -57,17 +57,22 @@ changed; restart the server to apply them.` — and the running set stays as it 
 
 ## defaults
 
-What a player wears of a kind they have picked nothing of, by permission group. One block per kind,
-each keyed by group and holding the id of an entry in that kind's catalogue:
+What a player wears of a kind they have picked nothing of, by rank. One list per kind, each line a
+`permission` and the id of an entry in that kind's catalogue as its `cosmetic`. The same lists are
+editable in game from the settings screen.
 
 ```yaml title="plugins/ExyliaChatCosmetics/config.yml"
 defaults:
   tag:
-    owner: staff
-    vip: mvp
-    default: ''
+    - permission: group.owner   # first, so it wins over vip
+      cosmetic: staff
+    - permission: group.staff
+      cosmetic: none            # staff get no default tag
+    - permission: group.vip
+      cosmetic: mvp
   chat-color:
-    default: ''
+    - permission: ''            # everyone else
+      cosmetic: snow
 ```
 
 | Key | Names an entry of |
@@ -80,13 +85,23 @@ defaults:
 | `font` | `cosmetics/fonts.yml` |
 | `modifier` | `cosmetics/modifiers.yml` |
 
-`default` covers every group a block does not name, and the first group listed that the player is in
-wins, so list the highest rank first. Groups come from LuckPerms; without it only `default` applies.
-Every block ships as `default: ''`, which gives nothing, so a fresh server looks as it did before.
-
-A default is the server's to give, not the player's to own: it is worn without a permission node and
-without a grant, and the moment the player picks something of that kind, theirs is drawn instead. An id
-that names no entry is reported in the console on load and on reload, and that group is given nothing.
+- **First match wins.** Lines are read top to bottom and the first one whose permission the player holds
+  is theirs, so put the highest rank first. A group is the node `group.<name>` that LuckPerms sets.
+- **An empty permission** is everyone; **`none`** gives that group nothing and stops the search.
+- **Empty** (what every list ships as) leaves the player wearing nothing of that kind, so a fresh server
+  looks as it did before.
+- **A default is the server's to give, not the player's to own.** It needs no grant, it is not saved to
+  the player's row, and the moment the player picks something of that kind theirs is drawn instead. A
+  pick they no longer own falls back to the default.
+- **Taking it off keeps it off.** A player who takes a kind off (the menu or `/cc unequip`) gets no
+  default for it until they pick something again. Staff `unequip` and `clear`, TAKE IT ALL OFF and
+  loadouts put the default back.
+- Menus show a default with `menu.default-marker` after its name, and the `_id` and `_name` placeholders
+  report it like anything worn.
+- An id that names no entry is reported in the console on load and on reload, and that line is skipped.
+  No catalogue may name an entry `none`.
+- A file written with the older `group: id` blocks is converted on start: each group becomes a
+  `group.<name>` line in the order written, and `default` the last line, with an empty permission.
 
 ## chat
 
@@ -94,7 +109,7 @@ that names no entry is reported in the console on load and on reload, and that g
 |---|---|---|
 | `hook` | `decorate` | How the message body is styled. The four modes are below. |
 | `priority` | `NORMAL` | Event priority for `chat_event` and `legacy_event`: `LOWEST`, `LOW`, `NORMAL`, `HIGH`, `HIGHEST`, `MONITOR`. Anything else falls back to `NORMAL` with a warning. |
-| `sanitize` | `true` | Formatting a player types — `&c`, `<red>`, `{primary}` — is shown as the text they typed. `exyliachatcosmetics.chat.format` bypasses it. `§` is always neutralised, permission or not. |
+| `sanitize` | `true` | Formatting a player types — `&c`, `<red>`, `{primary}` — is shown as the text they typed. `exyliachatcosmetics.chat.format` lets colours, gradients and decorations through. Clicks, hovers, fonts, heads and line breaks stay text even with `sanitize: false`. `§` is always neutralised, permission or not. |
 
 The hook only runs while `modules.chat` is off. With the [chat module](/docs/exyliachatcosmetics/chat)
 on, the hook is uninstalled and the module styles the body itself.
