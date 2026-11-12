@@ -2621,7 +2621,7 @@ export const plugins: Plugin[] = [
       en: "As many currencies as you want, kept in the database and edited in game, one published to Vault, payments with taxes and confirmations, banknotes a copy cannot redeem twice, interest, leaderboards, a ledger with rollback, and balances shared across every server. Free and open source.",
       es: "Tantas monedas como quieras, guardadas en la base de datos y editadas dentro del juego, una publicada en Vault, pagos con impuestos y confirmaciones, billetes que una copia no puede canjear dos veces, intereses, clasificaciones, un registro con reversión y saldos compartidos entre todos los servidores. Gratis y de código abierto.",
     },
-    version: "1.1.0",
+    version: "1.3.0",
     status: "stable",
     category: { en: "Survival", es: "Survival" },
     minecraft: "1.21+",

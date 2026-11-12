@@ -1,6 +1,6 @@
 ---
 title: "Migración"
-description: "Venir del módulo de economía de ExyliaSurvivalCore, la importación de currencies.yml del primer arranque y traer saldos desde Vault, EssentialsX, CMI o PlayerPoints."
+description: "Venir del módulo de economía de ExyliaSurvivalCore, un config.yml antiguo, la importación de currencies.yml del primer arranque y traer saldos desde Vault, EssentialsX, CMI o PlayerPoints."
 ---
 
 ## Desde ExyliaSurvivalCore
@@ -9,52 +9,27 @@ ExyliaEconomy es el módulo `economy` de ExyliaSurvivalCore convertido en plugin
 cambios en cola y el registro ya vivían en tablas con nombres neutros (`exylia_balances`,
 `exylia_balance_pending`, `exylia_ledger`), así que pasarse consiste en abrir la misma base de datos.
 
-<Steps>
-  <Step title="Actualiza todos los servidores a la vez">
-    Instala ExyliaEconomy junto a la versión de ExyliaSurvivalCore que le entrega la economía, en cada
-    servidor que comparte saldos, antes de que cualquiera de ellos vuelva a arrancar. Un servidor que
-    todavía usa el módulo antiguo no oye los cambios que anuncia uno con ExyliaEconomy, ni al revés.
-  </Step>
-  <Step title="Conserva la carpeta antigua para el primer arranque">
-    `plugins/ExyliaSurvivalCore/` tiene que seguir ahí: el primer arranque lee de ella.
-  </Step>
-  <Step title="Arranca una vez y lee la consola">
-    Cada paso de abajo dice qué copió. Después abre `/economyadmin`: las monedas son las que tenías.
-  </Step>
-</Steps>
-
-En su primer arranque junto a ExyliaSurvivalCore, ExyliaEconomy trae, una sola vez:
-
-| Qué | Cómo |
-|---|---|
-| `database.yml` | Se copia aquí antes de que nada abra la base de datos, así el plugin lee la base de datos donde ya están los saldos, con el mismo ID de servidor de Redis. Un archivo H2 embebido se copia a la carpeta de este plugin bajo la misma ruta, a través de un archivo temporal, para que borrar la carpeta del survival core nunca se lleve los saldos. Un archivo H2 que este plugin ya tenga nunca se sobrescribe; en ese caso sigue leyéndose el del survival core. |
-| Monedas y ajustes | Se copian de `sc_currencies` y `sc_economy_settings` a `exylia_currencies` y `exylia_economy_settings`, solo mientras las dos tablas nuevas están vacías. Las tablas antiguas se quedan exactamente como estaban. |
-| Mensajes | El `modules/economy/messages.yml` de cada idioma pasa a ser `lang/<code>/messages.yml`, donde este plugin no tenga uno. |
-| Menús de los jugadores | Las pantallas de billetera, top e historial pasan a `lang/<code>/menus/user/`, con sus botones cambiados de acciones `survivalcore:` a `exyliaeconomy:`. Las pantallas de administración se reescriben desde el jar de todas formas. |
-| `currencies.yml` | Si las tablas siguen vacías, `modules/economy/currencies.yml` se copia y se importa. |
-
-Nada de la carpeta de ExyliaSurvivalCore se cambia ni se borra nunca. Un archivo de marca,
-`.imported-survivalcore`, anota que la importación se hizo; bórralo para hacerla otra vez. Un `database.yml`
-escrito por una versión anterior que todavía abría el archivo H2 del survival core recibe su propia copia en
-el siguiente arranque, y la consola lo dice.
-
-<Callout type="danger" title="No lo apuntes a una base de datos nueva">
-Los saldos están en la base de datos del survival core. Si falla la copia de `database.yml`, la consola lo
-dice y el siguiente arranque lo vuelve a intentar en lugar de conformarse con una base de datos nueva y
-vacía. Si sigue fallando, copia `plugins/ExyliaSurvivalCore/database.yml` aquí a mano.
+<Callout type="warning" title="La importación automática ya no existe">
+Desde la 1.2.1 el plugin ya no copia el `database.yml` del survival core, ni sus monedas, ajustes,
+mensajes o menús, y los nombres de permiso `exyliasurvivalcore.economy…` ya no conceden nada. Pásate con
+una versión anterior a la 1.2.1 en todos los servidores de la red a la vez y después actualiza; o copia a
+mano `plugins/ExyliaSurvivalCore/database.yml` aquí, para que el plugin abra la base de datos donde están
+los saldos, y vuelve a crear las monedas en `/economyadmin`. Concede los nodos `exyliaeconomy.…` en lugar
+de los antiguos.
 </Callout>
 
-### Permisos
+Actualiza todos los servidores a la vez: los servidores se avisan de los cambios de saldo por un canal de
+Redis cuya clave incluye el nombre del plugin, así que un servidor que aún usa el módulo antiguo no oye a
+uno con ExyliaEconomy, ni al revés.
 
-Lo que tenía concedido el staff cuando la economía vivía en ExyliaSurvivalCore sigue funcionando: los nodos
-antiguos se declaran de nuevo, cada uno con su nodo nuevo como hijo.
+## Un config.yml antiguo
 
-| Nodo antiguo | Concede | Por defecto |
-|---|---|---|
-| `exyliasurvivalcore.economy` | `exyliaeconomy.use` | todos |
-| `exyliasurvivalcore.economy.pay` | `exyliaeconomy.pay` | todos |
-| `exyliasurvivalcore.economy.others` | `exyliaeconomy.others` | operadores |
-| `exyliasurvivalcore.economy.admin` | `exyliaeconomy.admin` | operadores |
+Una versión anterior a la 1.2.0 guardaba en `config.yml` el idioma, la depuración, la confirmación de
+`/pay`, el aviso de pagos sin conexión, `banknotes` e `interest`. El primer arranque de una más nueva los
+importa a la base de datos donde todavía no hay nada fijado — el idioma y los interruptores a **Ajustes de
+economía**, las cantidades de confirmación, la lista de billetes y los bloques de intereses a cada moneda —
+y renombra el archivo a `config.yml.migrated`. Un `config.yml` que solo contenga `language` se importa
+igual. Desde entonces se editan en `/economyadmin`; el plugin ya no escribe `config.yml`.
 
 ### Comandos y placeholders
 
@@ -73,8 +48,7 @@ Las monedas viven en la base de datos. La primera vez que las tablas están vac�
 cuyo survival core no tenía monedas que copiar —, el plugin importa un `currencies.yml`, en este orden:
 
 1. `plugins/ExyliaEconomy/currencies.yml`, si pusiste uno ahí;
-2. `plugins/ExyliaSurvivalCore/modules/economy/currencies.yml`, copiado antes;
-3. las monedas de serie: `dollars`, `shards`, `netherite_ingots`, y las superposiciones `vault` y `points`.
+2. las monedas de serie: `dollars`, `shards`, `netherite_ingots`, y las superposiciones `vault` y `points`.
 
 Después el archivo se renombra a `currencies.yml.imported` y no se vuelve a leer. Su formato, para un
 servidor que quiera preparar uno:
@@ -101,7 +75,8 @@ stored:
       enabled: false
       rates: {}
     leaderboard: true
-    networked: true
+    scope: global          # global, group o server; el antiguo 'networked: true/false' se sigue leyendo
+    available-on: []       # grupos o IDs de servidor donde existe; [] es todos
     commands: true
 items:
   emeralds:
@@ -123,7 +98,7 @@ display:
     format: "%symbol%%amount%"
 vault:
   provide: gems
-  force: false
+  force: true
 ledger:
   enabled: true
 ```

@@ -1,6 +1,6 @@
 ---
 title: "Network"
-description: "Sharing balances across servers: who writes a balance, what happens to a change for a player somewhere else, shared and per-server currencies, server ids and Redis."
+description: "Sharing balances across servers: who writes a balance, what happens to a change for a player somewhere else, global, group and per-server currencies, server ids and Redis."
 ---
 
 Every server that points at the same database shares the same currencies, the same economy settings and
@@ -40,20 +40,26 @@ Queued changes land oldest first, each exactly once however many servers hear ab
 Changes made while a server was unreachable are retried every second, and a change that cannot be written
 at all is logged in the console with everything needed to apply it by hand.
 
-## Shared and per-server currencies
+## Network scope of a currency
 
-**Shared across servers**, on a stored currency's screen, decides which balance a player has:
+**Network scope**, on a stored currency's Integrations page, decides which servers share a player's balance:
 
-| | One balance | Leaderboard | Banknotes | Interest |
-|---|---|---|---|---|
-| On (default) | One across the whole network | One for the network | Redeem anywhere | Paid once per player |
-| Off | One per server, stored as `<id>@<server-id>` | One per server | Only on the server that printed them | Paid by each server |
+| Scope | One balance for | Stored as | Leaderboard, banknotes, interest |
+|---|---|---|---|
+| Global (default) | Every server on the database | `<id>` | One for the network; notes redeem anywhere; paid once per player |
+| Group | The servers of one network group | `<id>#<group>` | One per group; notes redeem inside the group; paid per group |
+| Server | Each server alone | `<id>@<server-id>` | One per server; notes redeem where printed; paid by each server |
 
-A per-server currency is a survival server's money that stays on that survival server, while the lobby
-next door keeps its own. Changes queued for a per-server balance are only ever claimed by that server.
+The group is the server's `network-group` in ExyliaLib's `config.yml`, said once for every plugin: two
+survivals in group `survival` share a balance while a `boxpvp` server keeps another. A group currency on a
+server with no group is kept per server, and the console warns once. Changes queued for a group or
+per-server balance are only ever claimed by a server it belongs to.
 
-The switch is refused once the currency holds any balance other than the starting one, because the
-balances it holds would be left behind under the other key. Decide before players earn any.
+**Available on** lists the groups or server ids a currency exists on; blank is every server. On a server
+left out the currency is not registered at all: no command, no Vault, no balance of it.
+
+The scope is refused once the currency holds any balance other than the starting one, because the balances
+it holds would be left behind under the other key. Decide before players earn any.
 
 ## Server ids
 
@@ -73,7 +79,7 @@ believe they hold the player and overwrite each other. When the plugin sees the 
 Redis or a networked database, it warns once at start:
 *"this server's id is the default 'server-1' while balances are shared…"*. Give every server its own.
 
-The id is also what a per-server currency is keyed by: renaming a server's id moves it onto a new, empty
+The id is also what a per-server currency is keyed by (and, with a group, the network group): renaming a server's id moves it onto a new, empty
 set of per-server balances.
 
 ## With and without Redis
