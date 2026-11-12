@@ -1,0 +1,44 @@
+---
+title: "Server versions"
+description: "Running on Paper 1.21.1 while compiling against 1.21.4: what the library probes, shims and switches off."
+---
+
+Exylia plugins run on **Paper 1.21.1 and newer** and on **Folia 1.21.4 and newer** (Folia has no 1.21.1
+build), while compiling against paper-api 1.21.4. A newer feature is detected when the server starts and
+switched off where it is missing, so a 1.21.4+ server runs exactly the code it always did.
+
+On an older server the library still loads, but logs a boxed console error at startup naming the detected
+version: Exylia plugins fail mid-game there with `NoSuchMethodError`. Versions compare number by number,
+so `26.x` counts as newer than `1.21.x`.
+
+## What a 1.21.1 server does without
+
+| Feature | On 1.21.1 |
+|---|---|
+| `item_model`, `tooltip_style` in item configs | Ignored, with one console line per server; `custom-model-data` still works. |
+| `force-consumable` items | Refused with a console line. |
+| Text shadow (the `text-shadow` setting) | Not drawn; text keeps its colours. |
+| Anvil search box | Opened through the older door; same behaviour. |
+| Kit comparison and replay item sampling | Done through item meta instead of components; same result. |
+
+## For plugin developers
+
+Never name server API newer than 1.21.1 in a class that loads everywhere. Put it in its own class marked
+`@RequiresServer("<version>")` and reach it only after a `Features` probe says yes.
+
+```java
+if (Features.itemModel()) {
+    ModernModels.apply(meta, key);
+}
+```
+
+| Tool | Use |
+|---|---|
+| `Features` | One probe per newer feature (`dataComponents()`, `itemModel()`, `tooltipStyle()`, `textShadow()`, `playerInput()`, `menuBuilders()`, `equipmentEvent()`, `tooltipDisplay()`). Each asks whether the class or method exists, never the version, and is computed once. |
+| `Attributes` | Attribute constants that exist on every supported server (1.21.2 dropped the `generic.` prefixes). `Attributes.byKey` reads `max_health`, `generic.max_health`, `minecraft:…` and the Bukkit field names. |
+| `Constants.named(Sound.class, "NAME")` | `Sound`, `Attribute` and `Biome` became interfaces in 1.21.3; this reads them by name on both. |
+| `ArmorChanges`, `ItemNames`, `ItemData`, `util.EnderPearls` | One-call shims for API that gained a direct method after 1.21.1. |
+
+A plugin that truly needs a newer server says so with a patch `api-version` in `plugin.yml`. javac cannot
+see these breaks, so the repository ships `tools/compat/check-compat.sh`, which reads compiled bytecode
+against paper-api 1.21.1 and reports anything the old API lacks.

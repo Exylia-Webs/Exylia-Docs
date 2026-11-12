@@ -1,0 +1,44 @@
+---
+title: "Versiones de servidor"
+description: "Funcionar en Paper 1.21.1 compilando contra 1.21.4: qué sondea, adapta y desactiva la librería."
+---
+
+Los plugins de Exylia corren en **Paper 1.21.1 o superior** y en **Folia 1.21.4 o superior** (Folia no tiene
+build 1.21.1), mientras compilan contra paper-api 1.21.4. Una función más nueva se detecta al arrancar el
+servidor y se desactiva donde falta, así que un servidor 1.21.4+ ejecuta exactamente el código de siempre.
+
+En un servidor más antiguo la librería carga, pero escribe en consola un error en recuadro al arrancar con la
+versión detectada: ahí los plugins de Exylia fallan a mitad de partida con `NoSuchMethodError`. Las versiones
+se comparan número a número, así que `26.x` cuenta como más nueva que `1.21.x`.
+
+## Qué hace un servidor 1.21.1 sin ello
+
+| Función | En 1.21.1 |
+|---|---|
+| `item_model`, `tooltip_style` en configs de items | Se ignoran, con una línea de consola por servidor; `custom-model-data` sigue funcionando. |
+| Items `force-consumable` | Se rechazan con una línea de consola. |
+| Sombra de texto (ajuste `text-shadow`) | No se dibuja; el texto conserva sus colores. |
+| Cuadro de búsqueda del yunque | Se abre por la puerta antigua; mismo comportamiento. |
+| Comparación de kits y muestreo de items en repeticiones | Se hace con item meta en vez de componentes; mismo resultado. |
+
+## Para desarrolladores de plugins
+
+No nombres API de servidor posterior a 1.21.1 en una clase que carga en todas partes. Ponla en su propia clase
+marcada `@RequiresServer("<versión>")` y llégale solo cuando un sondeo de `Features` diga que sí.
+
+```java
+if (Features.itemModel()) {
+    ModernModels.apply(meta, key);
+}
+```
+
+| Herramienta | Uso |
+|---|---|
+| `Features` | Un sondeo por función nueva (`dataComponents()`, `itemModel()`, `tooltipStyle()`, `textShadow()`, `playerInput()`, `menuBuilders()`, `equipmentEvent()`, `tooltipDisplay()`). Cada uno pregunta si existe la clase o el método, nunca la versión, y se calcula una vez. |
+| `Attributes` | Constantes de atributos que existen en todo servidor soportado (1.21.2 quitó los prefijos `generic.`). `Attributes.byKey` lee `max_health`, `generic.max_health`, `minecraft:…` y los nombres de campo de Bukkit. |
+| `Constants.named(Sound.class, "NOMBRE")` | `Sound`, `Attribute` y `Biome` pasaron a interfaces en 1.21.3; esto los lee por nombre en ambas. |
+| `ArmorChanges`, `ItemNames`, `ItemData`, `util.EnderPearls` | Adaptadores de una llamada para API que ganó un método directo después de 1.21.1. |
+
+Un plugin que de verdad necesita un servidor más nuevo lo dice con un `api-version` de parche en `plugin.yml`.
+javac no ve estas roturas, así que el repositorio incluye `tools/compat/check-compat.sh`, que lee el bytecode
+compilado contra paper-api 1.21.1 e informa de lo que la API antigua no tiene.

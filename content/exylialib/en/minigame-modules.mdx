@@ -1,0 +1,49 @@
+---
+title: "Minigame and network modules"
+description: "Arenas, escrow, trades, lobbies, modes, network messages, playtime, respawns and plugin hooks: the pieces game plugins share."
+---
+
+Modules for plugins that run matches, queues and events, so none of them rebuilds the same plumbing. Each one
+is reached through its static entry class, like every other module, and each has a full guide in the
+library's `docs/` folder.
+
+| Module | Entry point | Since | What it is for |
+|---|---|---|---|
+| Arenas | `ArenaPool.of(plugin, prefix)` | 1.346.0 | Arenas handed out one match at a time: the original when free, else a copy pasted into the temporary world, up to a limit per arena. Released arenas are regenerated before the next match. |
+| Escrow | `Escrow.of(plugin)` | 1.345.0 | Money and items held while a match is played. Written before anything moves, settled or refunded exactly once, refunded after a crash, owed rows delivered on join or respawn. |
+| Trades | `Trades.of(plugin)` | 1.349.0 | A two-player trade window: both see both offers live, both confirm, and a countdown that any change resets. Closing, leaving, dying or a stop gives everything back. |
+| Lobby | `Lobby.of(plugin, hooks, messages)` | 1.356.0 | Tables, seats and invitations: open tables, clickable invitations, minimum and maximum seats, start when full or on the host's word, expiry. One table per player, server-wide. |
+| Modes | `Modes.register(plugin, mode)` | 1.356.0 | Every way to play the server offers, in shared categories, on one screen that shows state and players live. |
+| Network | `Network.of(plugin)` | 1.347.0 | Messages from a plugin to itself on one other server, or on the server a player is on, plus `awaitArrival` for players the proxy is sending here. |
+| Server commands | `ServerCommands.of(plugin)` | 1.337.0 | Commands run for a player on a given server of the network, now or on their next join there. |
+| Playtime | `Playtime.of(plugin)` | 1.341.0 | Network-wide played time, one tracker per server shared by every plugin, idle time dropped. |
+| Respawns | `Respawns.of(plugin)` | 1.440.0 | Where players respawn and code that runs once they stand again. |
+| Hooks | `SkillHooks.suspend(plugin, player)` | 1.409.0 | Turns other plugins' mechanics off for a player in a minigame (AuraSkills and mcMMO experience, abilities and combat stats; permission groups). |
+| Wipes | `Wipes.of(plugin)` | 1.439.0 | New season and player resets by what tables hold. Already covered under [Commands](/docs/exylialib/commands#moving-and-wiping-data). |
+
+## Respawns on Folia
+
+Folia fires neither `PlayerRespawnEvent` nor `PlayerPostRespawnEvent` when a player respawns after dying, so a
+plain listener silently does nothing there. The module drives the same rules from the events on Paper and
+detects the respawn itself on Folia.
+
+```java
+Respawns.of(this).location(EventPriority.HIGH, ctx -> ctx.bedSpawn() ? null : spawn.location());
+Respawns.of(this).after(player -> kits.giveStarter(player));
+```
+
+Rules run in priority order, the last non-null answer wins, and with no reasons a rule only sees deaths.
+
+## Playtime
+
+One tracker per server counts time with idle stretches dropped (five minutes without moving, looking, typing
+or clicking by default). `online(uuid)` reads memory, `total(uuid)` reads the database for anybody, and
+`onMinute(plugin, consumer)` runs once a minute for every online player. Point the plugins of every server at
+one database and the totals are network-wide. The table is `exylia_playtime`.
+
+## Network messages
+
+`Network.send(server, channel, payload)` and `send(playerId, channel, payload)` deliver to the same plugin on
+the addressed server only. The result is `SENT`, `NO_NETWORK` (no Redis, or no proxy bridge to find the
+player) or `NO_PLAYER`. Messages are events, not state: what must be known afterwards goes to a repository.
+Without Redis a send to this server still arrives.

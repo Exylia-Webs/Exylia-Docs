@@ -1,0 +1,49 @@
+---
+title: "Módulos de minijuegos y red"
+description: "Arenas, depósito, intercambios, salas, modos, mensajes de red, tiempo jugado, reapariciones y hooks de plugins: lo que comparten los plugins de juegos."
+---
+
+Módulos para plugins que organizan partidas, colas y eventos, para que ninguno rehaga la misma fontanería.
+Cada uno se alcanza por su clase estática de entrada, como cualquier otro módulo, y tiene una guía completa en
+la carpeta `docs/` de la librería.
+
+| Módulo | Punto de entrada | Desde | Para qué sirve |
+|---|---|---|---|
+| Arenas | `ArenaPool.of(plugin, prefijo)` | 1.346.0 | Arenas entregadas de una partida en una: la original si está libre, si no una copia pegada en el mundo temporal, hasta un límite por arena. Las liberadas se regeneran antes de la siguiente partida. |
+| Depósito (Escrow) | `Escrow.of(plugin)` | 1.345.0 | Dinero e items retenidos mientras se juega. Se anota antes de mover nada, se liquida o devuelve exactamente una vez, se devuelve tras un fallo y lo adeudado se entrega al entrar o reaparecer. |
+| Intercambios | `Trades.of(plugin)` | 1.349.0 | Una ventana de intercambio entre dos jugadores: ambos ven las dos ofertas en vivo, ambos confirman y una cuenta atrás que cualquier cambio reinicia. Cerrar, salir, morir o una parada lo devuelve todo. |
+| Sala (Lobby) | `Lobby.of(plugin, hooks, mensajes)` | 1.356.0 | Mesas, asientos e invitaciones: mesas abiertas, invitaciones con botones, asientos mínimo y máximo, inicio al llenarse o cuando lo diga el anfitrión, caducidad. Una mesa por jugador en todo el servidor. |
+| Modos | `Modes.register(plugin, modo)` | 1.356.0 | Cada forma de jugar que ofrece el servidor, en categorías compartidas, en una pantalla que muestra estado y jugadores en vivo. |
+| Red | `Network.of(plugin)` | 1.347.0 | Mensajes de un plugin a sí mismo en otro servidor, o en el servidor donde está un jugador, y `awaitArrival` para jugadores que el proxy envía aquí. |
+| Comandos por servidor | `ServerCommands.of(plugin)` | 1.337.0 | Comandos ejecutados para un jugador en un servidor concreto de la red, ahora o en su próxima entrada allí. |
+| Tiempo jugado | `Playtime.of(plugin)` | 1.341.0 | Tiempo jugado en toda la red, un contador por servidor compartido por todos los plugins, sin contar el tiempo inactivo. |
+| Reapariciones | `Respawns.of(plugin)` | 1.440.0 | Dónde reaparecen los jugadores y código que se ejecuta cuando ya están de pie. |
+| Hooks | `SkillHooks.suspend(plugin, jugador)` | 1.409.0 | Apaga las mecánicas de otros plugins para un jugador en un minijuego (experiencia, habilidades y estadísticas de combate de AuraSkills y mcMMO; grupos de permisos). |
+| Wipes | `Wipes.of(plugin)` | 1.439.0 | Nueva temporada y reinicios de jugador según lo que guardan las tablas. Ya descrito en [Comandos](/docs/exylialib/comandos). |
+
+## Reapariciones en Folia
+
+Folia no lanza `PlayerRespawnEvent` ni `PlayerPostRespawnEvent` cuando un jugador reaparece tras morir, así que
+un listener normal no hace nada ahí. El módulo aplica las mismas reglas desde los eventos en Paper y detecta
+la reaparición por sí mismo en Folia.
+
+```java
+Respawns.of(this).location(EventPriority.HIGH, ctx -> ctx.bedSpawn() ? null : spawn.location());
+Respawns.of(this).after(player -> kits.giveStarter(player));
+```
+
+Las reglas se ejecutan por prioridad, gana la última respuesta no nula, y sin motivos una regla solo ve muertes.
+
+## Tiempo jugado
+
+Un contador por servidor cuenta el tiempo sin los tramos inactivos (por defecto cinco minutos sin moverse,
+mirar, escribir ni hacer clic). `online(uuid)` lee memoria, `total(uuid)` lee la base de datos para cualquiera
+y `onMinute(plugin, consumidor)` se ejecuta cada minuto para cada jugador conectado. Apunta los plugins de todos
+los servidores a una misma base de datos y los totales serán de toda la red. La tabla es `exylia_playtime`.
+
+## Mensajes de red
+
+`Network.send(servidor, canal, carga)` y `send(idJugador, canal, carga)` entregan al mismo plugin solo en el
+servidor indicado. El resultado es `SENT`, `NO_NETWORK` (sin Redis, o sin puente de proxy para localizar al
+jugador) o `NO_PLAYER`. Los mensajes son eventos, no estado: lo que deba saberse después va a un repositorio.
+Sin Redis, un envío a este mismo servidor sí llega.
