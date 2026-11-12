@@ -2646,7 +2646,7 @@ export const plugins: Plugin[] = [
       en: "A head where you fell holding exactly what you dropped, collected with one click, protected for the owner, with expiry and limits by rank, a /graves list across the network, paid teleports and staff restores — handed over exactly once on any server. Free and open source.",
       es: "Una cabeza donde caíste con exactamente lo que soltaste, recogida con un clic, protegida para el dueño, con caducidad y límites por rango, una lista /graves de toda la red, teletransportes de pago y restauraciones del staff — entregada una sola vez en cualquier servidor. Gratis y de código abierto.",
     },
-    version: "1.0.0",
+    version: "1.11.1",
     status: "stable",
     category: { en: "Survival", es: "Survival" },
     minecraft: "1.21+",
