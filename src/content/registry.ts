@@ -2710,7 +2710,7 @@ export const plugins: Plugin[] = [
       en: "A modular lobby, free and open source: spawn and protection, a hotbar of buttons, double jump and launch pads, a server selector with live counts, tab list and announcements, triggers that run actions from buttons, plates and areas, opt-in lobby PvP, parkour with endless modes and leaderboards, and gadgets. Sixteen modules switched on and off live, and everything edited in game.",
       es: "Un lobby modular, gratuito y de código abierto: spawn y protección, una hotbar de botones, doble salto y plataformas de lanzamiento, un selector de servidores con contadores en vivo, lista de jugadores y anuncios, disparadores que ejecutan acciones desde botones, placas y zonas, PvP de lobby opcional, parkour con modos infinitos y clasificaciones, y gadgets. Dieciséis módulos que se activan y desactivan en vivo, y todo se edita en el juego.",
     },
-    version: "1.0.0",
+    version: "1.6.0",
     status: "beta",
     category: { en: "Utility", es: "Utilidad" },
     minecraft: "1.21.1+",
