@@ -2664,7 +2664,7 @@ export const plugins: Plugin[] = [
       en: "Vaults per player kept in the database, their number and size set by rank, renamed, given icons, bought with any currency and searched by item, with staff browsing and history restores — open in exactly one window across the whole network. Free and open source.",
       es: "Baúles por jugador guardados en la base de datos, con cantidad y tamaño por rango, renombrables, con iconos, comprables con cualquier moneda y buscables por ítem, con navegación y restauración de historial para el staff — abiertos en una sola ventana en toda la red. Gratis y de código abierto.",
     },
-    version: "1.0.0",
+    version: "1.11.1",
     status: "stable",
     category: { en: "Survival", es: "Survival" },
     minecraft: "1.21+",
