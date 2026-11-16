@@ -153,7 +153,7 @@ function NavTree({
                   {active && (
                     <m.span
                       layoutId="sidebar-active"
-                      className="absolute -left-px top-0 h-full w-px bg-[rgb(var(--accent))]"
+                      className="absolute -left-px top-0 h-full w-[2px] bg-[rgb(var(--accent))]"
                       transition={{ duration: 0.32, ease: EASE }}
                     />
                   )}
@@ -161,7 +161,7 @@ function NavTree({
                     href={href}
                     onClick={onNavigate}
                     className={`group flex items-center justify-between gap-2 py-[7px] pl-3 pr-2 text-[13.5px] transition-colors duration-200 ${
-                      active ? "text-white" : "text-white/42 hover:text-white/80"
+                      active ? "rounded-r-md bg-[rgb(var(--accent)/0.1)] text-white" : "text-white/42 hover:text-white/80"
                     }`}
                   >
                     <span className="truncate">{page.title}</span>

@@ -81,7 +81,7 @@ export function DocHeader({
         <span className="flex items-center gap-2">
           <span className="relative h-1 w-16 overflow-hidden rounded-full bg-white/[0.08]">
             <span
-              className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-[rgb(var(--accent))] to-[#e7cfff]"
+              className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-[rgb(var(--accent))] to-white"
               style={{ width: `${(index / total) * 100}%` }}
             />
           </span>

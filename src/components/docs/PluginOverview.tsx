@@ -10,6 +10,8 @@ import { PluginBanner } from "@/components/PluginBanner";
 import { SITE } from "@/content/registry";
 import { ReadTick, useReadPages } from "./Reading";
 import { AskPlugin } from "./AskPlugin";
+import { useLayoutEffect } from "react";
+import { arrived, BANNER_MORPH } from "@/lib/banner-morph";
 
 const EASE = [0.16, 1, 0.3, 1] as const;
 /** The pages people come back to look things up in. */
@@ -33,6 +35,7 @@ export function PluginOverview({
   const resume = flat.find((p) => !read.includes(p.id));
   const quick = flat.filter((p) => QUICK.includes(p.id));
   const f = dict.docs.facts;
+  useLayoutEffect(arrived, []);
 
   const facts = [
     { label: f.version[lang], value: `v${plugin.version}` },
@@ -44,27 +47,14 @@ export function PluginOverview({
   return (
     <div className="pb-6">
       <header className="pb-12">
-        <m.div
-          initial={false}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.8, ease: EASE }}
-          className="relative mb-10"
-        >
-          {/* The banner's own light, spilling under it. */}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={plugin.banner}
-            alt=""
-            aria-hidden
-            className="pointer-events-none absolute inset-x-[6%] -bottom-10 top-8 h-[calc(100%-2rem+2.5rem)] w-[88%] object-cover opacity-50 blur-[60px] saturate-150"
-          />
+        <div className="relative mb-10" style={{ viewTransitionName: BANNER_MORPH }}>
           <PluginBanner
             plugin={plugin}
             priority
             rounded="rounded-xl"
             className="relative aspect-[2/1] w-full shadow-[0_40px_120px_-50px_rgba(0,0,0,0.9)] sm:aspect-[3/1]"
           />
-        </m.div>
+        </div>
 
         <m.h1
           initial={false}

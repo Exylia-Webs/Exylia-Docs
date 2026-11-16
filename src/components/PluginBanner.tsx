@@ -31,7 +31,7 @@ export function PluginBanner({
       className={`relative block overflow-hidden ${rounded} border border-white/[0.07] bg-ink-900 ${className}`}
     >
       {failed ? (
-        <span className="absolute inset-0 flex items-center justify-center bg-[radial-gradient(circle_at_30%_20%,rgba(124,92,255,0.22),transparent_70%)]">
+        <span className="absolute inset-0 flex items-center justify-center bg-[radial-gradient(circle_at_30%_20%,rgb(var(--accent)/0.22),transparent_70%)]">
           <span className="font-display text-[clamp(0.9rem,7cqw,2.4rem)] font-semibold tracking-tight2 text-white/70">
             {monogram}
           </span>

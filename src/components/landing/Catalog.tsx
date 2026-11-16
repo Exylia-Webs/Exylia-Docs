@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import { morphTo } from "@/lib/banner-morph";
 import { groupByCategory, pageCount, plugins, type Lang, type Plugin } from "@/content/registry";
 import { dict } from "@/content/dictionary";
 import { TINTS } from "@/content/tints";
@@ -118,10 +120,12 @@ export function Catalog({ lang }: { lang: Lang }) {
 
 function Card({ plugin, lang, priority }: { plugin: Plugin; lang: Lang; priority: boolean }) {
   const l = dict.landing;
+  const router = useRouter();
   const ready = plugin.nav.length > 0;
+  const href = `/${lang}/docs/${plugin.id}/`;
   const body = (
     <>
-      <span className="block overflow-hidden rounded-xl">
+      <span data-banner className="block overflow-hidden rounded-xl">
         <PluginBanner
           plugin={plugin}
           priority={priority}
@@ -140,7 +144,16 @@ function Card({ plugin, lang, priority }: { plugin: Plugin; lang: Lang; priority
   );
   const on = { onPointerEnter: () => tint(plugin.id), onFocus: () => tint(plugin.id) };
   return ready ? (
-    <Link href={`/${lang}/docs/${plugin.id}`} className="group block" {...on}>
+    <Link
+      href={href}
+      className="group block"
+      onClick={(e) => {
+        if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+        e.preventDefault();
+        morphTo(e.currentTarget.querySelector<HTMLElement>("[data-banner]")!, () => router.push(href));
+      }}
+      {...on}
+    >
       {body}
     </Link>
   ) : (

@@ -73,7 +73,7 @@ export function Toc({ headings, minutes, lang }: { headings: Heading[]; minutes:
                 {isActive && (
                   <m.span
                     layoutId="toc-active"
-                    className="absolute -left-[2.5px] top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full bg-white shadow-[0_0_10px_2px_rgba(231,207,255,0.6)]"
+                    className="absolute -left-[2.5px] top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full bg-[rgb(var(--accent))] shadow-[0_0_10px_2px_rgb(var(--accent)/0.6)]"
                     transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
                   />
                 )}
