@@ -1,7 +1,7 @@
 "use client";
 
 import Lenis from "lenis";
-import { useEffect } from "react";
+import { useLayoutEffect } from "react";
 
 /**
  * Inertial wheel scrolling for the landing only. Touch keeps the native scroll,
@@ -9,7 +9,9 @@ import { useEffect } from "react";
  * `data-lenis-prevent` (the search dialog list) scrolls on its own.
  */
 export function SmoothScroll() {
-  useEffect(() => {
+  // Layout effect: its cleanup runs before Next scrolls the next page to the top, so a
+  // glide still in flight cannot drag the new page down to where the landing was.
+  useLayoutEffect(() => {
     if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     const lenis = new Lenis({ lerp: 0.1, anchors: { offset: -96 } });
     let raf = requestAnimationFrame(function loop(time) {
