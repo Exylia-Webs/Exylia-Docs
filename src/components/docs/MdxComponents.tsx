@@ -9,8 +9,8 @@ import type { Lang } from "@/content/registry";
 
 const CALLOUT = {
   note: {
-    accent: "rgba(124,92,255,0.55)",
-    tint: "rgba(124,92,255,0.05)",
+    accent: "rgb(var(--accent) / 0.55)",
+    tint: "rgb(var(--accent) / 0.05)",
     label: "Nota",
     icon: (
       <path d="M8 5.2v.1M8 7.4v3.4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />

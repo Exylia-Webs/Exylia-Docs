@@ -45,7 +45,7 @@ export function PluginOverview({
     <div className="pb-6">
       <header className="pb-12">
         <m.div
-          initial={{ opacity: 0, scale: 1.01 }}
+          initial={false}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.8, ease: EASE }}
           className="relative mb-10"
@@ -66,27 +66,17 @@ export function PluginOverview({
           />
         </m.div>
 
-        <m.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, ease: EASE }}
-          className="flex items-center gap-3"
-        >
-          <span className="h-px w-6 bg-[rgb(var(--accent))]/50" />
-          <span className="eyebrow">{dict.docs.documentation[lang]}</span>
-        </m.div>
-
         <m.h1
-          initial={{ opacity: 0, y: 16, filter: "blur(8px)" }}
+          initial={false}
           animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
           transition={{ duration: 0.8, delay: 0.06, ease: EASE }}
-          className="mt-5 font-display text-[clamp(2.3rem,5.4vw,3.6rem)] font-medium leading-[1.02] tracking-tight2 text-white"
+          className="font-display text-[clamp(2.3rem,5.4vw,3.6rem)] font-medium leading-[1.02] tracking-tight2 text-white"
         >
           {plugin.name}
         </m.h1>
 
         <m.p
-          initial={{ opacity: 0, y: 12 }}
+          initial={false}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.7, delay: 0.16, ease: EASE }}
           className="mt-4 max-w-2xl text-[16.5px] leading-relaxed text-white/50"
@@ -95,7 +85,7 @@ export function PluginOverview({
         </m.p>
 
         <m.div
-          initial={{ opacity: 0, y: 12 }}
+          initial={false}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.7, delay: 0.26, ease: EASE }}
           className="mt-9 flex flex-wrap items-center gap-4"
@@ -136,14 +126,14 @@ export function PluginOverview({
         </m.div>
 
         <m.div
-          initial={{ opacity: 0 }}
+          initial={false}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.8, delay: 0.3 }}
           className="mt-6 flex items-center gap-3 font-mono text-[11px] tracking-wide text-white/35"
         >
           <span className="relative h-1 w-32 overflow-hidden rounded-full bg-white/[0.08]">
             <span
-              className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-[#8a51c4] to-[#8fffc1] transition-[width] duration-700"
+              className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-[rgb(var(--accent))] to-[#8fffc1] transition-[width] duration-700"
               style={{ width: `${(done / pageCount) * 100}%` }}
             />
           </span>
@@ -155,7 +145,7 @@ export function PluginOverview({
         <AskPlugin name={plugin.name} lang={lang} />
 
         <m.dl
-          initial={{ opacity: 0 }}
+          initial={false}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.8, delay: 0.34 }}
           className="mt-10 grid grid-cols-2 gap-px border-l border-t hair sm:grid-cols-4"
@@ -179,7 +169,7 @@ export function PluginOverview({
               <Link
                 key={page.slug}
                 href={`/${lang}/docs/${page.plugin}/${page.slug}`}
-                className="group inline-flex h-10 items-center gap-2 rounded-full border border-white/10 bg-white/[0.02] px-4 text-[13.5px] text-white/70 transition-all duration-300 hover:border-[#aa76de]/50 hover:bg-[#8a51c4]/10 hover:text-white"
+                className="group inline-flex h-10 items-center gap-2 rounded-full border border-white/10 bg-white/[0.02] px-4 text-[13.5px] text-white/70 transition-all duration-300 hover:border-[rgb(var(--accent))]/50 hover:bg-[rgb(var(--accent))]/10 hover:text-white"
               >
                 {page.title}
                 <svg className="h-3 w-3 text-white/25 transition-all duration-300 group-hover:translate-x-0.5 group-hover:text-[#e7cfff]" viewBox="0 0 16 16" fill="none" aria-hidden>
@@ -197,7 +187,7 @@ export function PluginOverview({
           return (
             <m.section
               key={section.label}
-              initial={{ opacity: 0, y: 20 }}
+              initial={false}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, margin: "-6% 0px" }}
               transition={{ duration: 0.6, ease: EASE }}
@@ -224,7 +214,7 @@ export function PluginOverview({
                       >
                         <span
                           className={`mt-[3px] grid h-5 w-5 shrink-0 place-items-center rounded-full border font-mono text-[9.5px] transition-colors duration-300 ${
-                            isRead ? "border-[#8fffc1]/30 bg-[#8fffc1]/10" : "border-white/12 text-white/35 group-hover:border-[#aa76de]/60 group-hover:text-white"
+                            isRead ? "border-[#8fffc1]/30 bg-[#8fffc1]/10" : "border-white/12 text-white/35 group-hover:border-[rgb(var(--accent))]/60 group-hover:text-white"
                           }`}
                         >
                           {isRead ? <ReadTick className="h-2.5 w-2.5" /> : flat.indexOf(page) + 1}

@@ -63,7 +63,7 @@ export function Toc({ headings, minutes, lang }: { headings: Heading[]; minutes:
         <span className="absolute bottom-0 left-0 top-0 w-px bg-white/[0.07]" />
         <m.span
           style={{ scaleY: fill }}
-          className="absolute bottom-0 left-0 top-0 w-px origin-top bg-gradient-to-b from-[#e7cfff] via-[#aa76de] to-[#8a51c4]"
+          className="absolute bottom-0 left-0 top-0 w-px origin-top bg-[rgb(var(--accent))]"
         />
         <ul className="flex flex-col">
           {headings.map((h) => {

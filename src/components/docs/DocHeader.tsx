@@ -35,7 +35,7 @@ export function DocHeader({
   return (
     <header className="pb-10">
       <m.div
-        initial={{ opacity: 0, y: 8 }}
+        initial={false}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, ease: EASE }}
         className="flex flex-wrap items-center gap-x-3 gap-y-2 font-mono text-[10.5px] uppercase tracking-[0.18em]"
@@ -44,7 +44,7 @@ export function DocHeader({
           {plugin.name}
         </Link>
         <span className="text-white/15">/</span>
-        <span className="text-[#b48fd9]">{group}</span>
+        <span className="text-[rgb(var(--accent))]">{group}</span>
         {badge && (
           <span className="rounded-full border border-[rgb(var(--accent))]/25 px-2 py-0.5 text-[9.5px] tracking-[0.14em] text-accent">
             {badge}
@@ -53,7 +53,7 @@ export function DocHeader({
       </m.div>
 
       <m.h1
-        initial={{ opacity: 0, y: 16, filter: "blur(8px)" }}
+        initial={false}
         animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
         transition={{ duration: 0.75, delay: 0.06, ease: EASE }}
         className="mt-5 font-display text-[clamp(2rem,4.4vw,2.9rem)] font-medium leading-[1.05] tracking-tight2 text-white"
@@ -63,7 +63,7 @@ export function DocHeader({
 
       {description && (
         <m.p
-          initial={{ opacity: 0, y: 12 }}
+          initial={false}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.7, delay: 0.16, ease: EASE }}
           className="mt-4 max-w-2xl text-[16px] leading-relaxed text-white/45"
@@ -73,7 +73,7 @@ export function DocHeader({
       )}
 
       <m.div
-        initial={{ opacity: 0 }}
+        initial={false}
         animate={{ opacity: 1 }}
         transition={{ duration: 0.7, delay: 0.24 }}
         className="mt-7 flex flex-wrap items-center gap-x-5 gap-y-3 font-mono text-[11px] tracking-wide text-white/35"
@@ -81,7 +81,7 @@ export function DocHeader({
         <span className="flex items-center gap-2">
           <span className="relative h-1 w-16 overflow-hidden rounded-full bg-white/[0.08]">
             <span
-              className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-[#8a51c4] to-[#e7cfff]"
+              className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-[rgb(var(--accent))] to-[#e7cfff]"
               style={{ width: `${(index / total) * 100}%` }}
             />
           </span>
@@ -92,10 +92,10 @@ export function DocHeader({
       </m.div>
 
       <m.span
-        initial={{ scaleX: 0 }}
+        initial={false}
         animate={{ scaleX: 1 }}
         transition={{ duration: 0.9, delay: 0.22, ease: EASE }}
-        className="mt-7 block h-px w-full origin-left bg-gradient-to-r from-[#8a51c4]/50 via-white/[0.08] to-transparent"
+        className="mt-7 block h-px w-full origin-left bg-gradient-to-r from-[rgb(var(--accent))]/50 via-white/[0.08] to-transparent"
       />
     </header>
   );
@@ -141,7 +141,7 @@ function CopyPage({ markdown, lang }: { markdown: string; lang: Lang }) {
 export function ArticleFade({ children }: { children: React.ReactNode }) {
   return (
     <m.div
-      initial={{ opacity: 0, y: 12 }}
+      initial={false}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.7, delay: 0.28, ease: EASE }}
     >

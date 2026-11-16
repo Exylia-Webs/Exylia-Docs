@@ -171,7 +171,7 @@ export function SearchDialog({
               </kbd>
             </div>
 
-            <div data-lenis-prevent className="max-h-[52vh] overflow-y-auto scroll-thin p-2">
+            <div className="max-h-[52vh] overflow-y-auto scroll-thin p-2">
               {query && !entries && (
                 <p className="px-3 py-8 text-center font-mono text-[11px] uppercase tracking-[0.18em] text-white/25 animate-pulse">
                   {dict.search.loading[lang]}

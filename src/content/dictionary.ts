@@ -87,6 +87,8 @@ export const dict = {
   },
   landing: {
     kicker: { en: "Official documentation", es: "Documentación oficial" },
+    title1: { en: "{n} plugins.", es: "{n} plugins." },
+    title2: { en: "One way to read them.", es: "Una sola forma de leerlos." },
     line1: { en: "Every plugin,", es: "Cada plugin," },
     line2: { en: "explained the way it was", es: "explicado como fue" },
     /** Accent words drawn by hand (fx/Ink.tsx); each must exist in ink-paths.ts. */

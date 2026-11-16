@@ -1,13 +1,8 @@
 import { Nav } from "@/components/Nav";
-import { ScrollProgress } from "@/components/ScrollProgress";
 import { Footer } from "@/components/Footer";
 import { Hero } from "@/components/landing/Hero";
 import { Catalog } from "@/components/landing/Catalog";
-import { Structure } from "@/components/landing/Structure";
-import { Features, Stats } from "@/components/landing/Features";
-import { SmoothScroll } from "@/components/landing/fx/SmoothScroll";
-import { CTA } from "@/components/landing/CTA";
-import { Intro } from "@/components/landing/Intro";
+import { HowToRead } from "@/components/landing/HowToRead";
 import { LANGS, toLang } from "@/content/registry";
 
 export function generateStaticParams() {
@@ -19,19 +14,16 @@ export default async function LandingPage({ params }: { params: Promise<{ lang: 
 
   return (
     <>
-      <Intro />
-      <SmoothScroll />
-      <ScrollProgress />
+      <div aria-hidden className="tint-wash" />
       <Nav lang={lang} />
-      <main className="relative">
-        <Hero lang={lang} />
-        <Structure lang={lang} />
-        <Catalog lang={lang} />
-        <Features lang={lang} />
-        <Stats lang={lang} />
-        <CTA lang={lang} />
-      </main>
-      <Footer lang={lang} />
+      <div className="relative z-[1]">
+        <main>
+          <Hero lang={lang} />
+          <Catalog lang={lang} />
+          <HowToRead lang={lang} />
+        </main>
+        <Footer lang={lang} />
+      </div>
     </>
   );
 }

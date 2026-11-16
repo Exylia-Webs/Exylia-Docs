@@ -5,6 +5,7 @@ import { Footer } from "@/components/Footer";
 import { Sidebar } from "@/components/docs/Sidebar";
 import { AssistantLauncher } from "@/components/assistant/AssistantLauncher";
 import { getNav } from "@/lib/docs";
+import { TINTS } from "@/content/tints";
 import { documentedPlugins, LANGS, getPlugin, toLang } from "@/content/registry";
 
 export function generateStaticParams() {
@@ -24,33 +25,22 @@ export default async function DocsLayout({
   if (!entry || entry.nav.length === 0) notFound();
 
   return (
-    <>
+    <div style={{ "--accent": TINTS[entry.id] ?? "124 92 255" } as React.CSSProperties}>
       <ScrollProgress />
       <Nav lang={lang} />
 
-      <div className="pointer-events-none fixed inset-0 -z-10">
-        <div className="absolute inset-0 bg-grid opacity-40" />
-        {/* The plugin's own colours: its banner, blurred into a glow at the top of every page. */}
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={entry.banner}
-          alt=""
-          aria-hidden
-          className="absolute inset-x-0 top-0 h-[70vh] w-full scale-110 object-cover opacity-[0.3] blur-[100px] saturate-150 [mask-image:linear-gradient(to_bottom,black,transparent)]"
-        />
-        <div
-          className="absolute left-1/2 top-[-30%] h-[60vw] w-[60vw] -translate-x-1/2 rounded-full opacity-40 blur-[140px]"
-          style={{ background: "radial-gradient(circle, rgba(124,92,255,0.13), transparent 62%)" }}
-        />
-      </div>
+      {/* The plugin's own colour, from its banner (scripts/tints.py), behind the top of every page. */}
+      <div aria-hidden className="tint-wash is-docs" />
 
-      <div className="mx-auto flex w-full max-w-docs gap-10 px-6 pt-[132px]">
+      <div className="relative z-[1] mx-auto flex w-full max-w-docs gap-10 px-6 pt-[132px]">
         <Sidebar plugin={entry} sections={getNav(resolved.plugin, lang)} lang={lang} />
         <main className="min-w-0 flex-1 pb-8">{children}</main>
       </div>
 
-      <Footer lang={lang} />
+      <div className="relative z-[1]">
+        <Footer lang={lang} />
+      </div>
       <AssistantLauncher lang={lang} plugin={entry.id} pluginName={entry.name} />
-    </>
+    </div>
   );
 }

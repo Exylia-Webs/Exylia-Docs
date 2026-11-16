@@ -41,10 +41,10 @@ export function Pager({ previous, next, lang }: { previous: DocMeta | null; next
         {next && (
           <Link
             href={href(next)}
-            className="group relative overflow-hidden rounded-2xl border border-[#8a51c4]/30 bg-[linear-gradient(135deg,rgba(138,81,196,0.14),rgba(138,81,196,0.02)_60%)] p-6 transition-all duration-500 hover:border-[#aa76de]/60 hover:shadow-[0_30px_80px_-40px_rgba(138,81,196,0.9)]"
+            className="group relative overflow-hidden rounded-2xl border border-[rgb(var(--accent))]/30 bg-[linear-gradient(135deg,rgb(var(--accent)/0.14),rgb(var(--accent)/0.02)_60%)] p-6 transition-all duration-500 hover:border-[rgb(var(--accent))]/60 hover:shadow-[0_30px_80px_-40px_rgb(var(--accent)/0.9)]"
           >
             <span className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-[radial-gradient(closest-side,rgba(170,118,222,0.35),transparent)] opacity-60 blur-2xl transition-opacity duration-500 group-hover:opacity-100" />
-            <span className="relative flex items-center justify-between gap-2 font-mono text-[10.5px] uppercase tracking-[0.18em] text-[#b48fd9]">
+            <span className="relative flex items-center justify-between gap-2 font-mono text-[10.5px] uppercase tracking-[0.18em] text-[rgb(var(--accent))]">
               <span>
                 {dict.docs.next[lang]} · {next.group}
               </span>

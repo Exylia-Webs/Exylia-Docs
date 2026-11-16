@@ -27,7 +27,7 @@ export function Nav({ lang }: { lang: Lang }) {
   return (
     <>
       <m.header
-        initial={{ y: -40, opacity: 0 }}
+        initial={false}
         animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1], delay: 0.1 }}
         className={`fixed inset-x-0 top-0 z-50 transition-colors duration-500 ${

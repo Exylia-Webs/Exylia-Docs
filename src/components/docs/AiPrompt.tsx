@@ -49,7 +49,7 @@ export function AiPrompt({ id, lang = "en" }: { id: PromptId; lang?: Lang }) {
         borderColor: ready ? "rgb(var(--accent) / 0.5)" : "rgb(var(--accent) / 0.22)",
       }}
       transition={{ duration: 0.4 }}
-      className="not-prose relative my-8 overflow-hidden rounded-2xl border bg-[linear-gradient(160deg,rgba(124,92,255,0.10),rgba(124,92,255,0.02)_55%,transparent)]"
+      className="not-prose relative my-8 overflow-hidden rounded-2xl border bg-[linear-gradient(160deg,rgb(var(--accent)/0.10),rgb(var(--accent)/0.02)_55%,transparent)]"
     >
       <AnimatePresence>
         {ready && (
@@ -99,7 +99,7 @@ export function AiPrompt({ id, lang = "en" }: { id: PromptId; lang?: Lang }) {
           rows={3}
           spellCheck={false}
           placeholder={dict.ai.placeholder[lang]}
-          className="mt-5 block max-h-64 w-full resize-none rounded-xl border border-white/10 bg-ink-950/50 px-4 py-3.5 text-[14px] leading-relaxed text-white/85 outline-none transition-all duration-300 placeholder:text-white/22 focus:border-[rgb(var(--accent))]/55 focus:bg-ink-950/70 focus:shadow-[0_0_0_4px_rgba(124,92,255,0.10)]"
+          className="mt-5 block max-h-64 w-full resize-none rounded-xl border border-white/10 bg-ink-950/50 px-4 py-3.5 text-[14px] leading-relaxed text-white/85 outline-none transition-all duration-300 placeholder:text-white/22 focus:border-[rgb(var(--accent))]/55 focus:bg-ink-950/70 focus:shadow-[0_0_0_4px_rgb(var(--accent)/0.10)]"
         />
 
         <div className="mt-4 flex flex-wrap items-center justify-between gap-4">
