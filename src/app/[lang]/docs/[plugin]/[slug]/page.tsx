@@ -6,7 +6,8 @@ import { Toc } from "@/components/docs/Toc";
 import { Pager } from "@/components/docs/Pager";
 import { MobileNav } from "@/components/docs/Sidebar";
 import { ArticleFade, DocHeader } from "@/components/docs/DocHeader";
-import { getAllDocParams, getNav, getNeighbours, readDoc } from "@/lib/docs";
+import { getAllDocParams, getFlatNav, getNav, getNeighbours, readDoc } from "@/lib/docs";
+import { KeyNav, ReadMarker } from "@/components/docs/Reading";
 import { LANGS, SITE, getPlugin, toLang, translateSlug } from "@/content/registry";
 import { dict } from "@/content/dictionary";
 
@@ -49,18 +50,30 @@ export default async function DocPage({ params }: { params: Params }) {
 
   const sections = getNav(resolved.plugin, lang);
   const { previous, next } = getNeighbours(resolved.plugin, lang, resolved.slug);
+  const flat = getFlatNav(resolved.plugin, lang);
+  const index = flat.findIndex((d) => d.slug === doc.slug) + 1;
+  const minutes = Math.max(1, Math.round(doc.body.split(/\s+/).length / 200));
+  const markdown = `# ${doc.title}\n\n${doc.description ? `${doc.description}\n\n` : ""}${doc.body.trim()}\n\nSource: ${SITE.url}/${lang}/docs/${entry.id}/${doc.slug}\n`;
+  const to = (d: typeof previous) => (d ? `/${lang}/docs/${d.plugin}/${d.slug}` : undefined);
 
   return (
     <>
       <MobileNav plugin={entry} sections={sections} title={doc.title} lang={lang} />
 
       <div className="flex gap-12">
-        <article className="min-w-0 max-w-4xl flex-1 pb-4">
+        <article data-doc className="min-w-0 max-w-4xl flex-1 pb-4">
+          <KeyNav previous={to(previous)} next={to(next)} />
           <DocHeader
+            lang={lang}
+            plugin={{ id: entry.id, name: entry.name }}
             group={doc.group || entry.name}
             title={doc.title}
             description={doc.description}
             badge={doc.badge}
+            minutes={minutes}
+            index={index}
+            total={flat.length}
+            markdown={markdown}
           />
 
           <ArticleFade>
@@ -69,6 +82,7 @@ export default async function DocPage({ params }: { params: Params }) {
             </div>
           </ArticleFade>
 
+          <ReadMarker plugin={entry.id} id={doc.id} />
           <Pager previous={previous} next={next} lang={lang} />
 
           <p className="mt-10 font-mono text-[11px] tracking-wide text-white/25">
@@ -84,7 +98,7 @@ export default async function DocPage({ params }: { params: Params }) {
           </p>
         </article>
 
-        <Toc headings={doc.headings} lang={lang} />
+        <Toc headings={doc.headings} minutes={minutes} lang={lang} />
       </div>
     </>
   );

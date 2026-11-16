@@ -8,6 +8,7 @@ import type { NavSection } from "@/lib/docs";
 import { groupByCategory, type Lang, type Plugin } from "@/content/registry";
 import { dict } from "@/content/dictionary";
 import { PluginBanner } from "@/components/PluginBanner";
+import { ReadTick, useReadPages } from "./Reading";
 
 const EASE = [0.16, 1, 0.3, 1] as const;
 
@@ -121,6 +122,7 @@ function NavTree({
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
+  const read = useReadPages(sections[0]?.pages[0]?.plugin ?? "");
 
   return (
     <nav className="flex flex-col gap-8">
@@ -131,7 +133,17 @@ function NavTree({
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.5, delay: 0.04 * si, ease: EASE }}
         >
-          <p className="eyebrow mb-3 pl-3">{section.label}</p>
+          <p className="eyebrow mb-3 flex items-center justify-between pl-3 pr-2">
+            {section.label}
+            {(() => {
+              const done = section.pages.filter((p) => read.includes(p.id)).length;
+              return done > 0 ? (
+                <span className={`tabular-nums tracking-normal ${done === section.pages.length ? "text-[#8fffc1]/60" : "text-white/25"}`}>
+                  {done}/{section.pages.length}
+                </span>
+              ) : null;
+            })()}
+          </p>
           <ul className="flex flex-col border-l hair">
             {section.pages.map((page) => {
               const href = `/${lang}/docs/${page.plugin}/${page.slug}`;
@@ -153,6 +165,7 @@ function NavTree({
                     }`}
                   >
                     <span className="truncate">{page.title}</span>
+                    {read.includes(page.id) && !page.badge && <ReadTick />}
                     {page.badge && (
                       <span className="shrink-0 rounded border border-[rgb(var(--accent))]/25 px-1.5 py-px font-mono text-[9px] uppercase tracking-[0.12em] text-accent">
                         {page.badge}

@@ -34,8 +34,16 @@ export function CodeBlock({
     setTimeout(() => setCopied(false), 1600);
   }
 
+  const language = (props as Record<string, unknown>)["data-language"];
+  const label = typeof language === "string" && language !== "text" && language !== "plaintext" ? language : null;
+
   return (
     <div className="group/code relative">
+      {label && (
+        <span className="pointer-events-none absolute right-3.5 top-3 font-mono text-[10px] uppercase tracking-[0.16em] text-white/20 transition-opacity duration-300 group-hover/code:opacity-0">
+          {label}
+        </span>
+      )}
       <pre ref={ref} {...props}>
         <PreBoundary value={true}>{children}</PreBoundary>
       </pre>

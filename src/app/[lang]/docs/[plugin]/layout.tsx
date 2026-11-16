@@ -30,6 +30,14 @@ export default async function DocsLayout({
 
       <div className="pointer-events-none fixed inset-0 -z-10">
         <div className="absolute inset-0 bg-grid opacity-40" />
+        {/* The plugin's own colours: its banner, blurred into a glow at the top of every page. */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={entry.banner}
+          alt=""
+          aria-hidden
+          className="absolute inset-x-0 top-0 h-[70vh] w-full scale-110 object-cover opacity-[0.3] blur-[100px] saturate-150 [mask-image:linear-gradient(to_bottom,black,transparent)]"
+        />
         <div
           className="absolute left-1/2 top-[-30%] h-[60vw] w-[60vw] -translate-x-1/2 rounded-full opacity-40 blur-[140px]"
           style={{ background: "radial-gradient(circle, rgba(124,92,255,0.13), transparent 62%)" }}

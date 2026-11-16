@@ -180,6 +180,20 @@ export function Field({
   );
 }
 
+/** A heading with a `#` link that shows on hover, so any section can be shared. */
+function Anchored({ as: Tag, id, children }: { as: "h2" | "h3"; id?: string; children?: ReactNode }) {
+  return (
+    <Tag id={id} className="group/h">
+      {children}
+      {id && (
+        <a href={`#${id}`} aria-label="#" className="heading-anchor">
+          #
+        </a>
+      )}
+    </Tag>
+  );
+}
+
 /**
  * Links inside MDX are written without a language, as `/docs/exyliaffa/arenas`.
  * Prefixing them here means the same file works in both languages and a
@@ -192,6 +206,8 @@ function withLang(href: string, lang: Lang): string {
 export function createMdxComponents(lang: Lang) {
   return {
     pre: (props: { children?: ReactNode }) => <CodeBlock {...props} lang={lang} />,
+    h2: (props: { id?: string; children?: ReactNode }) => <Anchored as="h2" {...props} />,
+    h3: (props: { id?: string; children?: ReactNode }) => <Anchored as="h3" {...props} />,
     code: (props: { children?: ReactNode }) => <InlineCode {...props} lang={lang} />,
     table: (props: { children?: ReactNode }) => (
       <div className="table-wrap">
