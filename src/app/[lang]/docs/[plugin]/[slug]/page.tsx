@@ -85,7 +85,7 @@ export default async function DocPage({ params }: { params: Params }) {
           <ReadMarker plugin={entry.id} id={doc.id} />
           <Pager previous={previous} next={next} lang={lang} />
 
-          <p className="mt-10 font-mono text-[11px] tracking-wide text-white/25">
+          <p className="mt-10 text-[13px] text-white/30">
             {dict.docs.missing[lang]}{" "}
             <a
               href={SITE.discord}

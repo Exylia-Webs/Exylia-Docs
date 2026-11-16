@@ -35,7 +35,7 @@ export function Nav({ lang }: { lang: Lang }) {
         }`}
       >
         <div className="border-b border-white/[0.06] bg-ink-950/70 backdrop-blur-xl">
-          <p className="mx-auto flex max-w-docs items-center justify-center gap-2 px-6 py-1.5 text-center font-mono text-[10.5px] uppercase tracking-[0.14em] text-white/40">
+          <p className="mx-auto flex max-w-docs items-center justify-center gap-2 px-6 py-1.5 text-center text-[12.5px] text-white/40">
             <svg className="h-3 w-3 shrink-0 text-white/30" viewBox="0 0 16 16" fill="none">
               <path
                 d="M8 2.2l1.3 3.4L12.7 7l-3.4 1.4L8 11.8 6.7 8.4 3.3 7l3.4-1.4L8 2.2z"
@@ -54,7 +54,7 @@ export function Nav({ lang }: { lang: Lang }) {
             <Link href={`/${lang}`} className="group shrink-0">
               <Logo className="h-7" />
             </Link>
-            <span className="hidden font-mono text-[10.5px] uppercase tracking-[0.2em] text-white/30 sm:block">
+            <span className="hidden text-[12.5px] text-white/30 sm:block">
               {dict.nav.docsSuffix[lang]}
             </span>
           </div>
@@ -66,7 +66,7 @@ export function Nav({ lang }: { lang: Lang }) {
                 <Link
                   key={l.href}
                   href={l.href}
-                  className={`group relative py-1 font-mono text-[12px] uppercase tracking-[0.12em] transition-colors hover:text-white ${
+                  className={`group relative py-1 text-[12.5px] transition-colors hover:text-white ${
                     active ? "text-white" : "text-white/45"
                   }`}
                 >
@@ -133,7 +133,7 @@ export function Nav({ lang }: { lang: Lang }) {
                   key={l.href}
                   href={l.href}
                   onClick={() => setOpen(false)}
-                  className="block py-3 font-mono text-[13px] uppercase tracking-[0.12em] text-white/60 hover:text-white"
+                  className="block py-3 text-[12.5px] text-white/60 hover:text-white"
                 >
                   {l.label}
                 </Link>
@@ -142,7 +142,7 @@ export function Nav({ lang }: { lang: Lang }) {
                 href={SITE.discord}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="block py-3 font-mono text-[13px] uppercase tracking-[0.12em] text-white/60 hover:text-white"
+                className="block py-3 text-[12.5px] text-white/60 hover:text-white"
               >
                 Discord ↗
               </a>

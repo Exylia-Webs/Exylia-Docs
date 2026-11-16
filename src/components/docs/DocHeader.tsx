@@ -38,7 +38,7 @@ export function DocHeader({
         initial={false}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, ease: EASE }}
-        className="flex flex-wrap items-center gap-x-3 gap-y-2 font-mono text-[10.5px] uppercase tracking-[0.18em]"
+        className="flex flex-wrap items-center gap-x-3 gap-y-2 text-[12.5px]"
       >
         <Link href={`/${lang}/docs/${plugin.id}`} className="text-white/40 transition-colors hover:text-white">
           {plugin.name}
@@ -46,7 +46,7 @@ export function DocHeader({
         <span className="text-white/15">/</span>
         <span className="text-[rgb(var(--accent))]">{group}</span>
         {badge && (
-          <span className="rounded-full border border-[rgb(var(--accent))]/25 px-2 py-0.5 text-[9.5px] tracking-[0.14em] text-accent">
+          <span className="rounded-full border border-[rgb(var(--accent)/0.25)] px-2 py-0.5 text-[9.5px] tracking-[0.14em] text-accent">
             {badge}
           </span>
         )}
@@ -76,7 +76,7 @@ export function DocHeader({
         initial={false}
         animate={{ opacity: 1 }}
         transition={{ duration: 0.7, delay: 0.24 }}
-        className="mt-7 flex flex-wrap items-center gap-x-5 gap-y-3 font-mono text-[11px] tracking-wide text-white/35"
+        className="mt-7 flex flex-wrap items-center gap-x-5 gap-y-3 text-[12.5px] text-white/35"
       >
         <span className="flex items-center gap-2">
           <span className="relative h-1 w-16 overflow-hidden rounded-full bg-white/[0.08]">
@@ -95,7 +95,7 @@ export function DocHeader({
         initial={false}
         animate={{ scaleX: 1 }}
         transition={{ duration: 0.9, delay: 0.22, ease: EASE }}
-        className="mt-7 block h-px w-full origin-left bg-gradient-to-r from-[rgb(var(--accent))]/50 via-white/[0.08] to-transparent"
+        className="mt-7 block h-px w-full origin-left bg-gradient-to-r from-[rgb(var(--accent)/0.5)] via-white/[0.08] to-transparent"
       />
     </header>
   );

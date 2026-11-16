@@ -91,7 +91,7 @@ export function Toc({ headings, minutes, lang }: { headings: Heading[]; minutes:
         </ul>
       </div>
 
-      <div className="mt-6 flex items-center justify-between border-t border-white/[0.06] pt-4 font-mono text-[10.5px] tracking-wide text-white/30">
+      <div className="mt-6 flex items-center justify-between border-t border-white/[0.06] pt-4 text-[12.5px] text-white/30">
         <span>{left > 0 ? t.minutesLeft[lang].replace("{n}", String(left)) : t.done[lang]}</span>
         <a href="#top" onClick={(e) => (e.preventDefault(), scrollTo({ top: 0, behavior: "smooth" }))} className="transition-colors hover:text-white">
           {t.toTop[lang]} ↑

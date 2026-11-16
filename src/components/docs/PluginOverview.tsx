@@ -83,7 +83,7 @@ export function PluginOverview({
           <Magnetic>
             <Link
               href={resume ? `/${lang}/docs/${resume.plugin}/${resume.slug}` : firstHref}
-              className="group inline-flex h-11 max-w-[80vw] items-center gap-2.5 rounded-full bg-white px-5 text-[14px] font-medium text-ink-950 transition-colors hover:bg-[#f1efff]"
+              className="group inline-flex h-11 max-w-[80vw] items-center gap-2.5 rounded-full bg-white px-5 text-[14px] font-medium text-ink-950 transition-colors hover:bg-white/85"
             >
               <span className="truncate">{resume && done > 0 ? dict.docs.continue[lang].replace("{title}", resume.title) : dict.docs.start[lang]}</span>
               <svg className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" viewBox="0 0 16 16" fill="none">
@@ -119,7 +119,7 @@ export function PluginOverview({
           initial={false}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.8, delay: 0.3 }}
-          className="mt-6 flex items-center gap-3 font-mono text-[11px] tracking-wide text-white/35"
+          className="mt-6 flex items-center gap-3 text-[12.5px] text-white/35"
         >
           <span className="relative h-1 w-32 overflow-hidden rounded-full bg-white/[0.08]">
             <span
@@ -142,7 +142,7 @@ export function PluginOverview({
         >
           {facts.map((fact) => (
             <div key={fact.label} className="border-b border-r hair px-4 py-3.5">
-              <dt className="font-mono text-[10px] uppercase tracking-[0.16em] text-white/28">
+              <dt className="text-[12.5px] text-white/28">
                 {fact.label}
               </dt>
               <dd className="mt-1.5 font-display text-[15px] font-medium text-white">{fact.value}</dd>
@@ -159,10 +159,10 @@ export function PluginOverview({
               <Link
                 key={page.slug}
                 href={`/${lang}/docs/${page.plugin}/${page.slug}`}
-                className="group inline-flex h-10 items-center gap-2 rounded-full border border-white/10 bg-white/[0.02] px-4 text-[13.5px] text-white/70 transition-all duration-300 hover:border-[rgb(var(--accent))]/50 hover:bg-[rgb(var(--accent))]/10 hover:text-white"
+                className="group inline-flex h-10 items-center gap-2 rounded-full border border-white/10 bg-white/[0.02] px-4 text-[13.5px] text-white/70 transition-all duration-300 hover:border-[rgb(var(--accent)/0.5)] hover:bg-[rgb(var(--accent)/0.1)] hover:text-white"
               >
                 {page.title}
-                <svg className="h-3 w-3 text-white/25 transition-all duration-300 group-hover:translate-x-0.5 group-hover:text-[#e7cfff]" viewBox="0 0 16 16" fill="none" aria-hidden>
+                <svg className="h-3 w-3 text-white/25 transition-all duration-300 group-hover:translate-x-0.5 group-hover:text-white" viewBox="0 0 16 16" fill="none" aria-hidden>
                   <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               </Link>
@@ -184,7 +184,7 @@ export function PluginOverview({
               className="grid gap-4 border-t border-white/[0.07] py-10 md:grid-cols-[200px_1fr] md:gap-10"
             >
               <div>
-                <p className="font-mono text-[10.5px] uppercase tracking-[0.18em] text-white/30">
+                <p className="text-[12.5px] text-white/30">
                   {dict.docs.chapter[lang]} {String(si + 1).padStart(2, "0")}
                 </p>
                 <h2 className="mt-2 flex items-center gap-2 font-display text-[22px] font-medium tracking-tight text-white">
@@ -204,7 +204,7 @@ export function PluginOverview({
                       >
                         <span
                           className={`mt-[3px] grid h-5 w-5 shrink-0 place-items-center rounded-full border font-mono text-[9.5px] transition-colors duration-300 ${
-                            isRead ? "border-[#8fffc1]/30 bg-[#8fffc1]/10" : "border-white/12 text-white/35 group-hover:border-[rgb(var(--accent))]/60 group-hover:text-white"
+                            isRead ? "border-[#8fffc1]/30 bg-[#8fffc1]/10" : "border-white/12 text-white/35 group-hover:border-[rgb(var(--accent)/0.6)] group-hover:text-white"
                           }`}
                         >
                           {isRead ? <ReadTick className="h-2.5 w-2.5" /> : flat.indexOf(page) + 1}
@@ -213,7 +213,7 @@ export function PluginOverview({
                           <span className={`block font-display text-[15px] font-medium transition-colors ${isRead ? "text-white/60" : "text-white"} group-hover:text-white`}>
                             {page.title}
                             {page.badge && (
-                              <span className="ml-2 rounded border border-[rgb(var(--accent))]/25 px-1.5 py-px align-middle font-mono text-[9px] uppercase tracking-[0.12em] text-accent">
+                              <span className="ml-2 rounded border border-[rgb(var(--accent)/0.25)] px-1.5 py-px align-middle text-[11px] font-medium text-accent">
                                 {page.badge}
                               </span>
                             )}

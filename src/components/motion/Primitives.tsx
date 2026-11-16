@@ -151,7 +151,7 @@ export function Magnetic({
     >
       <m.span
         aria-hidden
-        className="pointer-events-none absolute -inset-3 rounded-full bg-[radial-gradient(circle_at_var(--pointer-x)_var(--pointer-y),rgba(124,92,255,0.3),transparent_42%)] blur-xl"
+        className="pointer-events-none absolute -inset-3 rounded-full bg-[radial-gradient(circle_at_var(--pointer-x)_var(--pointer-y),rgb(var(--accent)/0.3),transparent_42%)] blur-xl"
         style={{ opacity: sGlowOpacity }}
       />
       {children}

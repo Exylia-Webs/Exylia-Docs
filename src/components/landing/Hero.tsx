@@ -85,7 +85,7 @@ function HeroSearch({ lang }: { lang: Lang }) {
           aria-label={l.searchLabel[lang].replace("{n}", String(TOTAL_PAGES))}
           className="h-14 min-w-0 flex-1 bg-transparent text-base text-white placeholder:text-white/30 focus:outline-none sm:text-[15px]"
         />
-        <span className="hidden shrink-0 pr-3 font-mono text-[11px] text-white/30 sm:block">
+        <span className="hidden shrink-0 pr-3 text-[12px] tabular-nums text-white/30 sm:block">
           {TOTAL_PAGES} {s.pages[lang]}
         </span>
       </label>

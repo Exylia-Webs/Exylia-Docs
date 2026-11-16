@@ -40,7 +40,7 @@ export function CodeBlock({
   return (
     <div className="group/code relative">
       {label && (
-        <span className="pointer-events-none absolute right-3.5 top-3 font-mono text-[10px] uppercase tracking-[0.16em] text-white/20 transition-opacity duration-300 group-hover/code:opacity-0">
+        <span className="pointer-events-none absolute right-3.5 top-3 text-[12.5px] text-white/20 transition-opacity duration-300 group-hover/code:opacity-0">
           {label}
         </span>
       )}

@@ -26,9 +26,9 @@ export function Pager({ previous, next, lang }: { previous: DocMeta | null; next
         {previous ? (
           <Link
             href={href(previous)}
-            className="group flex flex-col justify-between gap-6 rounded-2xl border border-white/[0.07] p-5 transition-colors duration-300 hover:border-white/15 hover:bg-white/[0.02]"
+            className="group flex flex-col justify-between gap-6 rounded-2xl border border-white/[0.07] p-5 transition-colors duration-200 hover:border-white/15 hover:bg-white/[0.02]"
           >
-            <span className="flex items-center gap-2 font-mono text-[10.5px] uppercase tracking-[0.18em] text-white/30">
+            <span className="flex items-center gap-2 text-[12.5px] text-white/30">
               <Arrow back />
               {dict.docs.previous[lang]}
             </span>
@@ -41,10 +41,9 @@ export function Pager({ previous, next, lang }: { previous: DocMeta | null; next
         {next && (
           <Link
             href={href(next)}
-            className="group relative overflow-hidden rounded-2xl border border-[rgb(var(--accent))]/30 bg-[linear-gradient(135deg,rgb(var(--accent)/0.14),rgb(var(--accent)/0.02)_60%)] p-6 transition-all duration-500 hover:border-[rgb(var(--accent))]/60 hover:shadow-[0_30px_80px_-40px_rgb(var(--accent)/0.9)]"
+            className="group rounded-2xl border border-white/[0.1] bg-white/[0.02] p-6 transition-colors duration-200 hover:border-[rgb(var(--accent)/0.5)] hover:bg-[rgb(var(--accent)/0.06)]"
           >
-            <span className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-[radial-gradient(closest-side,rgba(170,118,222,0.35),transparent)] opacity-60 blur-2xl transition-opacity duration-500 group-hover:opacity-100" />
-            <span className="relative flex items-center justify-between gap-2 font-mono text-[10.5px] uppercase tracking-[0.18em] text-[rgb(var(--accent))]">
+            <span className="flex items-center justify-between gap-2 text-[12.5px] text-white/40">
               <span>
                 {dict.docs.next[lang]} · {next.group}
               </span>
@@ -52,13 +51,13 @@ export function Pager({ previous, next, lang }: { previous: DocMeta | null; next
                 <Arrow />
               </span>
             </span>
-            <span className="relative mt-5 block font-display text-[clamp(1.25rem,2.4vw,1.6rem)] font-medium tracking-tight text-white">{next.title}</span>
-            {next.description && <span className="relative mt-2 block max-w-lg text-[13.5px] leading-relaxed text-white/45">{next.description}</span>}
+            <span className="mt-4 block font-display text-[clamp(1.25rem,2.4vw,1.6rem)] font-medium tracking-tight text-white">{next.title}</span>
+            {next.description && <span className="mt-1.5 block max-w-lg text-[13.5px] leading-relaxed text-white/45">{next.description}</span>}
           </Link>
         )}
       </div>
 
-      <p className="mt-4 hidden items-center justify-end gap-1.5 font-mono text-[10.5px] text-white/25 lg:flex">
+      <p className="mt-4 hidden items-center justify-end gap-1.5 text-[12px] text-white/25 lg:flex">
         <Kbd>←</Kbd>
         <Kbd>→</Kbd>
         <span className="ml-1">{dict.docs.keysHint[lang]}</span>

@@ -36,7 +36,7 @@ function PluginSwitcher({ current, lang }: { current: Plugin; lang: Lang }) {
           <span className="block truncate font-display text-[13.5px] font-medium text-white">
             {current.name}
           </span>
-          <span className="block font-mono text-[10px] tracking-wide text-white/30">
+          <span className="block text-[12.5px] text-white/30">
             v{current.version}
           </span>
         </span>
@@ -167,7 +167,7 @@ function NavTree({
                     <span className="truncate">{page.title}</span>
                     {read.includes(page.id) && !page.badge && <ReadTick />}
                     {page.badge && (
-                      <span className="shrink-0 rounded border border-[rgb(var(--accent))]/25 px-1.5 py-px font-mono text-[9px] uppercase tracking-[0.12em] text-accent">
+                      <span className="shrink-0 rounded border border-[rgb(var(--accent)/0.25)] px-1.5 py-px text-[11px] font-medium text-accent">
                         {page.badge}
                       </span>
                     )}
@@ -232,7 +232,7 @@ export function MobileNav({
           <svg className="h-3.5 w-3.5 shrink-0" viewBox="0 0 16 16" fill="none">
             <path d="M2.5 4h11M2.5 8h11M2.5 12h7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
           </svg>
-          <span className="shrink-0 font-mono text-[11px] uppercase tracking-[0.16em]">{plugin.name}</span>
+          <span className="shrink-0 text-[12.5px]">{plugin.name}</span>
           <span className="shrink-0 text-white/20">/</span>
           <span className="min-w-0 truncate text-[13px] text-white/80">{title}</span>
         </button>

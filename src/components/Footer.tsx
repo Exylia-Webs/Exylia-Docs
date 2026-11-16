@@ -67,7 +67,7 @@ export function Footer({ lang }: { lang: Lang }) {
         </div>
 
         <div className="mt-14 flex flex-col items-start justify-between gap-3 border-t hair pt-6 sm:flex-row sm:items-center">
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-2 font-mono text-[11px] tracking-wide">
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-[12.5px]">
             <p className="text-white/25">© {new Date().getFullYear()} Exylia · DiGround</p>
             {/* The hub's privacy policy covers this site too: it collects nothing beyond it. */}
             <a href={`${HUB_LEGAL}/${lang}/legal`} className="text-white/40 transition-colors hover:text-white">
@@ -78,7 +78,7 @@ export function Footer({ lang }: { lang: Lang }) {
             </a>
             <CookieSettingsButton className="text-white/40 transition-colors hover:text-white" />
           </div>
-          <p className="font-mono text-[11px] tracking-wide text-white/25">{f.madeWith[lang]}</p>
+          <p className="text-[12.5px] text-white/25">{f.madeWith[lang]}</p>
         </div>
       </div>
     </footer>
