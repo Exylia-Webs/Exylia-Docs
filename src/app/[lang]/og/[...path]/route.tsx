@@ -36,7 +36,7 @@ function landing(lang: Lang) {
     path: `/${lang}`,
     badge: l.kicker[lang],
     eyebrow: "Minecraft plugins",
-    title: `${l.line1[lang]} ${l.line2[lang]} ${l.line3[lang]}`,
+    title: `${l.line1[lang]} ${l.line2[lang]} ${l.ink.hero[lang]}`,
     subtitle: l.lead[lang],
     panel: (
       <Panel accent={ACCENT}>

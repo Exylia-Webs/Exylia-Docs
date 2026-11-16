@@ -13,7 +13,7 @@ import { LangToggle } from "./LangToggle";
 export function Nav({ lang }: { lang: Lang }) {
   const links = [
     { label: dict.nav.plugins[lang], href: `/${lang}#plugins` },
-    { label: dict.nav.ecosystem[lang], href: `/${lang}#ecosistema` },
+    { label: dict.nav.ecosystem[lang], href: `/${lang}#estructura` },
   ];
 
   const [scrolled, setScrolled] = useState(false);

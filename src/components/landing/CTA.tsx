@@ -3,13 +3,14 @@
 import { m } from "framer-motion";
 import { SITE, type Lang } from "@/content/registry";
 import { dict } from "@/content/dictionary";
-import { Magnetic, TextReveal } from "@/components/motion/Primitives";
+import { Magnetic } from "@/components/motion/Primitives";
+import { Ink } from "./fx/Ink";
 
 export function CTA({ lang }: { lang: Lang }) {
   const l = dict.landing;
   return (
-    <section className="relative overflow-hidden py-24 sm:py-32">
-      <div className="pointer-events-none absolute inset-0 bg-grid bg-grid-fade opacity-70" />
+    <section className="relative overflow-hidden pt-32 sm:pt-44">
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[70%] bg-[radial-gradient(50%_60%_at_50%_100%,rgba(138,81,196,0.3),transparent_70%)]" />
 
       <div className="relative mx-auto max-w-content px-6 text-center">
         <m.div
@@ -20,8 +21,8 @@ export function CTA({ lang }: { lang: Lang }) {
           className="mx-auto mb-10 h-px w-24 bg-gradient-to-r from-transparent via-[rgb(var(--accent))]/60 to-transparent"
         />
 
-        <h2 className="mx-auto max-w-3xl font-display text-[clamp(1.9rem,4.6vw,3.2rem)] font-medium leading-[1.08] tracking-tight2 text-white">
-          <TextReveal>{l.ctaTitle[lang]}</TextReveal>
+        <h2 className="mx-auto max-w-4xl font-display text-[clamp(2.4rem,6.5vw,5.5rem)] font-medium leading-[1] tracking-[-0.045em] text-white">
+          {l.ctaTitle[lang]} <Ink word={l.ink.cta[lang]} className="text-[1.12em]" />?
         </h2>
 
         <m.p
@@ -65,6 +66,17 @@ export function CTA({ lang }: { lang: Lang }) {
           </a>
         </m.div>
       </div>
+
+      <m.p
+        aria-hidden
+        initial={{ opacity: 0, y: "30%" }}
+        whileInView={{ opacity: 1, y: "0%" }}
+        viewport={{ once: true }}
+        transition={{ duration: 1.4, ease: [0.16, 1, 0.3, 1] }}
+        className="wordmark pointer-events-none mt-20 select-none text-center font-display text-[25vw] font-semibold leading-[0.78] tracking-[-0.07em]"
+      >
+        Exylia
+      </m.p>
     </section>
   );
 }

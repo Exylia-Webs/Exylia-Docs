@@ -10,7 +10,7 @@ import type { Lang, Localized } from "./registry";
 export const dict = {
   nav: {
     plugins: { en: "Plugins", es: "Plugins" },
-    ecosystem: { en: "Approach", es: "Ecosistema" },
+    ecosystem: { en: "How it reads", es: "Cómo se lee" },
     search: { en: "Search", es: "Buscar" },
     menu: { en: "Menu", es: "Menú" },
     docsSuffix: { en: "/ docs", es: "/ docs" },
@@ -74,8 +74,70 @@ export const dict = {
   landing: {
     kicker: { en: "Official documentation", es: "Documentación oficial" },
     line1: { en: "Every plugin,", es: "Cada plugin," },
-    line2: { en: "explained the way", es: "explicado como" },
-    line3: { en: "it was built", es: "fue construido" },
+    line2: { en: "explained the way it was", es: "explicado como fue" },
+    /** Accent words drawn by hand (fx/Ink.tsx); each must exist in ink-paths.ts. */
+    ink: {
+      hero: { en: "built", es: "construido" },
+      structure: { en: "once", es: "una vez" },
+      catalog: { en: "plugins", es: "plugins" },
+      features: { en: "seconds", es: "segundos" },
+      cta: { en: "clear", es: "claro" },
+    },
+    searchLabel: { en: "Search {n} pages of documentation", es: "Buscar en {n} páginas de documentación" },
+    searchExamples: {
+      en: ["How do I create an arena?", "killstreak rewards", "%exyliaffa_current_streak%", "Reset a player's stats", "MySQL storage"],
+      es: ["¿Cómo creo una arena?", "recompensas de racha", "%exyliaffa_current_streak%", "Reiniciar las estadísticas de un jugador", "Guardar en MySQL"],
+    },
+    ringLabel: { en: "Documented plugins", es: "Plugins documentados" },
+    structureKicker: { en: "One structure", es: "Una estructura" },
+    structureTitle: { en: "Learn to read it", es: "Aprendes a leerla" },
+    structureLead: {
+      en: "Every plugin is split the same four ways. Once you know where things live in one, you know it for all of them.",
+      es: "Todos los plugins se dividen en las mismas cuatro partes. Cuando sabes dónde está cada cosa en uno, lo sabes en todos.",
+    },
+    structureSteps: [
+      {
+        title: { en: "Getting started", es: "Empezar" },
+        body: { en: "Install it, start the server, play the first match. Ten minutes from the jar to a working mode.", es: "Instalarlo, arrancar el servidor y jugar la primera partida. Diez minutos del jar a un modo funcionando." },
+      },
+      {
+        title: { en: "Configuring", es: "Configurar" },
+        body: { en: "Each file explained key by key, with the default value and what changing it does in game.", es: "Cada archivo explicado clave por clave, con su valor por defecto y lo que cambia en el juego." },
+      },
+      {
+        title: { en: "Systems", es: "Sistemas" },
+        body: { en: "How the parts behave together: combat, rewards, stats, menus. The why, not only the what.", es: "Cómo se comportan las piezas juntas: combate, recompensas, estadísticas, menús. El porqué, no solo el qué." },
+      },
+      {
+        title: { en: "Reference", es: "Referencia" },
+        body: { en: "Commands, permissions, placeholders and API, in tables you can scan and copy from.", es: "Comandos, permisos, placeholders y API, en tablas que se leen de un vistazo y se copian." },
+      },
+    ],
+    catalogTitleLead: { en: "All the", es: "Todos los" },
+    showAll: { en: "Show all {n}", es: "Mostrar los {n}" },
+    showLess: { en: "Show fewer", es: "Mostrar menos" },
+    featuresKicker: { en: "Made to be used", es: "Hecha para usarse" },
+    featuresTitle: { en: "Find it in", es: "Encuéntralo en" },
+    featureSearch: {
+      title: { en: "Search that answers", es: "Una búsqueda que responde" },
+      body: { en: "Every heading of every page, instant, from any page with ⌘K.", es: "Cada título de cada página, al instante, desde cualquier página con ⌘K." },
+    },
+    featureAssistant: {
+      title: { en: "Ask the assistant", es: "Pregúntale al asistente" },
+      body: { en: "It has read these docs, and it links the page it answers from.", es: "Se ha leído esta documentación y enlaza la página de donde saca la respuesta." },
+      question: { en: "How do I give a kit only to VIPs?", es: "¿Cómo doy un kit solo a los VIP?" },
+      answer: { en: "Set the kit's permission field, then give that node to your VIP group. Players without it see the kit locked.", es: "Rellena el campo permission del kit y dale ese nodo a tu grupo VIP. Quien no lo tenga lo verá bloqueado." },
+    },
+    featureLangs: {
+      title: { en: "English and Spanish", es: "Español e inglés" },
+      body: { en: "Every page, both languages, same structure. Switch without losing your place.", es: "Cada página en los dos idiomas, con la misma estructura. Cambia sin perder dónde estabas." },
+    },
+    featureCopy: {
+      title: { en: "Copy and paste", es: "Copiar y pegar" },
+      body: { en: "Commands, permissions and config blocks copy in one click.", es: "Comandos, permisos y bloques de configuración se copian con un clic." },
+      copied: { en: "Copied", es: "Copiado" },
+    },
+    statsLead: { en: "Written next to the code, versioned with every release.", es: "Escrita junto al código, versionada con cada release." },
     lead: {
       en: "Installation guides, configuration reference, commands, permissions, placeholders and API. No filler: only what the plugin actually does.",
       es: "Guías de instalación, referencia de configuración, comandos, permisos, placeholders y API. Sin relleno: solo lo que el plugin hace de verdad.",
@@ -106,45 +168,7 @@ export const dict = {
     statusSoon: { en: "Coming soon", es: "Próximamente" },
     unpublished: { en: "unpublished", es: "sin publicar" },
     openPlugin: { en: "Open", es: "Abrir" },
-    approachKicker: { en: "How it is written", es: "Cómo se escribe" },
-    approachTitle1: { en: "Documenting", es: "Documentar" },
-    approachTitle2: { en: "is part of the", es: "es parte del" },
-    approachTitle3: { en: "product", es: "producto" },
-    approachLead: {
-      en: "A plugin nobody can configure is not finished. These pages are the manual we would want to find when buying software for our own server.",
-      es: "Un plugin que nadie sabe configurar no está terminado. Estas páginas son el manual que nos gustaría encontrar al comprar software para nuestro propio servidor.",
-    },
-    principles: [
-      {
-        title: { en: "Written next to the code", es: "Escrita junto al código" },
-        body: {
-          en: "Every default, permission and placeholder comes from the plugin's actual source, not from a template.",
-          es: "Cada valor por defecto, cada permiso y cada placeholder sale del código real del plugin, no de una plantilla.",
-        },
-      },
-      {
-        title: { en: "One structure, every plugin", es: "Una estructura, todos los plugins" },
-        body: {
-          en: "Getting started, configuring, systems and reference. Learn to read it once and it holds for the rest.",
-          es: "Empezar, configurar, sistemas y referencia. Aprendes a leer una vez y sirve para el resto.",
-        },
-      },
-      {
-        title: { en: "Versioned with the release", es: "Versionada con el release" },
-        body: {
-          en: "When a key is renamed or migrated, the page says so and explains what the migration does.",
-          es: "Cuando una clave cambia de nombre o migra, la página lo dice y explica qué hace la migración.",
-        },
-      },
-      {
-        title: { en: "Quick to read", es: "Rápida de leer" },
-        body: {
-          en: "Instant search, a side index, keyboard navigation and static pages served without blocking.",
-          es: "Búsqueda instantánea, índice lateral, navegación con teclado y páginas estáticas servidas sin bloqueo.",
-        },
-      },
-    ],
-    ctaTitle: { en: "Still not clear?", es: "¿Algo no queda claro?" },
+    ctaTitle: { en: "Still not", es: "¿Algo no queda" },
     ctaLead: {
       en: "Support runs on Discord, next to the team that writes these plugins. Licences are handled there too.",
       es: "El soporte se atiende en Discord, junto al equipo que escribe estos plugins. Las licencias también se gestionan ahí.",

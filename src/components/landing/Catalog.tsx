@@ -11,7 +11,8 @@ import {
   type Plugin,
 } from "@/content/registry";
 import { dict } from "@/content/dictionary";
-import { Reveal, TextReveal } from "@/components/motion/Primitives";
+import { Reveal } from "@/components/motion/Primitives";
+import { Ink } from "./fx/Ink";
 import { PluginBanner } from "@/components/PluginBanner";
 
 const EASE = [0.16, 1, 0.3, 1] as const;
@@ -45,6 +46,7 @@ export function Catalog({ lang }: { lang: Lang }) {
   const l = dict.landing;
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<string | null>(null);
+  const [all, setAll] = useState(false);
 
   const index = useMemo(
     () => plugins.map((plugin) => ({ plugin, text: haystack(plugin, lang) })),
@@ -64,10 +66,11 @@ export function Catalog({ lang }: { lang: Lang }) {
       .map(({ plugin }) => plugin);
   }, [index, query, category]);
 
-  /* A search reads better as one flat list of hits; browsing reads better
-     grouped, which is the whole point of the categories. */
-  const searching = query.trim() !== "";
-  const groups = searching ? [] : groupByCategory(matches);
+  /* Browsing everything shows a first screenful; a search or a category
+     shows every match, since the reader already narrowed it down. */
+  const narrowed = query.trim() !== "" || category !== null;
+  const LIMIT = 12;
+  const shown = narrowed || all ? matches : matches.slice(0, LIMIT);
 
   return (
     <section id="plugins" className="relative py-24 sm:py-32">
@@ -77,8 +80,8 @@ export function Catalog({ lang }: { lang: Lang }) {
             <span className="h-px w-8 bg-white/20" />
             <span className="eyebrow">{l.catalogKicker[lang]}</span>
           </div>
-          <h2 className="mt-6 font-display text-[clamp(1.9rem,4.4vw,3.2rem)] font-medium leading-[1.05] tracking-tight2 text-white">
-            <TextReveal delay={0.05}>{l.catalogTitle[lang]}</TextReveal>
+          <h2 className="mt-6 font-display text-[clamp(2.2rem,5vw,4rem)] font-medium leading-[1] tracking-[-0.04em] text-white">
+            {l.catalogTitleLead[lang]} <Ink word={l.ink.catalog[lang]} className="text-[1.15em]" />
           </h2>
           <Reveal delay={0.12}>
             <p className="mt-5 text-[15.5px] leading-relaxed text-white/45">
@@ -148,26 +151,23 @@ export function Catalog({ lang }: { lang: Lang }) {
           </p>
         )}
 
-        {searching ? (
-          <Grid plugins={matches} lang={lang} />
-        ) : (
-          <div className="mt-6 flex flex-col gap-16">
-            {groups.map((group) => (
-              <section key={group.key}>
-                <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 border-b hair pb-4">
-                  <h3 className="font-display text-[19px] font-medium tracking-tightish text-white">
-                    {group.label[lang]}
-                  </h3>
-                  <span className="font-mono text-[10.5px] text-white/22">
-                    {String(group.plugins.length).padStart(2, "0")}
-                  </span>
-                  <p className="w-full text-[13.5px] leading-relaxed text-white/35 sm:w-auto sm:flex-1">
-                    {dict.categories[group.key]?.[lang]}
-                  </p>
-                </div>
-                <Grid plugins={group.plugins} lang={lang} compact />
-              </section>
-            ))}
+        {category && (
+          <p className="mt-8 text-[14px] text-white/40">{dict.categories[category]?.[lang]}</p>
+        )}
+        <Grid plugins={shown} lang={lang} />
+
+        {!narrowed && matches.length > LIMIT && (
+          <div className="relative mt-10 flex justify-center">
+            {!all && <div className="pointer-events-none absolute inset-x-0 -top-48 h-48 bg-gradient-to-b from-transparent to-ink-950" />}
+            <button
+              onClick={() => setAll(!all)}
+              className="relative inline-flex h-11 items-center gap-2 rounded-full border border-white/12 bg-white/[0.03] px-5 text-[14px] text-white/75 transition-colors hover:border-white/30 hover:text-white"
+            >
+              {all ? l.showLess[lang] : l.showAll[lang].replace("{n}", String(matches.length))}
+              <svg className={`h-3 w-3 transition-transform duration-500 ${all ? "rotate-180" : ""}`} viewBox="0 0 16 16" fill="none">
+                <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
           </div>
         )}
       </div>
@@ -189,14 +189,19 @@ function Chip({
   return (
     <button
       onClick={onClick}
-      className={`shrink-0 rounded-full border px-3.5 py-1.5 text-[12.5px] transition-colors ${
-        active
-          ? "border-[rgb(var(--accent))]/40 bg-[rgb(var(--accent))]/10 text-white"
-          : "border-white/[0.08] bg-white/[0.015] text-white/45 hover:border-white/20 hover:text-white/80"
+      className={`relative isolate shrink-0 rounded-full border px-3.5 py-1.5 text-[12.5px] transition-colors ${
+        active ? "border-transparent text-white" : "border-white/[0.08] text-white/45 hover:border-white/20 hover:text-white/80"
       }`}
     >
+      {active && (
+        <m.span
+          layoutId="catalog-pill"
+          transition={{ type: "spring", stiffness: 420, damping: 36 }}
+          className="absolute inset-0 -z-10 rounded-full border border-[#b48fd9]/40 bg-[#8a51c4]/25"
+        />
+      )}
       {label}
-      <span className={`ml-2 font-mono text-[10px] ${active ? "text-accent" : "text-white/25"}`}>
+      <span className={`ml-2 font-mono text-[10px] ${active ? "text-[#e7cfff]" : "text-white/25"}`}>
         {count}
       </span>
     </button>
@@ -206,14 +211,12 @@ function Chip({
 function Grid({
   plugins: list,
   lang,
-  compact = false,
 }: {
   plugins: Plugin[];
   lang: Lang;
-  compact?: boolean;
 }) {
   return (
-    <div className={`grid gap-5 sm:grid-cols-2 lg:grid-cols-3 ${compact ? "mt-6" : "mt-10"}`}>
+    <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
       {list.map((plugin, i) => (
         <PluginCard key={plugin.id} plugin={plugin} index={i} lang={lang} />
       ))}
@@ -231,15 +234,15 @@ function PluginCard({ plugin, index, lang }: { plugin: Plugin; index: number; la
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, margin: "-6% 0px" }}
       transition={{ duration: 0.55, delay: Math.min(index, 5) * 0.05, ease: EASE }}
-      className={`group relative flex flex-col overflow-hidden rounded-xl border border-white/[0.07] bg-white/[0.012] transition-colors duration-300 ${
-        ready ? "hover:border-white/20 hover:bg-white/[0.03]" : "opacity-60"
+      className={`group relative flex flex-col overflow-hidden rounded-xl border border-white/[0.07] bg-white/[0.012] transition-all duration-500 [transition-timing-function:cubic-bezier(.16,1,.3,1)] ${
+        ready ? "hover:-translate-y-1 hover:border-[#b48fd9]/35 hover:shadow-[0_24px_60px_-28px_rgba(138,81,196,0.7)]" : "opacity-60"
       }`}
     >
-      <div className="relative">
+      <div className="relative overflow-hidden">
         <PluginBanner
           plugin={plugin}
           rounded="rounded-none"
-          className="aspect-[2/1] w-full border-x-0 border-t-0"
+          className="aspect-[2/1] w-full border-x-0 border-t-0 transition-transform duration-700 [transition-timing-function:cubic-bezier(.16,1,.3,1)] group-hover:scale-[1.06]"
         />
         <span className="pointer-events-none absolute inset-x-0 bottom-0 h-14 bg-gradient-to-t from-ink-950/85 to-transparent" />
         <span

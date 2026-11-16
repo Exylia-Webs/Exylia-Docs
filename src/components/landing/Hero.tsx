@@ -1,232 +1,203 @@
 "use client";
 
 import Link from "next/link";
-import { AnimatePresence, m, useScroll, useTransform } from "framer-motion";
+import { m, useScroll, useTransform, type MotionValue } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
-import { Aurora } from "@/components/motion/Backdrops";
-import { AnimatedWords, Magnetic } from "@/components/motion/Primitives";
+import { AnimatedWords } from "@/components/motion/Primitives";
 import { PluginBanner } from "@/components/PluginBanner";
+import { SearchDialog } from "@/components/Search";
 import { dict } from "@/content/dictionary";
-import { documentedPlugins, pageCount, plugins, SITE, type Lang } from "@/content/registry";
+import { documentedPlugins, pageCount, plugins, type Lang } from "@/content/registry";
+import { Ink } from "./fx/Ink";
+import { Nebula } from "./fx/Nebula";
 
-const TOTAL_PAGES = documentedPlugins.reduce((n, plugin) => n + pageCount(plugin), 0);
+export const TOTAL_PAGES = documentedPlugins.reduce((n, plugin) => n + pageCount(plugin), 0);
+const RING = documentedPlugins.slice(0, 16);
+const EASE = [0.16, 1, 0.3, 1] as const;
 
 export function Hero({ lang }: { lang: Lang }) {
   const l = dict.landing;
-  const ref = useRef<HTMLDivElement>(null);
+  const ref = useRef<HTMLElement>(null);
+  const [search, setSearch] = useState(false);
   const { scrollYProgress } = useScroll({ target: ref, offset: ["start start", "end start"] });
-  const contentY = useTransform(scrollYProgress, [0, 1], [0, 90]);
-  const contentOpacity = useTransform(scrollYProgress, [0, 0.8], [1, 0]);
-  const mockY = useTransform(scrollYProgress, [0, 1], [0, -60]);
-
-  const stats = [
-    { value: String(plugins.length), label: l.statPlugins[lang] },
-    { value: String(TOTAL_PAGES), label: l.statPages[lang] },
-    { value: "2", label: l.statLangs[lang] },
-  ];
+  const textY = useTransform(scrollYProgress, [0, 1], [0, -120]);
+  const textOpacity = useTransform(scrollYProgress, [0, 0.55], [1, 0]);
+  const ringTilt = useTransform(scrollYProgress, [0, 1], [-9, -26]);
+  const ringY = useTransform(scrollYProgress, [0, 1], [0, -140]);
+  const ringScale = useTransform(scrollYProgress, [0, 1], [1, 1.12]);
 
   return (
-    <section ref={ref} id="top" className="relative min-h-[92svh] overflow-hidden pt-36 sm:pt-40">
-      <Aurora />
-      <div className="pointer-events-none absolute inset-0 bg-grid bg-grid-fade" />
+    <section ref={ref} id="top" className="relative overflow-hidden pt-32 sm:pt-36">
+      <Nebula />
       <div className="noise" />
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-32 bg-gradient-to-b from-transparent to-ink-950" />
 
-      <m.div
-        style={{ y: contentY, opacity: contentOpacity }}
-        className="relative z-10 mx-auto grid max-w-content grid-cols-1 gap-16 px-6 lg:grid-cols-[1.05fr_0.95fr] lg:items-center lg:gap-10"
-      >
-        <div className="max-w-2xl lg:pt-6">
-          <div className="fade-up flex items-center gap-3" style={{ animationDelay: "0.05s" }}>
-            <span className="h-px w-8 bg-white/25" />
-            <span className="eyebrow">{l.kicker[lang]}</span>
-          </div>
+      <m.div style={{ y: textY, opacity: textOpacity }} className="relative z-10 mx-auto max-w-content px-6 text-center">
+        <m.p
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8, ease: EASE }}
+          className="mx-auto inline-flex items-center gap-2.5 rounded-full border border-white/10 bg-white/[0.03] py-1.5 pl-1.5 pr-4 text-[12.5px] text-white/60 backdrop-blur-md"
+        >
+          <span className="rounded-full bg-[#8a51c4]/25 px-2 py-0.5 font-mono text-[10.5px] tracking-[0.12em] text-[#e7cfff]">
+            {plugins.length}
+          </span>
+          {l.kicker[lang]}
+        </m.p>
 
-          <h1 className="mt-8 font-display text-[clamp(2.6rem,6.4vw,4.9rem)] font-medium leading-[0.98] tracking-tight2 text-white">
-            <span className="block">
-              <AnimatedWords text={l.line1[lang]} />
-            </span>
-            <span className="block text-white/35">
-              <AnimatedWords text={l.line2[lang]} />
-            </span>
-            <span className="block">
-              <AnimatedWords text={l.line3[lang]} gradientLast />
-            </span>
-          </h1>
+        <h1 className="mx-auto mt-7 max-w-6xl font-display text-[clamp(2.5rem,6vw,5.4rem)] font-medium leading-[1] tracking-[-0.045em] text-white">
+          <span className="block">
+            <AnimatedWords text={l.line1[lang]} />
+          </span>
+          <span className="block text-white/40">
+            <AnimatedWords text={l.line2[lang]} />{" "}
+            <Ink word={l.ink.hero[lang]} delay={0.55} className="-ml-[0.1em] text-[1.12em]" />
+          </span>
+        </h1>
 
-          <p
-            className="fade-up mt-8 max-w-lg text-[16px] leading-relaxed text-white/50"
-            style={{ animationDelay: "0.6s" }}
+        <m.p
+          initial={{ opacity: 0, y: 12, filter: "blur(6px)" }}
+          animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+          transition={{ duration: 0.9, delay: 0.5, ease: EASE }}
+          className="mx-auto mt-6 max-w-xl text-[16.5px] leading-relaxed text-white/50"
+        >
+          {l.lead[lang]}
+        </m.p>
+
+        <m.div
+          initial={{ opacity: 0, y: 14 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.9, delay: 0.7, ease: EASE }}
+          className="mx-auto mt-8 flex max-w-xl flex-col items-stretch gap-3 sm:flex-row sm:items-center"
+        >
+          <SearchTrigger lang={lang} onOpen={() => setSearch(true)} />
+          <a
+            href="#plugins"
+            className="group inline-flex h-14 shrink-0 items-center justify-center gap-2 rounded-full px-5 text-[14.5px] font-medium text-white/70 transition-colors hover:text-white"
           >
-            {l.lead[lang]}
-          </p>
-
-          <m.div
-            initial={{ opacity: 0, y: 14 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, delay: 0.78 }}
-            className="mt-10 flex flex-wrap items-center gap-4"
-          >
-            <Magnetic>
-              <a
-                href="#plugins"
-                className="group relative inline-flex h-12 items-center gap-2.5 rounded-full bg-white px-6 text-[14.5px] font-medium text-ink-950 transition-colors hover:bg-[#f1efff]"
-              >
-                {l.ctaPrimary[lang]}
-                <svg className="h-3.5 w-3.5 transition-transform group-hover:translate-y-0.5" viewBox="0 0 16 16" fill="none">
-                  <path d="M8 3v10M4 9l4 4 4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </a>
-            </Magnetic>
-            <a
-              href={SITE.store}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex h-12 items-center rounded-full border border-white/12 px-5 text-[14.5px] font-medium text-white/60 transition-colors hover:border-white/30 hover:text-white"
-            >
-              {l.ctaSecondary[lang]}
-              <span className="ml-2 text-white/25">↗</span>
-            </a>
-          </m.div>
-
-          <m.dl
-            initial={{ opacity: 0, y: 14 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, delay: 0.9 }}
-            className="mt-12 flex flex-wrap gap-x-10 gap-y-4"
-          >
-            {stats.map((stat) => (
-              <div key={stat.label}>
-                <dt className="font-display text-[26px] font-medium tracking-tight2 text-white">
-                  {stat.value}
-                </dt>
-                <dd className="mt-0.5 font-mono text-[10.5px] uppercase tracking-[0.16em] text-white/30">
-                  {stat.label}
-                </dd>
-              </div>
-            ))}
-          </m.dl>
-        </div>
-
-        <m.div style={{ y: mockY }} className="relative hidden lg:block">
-          <BannerDeck lang={lang} />
+            {l.ctaPrimary[lang]}
+            <svg className="h-3.5 w-3.5 transition-transform duration-300 group-hover:translate-y-0.5" viewBox="0 0 16 16" fill="none">
+              <path d="M8 3v10M4 9l4 4 4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </a>
         </m.div>
       </m.div>
 
       <m.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 1.3 }}
-        className="absolute bottom-8 left-1/2 z-10 hidden -translate-x-1/2 items-center gap-3 sm:flex"
+        initial={{ opacity: 0, y: 80 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 1.6, delay: 0.35, ease: EASE }}
+        className="relative z-0 -mt-4 sm:-mt-24"
       >
-        <span className="eyebrow">{l.scroll[lang]}</span>
-        <m.span
-          className="h-8 w-px bg-gradient-to-b from-white/40 to-transparent"
-          animate={{ scaleY: [0.4, 1, 0.4], opacity: [0.3, 1, 0.3] }}
-          transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-          style={{ transformOrigin: "top" }}
-        />
+        <m.div style={{ y: ringY, scale: ringScale }}>
+          <BannerRing lang={lang} tilt={ringTilt} />
+        </m.div>
       </m.div>
+
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-40 bg-gradient-to-b from-transparent to-ink-950" />
+      <SearchDialog lang={lang} open={search} onClose={() => setSearch(false)} />
     </section>
   );
 }
 
 /**
- * The catalogue, one plugin at a time.
- *
- * The hero used to advertise a single plugin, which only ever meant "the one
- * documented first". Cycling the key art says the true thing instead: there
- * are many, and any of them is one click away.
+ * The hero's main call to action is the search itself: it types real
+ * questions people ask, and a click or ⌘K opens the real search.
  */
-function BannerDeck({ lang }: { lang: Lang }) {
-  const deck = documentedPlugins;
-  const [i, setI] = useState(0);
-  const [paused, setPaused] = useState(false);
-
-  useEffect(() => {
-    if (paused) return;
-    const id = setInterval(() => setI((n) => (n + 1) % deck.length), 4200);
-    return () => clearInterval(id);
-  }, [paused, deck.length]);
-
-  const plugin = deck[i];
+function SearchTrigger({ lang, onOpen }: { lang: Lang; onOpen: () => void }) {
+  const l = dict.landing;
+  const typed = useTypewriter(l.searchExamples[lang]);
+  const [mac, setMac] = useState(true);
+  useEffect(() => setMac(/Mac|iPhone|iPad/.test(navigator.platform)), []);
 
   return (
-    <m.div
-      initial={{ opacity: 0, y: 26 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 1, delay: 0.4, ease: [0.16, 1, 0.3, 1] }}
-      onMouseEnter={() => setPaused(true)}
-      onMouseLeave={() => setPaused(false)}
-      className="relative"
+    <button
+      onClick={onOpen}
+      className="search-trigger group relative flex h-14 flex-1 items-center gap-3 rounded-full pl-5 pr-2 text-left"
     >
-      <div className="relative overflow-hidden rounded-xl border border-white/10 bg-ink-900/70 backdrop-blur-xl">
-        <div className="relative aspect-[2/1] w-full">
-          <AnimatePresence mode="popLayout">
-            <m.div
-              key={plugin.id}
-              initial={{ opacity: 0, scale: 1.04 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.99 }}
-              transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
-              className="absolute inset-0"
-            >
-              <PluginBanner
-                plugin={plugin}
-                priority={i === 0}
-                rounded="rounded-none"
-                className="h-full w-full border-0"
-              />
-            </m.div>
-          </AnimatePresence>
-          <span className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-ink-900 via-ink-900/60 to-transparent" />
-        </div>
+      <svg className="h-4 w-4 shrink-0 text-[#b48fd9]" viewBox="0 0 16 16" fill="none">
+        <circle cx="7.2" cy="7.2" r="4.4" stroke="currentColor" strokeWidth="1.6" />
+        <path d="M10.6 10.6L13.5 13.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+      </svg>
+      <span className="min-w-0 flex-1 truncate text-[15px] text-white/45">
+        <span className="sr-only">{l.searchLabel[lang].replace("{n}", String(TOTAL_PAGES))}</span>
+        <span aria-hidden className="text-white/80">{typed}</span>
+        <span aria-hidden className="caret ml-px inline-block h-[1.05em] w-px translate-y-[0.2em] bg-[#b48fd9]" />
+      </span>
+      <kbd className="hidden shrink-0 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 font-mono text-[11px] text-white/45 sm:block">
+        {mac ? "⌘" : "Ctrl"} K
+      </kbd>
+      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-white text-ink-950 transition-transform duration-500 [transition-timing-function:cubic-bezier(.16,1,.3,1)] group-hover:scale-105">
+        <svg className="h-3.5 w-3.5 transition-transform duration-500 group-hover:translate-x-0.5" viewBox="0 0 16 16" fill="none">
+          <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </span>
+    </button>
+  );
+}
 
-        <div className="relative px-5 pb-5 pt-1">
-          <AnimatePresence mode="wait">
-            <m.div
-              key={plugin.id}
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -6 }}
-              transition={{ duration: 0.35 }}
-            >
-              <p className="font-mono text-[9.5px] uppercase tracking-[0.2em] text-accent">
-                {plugin.category[lang]}
-              </p>
-              <p className="mt-1.5 font-display text-[18px] font-medium tracking-tight2 text-white">
-                {plugin.name}
-              </p>
-              <p className="mt-1 text-[13px] leading-relaxed text-white/45">
-                {plugin.tagline[lang]}
-              </p>
-            </m.div>
-          </AnimatePresence>
+/** Types each example, holds it, erases it, moves on. Static first example under reduced motion. */
+function useTypewriter(examples: readonly string[]) {
+  const [text, setText] = useState(examples[0]);
+  useEffect(() => {
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    let i = 0;
+    let n = 0;
+    let erasing = false;
+    let id: ReturnType<typeof setTimeout>;
+    const step = () => {
+      const word = examples[i];
+      if (!erasing) {
+        n++;
+        setText(word.slice(0, n));
+        if (n >= word.length) {
+          erasing = true;
+          id = setTimeout(step, 2200);
+          return;
+        }
+        id = setTimeout(step, 45 + Math.random() * 55);
+      } else {
+        n--;
+        setText(word.slice(0, n));
+        if (n <= 0) {
+          erasing = false;
+          i = (i + 1) % examples.length;
+          id = setTimeout(step, 380);
+          return;
+        }
+        id = setTimeout(step, 22);
+      }
+    };
+    setText("");
+    id = setTimeout(step, 1400);
+    return () => clearTimeout(id);
+  }, [examples]);
+  return text;
+}
 
-          <div className="mt-4 flex items-center justify-between gap-4">
-            <div className="flex flex-1 flex-wrap gap-1">
-              {deck.map((entry, n) => (
-                <button
-                  key={entry.id}
-                  onClick={() => setI(n)}
-                  aria-label={entry.name}
-                  className={`h-[3px] flex-1 rounded-full transition-colors duration-300 ${
-                    n === i ? "bg-[rgb(var(--accent))]" : "bg-white/12 hover:bg-white/30"
-                  }`}
-                />
-              ))}
-            </div>
-            <Link
-              href={`/${lang}/docs/${plugin.id}`}
-              className="shrink-0 font-mono text-[10px] uppercase tracking-[0.16em] text-white/45 transition-colors hover:text-white"
-            >
-              {dict.landing.openPlugin[lang]} →
-            </Link>
-          </div>
-        </div>
-      </div>
-
-      <div className="pointer-events-none absolute -inset-8 -z-10 rounded-3xl bg-[radial-gradient(circle_at_60%_40%,rgba(124,92,255,0.14),transparent_70%)] blur-2xl" />
-    </m.div>
+/**
+ * Sixteen plugins' key art on a slowly turning ring, seen from just above.
+ * Pure CSS 3D (`.ring` in globals.css); hovering pauses it, every card opens
+ * its documentation, and scrolling tips the ring towards the reader.
+ */
+function BannerRing({ lang, tilt }: { lang: Lang; tilt: MotionValue<number> }) {
+  const rotateX = useTransform(tilt, (v) => `${v}deg`);
+  return (
+    <div className="ring-stage" aria-label={dict.landing.ringLabel[lang]}>
+      <m.div className="ring-tilt" style={{ rotateX }}>
+        <ul className="ring" style={{ ["--n" as string]: RING.length }}>
+          {RING.map((plugin, i) => (
+            <li key={plugin.id} className="ring-card" style={{ ["--i" as string]: i }}>
+              <Link href={`/${lang}/docs/${plugin.id}`} className="ring-face" tabIndex={-1}>
+                <PluginBanner plugin={plugin} rounded="rounded-[14px]" priority={i < 4} className="h-full w-full border-white/10" />
+                <span className="ring-label">
+                  <span className="font-mono text-[9px] uppercase tracking-[0.18em] text-[#b48fd9]">{plugin.category[lang]}</span>
+                  <span className="mt-0.5 block text-[13px] font-medium text-white">{plugin.name}</span>
+                </span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </m.div>
+    </div>
   );
 }
