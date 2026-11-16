@@ -229,9 +229,9 @@ function IndexList({ plugins: list, lang }: { plugins: Plugin[]; lang: Lang }) {
       }}
       onPointerLeave={() => setActive(null)}
     >
-      <div className="hidden grid-cols-[4rem_1fr_12rem_7rem_6rem] border-b hair pb-3 font-mono text-[10px] uppercase tracking-[0.18em] text-white/25 md:grid">
+      <div className="hidden grid-cols-[4rem_9.5rem_1fr_12rem_7rem_6rem] border-b hair pb-3 font-mono text-[10px] uppercase tracking-[0.18em] text-white/25 md:grid">
         <span>#</span>
-        <span>{l.colPlugin[lang]}</span>
+        <span className="col-span-2">{l.colPlugin[lang]}</span>
         <span>{l.colCategory[lang]}</span>
         <span>{l.colPages[lang]}</span>
         <span className="text-right">{l.colStatus[lang]}</span>
@@ -243,7 +243,7 @@ function IndexList({ plugins: list, lang }: { plugins: Plugin[]; lang: Lang }) {
           const row = (
             <>
               <span className="hidden font-mono text-[11px] text-white/25 md:block">{String(i + 1).padStart(2, "0")}</span>
-              <PluginBanner plugin={plugin} rounded="rounded-md" className="h-9 w-[72px] shrink-0 md:hidden" />
+              <PluginBanner plugin={plugin} rounded="rounded-md" className="h-9 w-[72px] shrink-0 transition-[transform,box-shadow] duration-500 group-hover:scale-[1.04] group-hover:shadow-[0_18px_40px_-18px_rgba(138,81,196,0.8)] md:h-[68px] md:w-[136px]" />
               <span className="min-w-0">
                 <span className="index-name block truncate font-display text-[clamp(1.25rem,2.4vw,2rem)] font-medium leading-tight tracking-[-0.03em] text-white/85 transition-[transform,color] duration-500 [transition-timing-function:cubic-bezier(.16,1,.3,1)]">
                   {plugin.name}
@@ -269,7 +269,7 @@ function IndexList({ plugins: list, lang }: { plugins: Plugin[]; lang: Lang }) {
             </>
           );
           const cls =
-            "index-row group grid grid-cols-[72px_1fr_auto] items-center gap-4 border-b hair py-4 md:grid-cols-[4rem_1fr_12rem_7rem_6rem] md:gap-0 md:py-5";
+            "index-row group grid grid-cols-[72px_1fr_auto] items-center gap-4 border-b hair py-4 md:grid-cols-[4rem_9.5rem_1fr_12rem_7rem_6rem] md:gap-0 md:py-4";
           return (
             <m.li
               key={plugin.id}
