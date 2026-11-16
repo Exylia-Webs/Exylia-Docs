@@ -9,6 +9,7 @@ import { Magnetic } from "@/components/motion/Primitives";
 import { PluginBanner } from "@/components/PluginBanner";
 import { SITE } from "@/content/registry";
 import { ReadTick, useReadPages } from "./Reading";
+import { AskPlugin } from "./AskPlugin";
 
 const EASE = [0.16, 1, 0.3, 1] as const;
 /** The pages people come back to look things up in. */
@@ -150,6 +151,8 @@ export function PluginOverview({
             ? dict.docs.allRead[lang]
             : (done > 0 ? dict.docs.progress : dict.docs.progressNone)[lang].replace("{n}", String(done)).replace("{total}", String(pageCount))}
         </m.div>
+
+        <AskPlugin name={plugin.name} lang={lang} />
 
         <m.dl
           initial={{ opacity: 0 }}

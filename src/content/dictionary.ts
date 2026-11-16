@@ -311,6 +311,13 @@ export const dict = {
       es: ["¿Cómo instalo un plugin y ExyliaLib?", "¿Qué plugins hay para servidores PvP?", "¿Dónde cambio los mensajes de un plugin?"],
     },
     /** `{plugin}` is the plugin the visitor is reading. */
+    askTitle: { en: "What do you need from {plugin}?", es: "¿Qué necesitas de {plugin}?" },
+    askLead: {
+      en: "Tell it in your words: the assistant reads these docs and takes you to the page, or tells you how.",
+      es: "Dilo con tus palabras: el asistente lee esta documentación y te lleva a la página, o te dice cómo hacerlo.",
+    },
+    askPlaceholder: { en: "e.g. change a message or give a rank a permission", es: "ej. cambiar un mensaje o darle un permiso a un rango" },
+    askSend: { en: "Ask", es: "Preguntar" },
     forPlugin: {
       en: ["How do I set up {plugin}?", "Which commands and permissions does {plugin} have?", "What placeholders does {plugin} provide?"],
       es: ["¿Cómo configuro {plugin}?", "¿Qué comandos y permisos tiene {plugin}?", "¿Qué placeholders ofrece {plugin}?"],
