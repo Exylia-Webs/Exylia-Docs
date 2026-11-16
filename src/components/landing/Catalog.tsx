@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { m } from "framer-motion";
+import { AnimatePresence, m, useSpring } from "framer-motion";
 import { useMemo, useState } from "react";
 import {
   groupByCategory,
@@ -154,7 +154,7 @@ export function Catalog({ lang }: { lang: Lang }) {
         {category && (
           <p className="mt-8 text-[14px] text-white/40">{dict.categories[category]?.[lang]}</p>
         )}
-        <Grid plugins={shown} lang={lang} />
+        <IndexList plugins={shown} lang={lang} />
 
         {!narrowed && matches.length > LIMIT && (
           <div className="relative mt-10 flex justify-center">
@@ -208,101 +208,112 @@ function Chip({
   );
 }
 
-function Grid({
-  plugins: list,
-  lang,
-}: {
-  plugins: Plugin[];
-  lang: Lang;
-}) {
-  return (
-    <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-      {list.map((plugin, i) => (
-        <PluginCard key={plugin.id} plugin={plugin} index={i} lang={lang} />
-      ))}
-    </div>
-  );
-}
-
-function PluginCard({ plugin, index, lang }: { plugin: Plugin; index: number; lang: Lang }) {
-  const ready = plugin.nav.length > 0;
-  const pages = pageCount(plugin);
+/**
+ * The catalogue as an editorial index: one large row per plugin. On a mouse,
+ * a banner follows the cursor and shows the row under it; on touch each row
+ * carries a small thumbnail instead.
+ */
+function IndexList({ plugins: list, lang }: { plugins: Plugin[]; lang: Lang }) {
+  const l = dict.landing;
+  const [active, setActive] = useState<Plugin | null>(null);
+  const x = useSpring(0, { stiffness: 260, damping: 30, mass: 0.6 });
+  const y = useSpring(0, { stiffness: 260, damping: 30, mass: 0.6 });
 
   return (
-    <m.article
-      initial={{ opacity: 0, y: 18 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, margin: "-6% 0px" }}
-      transition={{ duration: 0.55, delay: Math.min(index, 5) * 0.05, ease: EASE }}
-      className={`group relative flex flex-col overflow-hidden rounded-xl border border-white/[0.07] bg-white/[0.012] transition-all duration-500 [transition-timing-function:cubic-bezier(.16,1,.3,1)] ${
-        ready ? "hover:-translate-y-1 hover:border-[#b48fd9]/35 hover:shadow-[0_24px_60px_-28px_rgba(138,81,196,0.7)]" : "opacity-60"
-      }`}
+    <div
+      className="relative mt-8"
+      onPointerMove={(e) => {
+        if (e.pointerType !== "mouse") return;
+        x.set(e.clientX);
+        y.set(e.clientY);
+      }}
+      onPointerLeave={() => setActive(null)}
     >
-      <div className="relative overflow-hidden">
-        <PluginBanner
-          plugin={plugin}
-          rounded="rounded-none"
-          className="aspect-[2/1] w-full border-x-0 border-t-0 transition-transform duration-700 [transition-timing-function:cubic-bezier(.16,1,.3,1)] group-hover:scale-[1.06]"
-        />
-        <span className="pointer-events-none absolute inset-x-0 bottom-0 h-14 bg-gradient-to-t from-ink-950/85 to-transparent" />
-        <span
-          className={`absolute right-3 top-3 rounded-full border bg-ink-950/70 px-2 py-0.5 font-mono text-[9.5px] uppercase tracking-[0.14em] backdrop-blur-sm ${
-            STATUS_TONE[plugin.status]
-          }`}
-        >
-          {STATUS_LABEL[plugin.status][lang]}
-        </span>
+      <div className="hidden grid-cols-[4rem_1fr_12rem_7rem_6rem] border-b hair pb-3 font-mono text-[10px] uppercase tracking-[0.18em] text-white/25 md:grid">
+        <span>#</span>
+        <span>{l.colPlugin[lang]}</span>
+        <span>{l.colCategory[lang]}</span>
+        <span>{l.colPages[lang]}</span>
+        <span className="text-right">{l.colStatus[lang]}</span>
       </div>
 
-      <div className="flex flex-1 flex-col p-5">
-        <h4 className="font-display text-[16px] font-medium tracking-tightish text-white">
-          {plugin.name}
-        </h4>
-        <p className="mt-1.5 text-[13.5px] leading-relaxed text-white/45">
-          {plugin.tagline[lang]}
-        </p>
-
-        <div className="mt-4 flex flex-wrap items-center gap-1.5">
-          {plugin.tags.slice(0, 3).map((tag) => (
-            <span
-              key={tag.en}
-              className="rounded-full border border-white/[0.07] bg-white/[0.015] px-2.5 py-0.5 font-mono text-[10px] tracking-wide text-white/35"
+      <ul className="[&:hover>li]:opacity-45 [&>li:hover]:!opacity-100">
+        {list.map((plugin, i) => {
+          const ready = plugin.nav.length > 0;
+          const row = (
+            <>
+              <span className="hidden font-mono text-[11px] text-white/25 md:block">{String(i + 1).padStart(2, "0")}</span>
+              <PluginBanner plugin={plugin} rounded="rounded-md" className="h-9 w-[72px] shrink-0 md:hidden" />
+              <span className="min-w-0">
+                <span className="index-name block truncate font-display text-[clamp(1.25rem,2.4vw,2rem)] font-medium leading-tight tracking-[-0.03em] text-white/85 transition-[transform,color] duration-500 [transition-timing-function:cubic-bezier(.16,1,.3,1)]">
+                  {plugin.name}
+                </span>
+                <span className="index-name mt-0.5 block truncate text-[13px] text-white/40 transition-transform delay-[40ms] duration-500 [transition-timing-function:cubic-bezier(.16,1,.3,1)]">
+                  {plugin.tagline[lang]}
+                </span>
+              </span>
+              <span className="hidden truncate text-[13px] text-white/45 md:block">{plugin.category[lang]}</span>
+              <span className="hidden font-mono text-[12px] tabular-nums text-white/40 md:block">
+                {ready ? pageCount(plugin) : "—"}
+              </span>
+              <span className="flex items-center justify-end gap-3">
+                <span className={`hidden rounded-full border px-2 py-0.5 font-mono text-[9.5px] uppercase tracking-[0.14em] sm:inline ${STATUS_TONE[plugin.status]}`}>
+                  {STATUS_LABEL[plugin.status][lang]}
+                </span>
+                {ready && (
+                  <svg className="h-4 w-4 -translate-x-2 text-[#b48fd9] opacity-0 transition-all duration-500 group-hover:translate-x-0 group-hover:opacity-100" viewBox="0 0 16 16" fill="none" aria-hidden>
+                    <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                )}
+              </span>
+            </>
+          );
+          const cls =
+            "index-row group grid grid-cols-[72px_1fr_auto] items-center gap-4 border-b hair py-4 md:grid-cols-[4rem_1fr_12rem_7rem_6rem] md:gap-0 md:py-5";
+          return (
+            <m.li
+              key={plugin.id}
+              initial={{ opacity: 0, y: 14 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: "-4% 0px" }}
+              transition={{ duration: 0.6, delay: Math.min(i % 12, 6) * 0.04, ease: EASE }}
+              onPointerEnter={(e) => e.pointerType === "mouse" && setActive(plugin)}
+              className="transition-opacity duration-300"
             >
-              {tag[lang]}
-            </span>
-          ))}
-        </div>
+              {ready ? (
+                <Link href={`/${lang}/docs/${plugin.id}`} className={cls}>
+                  {row}
+                </Link>
+              ) : (
+                <a href={plugin.purchase ?? plugin.download ?? "#"} target="_blank" rel="noopener noreferrer" className={`${cls} opacity-60`}>
+                  {row}
+                </a>
+              )}
+            </m.li>
+          );
+        })}
+      </ul>
 
-        <div className="mt-auto flex items-center justify-between gap-3 pt-5">
-          <span className="font-mono text-[10.5px] tracking-wide text-white/25">
-            v{plugin.version} ·{" "}
-            {ready
-              ? `${pages} ${dict.landing.docsPages[lang]}`
-              : dict.landing.unpublished[lang]}
-          </span>
-
-          {(plugin.purchase ?? plugin.download) && (
-            <a
-              href={plugin.purchase ?? plugin.download}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="relative z-10 shrink-0 rounded-full border border-white/12 px-3 py-1 font-mono text-[10px] uppercase tracking-[0.14em] text-white/50 transition-colors hover:border-white/35 hover:text-white"
+      {/* The floating preview: fixed to the viewport, eased after the cursor. */}
+      <m.div style={{ x, y }} className="pointer-events-none fixed left-0 top-0 z-40 hidden md:block" aria-hidden>
+        <div className="absolute left-5 top-5 w-[300px]">
+        <AnimatePresence>
+          {active && (
+            <m.div
+              key={active.id}
+              initial={{ opacity: 0, scale: 0.85, rotate: -4 }}
+              animate={{ opacity: 1, scale: 1, rotate: 0 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              transition={{ duration: 0.35, ease: EASE }}
+              className="absolute inset-x-0 top-0 overflow-hidden rounded-xl border border-white/10 bg-ink-950 shadow-[0_30px_80px_-20px_rgba(138,81,196,0.7)]"
             >
-              {(plugin.purchase ? dict.landing.buy : dict.landing.download)[lang]} ↗
-            </a>
+              <PluginBanner plugin={active} rounded="rounded-none" className="aspect-[2/1] w-full border-0" />
+              <p className="px-3.5 py-2.5 line-clamp-3 text-[12.5px] leading-snug text-white/55">{active.summary[lang]}</p>
+            </m.div>
           )}
+        </AnimatePresence>
         </div>
-      </div>
-
-      {/* The card itself is the link to the documentation; the buy button sits
-          above it so the two targets never nest. */}
-      {ready && (
-        <Link
-          href={`/${lang}/docs/${plugin.id}`}
-          aria-label={plugin.name}
-          className="absolute inset-0 z-0"
-        />
-      )}
-    </m.article>
+      </m.div>
+    </div>
   );
 }

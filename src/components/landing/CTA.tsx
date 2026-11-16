@@ -5,6 +5,7 @@ import { SITE, type Lang } from "@/content/registry";
 import { dict } from "@/content/dictionary";
 import { Magnetic } from "@/components/motion/Primitives";
 import { Ink } from "./fx/Ink";
+import { ParticleWord } from "./fx/Particles";
 
 export function CTA({ lang }: { lang: Lang }) {
   const l = dict.landing;
@@ -67,16 +68,7 @@ export function CTA({ lang }: { lang: Lang }) {
         </m.div>
       </div>
 
-      <m.p
-        aria-hidden
-        initial={{ opacity: 0, y: "30%" }}
-        whileInView={{ opacity: 1, y: "0%" }}
-        viewport={{ once: true }}
-        transition={{ duration: 1.4, ease: [0.16, 1, 0.3, 1] }}
-        className="wordmark pointer-events-none mt-20 select-none text-center font-display text-[25vw] font-semibold leading-[0.78] tracking-[-0.07em]"
-      >
-        Exylia
-      </m.p>
+      <ParticleWord word="Exylia" className="mt-16 h-[24vw] max-h-[320px] min-h-[110px] cursor-crosshair" />
     </section>
   );
 }

@@ -7,6 +7,7 @@ import { Structure } from "@/components/landing/Structure";
 import { Features, Stats } from "@/components/landing/Features";
 import { SmoothScroll } from "@/components/landing/fx/SmoothScroll";
 import { CTA } from "@/components/landing/CTA";
+import { Intro } from "@/components/landing/Intro";
 import { LANGS, toLang } from "@/content/registry";
 
 export function generateStaticParams() {
@@ -18,6 +19,7 @@ export default async function LandingPage({ params }: { params: Promise<{ lang: 
 
   return (
     <>
+      <Intro />
       <SmoothScroll />
       <ScrollProgress />
       <Nav lang={lang} />

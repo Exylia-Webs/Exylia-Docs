@@ -8,12 +8,12 @@ import type { SearchEntry } from "@/lib/docs";
 import { dict } from "@/content/dictionary";
 import type { Lang } from "@/content/registry";
 
-type Hit = SearchEntry & { score: number };
+export type Hit = SearchEntry & { score: number };
 
 /** An entry with its fields lowercased once, not on every keystroke. */
-type Prepared = { entry: SearchEntry; title: string; description: string; sections: string[] };
+export type Prepared = { entry: SearchEntry; title: string; description: string; sections: string[] };
 
-const prepare = (entries: SearchEntry[]): Prepared[] =>
+export const prepare = (entries: SearchEntry[]): Prepared[] =>
   entries.map((entry) => ({
     entry,
     title: entry.title.toLowerCase(),
@@ -22,7 +22,7 @@ const prepare = (entries: SearchEntry[]): Prepared[] =>
   }));
 
 /** Cheap ranking: title hits beat description hits beat body hits. */
-function rank(prepared: Prepared[], query: string): Hit[] {
+export function rank(prepared: Prepared[], query: string, limit = 8): Hit[] {
   const q = query.trim().toLowerCase();
   if (!q) return [];
   const words = q.split(/\s+/);
@@ -41,13 +41,13 @@ function rank(prepared: Prepared[], query: string): Hit[] {
     }
     if (score > 0) hits.push({ ...entry, score });
   }
-  return hits.sort((a, b) => b.score - a.score).slice(0, 8);
+  return hits.sort((a, b) => b.score - a.score).slice(0, limit);
 }
 
 /** One request per language per page load, shared by every open of the dialog. */
 const indexes = new Map<Lang, Promise<SearchEntry[]>>();
 
-function loadIndex(lang: Lang): Promise<SearchEntry[]> {
+export function loadIndex(lang: Lang): Promise<SearchEntry[]> {
   let index = indexes.get(lang);
   if (!index) {
     index = fetch(`/${lang}/search-index.json`).then((res) => {
