@@ -15,6 +15,7 @@ export function DocHeader({
   title,
   description,
   badge,
+  updated,
   minutes,
   index,
   total,
@@ -26,6 +27,7 @@ export function DocHeader({
   title: string;
   description?: string;
   badge?: string;
+  updated?: string;
   minutes: number;
   index: number;
   total: number;
@@ -48,6 +50,12 @@ export function DocHeader({
         {badge && (
           <span className="rounded-full border border-[rgb(var(--accent)/0.25)] px-2 py-0.5 text-[9.5px] tracking-[0.14em] text-accent">
             {badge}
+          </span>
+        )}
+        {updated && (
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-[rgb(var(--accent)/0.1)] px-2.5 py-0.5 text-[12px] text-[color-mix(in_srgb,rgb(var(--accent))_50%,#fff)]">
+            <span className="h-1.5 w-1.5 rounded-full bg-[rgb(var(--accent))]" />
+            {t.updatedIn[lang].replace("{v}", updated)}
           </span>
         )}
       </m.div>

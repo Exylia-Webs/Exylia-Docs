@@ -32,7 +32,7 @@ const config: Config = {
       },
       maxWidth: {
         content: "72rem",
-        docs: "88rem",
+        docs: "104rem",
       },
       keyframes: {
         float: {

@@ -151,6 +151,24 @@ export function PluginOverview({
         </m.dl>
       </header>
 
+      {flat.some((p) => p.fresh) && (
+        <section className="mb-16 rounded-2xl border border-[rgb(var(--accent)/0.2)] bg-[rgb(var(--accent)/0.04)] p-5 sm:p-6">
+          <p className="eyebrow !text-[rgb(var(--accent))]">{dict.docs.news[lang].replace("{v}", plugin.version)}</p>
+          <ul className="mt-3 grid gap-x-8 sm:grid-cols-2">
+            {flat
+              .filter((p) => p.fresh)
+              .map((page) => (
+                <li key={page.slug}>
+                  <Link href={`/${lang}/docs/${page.plugin}/${page.slug}`} className="group flex items-baseline gap-3 py-2">
+                    <span className="text-[14.5px] text-white transition-colors group-hover:text-[rgb(var(--accent))]">{page.title}</span>
+                    <span className="min-w-0 truncate text-[13px] text-white/40">{page.description}</span>
+                  </Link>
+                </li>
+              ))}
+          </ul>
+        </section>
+      )}
+
       {quick.length > 0 && (
         <section className="mb-16">
           <p className="eyebrow">{dict.docs.quick[lang]}</p>

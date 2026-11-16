@@ -2,6 +2,9 @@ import fs from "node:fs";
 import path from "node:path";
 import matter from "gray-matter";
 import { getPlugin, plugins, LANGS, type Lang, type NavGroup } from "@/content/registry";
+import { slugify } from "./slug";
+
+export { slugify };
 
 const CONTENT_DIR = path.join(process.cwd(), "content");
 
@@ -17,6 +20,10 @@ export type DocMeta = {
   group: string;
   /** Optional tag drawn next to the title in the sidebar. */
   badge?: string;
+  /** Plugin version whose changes this page last documented (frontmatter `updated`). */
+  updated?: string;
+  /** `updated` is the plugin's current version: the page is news. */
+  fresh?: boolean;
 };
 
 export type Doc = DocMeta & {
@@ -30,19 +37,6 @@ export type NavSection = { label: string; pages: DocMeta[] };
 
 function filePath(plugin: string, lang: Lang, slug: string) {
   return path.join(CONTENT_DIR, plugin, lang, `${slug}.mdx`);
-}
-
-/**
- * Slugifies a heading the way `rehype-slug` (github-slugger) does: lowercase,
- * punctuation dropped, spaces hyphenated — accents kept, which is why the
- * anchors of Spanish headings read `configuración` and not `configuracion`.
- */
-export function slugify(text: string): string {
-  return text
-    .toLowerCase()
-    .trim()
-    .replace(/[ -⁯⸀-⹿\\'!"#$%&()*+,./:;<=>?@[\]^`{|}~]/g, "")
-    .replace(/\s+/g, "-");
 }
 
 /** `##` and `###` headings, ignoring anything inside a fenced code block. */
@@ -101,6 +95,8 @@ function loadDoc(plugin: string, lang: Lang, slug: string): Doc | null {
     title: String(data.title ?? slug),
     description: String(data.description ?? ""),
     badge: data.badge ? String(data.badge) : undefined,
+    updated: data.updated ? String(data.updated) : undefined,
+    fresh: !!data.updated && String(data.updated) === getPlugin(plugin)?.version,
     group: placed?.group ?? "",
     body: content,
     headings: extractHeadings(content),
@@ -120,6 +116,8 @@ function metaOf(plugin: string, lang: Lang, id: string, slug: string, group: str
     title: doc.title,
     description: doc.description,
     badge: doc.badge,
+    updated: doc.updated,
+    fresh: doc.fresh,
     group,
   };
 }

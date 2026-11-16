@@ -57,7 +57,7 @@ export function Toc({ headings, minutes, lang }: { headings: Heading[]; minutes:
   const t = dict.docs;
 
   return (
-    <aside className="sticky top-[124px] hidden max-h-[calc(100vh-9.75rem)] w-[220px] shrink-0 overflow-y-auto scroll-thin pb-16 xl:block">
+    <aside className="sticky top-[124px] hidden max-h-[calc(100vh-9.75rem)] w-[220px] shrink-0 overflow-y-auto scroll-thin pb-16 xl:block 2xl:w-[260px]">
       <p className="eyebrow mb-4">{t.onThisPage[lang]}</p>
       <div className="relative">
         <span className="absolute bottom-0 left-0 top-0 w-px bg-white/[0.07]" />

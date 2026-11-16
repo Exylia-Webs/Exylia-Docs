@@ -165,7 +165,8 @@ function NavTree({
                     }`}
                   >
                     <span className="truncate">{page.title}</span>
-                    {read.includes(page.id) && !page.badge && <ReadTick />}
+                    {page.fresh && !page.badge && <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-full bg-[rgb(var(--accent))]" />}
+                    {read.includes(page.id) && !page.badge && !page.fresh && <ReadTick />}
                     {page.badge && (
                       <span className="shrink-0 rounded border border-[rgb(var(--accent)/0.25)] px-1.5 py-px text-[11px] font-medium text-accent">
                         {page.badge}

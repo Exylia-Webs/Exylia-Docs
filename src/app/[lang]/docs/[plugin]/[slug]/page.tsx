@@ -10,6 +10,8 @@ import { getAllDocParams, getFlatNav, getNav, getNeighbours, readDoc } from "@/l
 import { KeyNav, ReadMarker } from "@/components/docs/Reading";
 import { LANGS, SITE, getPlugin, toLang, translateSlug } from "@/content/registry";
 import { dict } from "@/content/dictionary";
+import { buildConfigMap, noteFor } from "@/lib/config-map";
+import { ConfigExplorer } from "@/components/docs/ConfigExplorer";
 
 type Params = Promise<{ lang: string; plugin: string; slug: string }>;
 
@@ -54,6 +56,11 @@ export default async function DocPage({ params }: { params: Params }) {
   const index = flat.findIndex((d) => d.slug === doc.slug) + 1;
   const minutes = Math.max(1, Math.round(doc.body.split(/\s+/).length / 200));
   const markdown = `# ${doc.title}\n\n${doc.description ? `${doc.description}\n\n` : ""}${doc.body.trim()}\n\nSource: ${SITE.url}/${lang}/docs/${entry.id}/${doc.slug}\n`;
+  const config = buildConfigMap(doc.body);
+  const explorer = config?.files.map((f) => ({
+    name: f.name,
+    lines: f.lines.map((l) => (l.path ? { ...l, note: noteFor(config, l.path, l.anchor) } : l)),
+  }));
   const to = (d: typeof previous) => (d ? `/${lang}/docs/${d.plugin}/${d.slug}` : undefined);
 
   return (
@@ -61,7 +68,7 @@ export default async function DocPage({ params }: { params: Params }) {
       <MobileNav plugin={entry} sections={sections} title={doc.title} lang={lang} />
 
       <div className="flex gap-12">
-        <article data-doc className="min-w-0 max-w-4xl flex-1 pb-4">
+        <article data-doc className="min-w-0 max-w-4xl flex-1 pb-4 2xl:max-w-[68rem]">
           <KeyNav previous={to(previous)} next={to(next)} />
           <DocHeader
             lang={lang}
@@ -70,6 +77,7 @@ export default async function DocPage({ params }: { params: Params }) {
             title={doc.title}
             description={doc.description}
             badge={doc.badge}
+            updated={doc.updated}
             minutes={minutes}
             index={index}
             total={flat.length}
@@ -77,6 +85,7 @@ export default async function DocPage({ params }: { params: Params }) {
           />
 
           <ArticleFade>
+            {explorer && <ConfigExplorer files={explorer} lang={lang} />}
             <div className="prose-docs">
               <Mdx source={doc.body} lang={lang} />
             </div>

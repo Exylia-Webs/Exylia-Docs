@@ -3,7 +3,11 @@ import type { ReactNode } from "react";
 import { CodeBlock } from "./CodeBlock";
 import { InlineCode } from "./InlineCode";
 import { AiPrompt } from "./AiPrompt";
-import type { Lang } from "@/content/registry";
+import { LiveTable } from "./LiveTable";
+import { PreviewLink, type Preview } from "./PreviewLink";
+import { getPlugin, type Lang } from "@/content/registry";
+import { readDoc } from "@/lib/docs";
+import { dict } from "@/content/dictionary";
 
 /* ---------------- Callout ---------------- */
 
@@ -203,6 +207,20 @@ function withLang(href: string, lang: Lang): string {
   return href.startsWith("/docs/") ? `/${lang}${href}` : href;
 }
 
+/** What a `/docs/<plugin>/<slug>#anchor` link points at, read from the page itself at build time. */
+function previewOf(href: string, lang: Lang): Preview | null {
+  const m = href.match(/^\/docs\/([^/#]+)\/([^/#]+)\/?(?:#(.+))?$/);
+  const doc = m && readDoc(m[1], lang, m[2]);
+  if (!m || !doc) return null;
+  return {
+    plugin: getPlugin(m[1])?.name ?? m[1],
+    group: doc.group,
+    title: doc.title,
+    section: m[3] ? doc.headings.find((h) => h.id === m[3])?.text : undefined,
+    description: doc.description,
+  };
+}
+
 export function createMdxComponents(lang: Lang) {
   return {
     pre: (props: { children?: ReactNode }) => <CodeBlock {...props} lang={lang} />,
@@ -210,15 +228,24 @@ export function createMdxComponents(lang: Lang) {
     h3: (props: { id?: string; children?: ReactNode }) => <Anchored as="h3" {...props} />,
     code: (props: { children?: ReactNode }) => <InlineCode {...props} lang={lang} />,
     table: (props: { children?: ReactNode }) => (
-      <div className="table-wrap">
+      <LiveTable lang={lang}>
         <table {...props} />
-      </div>
+      </LiveTable>
     ),
     a: ({ href = "", ...props }: { href?: string; children?: ReactNode }) => {
       if (href.startsWith("#")) return <a href={href} {...props} />;
-      if (href.startsWith("/")) return <Link href={withLang(href, lang)} {...props} />;
+      if (href.startsWith("/")) {
+        const preview = previewOf(href, lang);
+        return preview ? <PreviewLink href={withLang(href, lang)} preview={preview} {...props} /> : <Link href={withLang(href, lang)} {...props} />;
+      }
       return <a href={href} target="_blank" rel="noopener noreferrer" {...props} />;
     },
+    /** `<Since v="1.5.0" />` after a heading or a key: the version that brought it. */
+    Since: ({ v }: { v: string }) => (
+      <span className="not-prose ml-2 inline-block rounded-full bg-[rgb(var(--accent)/0.1)] px-2 py-px align-middle text-[11.5px] font-normal tracking-normal text-[color-mix(in_srgb,rgb(var(--accent))_50%,#fff)]">
+        {dict.docs.since[lang].replace("{v}", v)}
+      </span>
+    ),
     Callout,
     Cards,
     Card: ({ href, ...rest }: { title: string; href?: string; children?: ReactNode }) => (
