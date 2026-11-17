@@ -505,21 +505,21 @@ const AIMTRAINER_NAV: NavGroup[] = [
     ],
   },
   {
-    label: { en: "Configuring", es: "Configurar" },
+    label: { en: "Guides", es: "Guías" },
     pages: [
+      page("arenas", "arenas", "arenas"),
       page("drills", "drills", "ejercicios"),
-      page("scoring", "scoring", "puntuacion"),
       page("settings", "settings", "ajustes"),
       page("duels", "duels", "duelos"),
-      page("arenas", "arenas", "arenas"),
+      page("hud", "hud", "hud"),
+      page("stats", "stats", "estadisticas"),
     ],
   },
   {
-    label: { en: "Systems", es: "Sistemas" },
+    label: { en: "How it works", es: "Cómo funciona" },
     pages: [
       page("training", "training", "entrenamiento"),
-      page("stats", "stats", "estadisticas"),
-      page("hud", "hud", "hud"),
+      page("scoring", "scoring", "puntuacion"),
       page("compatibility", "compatibility", "compatibilidad"),
     ],
   },
@@ -532,6 +532,12 @@ const AIMTRAINER_NAV: NavGroup[] = [
       page("configuration", "configuration", "configuracion"),
       page("menus", "menus", "menus"),
       page("api", "api", "api"),
+    ],
+  },
+  {
+    label: { en: "Help", es: "Ayuda" },
+    pages: [
+      page("troubleshooting", "troubleshooting", "problemas-comunes"),
       page("faq", "faq", "faq"),
     ],
   },
@@ -2459,7 +2465,7 @@ export const plugins: Plugin[] = [
     tagline: { en: "Survival 1v1 duels with stakes paid exactly once", es: "Duelos 1v1 de survival con apuestas pagadas exactamente una vez" },
     summary: {
       en: "Survival 1v1 duels started with /duel and set up on one screen, fought with the players' own inventory (kept or at risk), a server kit or another plugin's kit such as the RandomKits Random kit, each kit with its own arena flags and rules (start state, combat, hits to win, fall depth, best-of rounds), in arenas that save, copy and regenerate themselves, with money bets taxed as a sink and item bets in a two-player trade window held by an escrow that survives crashes, quits and restarts, per-rank options, cooldowns, bet limits and tax, an end-of-duel inventory view and rematch, match history and replays, spectators, records and leaderboards, and kit duels across a network on an arena server.",
-      es: "Duelos 1v1 de survival que se inician con /duel y se configuran en una sola pantalla, con el inventario propio de los jugadores (sin riesgo o a riesgo), un kit del servidor o el kit de otro plugin como el kit aleatorio de RandomKits, cada kit con sus propias flags de arena y reglas (estado inicial, combate, golpes para ganar, profundidad de caída, rondas al mejor de), en arenas que se guardan, se copian y se regeneran solas, con apuestas de dinero con impuesto como sumidero y apuestas de objetos en una ventana de intercambio entre los dos retenidas por un depósito que sobrevive a crashes, desconexiones y reinicios, opciones, esperas, límites de apuesta e impuesto por rango, una vista del inventario al final del duelo y revancha, historial de duelos y repeticiones, espectadores, estadísticas y clasificaciones, y duelos con kit en red en un servidor de arenas.",
+      es: "Duelos 1v1 de survival que se inician con /duel y se configuran en una sola pantalla, con el inventario propio de los jugadores (sin riesgo o a riesgo), un kit del servidor o el kit de otro plugin como el kit aleatorio de RandomKits, cada kit con sus propias flags de arena y reglas (estado inicial, combate, golpes para ganar, profundidad de caída, rondas al mejor de N), en arenas que se guardan, se copian y se regeneran solas, con apuestas de dinero con impuesto como sumidero y apuestas de objetos en una ventana de intercambio entre los dos retenidas por un depósito que sobrevive a crashes, desconexiones y reinicios, opciones, esperas, límites de apuesta e impuesto por rango, una vista del inventario al final del duelo y revancha, historial de duelos y repeticiones, espectadores, estadísticas y clasificaciones, y duelos con kit en red en un servidor de arenas.",
     },
     version: "1.1.0",
     purchase: "https://builtbybit.com/resources/exylia-duels.134726/",
@@ -2918,10 +2924,10 @@ export const plugins: Plugin[] = [
   {
     id: "exyliatotemtrainer",
     name: "ExyliaTotemTrainer",
-    tagline: { en: "Totem training and best-of duels", es: "Entrenamiento de tótems y duelos al mejor de" },
+    tagline: { en: "Totem training and best-of duels", es: "Entrenamiento de tótems y duelos a varias rondas" },
     summary: {
       en: "Solo totem-pop drills at five tick speeds in six configurable modes, best-of duels against a chosen opponent, reactions graded PERFECT to SLOW, a leaderboard per mode, duel history and an admin surface that is only menus.",
-      es: "Entrenamiento de pops de tótem en solitario a cinco velocidades en seis modos configurables, duelos al mejor de contra un rival elegido, reacciones calificadas de PERFECT a SLOW, una tabla por modo, historial de duelos y una administración que es solo menús.",
+      es: "Entrenamiento de pops de tótem en solitario a cinco velocidades en seis modos configurables, duelos a varias rondas contra un rival elegido, reacciones calificadas de PERFECT a SLOW, una tabla por modo, historial de duelos y una administración que es solo menús.",
     },
     version: "1.2.0",
     status: "stable",
@@ -2940,10 +2946,10 @@ export const plugins: Plugin[] = [
   {
     id: "exyliaaimtrainer",
     name: "ExyliaAimTrainer",
-    tagline: { en: "Aim drills and best-of aim duels", es: "Ejercicios de puntería y duelos al mejor de" },
+    tagline: { en: "Aim drills and best-of aim duels", es: "Ejercicios de puntería y duelos a varias rondas" },
     summary: {
       en: "Packet targets every player sees alone: flick, reaction, tracking and combo drills tuned from the config, target size and distance chosen per player and weighed into a rating, best-of duels on the same target sequence, a board per drill plus an overall one, Java and Bedrock ranked apart, menus in five languages, and an admin surface that is only menus.",
-      es: "Objetivos por paquetes que cada jugador ve solo: ejercicios de flick, reacción, tracking y combo ajustados desde la configuración, tamaño y distancia de objetivo elegidos por cada jugador y pesados en un rating, duelos al mejor de sobre la misma secuencia de objetivos, una tabla por ejercicio y otra general, Java y Bedrock clasificados por separado, menús en cinco idiomas, y una administración que es solo menús.",
+      es: "Objetivos por paquetes que cada jugador ve solo: ejercicios de flick, reacción, tracking y combo ajustados desde la configuración, tamaño y distancia de objetivo elegidos por cada jugador y pesados en un rating, duelos a varias rondas sobre la misma secuencia de objetivos, una tabla por ejercicio y otra general, Java y Bedrock clasificados por separado, menús en cinco idiomas, y una administración que es solo menús.",
     },
     version: "1.2.0",
     status: "stable",
