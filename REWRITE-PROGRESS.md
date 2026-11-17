@@ -30,7 +30,7 @@ Follow WRITING.md. ExyliaFFA is the model. One row per plugin; mark done after r
 | `exylialobby` | `ExyliaLobby` | done |
 | `exyliakilleffect` | `ExyliaKillEffect` | done (configuration, api, faq leftovers) |
 | `exyliamarket` | `ExyliaMarket` | done (collect, prices, integrations lightly restructured; config/api/faq pending) |
-| `exyliamines` | `ExyliaMines` | done (integrations, configuration, api, faq leftovers) |
+| `exyliamines` | `ExyliaMines` | done |
 | `exyliamobs` | `ExyliaMobs` | done |
 | `exyliaplayervaults` | `ExyliaPlayerVaults` | done |
 | `exyliapractice` | `ExyliaPracticeCore` | done (configuration, database, web-api, api, faq pending cleanup) |
