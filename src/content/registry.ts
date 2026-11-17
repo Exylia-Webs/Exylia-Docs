@@ -1140,7 +1140,7 @@ const STAFF_NAV: NavGroup[] = [
     ],
   },
   {
-    label: { en: "Modules", es: "Módulos" },
+    label: { en: "Guides", es: "Guías" },
     pages: [
       page("staff-mode", "staff-mode", "modo-staff"),
       page("vanish", "vanish", "vanish"),
@@ -1175,6 +1175,12 @@ const STAFF_NAV: NavGroup[] = [
       page("configuration", "configuration", "configuracion"),
       page("languages", "languages", "idiomas"),
       page("api", "api", "api"),
+    ],
+  },
+  {
+    label: { en: "Help", es: "Ayuda" },
+    pages: [
+      page("troubleshooting", "troubleshooting", "problemas-comunes"),
       page("faq", "faq", "faq"),
     ],
   },
