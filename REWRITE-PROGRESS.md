@@ -22,9 +22,9 @@ Follow WRITING.md. ExyliaFFA is the model. One row per plugin; mark done after r
 | `exyliaemotes` | `ExyliaEmotes` | todo |
 | `exyliaevents` | `ExyliaEvents` | todo |
 | `exyliaffa` | `ExyliaFFA` | done |
-| `exyliagraves` | `ExyliaGraves` | todo |
+| `exyliagraves` | `ExyliaGraves` | done (staff, network, configuration, faq, installation on old text) |
 | `exyliahiteffect` | `ExyliaHitEffect` | todo |
-| `exyliajobs` | `ExyliaJobs` | todo |
+| `exyliajobs` | `ExyliaJobs` | partial (guides in progress) |
 | `exyliajourney` | `ExyliaJourney` | todo |
 | `exyliakillcam` | `ExyliaKillCam` | done (pages left on old text: see .rewrite-notes) |
 | `exylialobby` | `ExyliaLobby` | todo |
@@ -36,7 +36,7 @@ Follow WRITING.md. ExyliaFFA is the model. One row per plugin; mark done after r
 | `exyliapractice` | `ExyliaPracticeCore` | todo |
 | `exyliapracticebot` | `ExyliaPracticeBotV3` | todo |
 | `exyliaprotections` | `ExyliaProtections` | todo |
-| `exyliaproxyutils` | `ExyliaProxyUtils` | todo |
+| `exyliaproxyutils` | `ExyliaProxyUtils` | done (reference pages left on old text) |
 | `exyliarandomkits` | `ExyliaRandomKitsCore` | todo |
 | `exyliarewards` | `ExyliaRewards` | todo |
 | `exyliasandbox` | `ExyliaSandBox` | todo |
