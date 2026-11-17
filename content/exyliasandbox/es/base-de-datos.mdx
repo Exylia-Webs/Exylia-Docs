@@ -1,72 +1,95 @@
 ---
 title: "Base de datos"
-description: "Las siete tablas, sus columnas y lo que se mantiene en memoria a propósito."
+description: "Las tablas que ExyliaSandBox añade a tu base de datos, sus columnas, lo que se mantiene en memoria y cómo las comparten los servidores."
+questions:
+  - "¿Qué tablas crea ExyliaSandBox en la base de datos?"
+  - "¿Dónde se guardan los mundos, kits y estadísticas de ExyliaSandBox?"
+  - "¿Qué se pierde al reiniciar el servidor?"
+  - "¿Cómo comparto mundos y kits entre servidores?"
+badge: "referencia"
+updated: "1.2.0"
 ---
 
-Todo lo que posee el plugin vive en la base de datos: no hay lista de mundos, ni archivo de kits, ni
-archivo de plataformas en disco. H2 por defecto, o cualquier motor que soporte ExyliaLib, configurado en
-`database.yml`.
+Todo lo que posee el plugin vive en la base de datos: no hay lista de mundos, ni archivo de kits, ni archivo de plataformas en disco. La conexión, el motor (H2 por defecto) y compartir entre servidores son de ExyliaLib; configúralos en [Base de datos](/docs/exylialib/base-de-datos). Esta página lista solo las tablas que añade ExyliaSandBox.
 
-## `sandbox_worlds`
+## Antes de empezar
 
-Una fila por mundo configurado.
+No hay nada que crear: las tablas se hacen en el primer arranque. Inclúyelas en la copia de seguridad del resto de tu base de datos.
 
+## Pasos
+
+<Steps>
+  <Step title="Apunta todos los servidores a la misma base de datos">
+    Así los mundos, kits, plantillas y plataformas son los mismos en todos.
+  </Step>
+  <Step title="Elige cómo se comparten los mundos">
+    Pon `worlds-scope` en `config.yml` (mira [Configuración](/docs/exyliasandbox/configuracion#comparte-mundos-entre-servidores)) y reinicia.
+  </Step>
+</Steps>
+
+## Comprueba que funciona
+
+Crea un mundo en un servidor y reinicia o recarga el otro: aparece allí. Nada se sincroniza en vivo, así que un mundo creado en un servidor lo recoge otro la próxima vez que lea, y los kits se leen al conectarse.
+
+## Ir más lejos
+
+### Las tablas
+
+<Details title="sandbox_worlds: una fila por mundo configurado">
 | Columna | Tipo | Notas |
 |---|---|---|
-| `id` | clave | El id del mundo tal cual se escribió |
+| `id` | clave | El id del mundo tal como se escribió |
 | `display_name` | texto | |
 | `biome` | texto | Un id de bioma, `minecraft:plains` |
 | `border_size` | int | El **diámetro** |
 | `icon` | texto | Nombre de material, cadena de cabeza o un objeto serializado |
-| `generation_json` | texto | El preset: altura base, la pila de capas y la lista de decoración |
+| `generation_json` | texto | El preset: altura base, la pila de capas y la lista de features |
 | `type` | texto | `MANAGED` o `IMPORTED` |
 | `folder_name` | texto | Solo mundos importados |
 | `settings_json` | texto | La dificultad y doce de los trece interruptores |
 | `created_at`, `updated_at` | long | |
 
-`disable_powder_snow` se alterna en la pantalla de administración y se lee en vivo, pero no se escribe
-en `settings_json` — vuelve a su valor por defecto en la siguiente carga.
+`disable_powder_snow` se activa en la pantalla de admin y se lee en vivo, pero no se escribe en `settings_json`: vuelve a su valor por defecto en la siguiente carga.
+</Details>
 
-## `sandbox_player_kits`
-
-Una fila por kit.
-
+<Details title="sandbox_player_kits: una fila por kit">
 | Columna | Tipo | Notas |
 |---|---|---|
 | `id` | clave | `<uuid>:<ranura>` |
 | `player_uuid` | indexada | |
 | `slot` | int | Empieza en 1 |
 | `name`, `icon` | texto | |
-| `contents`, `armor`, `offhand` | texto | Pilas de objetos serializadas |
+| `contents`, `armor`, `offhand` | texto | Stacks de objetos serializados |
 | `favorite` | booleano | Como mucho una fila verdadera por jugador |
+| `created_at`, `updated_at` | long | |
+</Details>
 
-## `sandbox_predefined_kits`
-
+<Details title="sandbox_predefined_kits: las plantillas de admin">
 | Columna | Tipo | Notas |
 |---|---|---|
 | `id` | clave | Un slug del nombre al crearla. Renombrar no lo cambia |
 | `name`, `description`, `icon` | texto | |
 | `contents`, `armor`, `offhand` | texto | |
+| `practice_kit` | texto | El kit de PracticeCore vinculado, si hay |
+| `created_at`, `updated_at` | long | |
+</Details>
 
-## `sandbox_kitroom_categories` y `sandbox_kitroom_items`
+<Details title="sandbox_kitroom_categories y sandbox_kitroom_items: la antigua sala de kits">
+Son las tablas antiguas de la sala de kits (una categoría tiene `display_name`, `material` y `priority`; un objeto tiene `category_id`, `slot` e `item_stack`). La sala de kits vive ahora en `exylia_kitroom` de ExyliaLib (mira [Sala de kits](/docs/exyliasandbox/sala-de-kits#qué-se-guarda)); estas dos solo se leen, una vez, para sembrarla, y no se vuelven a escribir.
+</Details>
 
-Las tablas antiguas de la sala de kits. La sala vive ahora en `exylia_kitroom` de ExyliaLib (mira la página
-[Sala de kits](/docs/exyliasandbox/sala-de-kits#qué-se-guarda)); estas dos solo se leen, una vez, para
-sembrarla, y no se vuelven a escribir.
-
-## `sandbox_player_stats`
-
+<Details title="sandbox_player_stats">
 | Columna | Tipo | Notas |
 |---|---|---|
 | `uuid` | clave | |
 | `kills`, `deaths` | int | Solo se cuentan dentro de mundos sandbox |
-| `playtime_millis` | long | Tiempo en sandbox, no tiempo en el servidor |
+| `playtime_millis` | long | Tiempo de sandbox, no del servidor |
+| `created_at`, `updated_at` | long | |
 
-Una baja cuenta cuando quien mata y quien muere están los dos en un mundo sandbox y no son el mismo
-jugador. El KDR sin muertes es el número de bajas.
+Una baja cuenta cuando el asesino y la víctima están en un mundo sandbox y no son el mismo jugador. El KDR sin muertes es el número de bajas.
+</Details>
 
-## `sandbox_tp_regions`
-
+<Details title="sandbox_tp_regions: las plataformas de teletransporte">
 | Columna | Tipo | Notas |
 |---|---|---|
 | `id` | clave | Doce caracteres hexadecimales |
@@ -75,16 +98,15 @@ jugador. El KDR sin muertes es el número de bajas.
 | `target_world_id` | texto | Vacío significa un mundo `READY` al azar |
 | `spread_radius` | int | |
 | `world_name` | texto | El mundo donde está la caja |
-| `min_x` … `max_z` | double | Las seis coordenadas |
+| `min_x` ... `max_z` | double | Las seis esquinas |
+| `created_at`, `updated_at` | long | |
+</Details>
 
-## `sandbox_settings`
+<Details title="sandbox_settings: el lobby y la sala del creador">
+Exactamente una fila, con la ubicación del lobby y la de la sala del creador de kits. Un `data.yml` antiguo en la carpeta del plugin se lee una vez al arrancar y se importa a esa fila, para las ubicaciones que la base de datos aún no tenga. El archivo nunca se reescribe ni se borra.
+</Details>
 
-Exactamente una fila, con la posición del lobby y la de la sala del creador de kits.
-
-Un `data.yml` heredado en la carpeta del plugin se lee una vez al arrancar y se importa a esta fila,
-para las posiciones que la base de datos no tenga ya. El archivo no se reescribe ni se borra.
-
-## Qué no está en la base de datos
+### Qué no está en la base de datos
 
 | Solo en memoria | Se pierde con |
 |---|---|
@@ -97,11 +119,11 @@ para las posiciones que la base de datos no tenga ya. El archivo no se reescribe
 
 Los kits y las estadísticas se cachean por jugador y se escriben al desconectarse.
 
-## Compartir entre servidores
+### Compartir entre servidores
 
-Apunta todos los servidores a la misma base de datos y los mundos, kits, plantillas, la sala de kits y
-las plataformas son los mismos en todos. La lista de mundos y las plataformas se guardan por grupo de red:
-`worlds-scope` en `config.yml` (`default` sigue el `network-group` del `config.yml` de ExyliaLib, `server`
-da a cada servidor los suyos, `global` comparte con todos, cualquier otro valor es el nombre de un grupo),
-leído al arrancar. Nada se sincroniza en vivo: un mundo creado en un servidor lo
-recoge otro la próxima vez que lea, y los kits se leen al conectarse.
+La lista de mundos y las plataformas se guardan por grupo de red: `worlds-scope` en `config.yml` (`default` sigue el grupo de red del `config.yml` de ExyliaLib, `server` da a cada servidor los suyos, `global` comparte con todos, cualquier otro valor es el nombre de un grupo), leído al arrancar.
+
+<Cards>
+  <Card title="Base de datos de ExyliaLib" href="/docs/exylialib/base-de-datos">Motor, conexión y compartir.</Card>
+  <Card title="Configuración" href="/docs/exyliasandbox/configuracion">worlds-scope y las demás claves.</Card>
+</Cards>

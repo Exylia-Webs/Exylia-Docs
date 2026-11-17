@@ -1,15 +1,41 @@
 ---
 title: "Database"
-description: "The seven tables, their columns, and what is deliberately kept in memory instead."
+description: "The tables ExyliaSandBox adds to your database, their columns, what is kept in memory instead, and how servers share them."
+questions:
+  - "Which database tables does ExyliaSandBox create?"
+  - "Where are ExyliaSandBox worlds, kits and stats stored?"
+  - "What is lost when the server restarts?"
+  - "How do I share worlds and kits between servers?"
+badge: "reference"
+updated: "1.2.0"
 ---
 
-Everything the plugin owns lives in the database: there is no world list, no kit file and no pad file
-on disk. H2 by default, or any engine ExyliaLib supports, configured in `database.yml`.
+Everything the plugin owns lives in the database: there is no world list, kit file or pad file on disk. The connection, the engine (H2 by default) and sharing between servers are ExyliaLib's; set them up on [Database](/docs/exylialib/database). This page lists only the tables ExyliaSandBox adds.
 
-## `sandbox_worlds`
+## Before you start
 
-One row per configured world.
+Nothing to create: the tables are made on first start. Back them up with the rest of your database.
 
+## Steps
+
+<Steps>
+  <Step title="Point every server at the same database">
+    Worlds, kits, templates and pads are then the same everywhere.
+  </Step>
+  <Step title="Choose how worlds are shared">
+    Set `worlds-scope` in `config.yml` (see [Configuration](/docs/exyliasandbox/configuration#share-worlds-between-servers)) and restart.
+  </Step>
+</Steps>
+
+## Check that it works
+
+Create a world on one server and restart or reload the other: it appears there. Nothing is synchronised live, so a world created on one server is picked up by another when it next reads, and kits are read on join.
+
+## Going further
+
+### The tables
+
+<Details title="sandbox_worlds: one row per configured world">
 | Column | Type | Notes |
 |---|---|---|
 | `id` | key | The world id as typed |
@@ -23,13 +49,10 @@ One row per configured world.
 | `settings_json` | text | The difficulty and twelve of the thirteen toggles |
 | `created_at`, `updated_at` | long | |
 
-`disable_powder_snow` is toggled in the admin screen and read live, but it is not written into
-`settings_json` — it goes back to its default on the next load.
+`disable_powder_snow` is toggled in the admin screen and read live, but it is not written into `settings_json`: it goes back to its default on the next load.
+</Details>
 
-## `sandbox_player_kits`
-
-One row per kit.
-
+<Details title="sandbox_player_kits: one row per kit">
 | Column | Type | Notes |
 |---|---|---|
 | `id` | key | `<uuid>:<slot>` |
@@ -38,34 +61,35 @@ One row per kit.
 | `name`, `icon` | text | |
 | `contents`, `armor`, `offhand` | text | Serialised item stacks |
 | `favorite` | boolean | At most one true row per player |
+| `created_at`, `updated_at` | long | |
+</Details>
 
-## `sandbox_predefined_kits`
-
+<Details title="sandbox_predefined_kits: the admin templates">
 | Column | Type | Notes |
 |---|---|---|
 | `id` | key | A slug of the name at creation. Renaming does not change it |
 | `name`, `description`, `icon` | text | |
 | `contents`, `armor`, `offhand` | text | |
+| `practice_kit` | text | The linked PracticeCore kit, if any |
+| `created_at`, `updated_at` | long | |
+</Details>
 
-## `sandbox_kitroom_categories` and `sandbox_kitroom_items`
+<Details title="sandbox_kitroom_categories and sandbox_kitroom_items: the old kit room">
+These are the old kit-room tables (a category has a `display_name`, `material` and `priority`; an item has a `category_id`, `slot` and `item_stack`). The kit room now lives in ExyliaLib's `exylia_kitroom` (see [Kit room](/docs/exyliasandbox/kit-room#what-is-stored)); these two are only read, once, to seed it, and never written again.
+</Details>
 
-The old kit-room tables. The kit room now lives in ExyliaLib's `exylia_kitroom` (see the
-[Kit room](/docs/exyliasandbox/kit-room#what-is-stored) page); these two are only read, once, to seed it,
-and never written again.
-
-## `sandbox_player_stats`
-
+<Details title="sandbox_player_stats">
 | Column | Type | Notes |
 |---|---|---|
 | `uuid` | key | |
 | `kills`, `deaths` | int | Counted only inside sandbox worlds |
 | `playtime_millis` | long | Sandbox time, not server time |
+| `created_at`, `updated_at` | long | |
 
-A kill counts when both the killer and the victim are in a sandbox world and they are not the same
-player. KDR with no deaths is the kill count.
+A kill counts when both the killer and the victim are in a sandbox world and they are not the same player. KDR with no deaths is the kill count.
+</Details>
 
-## `sandbox_tp_regions`
-
+<Details title="sandbox_tp_regions: the teleport pads">
 | Column | Type | Notes |
 |---|---|---|
 | `id` | key | Twelve hex characters |
@@ -74,16 +98,15 @@ player. KDR with no deaths is the kill count.
 | `target_world_id` | text | Empty means a random `READY` world |
 | `spread_radius` | int | |
 | `world_name` | text | The world the box is in |
-| `min_x` … `max_z` | double | The six corners |
+| `min_x` ... `max_z` | double | The six corners |
+| `created_at`, `updated_at` | long | |
+</Details>
 
-## `sandbox_settings`
+<Details title="sandbox_settings: the lobby and the kit-creator room">
+Exactly one row, holding the lobby location and the kit-creator room location. A legacy `data.yml` in the plugin folder is read once on startup and imported into this row, for locations the database does not already have. The file is never rewritten or deleted.
+</Details>
 
-Exactly one row, holding the lobby location and the kit-creator room location.
-
-A legacy `data.yml` in the plugin folder is read once on startup and imported into this row, for
-locations the database does not already have. The file is never rewritten or deleted.
-
-## What is not in the database
+### What is not in the database
 
 | Kept in memory only | Lost on |
 |---|---|
@@ -96,10 +119,11 @@ locations the database does not already have. The file is never rewritten or del
 
 Kits and statistics are cached per player and written back when they disconnect.
 
-## Sharing across servers
+### Sharing across servers
 
-Point every server at the same database and the worlds, kits, templates, kit room and pads are the same
-everywhere. The world list and the teleport pads are stored per network group: `worlds-scope` in
-`config.yml` (`default` follows the `network-group` set in ExyliaLib's `config.yml`, `server` gives each
-server its own, `global` shares with every server, any other value is a group name), read at startup. Nothing is synchronised live: a world created on one server is picked up by another when it
-next reads, and kits are read on join.
+The world list and the teleport pads are stored per network group: `worlds-scope` in `config.yml` (`default` follows the network group set in ExyliaLib's `config.yml`, `server` gives each server its own, `global` shares with every server, any other value is a group name), read at startup.
+
+<Cards>
+  <Card title="ExyliaLib database" href="/docs/exylialib/database">Engine, connection and sharing.</Card>
+  <Card title="Configuration" href="/docs/exyliasandbox/configuration">worlds-scope and the other keys.</Card>
+</Cards>
