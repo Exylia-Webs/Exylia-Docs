@@ -18,7 +18,7 @@ Follow WRITING.md. ExyliaFFA is the model. One row per plugin; mark done after r
 | `exyliacrates` | `ExyliaCrates` | done (guide bodies spot-checked only) |
 | `exyliadisplays` | `ExyliaDisplays` | done (configuration, file-reference pending) |
 | `exyliaduels` | `ExyliaDuels` | done (es labels of kit-rules and history unchecked) |
-| `exyliaeconomy` | `ExyliaEconomy` | done (configuration, api, ledger, network, integrations, faq leftovers) |
+| `exyliaeconomy` | `ExyliaEconomy` | done |
 | `exyliaemotes` | `ExyliaEmotes` | done (configuration leftover) |
 | `exyliaevents` | `ExyliaEvents` | done (introduction, installation bodies; configuration, api, faq tables leftovers) |
 | `exyliaffa` | `ExyliaFFA` | done |
