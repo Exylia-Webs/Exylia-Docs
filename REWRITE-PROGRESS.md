@@ -26,7 +26,7 @@ Follow WRITING.md. ExyliaFFA is the model. One row per plugin; mark done after r
 | `exyliahiteffect` | `ExyliaHitEffect` | done (configuration, api, faq leftovers) |
 | `exyliajobs` | `ExyliaJobs` | done |
 | `exyliajourney` | `ExyliaJourney` | done (configuration, api, faq pending cleanup) |
-| `exyliakillcam` | `ExyliaKillCam` | done (pages left on old text: see .rewrite-notes) |
+| `exyliakillcam` | `ExyliaKillCam` | done |
 | `exylialobby` | `ExyliaLobby` | done |
 | `exyliakilleffect` | `ExyliaKillEffect` | done (configuration, api, faq leftovers) |
 | `exyliamarket` | `ExyliaMarket` | done (collect, prices, integrations lightly restructured; config/api/faq pending) |
