@@ -6,7 +6,7 @@ Follow WRITING.md. ExyliaFFA is the model. One row per plugin; mark done after r
 |---|---|---|
 | `exyliaaimtrainer` | `ExyliaAimTrainer` | done (configuration, api, faq not fact-checked) |
 | `exyliaanalytics` | `ExyliaAnalytics` | todo |
-| `exyliaarmorskin` | `ExyliaArmorSkin` | todo |
+| `exyliaarmorskin` | `ExyliaArmorSkin` | started (guide bodies pending) |
 | `exyliaarmortrims` | `ExyliaArmorTrims` | done |
 | `exyliaarrows` | `ExyliaArrows` | todo |
 | `exyliacapture` | `ExyliaCapture` | todo |
