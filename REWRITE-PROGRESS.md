@@ -4,7 +4,7 @@ Follow WRITING.md. ExyliaFFA is the model. One row per plugin; mark done after r
 
 | Docs | Repo | State |
 |---|---|---|
-| `exyliaaimtrainer` | `ExyliaAimTrainer` | todo |
+| `exyliaaimtrainer` | `ExyliaAimTrainer` | done (configuration, api, faq not fact-checked) |
 | `exyliaanalytics` | `ExyliaAnalytics` | todo |
 | `exyliaarmorskin` | `ExyliaArmorSkin` | todo |
 | `exyliaarmortrims` | `ExyliaArmorTrims` | done |
