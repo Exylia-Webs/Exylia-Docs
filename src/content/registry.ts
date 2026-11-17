@@ -1709,21 +1709,18 @@ const LOBBY_NAV: NavGroup[] = [
     ],
   },
   {
-    label: { en: "The lobby", es: "El lobby" },
+    label: { en: "Guides", es: "Guías" },
     pages: [
       page("modules", "modules", "modulos"),
       page("areas", "areas", "areas"),
-    ],
-  },
-  {
-    label: { en: "Modules", es: "Módulos" },
-    pages: [
       page("core", "core", "base"),
       page("hotbar-and-movement", "hotbar-and-movement", "hotbar-y-movimiento"),
       page("selector-and-hud", "selector-and-hud", "selector-y-hud"),
       page("gadgets", "gadgets", "gadgets"),
       page("parkour", "parkour", "parkour"),
       page("lobby-pvp", "lobby-pvp", "pvp-del-lobby"),
+      page("migration", "migration", "migracion"),
+      page("translations", "translations", "traducciones"),
     ],
   },
   {
@@ -1732,9 +1729,13 @@ const LOBBY_NAV: NavGroup[] = [
       page("commands", "commands", "comandos"),
       page("permissions", "permissions", "permisos"),
       page("placeholders", "placeholders", "placeholders"),
-      page("migration", "migration", "migracion"),
-      page("translations", "translations", "traducciones"),
       page("api", "api", "api"),
+    ],
+  },
+  {
+    label: { en: "Help", es: "Ayuda" },
+    pages: [
+      page("troubleshooting", "troubleshooting", "problemas-comunes"),
       page("faq", "faq", "faq"),
     ],
   },
