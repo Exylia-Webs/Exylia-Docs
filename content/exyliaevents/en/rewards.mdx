@@ -1,37 +1,51 @@
 ---
 title: "Rewards"
-description: "Per-event rewards, global reward commands, and what happens when a winner is offline."
+description: "Pay winners, runners-up and everyone else who played, per event or for the whole server."
+questions:
+  - "How do I give a reward to the winner of an event?"
+  - "How do I reward 2nd and 3rd place?"
+  - "Can everyone who played get something?"
+  - "What happens if the winner is offline when the event ends?"
+  - "How do I give the same prize for every event?"
+  - "Why did my test event not pay out?"
+updated: "1.11.0"
 ---
 
-There are two independent reward layers: the ones a configuration carries, and the commands
-`config.yml` runs for every event.
+By the end of this page winners get a prize, other players get a smaller one, and you know what happens to a player who disconnects before it arrives.
 
-## Per-event rewards
+## Before you start
 
-Each configuration has two lists, edited with the reward editor in the admin panel:
+- An event configuration exists. See [Your first event](/docs/exyliaevents/first-steps).
+- You have `exyliaevents.admin`. See [Permissions](/docs/exyliaevents/permissions).
 
-| List | Given to |
-|---|---|
-| Winner rewards | Whoever the event declares the winner |
-| Participant rewards | Everyone else who played |
+## Steps
 
-They are handed over a moment after the event ends, so the items land after the player has been
-returned to the lobby rather than into an inventory that is about to be cleared.
+<Steps>
+  <Step title="Open the event">
+    Run `/eventsadmin`, click **Configurations**, open the category and click your event. The setup screen opens.
+  </Step>
+  <Step title="Set the winner prize">
+    Click **Winner rewards**. Add what the winner receives: items, commands, money, experience, messages or potion effects, with optional odds. The editor is ExyliaLib's reward editor, described in [Rewards](/docs/exylialib/rewards).
+  </Step>
+  <Step title="Set the participant prize">
+    Click **Participant rewards** and add what everyone else who played receives.
+  </Step>
+  <Step title="Reward 2nd place and below (optional)">
+    Click **Place rewards**, then a place (`#2` to `#10`) and add its prize. A place you leave empty pays the participant rewards instead.
+  </Step>
+</Steps>
 
-## Boosting prizes
+Prizes are handed over a moment after the event ends, so items land after the player is back in the lobby and not in an inventory that is about to be cleared.
 
-Both lists go through ExyliaLib's [modifiers](/docs/exylialib/economy#modifiers) under the source
-`events`, which the booster screens list. Money lines are boosted as `money`, experience as `xp` and
-items as `drops`; commands are paid as written. A boost can cover every event or one type, through
-the scope `event:<type>` with the type id, such as `event:koth`. The permission nodes work too:
-`exylia.modifier.money.events.2` doubles the money from every event prize.
+## Check that it works
 
-A prize is boosted once, when it is earned: one queued for an offline player keeps the boost it was
-earned with. The global reward commands below are never boosted.
+Run `/eventsadmin forcestart <id>`, join with a second account and finish the game. The winner receives the winner rewards and the other player the participant rewards. If nothing arrives, see [Common problems](/docs/exyliaevents/troubleshooting).
 
-## Global reward commands
+## Going further
 
-`config.yml` carries console commands run for every event, whichever configuration it was:
+### Reward the same thing in every event
+
+`config.yml` carries console commands run for every event, whichever configuration it is. Edit them in `/eventsadmin`, **Settings**, **Rewards** (**Winner commands**, **Player commands**) or in the file:
 
 ```yaml title="config.yml"
 reward-commands:
@@ -42,35 +56,38 @@ reward-commands:
     - "console: give %player% diamond 1"
 ```
 
-| Key | Default | What it does |
-|---|---|---|
-| `only-on-random-events` | `false` | When `true`, these commands only run for events the scheduler started. |
-| `participant` | one example | Commands run for each participant. `%player%` is substituted. |
-| `winner` | one example | Commands run for each winner. |
+Both layers run for the same event: a configuration with its own rewards and global commands pays both. Use the global commands for server-wide prizes (a crate key for every winner) and the configuration's lists for prizes that differ per event or contain exact items.
 
-<Callout type="tip" title="only-on-random-events">
-It exists so a staff member testing an event by hand does not hand out prizes. Turn it on and only
-automatically started events pay out — see [Game flow](/docs/exyliaevents/game-flow#automatic-events).
+<Callout type="tip" title="Do not pay for staff tests">
+Turn on **Random only** (`only-on-random-events`) and the global commands pay only for events the scheduler started. Prizes in a configuration's own lists are not affected by it. See [Game flow](/docs/exyliaevents/game-flow#automatic-events).
 </Callout>
 
-## Offline winners
+### Which games have places
 
-If a player is offline when rewards are handed out, their per-event rewards are queued in
-`event_pending_rewards` along with the event name and whether they won, and delivered the next time
-they join. Nothing is lost because somebody disconnected in the last seconds.
+Only games that rank players behind the winner show **Place rewards**. Team games (a winning team, nothing else to rank) and the role games Hide and Seek, Block Morph Hunt, King Kong, Infection and Murder Mystery do not: their players are paid as winners or participants. Nobody places when an event is stopped or has no winner.
 
-`/exylialib pendingrewards` lists what is still owed, alongside every other plugin's pending rewards.
-Each batch is named after its event, with `(winner)` when the player won, and staff can hand it over
-or cancel it from there. It needs `exylialib.pendingrewards`.
+### Boost the prizes
 
-## Which layer to use
+Prizes go through ExyliaLib's [modifiers](/docs/exylialib/economy#modifiers) under the source `events`: money lines are boosted as `money`, experience as `xp` and items as `drops`; commands are paid as written. A boost can cover every event or one type through the scope `event:<type>`, such as `event:koth`. The permission `exylia.modifier.money.events.2` doubles money from every event prize. The global reward commands are never boosted.
 
-| You want | Use |
-|---|---|
-| Different prizes per event | The configuration's own reward lists |
-| The same prize for every event on the server | The global reward commands |
-| Economy money, permissions, crate keys | Global commands, or commands inside the reward editor |
-| Physical items, exactly as configured | The reward lists |
+### Players who are offline
 
-Both layers run for the same event, so a configuration with its own rewards **and** global commands
-gives both.
+If a player is offline when prizes are handed out, their configuration rewards are queued and delivered when they next join, with the boost they earned. `/exylialib pendingrewards` lists what is still owed across every plugin; each batch is named after its event, with `(winner)` when the player won, and staff can hand it over or cancel it. It needs `exylialib.pendingrewards`.
+
+<Details title="Technical details">
+
+| Key (`config.yml`) | Default | What it does |
+|---|---|---|
+| `reward-commands.only-on-random-events` | `false` | When `true`, the global commands only run for events the scheduler started. |
+| `reward-commands.participant` | one example | Commands run for each participant. `%player%` is the player. |
+| `reward-commands.winner` | one example | Commands run for each winner. |
+
+- Who gets what: a winner gets the winner rewards; anyone else who played gets their place's rewards (places 2 to 10) when that place has any, otherwise the participant rewards.
+- Offline prizes are stored in the table `event_pending_rewards` with the event name and whether the player won.
+- Reward lines can use `%player%` and the event's name; the full list of reward types and their fields is in ExyliaLib's [Rewards](/docs/exylialib/rewards).
+</Details>
+
+<Cards>
+  <Card title="Game flow" href="/docs/exyliaevents/game-flow">Automatic events, limits and cooldowns.</Card>
+  <Card title="Teams, kits and loot" href="/docs/exyliaevents/teams-and-kits">What players carry into the game.</Card>
+</Cards>
