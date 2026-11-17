@@ -10,32 +10,73 @@ badge: "guide"
 updated: "1.4.0"
 ---
 
-DTR is the number that decides whether a clan's land is protected. It falls when members die, freezes
-for a while after each death, regenerates on a timer, and once it goes negative the clan is **raidable**.
+Set how hard it is for a clan to lose its land: deaths take DTR away, it regenerates on a timer, and a clan below zero is raidable, so its claim stops protecting it.
 
-## The maximum
+## Before you start
 
-```
-max DTR = max(1.0, member count ÷ members-per-point)
-```
+DTR only matters if clans can [claim land](/docs/exyliaclans/claims). The `dtr` module must be on (it is by default), see [Turn clan systems on and off](/docs/exyliaclans/modules).
 
-With `members-per-point: 3`, a three-member clan has a maximum of 1.0, a nine-member clan 3.0, and a
-thirty-member clan 10.0. A clan smaller than the divisor still gets 1.0 — never less.
+## Steps
 
-The maximum moves with the roster. Recruiting raises the ceiling; losing members lowers it, and a clan
-left above its new maximum is brought down to it on the next regeneration tick it is not frozen for.
+<Steps>
+  <Step title="Pick the settings">
+    Open `plugins/ExyliaClans/config.yml` and find the `dtr` section. The main knobs are `death-loss` (DTR lost per member death, shipped 0.9), `frozen-duration-seconds` (how long regeneration is paused after a death, shipped 600) and `members-per-point` (members needed per 1.0 of maximum DTR, shipped 3).
+  </Step>
+  <Step title="Exempt worlds where dying should be free">
+    Add the lobby, event or practice world to `no-loss-worlds`, for example `no-loss-worlds: [lobby]`. A death there costs nothing.
+  </Step>
+  <Step title="Reload">
+    Run `/clanadmin reload`.
+  </Step>
+</Steps>
 
-## Losing it
+## Check that it works
 
-Every member death costs `death-loss` (0.9) and freezes regeneration for `frozen-duration-seconds`
-(600 — ten minutes). Another death restarts the freeze from zero rather than extending it.
+Let a member of a test clan die in a normal world. The clan is told who died and where its DTR stands, green at maximum, yellow below it and red below zero. Look at the clan's DTR and state in `/clan` (clan info). Wait a regeneration tick and the DTR rises once the freeze is over.
 
-The floor is `min-dtr`, `-1.0` by default: a clan cannot be pushed further negative than that, so the
-time to recover from a raid is bounded no matter how badly it went.
+## How it works
 
-Every death broadcasts to the clan who died and where the pool now stands, coloured green at maximum,
-amber below it and red below zero.
+- **Maximum**: `max(1.0, members ÷ members-per-point)`. With 3 per point a three-member clan has 1.0, a nine-member clan 3.0 and a thirty-member clan 10.0. A small clan never gets less than 1.0.
+- **Loss**: each member death costs `death-loss` (0.9) and freezes regeneration for ten minutes. A death during the freeze restarts it. The floor is `min-dtr` (-1.0).
+- **Regeneration**: every `regen-interval-seconds` (45 s) a clan that is not frozen and not at maximum gains `regen-amount` (0.1). Undoing one death takes about seventeen minutes with the defaults: ten of freeze, then nine ticks.
 
+| State | When | Default colour |
+|---|---|---|
+| `NORMAL` | DTR is at the maximum | `&a` |
+| `REGENERATING` | Above zero but below the maximum | `&e` |
+| `FROZEN` | The freeze from the last death has not run out | `&b` |
+| `RAIDABLE` | DTR below zero and the freeze is over | `&c` |
+
+Colours use the [colour codes](/docs/exylialib/colours) of ExyliaLib.
+
+## Going further
+
+### What happens when a clan goes raidable
+
+When DTR crosses from zero or above to below zero, once:
+
+- The clan loses 50 EXP (`levels.exp-actions.raided.exp-loss`), see [Levels](/docs/exyliaclans/levels).
+- Its claim stops protecting anything, see [Claim land](/docs/exyliaclans/claims#protection-mode).
+
+Crossing back above zero restores protection on the next regeneration tick.
+
+### What DTR blocks
+
+A clan whose state is not `NORMAL` cannot `/clan disband` or `/clan unclaim`, and `/clan reclaim` is refused while it is raidable. A clan cannot drop or dissolve its land to escape a raid it is losing.
+
+### Change a clan's DTR by hand
+
+Run `/clanadmin setdtr <clan> <SET|ADD|REMOVE> <value>`. It is clamped at the clan's current maximum, but has **no lower clamp**: `SET -50` goes straight through, past `min-dtr`. It also clears the freeze.
+
+<Callout type="warning" title="Setting DTR by hand does not tell WorldGuard">
+Un-raiding a clan with `setdtr` does not reopen the protection: with `protection-mode: WORLDGUARD` a region opened by a raid keeps its `BUILD=ALLOW` until the next restart. With `BUILTIN` there is nothing to undo.
+</Callout>
+
+### Turn it off
+
+With `modules.dtr: false` there is no regeneration, freeze, death broadcast or raidable state, which means **no claim ever opens**. Territory becomes permanent and disband and unclaim lose their DTR check. If your server has claims it almost certainly wants DTR too.
+
+<Details title="Technical details">
 ```yaml
 dtr:
   no-loss-worlds: []
@@ -51,86 +92,14 @@ dtr:
   color-raidable: "&c"
 ```
 
-`no-loss-worlds` is the escape hatch: a death in a world listed there costs nothing. Put the lobby, the
-event world and the practice world in it.
+On a network every server runs the regeneration task, but each clan's row remembers when it last regenerated, so a clan gains `regen-amount` once per interval whatever the number of servers. A clan left above a new, lower maximum (after losing members) is brought down to it on the next tick it is not frozen for.
 
-## Regaining it
+`FROZEN` is checked first, so a clan pushed negative reads `FROZEN` for the ten minutes before `RAIDABLE`, although its claim is already open: that depends on the number being below zero, not the label.
 
-A task runs every `regen-interval-seconds` (45 s) and adds `regen-amount` (0.1) to every clan that is not
-frozen and not already at its maximum. With the defaults that is 0.133 DTR per minute, so undoing a
-single death — 0.9 — takes nine ticks of the task, about 6 minutes 45 seconds, and that only starts once
-the ten-minute freeze has run out. Call it seventeen minutes from the death to being whole again.
+On every start with the module on, each clan sitting at exactly `0.0` with no freeze is set to its maximum and the count is logged. It catches clans created while the module was off, but it also tops up a clan you deliberately left at `0.0` with `/clanadmin setdtr`.
+</Details>
 
-On a network every server runs the task, but each clan's row remembers when it last regenerated, so a
-clan gains `regen-amount` once per interval however many servers there are.
-
-## The four states
-
-| State | When | Default colour |
-|---|---|---|
-| `FROZEN` | The freeze from the last death has not expired | `&b` |
-| `RAIDABLE` | DTR is below zero and the freeze has expired | `&c` |
-| `REGENERATING` | DTR is above zero but below the maximum | `&e` |
-| `NORMAL` | DTR is at the maximum | `&a` |
-
-`FROZEN` is checked first, so a clan that has just been pushed negative reads `FROZEN` for ten minutes
-before it reads `RAIDABLE` — even though its claim is already open, which is decided by the number
-being below zero and not by the state label.
-
-The menus also print a detail line: how long until the freeze lifts, or an estimate of how long until
-the pool is full again.
-
-## Going raidable
-
-Crossing from zero or above to below zero, once:
-
-- The clan loses `exp-actions.raided.exp-loss` — 50 EXP by default.
-- Its claim stops protecting anything. Under `BUILTIN` every build, door and container check passes for
-  everybody; under `WORLDGUARD` the region's `BUILD` flag is set to `ALLOW`.
-- Under `BUILTIN`, explosions stop being filtered out of the claim. Under `WORLDGUARD` the region's own
-  flags decide.
-
-Crossing back above zero puts all of it back on the next regeneration tick.
-
-## What DTR gates
-
-Two operations are refused unless the clan's state is `NORMAL`:
-
-| Operation | Message |
-|---|---|
-| `/clan disband` | `errors.clan-raidable` |
-| `/clan unclaim` | `errors.dtr-not-normal` |
-
-`/clan reclaim` has its own check and is refused specifically while raidable. A clan cannot drop its
-land, redraw it or dissolve itself to escape a raid it is losing.
-
-## Admin
-
-```
-/clanadmin setdtr <clan> <SET|ADD|REMOVE> <value>
-```
-
-Clamped at the clan's current maximum, so it cannot be used to hand out more DTR than the roster
-supports. There is **no lower clamp**: `SET -50` goes straight through, well past `min-dtr`.
-
-It also clears the freeze, so a clan set back to a positive number regenerates from the next tick
-instead of waiting out `freeze-seconds`.
-
-<Callout type="warning" title="It does not tell WorldGuard">
-Un-raiding a clan by hand does not run the raidable change, so a WorldGuard region left open by a raid
-keeps its `BUILD=ALLOW` until the next restart. In the plugin's own protection mode there is nothing to
-undo.
-</Callout>
-
-## Turning it off
-
-With `modules.dtr: false` there is no regeneration task, no freeze, no death broadcast and no raidable
-state — which means **no claim ever opens**. Territory becomes permanent, and disband and unclaim lose
-their state check. If your server has claims, it almost certainly wants DTR too.
-
-<Callout type="note" title="The backfill runs on every start">
-Every start with the module on, each clan sitting at exactly `0.0` with no freeze is given its maximum
-and the count is logged. It is what catches clans created while the module was off — but it is not a
-one-off migration, so a clan you deliberately leave at `0.0` with `/clanadmin setdtr` is topped back up
-the next time the server boots.
-</Callout>
+<Cards>
+  <Card title="Claim land" href="/docs/exyliaclans/claims">What a raidable clan loses protection on.</Card>
+  <Card title="Levels" href="/docs/exyliaclans/levels">The EXP a raid costs.</Card>
+</Cards>

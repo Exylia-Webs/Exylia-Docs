@@ -10,33 +10,73 @@ badge: "guide"
 updated: "1.4.0"
 ---
 
-El DTR es el número que decide si el terreno de un clan está protegido. Baja cuando mueren miembros, se
-congela un rato tras cada muerte, se regenera con un temporizador, y en cuanto se vuelve negativo el clan
-es **raidable**.
+Fija lo difícil que es que un clan pierda su terreno: las muertes quitan DTR, se regenera con un temporizador y un clan por debajo de cero es raidable, así que su terreno deja de protegerlo.
 
-## El máximo
+## Antes de empezar
 
-```
-DTR máximo = max(1.0, número de miembros ÷ members-per-point)
-```
+El DTR solo importa si los clanes pueden [reclamar terreno](/docs/exyliaclans/terrenos). El módulo `dtr` debe estar encendido (lo está por defecto), mira [Apaga y enciende sistemas del clan](/docs/exyliaclans/modulos).
 
-Con `members-per-point: 3`, un clan de tres miembros tiene máximo 1.0, uno de nueve 3.0 y uno de treinta
-10.0. Un clan más pequeño que el divisor sigue teniendo 1.0 — nunca menos.
+## Pasos
 
-El máximo se mueve con la plantilla. Reclutar sube el techo; perder miembros lo baja, y un clan que queda por
-encima de su nuevo máximo baja a él en la siguiente pasada de regeneración en la que no esté congelado.
+<Steps>
+  <Step title="Elige los ajustes">
+    Abre `plugins/ExyliaClans/config.yml` y busca la sección `dtr`. Los principales son `death-loss` (DTR perdido por muerte de un miembro, por defecto 0.9), `frozen-duration-seconds` (cuánto se pausa la regeneración tras una muerte, por defecto 600) y `members-per-point` (miembros necesarios por cada 1.0 de DTR máximo, por defecto 3).
+  </Step>
+  <Step title="Exime los mundos donde morir sea gratis">
+    Añade el lobby, el mundo de eventos o el de práctica a `no-loss-worlds`, por ejemplo `no-loss-worlds: [lobby]`. Una muerte ahí no cuesta nada.
+  </Step>
+  <Step title="Recarga">
+    Ejecuta `/clanadmin reload`.
+  </Step>
+</Steps>
 
-## Perderlo
+## Comprueba que funciona
 
-Cada muerte de un miembro cuesta `death-loss` (0.9) y congela la regeneración `frozen-duration-seconds`
-(600 — diez minutos). Otra muerte reinicia el congelado desde cero en vez de alargarlo.
+Deja que un miembro de un clan de prueba muera en un mundo normal. El clan recibe quién murió y cómo queda su DTR, en verde al máximo, amarillo por debajo y rojo por debajo de cero. Mira el DTR y el estado del clan en `/clan` (info del clan). Espera un tick de regeneración y el DTR sube cuando termina la congelación.
 
-El suelo es `min-dtr`, `-1.0` por defecto: a un clan no se le puede empujar más abajo, así que el tiempo
-de recuperación tras un raideo está acotado por mal que haya ido.
+## Cómo funciona
 
-Cada muerte avisa al clan de quién ha muerto y de cómo queda la reserva, en verde al máximo, ámbar por
-debajo y rojo por debajo de cero.
+- **Máximo**: `max(1.0, miembros ÷ members-per-point)`. Con 3 por punto un clan de tres miembros tiene 1.0, uno de nueve 3.0 y uno de treinta 10.0. Un clan pequeño nunca baja de 1.0.
+- **Pérdida**: cada muerte de un miembro cuesta `death-loss` (0.9) y congela la regeneración diez minutos. Una muerte durante la congelación la reinicia. El suelo es `min-dtr` (-1.0).
+- **Regeneración**: cada `regen-interval-seconds` (45 s) un clan no congelado y por debajo del máximo gana `regen-amount` (0.1). Deshacer una muerte tarda unos diecisiete minutos con los valores por defecto: diez de congelación y nueve ticks.
 
+| Estado | Cuándo | Color por defecto |
+|---|---|---|
+| `NORMAL` | El DTR está al máximo | `&a` |
+| `REGENERATING` | Por encima de cero pero por debajo del máximo | `&e` |
+| `FROZEN` | La congelación de la última muerte no ha terminado | `&b` |
+| `RAIDABLE` | DTR por debajo de cero y la congelación terminó | `&c` |
+
+Los colores usan los [códigos de color](/docs/exylialib/colores) de ExyliaLib.
+
+## Para ir más lejos
+
+### Qué pasa cuando un clan queda raidable
+
+Cuando el DTR pasa de cero o más a menos de cero, una vez:
+
+- El clan pierde 50 EXP (`levels.exp-actions.raided.exp-loss`), mira [Niveles](/docs/exyliaclans/niveles).
+- Su terreno deja de proteger, mira [Reclama terreno](/docs/exyliaclans/terrenos#modo-de-protección).
+
+Al volver por encima de cero la protección se restablece en el siguiente tick de regeneración.
+
+### Qué bloquea el DTR
+
+Un clan cuyo estado no es `NORMAL` no puede hacer `/clan disband` ni `/clan unclaim`, y `/clan reclaim` se rechaza mientras es raidable. Un clan no puede soltar ni disolver su tierra para escapar de una incursión que está perdiendo.
+
+### Cambia el DTR de un clan a mano
+
+Ejecuta `/clanadmin setdtr <clan> <SET|ADD|REMOVE> <valor>`. Se limita al máximo actual del clan, pero **no tiene límite inferior**: `SET -50` pasa directo, por debajo de `min-dtr`. También quita la congelación.
+
+<Callout type="warning" title="Fijar el DTR a mano no avisa a WorldGuard">
+Sacar a un clan de raidable con `setdtr` no reabre la protección: con `protection-mode: WORLDGUARD` una región abierta por una incursión mantiene su `BUILD=ALLOW` hasta el siguiente reinicio. Con `BUILTIN` no hay nada que deshacer.
+</Callout>
+
+### Apágalo
+
+Con `modules.dtr: false` no hay regeneración, congelación, aviso de muertes ni estado raidable, lo que significa que **ningún terreno se abre nunca**. El territorio se vuelve permanente y disolver y liberar pierden su comprobación de DTR. Si tu servidor tiene terrenos casi seguro quiere DTR también.
+
+<Details title="Detalles técnicos">
 ```yaml
 dtr:
   no-loss-worlds: []
@@ -52,88 +92,14 @@ dtr:
   color-raidable: "&c"
 ```
 
-`no-loss-worlds` es la vía de escape: morir en un mundo de esa lista no cuesta nada. Mete ahí el lobby, el
-mundo de eventos y el de practice.
+En una red cada servidor ejecuta la tarea de regeneración, pero la fila de cada clan recuerda cuándo se regeneró por última vez, así que un clan gana `regen-amount` una vez por intervalo sea cual sea el número de servidores. Un clan que queda por encima de un máximo nuevo más bajo (al perder miembros) baja a él en el siguiente tick en que no esté congelado.
 
-## Recuperarlo
+`FROZEN` se comprueba primero, así que un clan empujado a negativo muestra `FROZEN` durante los diez minutos antes de `RAIDABLE`, aunque su terreno ya esté abierto: eso depende de que el número sea menor que cero, no de la etiqueta.
 
-Una tarea corre cada `regen-interval-seconds` (45 s) y suma `regen-amount` (0.1) a cada clan que no esté
-congelado ni ya en su máximo. Con los valores por defecto son 0,133 DTR por minuto, así que deshacer una
-sola muerte — 0,9 — son nueve pasadas de la tarea, unos 6 minutos y 45 segundos, y eso solo empieza
-cuando se agotan los diez minutos de congelado. Unos diecisiete minutos desde la muerte hasta estar
-entero otra vez.
+En cada arranque con el módulo encendido, cada clan que esté justo en `0.0` sin congelación se pone en su máximo y se registra el recuento. Recoge clanes creados con el módulo apagado, pero también rellena a un clan que dejaste a propósito en `0.0` con `/clanadmin setdtr`.
+</Details>
 
-En una red todos los servidores corren la tarea, pero la fila de cada clan recuerda cuándo regeneró por
-última vez, así que un clan gana `regen-amount` una vez por intervalo, haya los servidores que haya.
-
-## Los cuatro estados
-
-| Estado | Cuándo | Color por defecto |
-|---|---|---|
-| `FROZEN` | El congelado de la última muerte no ha caducado | `&b` |
-| `RAIDABLE` | El DTR está por debajo de cero y el congelado ha caducado | `&c` |
-| `REGENERATING` | El DTR está por encima de cero pero por debajo del máximo | `&e` |
-| `NORMAL` | El DTR está al máximo | `&a` |
-
-`FROZEN` se comprueba primero, así que un clan recién empujado a negativo lee `FROZEN` durante diez
-minutos antes de leer `RAIDABLE` — aunque su terreno ya está abierto, porque eso lo decide el número
-estando por debajo de cero, no la etiqueta del estado.
-
-Los menús también imprimen una línea de detalle: cuánto falta para que se levante el congelado, o una
-estimación de cuánto falta para tener la reserva llena.
-
-## Quedar raidable
-
-Al cruzar de cero o más a menos de cero, una vez:
-
-- El clan pierde `exp-actions.raided.exp-loss` — 50 EXP por defecto.
-- Su terreno deja de proteger nada. En `BUILTIN` todas las comprobaciones pasan para todo el mundo; en
-  `WORLDGUARD` la flag `BUILD` de la región se pone en `ALLOW`.
-- En `BUILTIN`, las explosiones dejan de filtrarse dentro del terreno. En `WORLDGUARD` deciden las flags
-  de la propia región.
-
-Volver a cruzar por encima de cero lo devuelve todo en el siguiente tick de regeneración.
-
-## Qué bloquea el DTR
-
-Dos operaciones se niegan si el estado del clan no es `NORMAL`:
-
-| Operación | Mensaje |
-|---|---|
-| `/clan disband` | `errors.clan-raidable` |
-| `/clan unclaim` | `errors.dtr-not-normal` |
-
-`/clan reclaim` tiene su propia comprobación y se niega concretamente mientras el clan es raidable. Un
-clan no puede soltar su terreno, redibujarlo ni disolverse para escapar de un raideo que está perdiendo.
-
-## Admin
-
-```
-/clanadmin setdtr <clan> <SET|ADD|REMOVE> <valor>
-```
-
-Se limita al máximo actual del clan, así que no sirve para dar más DTR del que soporta la plantilla.
-**No hay límite por abajo**: un `SET -50` pasa tal cual, muy por debajo de `min-dtr`.
-
-También quita el congelado, así que un clan puesto en un número positivo regenera desde la siguiente
-pasada en vez de esperar a que se agote `freeze-seconds`.
-
-<Callout type="warning" title="No avisa a WorldGuard">
-Sacar a un clan del estado raidable a mano no dispara el cambio de estado, así que una región de
-WorldGuard que un raideo dejó abierta conserva su `BUILD=ALLOW` hasta el siguiente reinicio. En el modo
-de protección propio del plugin no hay nada que deshacer.
-</Callout>
-
-## Apagarlo
-
-Con `modules.dtr: false` no hay tarea de regeneración, ni congelado, ni aviso de muerte, ni estado
-raidable — lo que significa que **ningún terreno se abre nunca**. El territorio pasa a ser permanente, y
-disolver y quitar terreno pierden su comprobación de estado. Si tu servidor tiene terrenos, casi seguro
-que también quiere DTR.
-
-<Callout type="note" title="El backfill corre en cada arranque">
-En cada arranque con el módulo activo, cada clan que esté exactamente a `0.0` y sin congelado recibe su
-máximo, y se registra el número. Es lo que recoge a los clanes creados con el módulo apagado — pero no
-es una migración de una sola vez, así que un clan que dejes a `0.0` a propósito con `/clanadmin setdtr`
-vuelve a llenarse en el siguiente arranque del servidor.
-</Callout>
+<Cards>
+  <Card title="Reclama terreno" href="/docs/exyliaclans/terrenos">Dónde pierde protección un clan raidable.</Card>
+  <Card title="Niveles" href="/docs/exyliaclans/niveles">La EXP que cuesta una incursión.</Card>
+</Cards>

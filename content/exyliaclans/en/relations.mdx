@@ -10,68 +10,44 @@ badge: "guide"
 updated: "1.4.0"
 ---
 
-Both live in the same table, `clan_relations`, and both are stored **directionally** — one row means
-"clan A regards clan B this way". Alliances need both rows; rivalries need one.
+Let clans team up with allies, declare rivals, and decide how friendly fire, name colours and the truce after a kick behave.
 
-## Alliances
+## Before you start
 
-An alliance is a request and an answer.
+- Both clans need the `allies` module for alliances and the `rivals` module for rivalries (both on by default), see [Turn clan systems on and off](/docs/exyliaclans/modules).
+- The member needs the rank permission, see [Ranks](/docs/exyliaclans/roles): `SEND_ALLIANCE_REQUEST`, `ACCEPT_ALLIANCE`, `REMOVE_ALLY` or `MANAGE_RIVALS`.
 
-```
-/clan ally add <clan>        needs SEND_ALLIANCE_REQUEST
-/clan ally accept <clan>     needs ACCEPT_ALLIANCE
-/clan ally decline <clan>    needs ACCEPT_ALLIANCE
-/clan ally remove <clan>     needs REMOVE_ALLY
-```
+## Steps
 
-The request is a row in `clan_alliance_requests`, so it survives a restart and can be answered from
-any server of a network. It expires after `settings.invite-expire-seconds` (60 s; `0` keeps it until it
-is answered), at which point the requesting clan is told. Only members with `ACCEPT_ALLIANCE` are told a
-request arrived.
+An alliance is a request and an answer. A rivalry is a declaration with nothing to accept.
 
-Accepting writes both rows at once. Removing deletes both — an alliance cannot be one-sided, so leaving
-one ends it for the other clan too.
+<Steps>
+  <Step title="Ask for the alliance">
+    As a member of the first clan, run `/clan ally add <clan>`.
+  </Step>
+  <Step title="Answer it">
+    Members of the other clan who have `ACCEPT_ALLIANCE` are told. They run `/clan ally accept <clan>` (or `/clan ally decline <clan>`). The request expires after 60 seconds by default (`settings.invite-expire-seconds`; `0` keeps it open until answered).
+  </Step>
+  <Step title="Declare a rival if you want one">
+    Run `/clan rival add <clan>`, or run `/clan`, click **Rivals** then **Declare rival**. The other clan becomes your rival without answering, and does not become yours in return.
+  </Step>
+</Steps>
 
-| Refused when | Message |
-|---|---|
-| Either clan is at its alliance cap | `errors.max-allies` / `errors.target-max-allies` |
-| The clans are already allied | `errors.already-allies` |
-| A request is already pending | `errors.alliance-request-already-sent` |
-| Accepting with nothing pending | `errors.alliance-request-not-found` |
+To end them, `/clan ally remove <clan>` (it ends the alliance for both clans) and `/clan rival remove <clan>`.
 
-The cap is `settings.max-alliances` (5) plus the level bonus, so a level 10 clan can hold ten.
+## Check that it works
 
-### What an alliance changes
+Run `/clan` and click **Allies** or **Rivals**: the other clan is listed. Allied members cannot hurt each other while at least one clan has friendly fire off. A clan is refused when it is at its cap (5 allies and 10 rivals by default, plus level bonuses, see [Levels](/docs/exyliaclans/levels)), when the clans are already allied, or when you try to rival an ally.
+
+## What an alliance changes
 
 - **Friendly fire.** Allies cannot hurt each other unless **both** clans have friendly fire on.
-- **Colour.** Allies are painted according to `visibility-mode` — see below.
-- **Client team.** Every clan reachable through alliances is put on one client-side team, so allies show
-  as teammates on a modified client's map. Two allied clans make one team, not three.
-- **Home waypoint.** An ally's clan home appears as a waypoint for your members.
-- **Ally chat.** `/clan chat` cycles to a channel that reaches your clan and every ally, and `@` sends a
-  single line there.
-- **Placeholders.** `clan_allies`, `clan_allies_total_members`, `clan_allies_total_online`,
-  `clan_allies_total_max_members` and the whole `clan_online_ally_<n>` roster.
+- **Colour.** Allies are painted according to the visibility mode, see below.
+- **Waypoints.** An ally's clan home appears as a waypoint for your members.
+- **Ally chat.** `/clan chat` cycles to a channel that reaches your clan and every ally; `@` sends a single line there. See [Chat and mail](/docs/exyliaclans/chat-and-mail).
+- **Placeholders.** Ally lists and totals, see [Placeholders](/docs/exyliaclans/placeholders).
 
-## Rivals
-
-A rivalry is a declaration. There is nothing to accept.
-
-```
-/clan rival add <clan>       needs MANAGE_RIVALS
-/clan rival remove <clan>    needs MANAGE_RIVALS
-```
-
-One row is written, from your clan to theirs. They are your rival whether they like it or not, and they
-do not automatically become rivals with you — if `notify-target-on-declare` is on they simply get told,
-at most once every two minutes per declaring clan, so adding and removing a rivalry in a loop cannot
-flood them.
-
-| Refused when | Message |
-|---|---|
-| At the rival cap | `errors.max-rivals` |
-| Already declared | `errors.already-rivals` |
-| The target is an ally | `errors.cannot-rival-ally` |
+## What a rivalry changes
 
 ```yaml
 rivals:
@@ -80,21 +56,13 @@ rivals:
   notify-target-on-declare: true
 ```
 
-### What a rivalry changes
-
 | Setting | Effect |
 |---|---|
-| `kill-exp-multiplier` | Kill EXP — base plus streak bonus — is multiplied by this when the victim was in a rival clan. `1.0` disables the lookup entirely. |
-| `kill-stat-multiplier` | The clan's recorded kill count is multiplied by this for a rival kill. It is rounded half up, so `2.0` records two kills and `1.5` records two as well. |
-| `notify-target-on-declare` | Whether the declared clan is told. |
+| `kill-exp-multiplier` | Kill EXP is multiplied by this when the victim was in a rival clan. `1.0` is no bonus. |
+| `kill-stat-multiplier` | The clan's recorded kill count is multiplied by this for a rival kill (rounded half up). |
+| `notify-target-on-declare` | Whether the declared clan is told, at most once every two minutes per declaring clan. |
 
-Rivals are also what `/clan camp` reads, and what makes a player show as an enemy to the relational
-placeholders.
-
-<Callout type="note" title="`kill-stat-multiplier` inflates the leaderboard, not the player">
-It only touches `clan_stats`, which is what the kills leaderboard sorts on. The per-player row in
-`player_stats` still records one kill. Leaving it at `1.0` keeps the two in step.
-</Callout>
+Rivals are also what `/clan camp` reads. `kill-stat-multiplier` only changes the clan's kills leaderboard; a player's own kill count still records one.
 
 ## How a player is coloured
 
@@ -105,41 +73,29 @@ settings:
 
 | Mode | Who is painted |
 |---|---|
-| `DISABLED` | **Nobody.** The shipped default. Names are exactly what TAB or your own plugin draws. |
-| `CLAN_ONLY` | Clanmates and yourself, green. Allies look like strangers. |
-| `ALLY_ONLY` | Allies and yourself, aqua. Clanmates look like strangers. |
-| `CLAN_AND_ALLY_MIXED` | Clanmates and yourself green; allies aqua **and glowing**, so the two are told apart. |
+| `DISABLED` | **Nobody.** The shipped default. Names are what TAB or your own plugin draws. |
+| `CLAN_ONLY` | Clanmates and yourself, green. |
+| `ALLY_ONLY` | Allies and yourself, aqua. |
+| `CLAN_AND_ALLY_MIXED` | Clanmates and yourself green; allies aqua **and glowing**. |
 | `UNIFIED` | Clanmates, allies and yourself, all in one colour. |
 
-An unknown value is reported in the console and falls back to `DISABLED`.
+The colour is per viewer, so two players can see the same third player differently. It needs **PacketEvents**; without it every mode behaves as `DISABLED`. An unknown value falls back to `DISABLED` and is reported in the console.
 
-The colour is per viewer, not a scoreboard team the whole server shares, so two players can see the same
-third player differently. Where `TAB` is installed its own team handling is paused for a player while
-this plugin is colouring them, and resumed when they leave a clan.
-
-<Callout type="warning" title="`DISABLED` ships as the default, and it turns more off than colour">
-Out of the box this plugin paints nothing at all: no nametags are touched, no scoreboard team is
-created, and TAB's team handling is never paused. A [focus](/docs/exyliaclans/war-tools#focus) still
-makes the target **glow**, because glow rides on the entity itself — but it is not red, because red
-needs the scoreboard team that `DISABLED` never creates. Set one of the four other modes to get the
-colours back.
+<Callout type="warning" title="DISABLED ships as the default and turns more off than colour">
+Out of the box the plugin touches no nametag and creates no scoreboard team. A [focus](/docs/exyliaclans/war-tools#focus) still makes its target **glow**, but not red, because red needs the team that `DISABLED` never creates. Choose one of the other four modes to get the colours back.
 </Callout>
-
-The whole feature is packet-level and needs **PacketEvents**. Without it, every mode behaves as
-`DISABLED`.
 
 ## Friendly fire
 
-```yaml
-settings:
-  forced-ff-worlds: []
-```
+`/clan ff` toggles it for the clan and needs `TOGGLE_FRIENDLY_FIRE`.
 
 | Pair | Damage lands when |
 |---|---|
 | Same clan | The clan has friendly fire on, or the world is in `forced-ff-worlds` |
 | Mutual allies | **Both** clans have it on, or the world is forced |
-| Anyone else | Always, **unless a kick truce is running** |
+| Anyone else | Always, unless a kick truce is running |
+
+`forced-ff-worlds` (shipped `[]`, under `settings`) overrides every clan's choice: use it for an arena world where everyone fights everyone. A player with no clan is never protected. Projectiles count for whoever fired them.
 
 ## The truce after a kick
 
@@ -149,35 +105,36 @@ kick-protection:
   duration-seconds: 120
 ```
 
-Kicking or banning a player arms a two-minute truce between them and the clan they just left. While it
-runs, **no damage passes in either direction** between that player and anybody still in the clan, or in
-a clan mutually allied with it. The attacker is told why, with the seconds remaining, at most once
-every three seconds.
+Kicking or banning a player starts a two-minute truce between them and the clan they left. While it runs **no damage passes in either direction** between that player and anybody still in the clan, or in a clan allied with it. The attacker is told why, with the seconds left. It starts from every route out: the kick and ban buttons, `/clan kick`, `/clan ban` and `/clanadmin forcekick`.
 
-It is armed from every route out: the kick and ban buttons in the members menu, `/clan kick`,
-`/clan ban` and `/clanadmin forcekick`. On a network it follows the kicked player to whichever server
-they move to.
-
-<Callout type="warning" title="The truce beats `forced-ff-worlds`">
-It is checked **before** the friendly-fire rules, so a kicked player cannot be finished off in an arena
-world either. Two minutes is the shipped value; `enabled: false` turns the whole thing off and a kicked
-player is fair game immediately.
+<Callout type="warning" title="The truce beats forced-ff-worlds">
+It is checked before the friendly-fire rules, so a kicked player cannot be finished off in an arena world either. Set `enabled: false` to make a kicked player fair game immediately.
 </Callout>
 
+## Going further
 
-`/clan ff` toggles it and needs `TOGGLE_FRIENDLY_FIRE`. Projectiles are resolved to whoever fired them,
-so an arrow follows the same rules as a sword. A player not in a clan is never protected by any of this.
+Admins can write relations directly, with no request, no cap check and no rank check:
 
-`forced-ff-worlds` overrides every clan's setting — the arena world where everyone fights everyone
-regardless.
+- `/clanadmin addally <clanA> <clanB>` and `/clanadmin removeally <clanA> <clanB>`
+- `/clanadmin addrival <clanA> <clanB>` and `/clanadmin removerival <clanA> <clanB>`
 
-## Admin
+<Details title="Technical details">
+Alliances and rivalries live in the table `clan_relations`, stored per direction: one row means "clan A regards clan B this way". An alliance needs both rows, a rivalry one. Accepting an alliance writes both rows at once and removing deletes both. Pending requests live in `clan_alliance_requests`, so they survive a restart and can be answered from any server of a network; only members with `ACCEPT_ALLIANCE` are told a request arrived, and the asking clan is told when it expires. See [Database](/docs/exylialib/database).
 
-```
-/clanadmin addally <clanA> <clanB>
-/clanadmin removeally <clanA> <clanB>
-/clanadmin addrival <clanA> <clanB>
-/clanadmin removerival <clanA> <clanB>
-```
+| Refused when | Message |
+|---|---|
+| Either clan is at its alliance cap | `errors.max-allies` / `errors.target-max-allies` |
+| The clans are already allied | `errors.already-allies` |
+| A request is already pending | `errors.alliance-request-already-sent` |
+| Accepting with nothing pending | `errors.alliance-request-not-found` |
+| At the rival cap | `errors.max-rivals` |
+| Already declared as a rival | `errors.already-rivals` |
+| The target is an ally | `errors.cannot-rival-ally` |
 
-These write the rows directly, with no request, no cap check and no permission check inside the clan.
+Every clan reachable through alliances is put on one client-side team, so allies show as teammates on a modified client. Where TAB is installed its own team handling is paused for a player this plugin is colouring and resumed when they leave a clan. On a network the truce follows the kicked player to whichever server they join.
+</Details>
+
+<Cards>
+  <Card title="Levels" href="/docs/exyliaclans/levels">Raise the ally and rival caps and rival EXP.</Card>
+  <Card title="War tools" href="/docs/exyliaclans/war-tools">Focus, camp and rally for fights against rivals.</Card>
+</Cards>

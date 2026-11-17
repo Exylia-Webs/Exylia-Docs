@@ -10,70 +10,44 @@ badge: "guide"
 updated: "1.4.0"
 ---
 
-Las dos viven en la misma tabla, `clan_relations`, y las dos se guardan **direccionalmente**: una fila
-significa "el clan A ve así al clan B". Una alianza necesita las dos filas; una rivalidad, una.
+Deja que los clanes se alíen, declaren rivales, y decide cómo se comportan el fuego amigo, los colores de nombre y la tregua tras una expulsión.
 
-## Alianzas
+## Antes de empezar
 
-Una alianza es una petición y una respuesta.
+- Los clanes necesitan el módulo `allies` para las alianzas y `rivals` para las rivalidades (ambos encendidos por defecto), mira [Apaga y enciende sistemas del clan](/docs/exyliaclans/modulos).
+- El miembro necesita el permiso de rango, mira [Roles](/docs/exyliaclans/roles): `SEND_ALLIANCE_REQUEST`, `ACCEPT_ALLIANCE`, `REMOVE_ALLY` o `MANAGE_RIVALS`.
 
-```
-/clan ally add <clan>        necesita SEND_ALLIANCE_REQUEST
-/clan ally accept <clan>     necesita ACCEPT_ALLIANCE
-/clan ally decline <clan>    necesita ACCEPT_ALLIANCE
-/clan ally remove <clan>     necesita REMOVE_ALLY
-```
+## Pasos
 
-La petición es una fila de `clan_alliance_requests`, así que sobrevive a un reinicio y se puede responder
-desde cualquier servidor de una red. Caduca a los `settings.invite-expire-seconds` (60 s; `0` la mantiene
-hasta que se responda), momento en el que se avisa al clan que la envió. Solo se avisa de que llegó a los
-miembros con `ACCEPT_ALLIANCE`.
+Una alianza es una petición y una respuesta. Una rivalidad es una declaración que nadie tiene que aceptar.
 
-Aceptar escribe las dos filas a la vez. Quitar borra las dos: una alianza no puede ser unilateral, así que
-salirse de una la termina también para el otro clan.
+<Steps>
+  <Step title="Pide la alianza">
+    Como miembro del primer clan, ejecuta `/clan ally add <clan>`.
+  </Step>
+  <Step title="Respóndela">
+    Los miembros del otro clan con `ACCEPT_ALLIANCE` reciben el aviso. Ejecutan `/clan ally accept <clan>` (o `/clan ally decline <clan>`). La petición caduca a los 60 segundos por defecto (`settings.invite-expire-seconds`; `0` la mantiene hasta que se responda).
+  </Step>
+  <Step title="Declara un rival si quieres">
+    Ejecuta `/clan rival add <clan>`, o ejecuta `/clan`, haz clic en **Rivales** y luego en **Declarar rival**. El otro clan pasa a ser tu rival sin responder, y no te declara rival a ti.
+  </Step>
+</Steps>
 
-| Se niega cuando | Mensaje |
-|---|---|
-| Alguno de los dos está en su tope de alianzas | `errors.max-allies` / `errors.target-max-allies` |
-| Los clanes ya son aliados | `errors.already-allies` |
-| Ya hay una petición pendiente | `errors.alliance-request-already-sent` |
-| Se acepta sin nada pendiente | `errors.alliance-request-not-found` |
+Para terminarlas, `/clan ally remove <clan>` (acaba la alianza para ambos clanes) y `/clan rival remove <clan>`.
 
-El tope es `settings.max-alliances` (5) más el bonus de nivel, así que un clan de nivel 10 puede tener
-diez.
+## Comprueba que funciona
 
-### Qué cambia una alianza
+Ejecuta `/clan` y haz clic en **Aliados** o **Rivales**: el otro clan aparece en la lista. Los miembros aliados no pueden hacerse daño mientras al menos un clan tenga el fuego amigo apagado. Un clan es rechazado si está en su límite (5 aliados y 10 rivales por defecto, más los bonos de nivel, mira [Niveles](/docs/exyliaclans/niveles)), si los clanes ya son aliados o si intentas declarar rival a un aliado.
 
-- **Friendly fire.** Los aliados no pueden hacerse daño salvo que **los dos** clanes lo tengan activado.
-- **Color.** Los aliados se pintan según `visibility-mode` — ver más abajo.
-- **Equipo de cliente.** Cada clan alcanzable por alianzas se mete en un mismo equipo de cliente, así que
-  los aliados salen como compañeros en el mapa de un cliente modificado. Dos clanes aliados hacen un
-  equipo, no tres.
-- **Waypoint del home.** El home de un aliado aparece como waypoint para tus miembros.
-- **Chat de aliados.** `/clan chat` cicla a un canal que llega a tu clan y a todos los aliados, y `@`
-  envía una sola línea ahí.
-- **Placeholders.** `clan_allies`, `clan_allies_total_members`, `clan_allies_total_online`,
-  `clan_allies_total_max_members` y toda la lista `clan_online_ally_<n>`.
+## Qué cambia una alianza
 
-## Rivales
+- **Fuego amigo.** Los aliados no se hacen daño salvo que **ambos** clanes lo tengan encendido.
+- **Color.** Los aliados se pintan según el modo de visibilidad, mira más abajo.
+- **Waypoints.** La base de un aliado aparece como waypoint para tus miembros.
+- **Chat de aliados.** `/clan chat` cambia a un canal que llega a tu clan y a todos los aliados; `@` envía una sola línea ahí. Mira [Chat y correo](/docs/exyliaclans/chat-y-correo).
+- **Placeholders.** Listas y totales de aliados, mira [Placeholders](/docs/exyliaclans/placeholders).
 
-Una rivalidad es una declaración. No hay nada que aceptar.
-
-```
-/clan rival add <clan>       necesita MANAGE_RIVALS
-/clan rival remove <clan>    necesita MANAGE_RIVALS
-```
-
-Se escribe una fila, de tu clan al suyo. Son tus rivales les guste o no, y no se convierten
-automáticamente en rivales tuyos: si `notify-target-on-declare` está activo, simplemente se les avisa,
-como mucho una vez cada dos minutos por clan que declara, así que poner y quitar una rivalidad en bucle
-no los inunda.
-
-| Se niega cuando | Mensaje |
-|---|---|
-| Se está en el tope de rivales | `errors.max-rivals` |
-| Ya está declarado | `errors.already-rivals` |
-| El objetivo es un aliado | `errors.cannot-rival-ally` |
+## Qué cambia una rivalidad
 
 ```yaml
 rivals:
@@ -82,21 +56,13 @@ rivals:
   notify-target-on-declare: true
 ```
 
-### Qué cambia una rivalidad
-
 | Ajuste | Efecto |
 |---|---|
-| `kill-exp-multiplier` | La EXP de la baja — base más bonus de racha — se multiplica por esto cuando la víctima estaba en un clan rival. `1.0` desactiva la consulta. |
-| `kill-stat-multiplier` | La baja registrada del clan se multiplica por esto en una baja contra rival. Se redondea hacia arriba en el medio, así que `2.0` registra dos bajas y `1.5` también registra dos. |
-| `notify-target-on-declare` | Si se avisa al clan declarado. |
+| `kill-exp-multiplier` | La EXP de la baja se multiplica por esto cuando la víctima era de un clan rival. `1.0` es sin bono. |
+| `kill-stat-multiplier` | Las bajas registradas del clan se multiplican por esto en una baja a un rival (redondeo hacia arriba desde .5). |
+| `notify-target-on-declare` | Si se avisa al clan declarado, como mucho una vez cada dos minutos por clan que declara. |
 
-Los rivales son además lo que lee `/clan camp`, y lo que hace que un jugador salga como enemigo en los
-placeholders relacionales.
-
-<Callout type="note" title="`kill-stat-multiplier` infla el ranking, no al jugador">
-Solo toca `clan_stats`, que es lo que ordena el ranking de bajas. La fila por jugador de `clan_player_stats`
-sigue registrando una baja. Dejarlo en `1.0` mantiene los dos números en sintonía.
-</Callout>
+Los rivales son también lo que lee `/clan camp`. `kill-stat-multiplier` solo cambia el top de bajas del clan; el contador propio del jugador sigue sumando una.
 
 ## Cómo se pinta a un jugador
 
@@ -107,41 +73,29 @@ settings:
 
 | Modo | A quién se pinta |
 |---|---|
-| `DISABLED` | **A nadie.** Es lo que viene por defecto. Los nombres son exactamente lo que dibuje TAB o tu propio plugin. |
-| `CLAN_ONLY` | Compañeros de clan y tú mismo, en verde. Los aliados se ven como desconocidos. |
-| `ALLY_ONLY` | Aliados y tú mismo, en aqua. Los del clan se ven como desconocidos. |
-| `CLAN_AND_ALLY_MIXED` | Clan y tú mismo en verde; aliados en aqua **y brillando**, para distinguirlos. |
-| `UNIFIED` | Clan, aliados y tú mismo, todos en un mismo color. |
+| `DISABLED` | **A nadie.** El valor por defecto. Los nombres son los que dibuja TAB o tu propio plugin. |
+| `CLAN_ONLY` | Compañeros de clan y tú, en verde. |
+| `ALLY_ONLY` | Aliados y tú, en aguamarina. |
+| `CLAN_AND_ALLY_MIXED` | Compañeros y tú en verde; aliados en aguamarina **y brillando**. |
+| `UNIFIED` | Compañeros, aliados y tú, todos en un solo color. |
 
-Un valor desconocido se avisa en consola y cae en `DISABLED`.
+El color es por espectador, así que dos jugadores pueden ver distinto a un tercero. Necesita **PacketEvents**; sin él cada modo se comporta como `DISABLED`. Un valor desconocido vuelve a `DISABLED` y se avisa en la consola.
 
-El color es por espectador, no un equipo de scoreboard compartido por todo el servidor, así que dos
-jugadores pueden ver a un tercero de forma distinta. Con `TAB` instalado, su gestión de equipos se pausa
-para un jugador mientras este plugin lo colorea, y se reanuda cuando sale del clan.
-
-<Callout type="warning" title="`DISABLED` es el valor por defecto, y apaga más que el color">
-De fábrica este plugin no pinta absolutamente nada: no toca ningún nametag, no crea ningún equipo de
-scoreboard y nunca pausa la gestión de equipos de TAB. Un [focus](/docs/exyliaclans/herramientas-de-guerra#focus)
-sigue haciendo **brillar** al objetivo, porque el brillo va en la propia entidad — pero no lo pone en
-rojo, porque el rojo necesita el equipo de scoreboard que `DISABLED` nunca crea. Pon cualquiera de los
-otros cuatro modos para recuperar los colores.
+<Callout type="warning" title="DISABLED es el valor por defecto y apaga más que el color">
+De fábrica el plugin no toca ningún nametag ni crea ningún equipo de scoreboard. Un [focus](/docs/exyliaclans/herramientas-de-guerra#focus) sigue haciendo **brillar** a su objetivo, pero no en rojo, porque el rojo necesita el equipo que `DISABLED` nunca crea. Elige uno de los otros cuatro modos para recuperar los colores.
 </Callout>
-
-Todo esto es a nivel de paquetes y necesita **PacketEvents**. Sin él, todos los modos se comportan como
-`DISABLED`.
 
 ## Friendly fire
 
-```yaml
-settings:
-  forced-ff-worlds: []
-```
+`/clan ff` lo alterna para el clan y necesita `TOGGLE_FRIENDLY_FIRE`.
 
-| Pareja | El daño entra cuando |
+| Pareja | El daño llega cuando |
 |---|---|
-| Mismo clan | El clan tiene friendly fire activado, o el mundo está en `forced-ff-worlds` |
-| Aliados mutuos | **Los dos** clanes lo tienen activado, o el mundo está forzado |
-| Cualquier otro | Siempre, **salvo que haya una tregua por expulsión** |
+| Mismo clan | El clan tiene el fuego amigo encendido, o el mundo está en `forced-ff-worlds` |
+| Aliados mutuos | **Ambos** clanes lo tienen encendido, o el mundo es forzado |
+| Cualquier otro | Siempre, salvo que haya una tregua por expulsión |
+
+`forced-ff-worlds` (por defecto `[]`, dentro de `settings`) anula la elección de cada clan: úsalo para un mundo de arena donde todos pelean contra todos. Un jugador sin clan nunca está protegido. Los proyectiles cuentan para quien los disparó.
 
 ## La tregua tras una expulsión
 
@@ -151,35 +105,36 @@ kick-protection:
   duration-seconds: 120
 ```
 
-Expulsar o banear a un jugador arma una tregua de dos minutos entre él y el clan del que acaba de salir.
-Mientras dura, **no pasa daño en ninguno de los dos sentidos** entre ese jugador y cualquiera que siga
-en el clan, o en un clan aliado mutuo suyo. A quien ataca se le dice por qué, con los segundos que
-quedan, como mucho una vez cada tres segundos.
+Expulsar o banear a un jugador inicia una tregua de dos minutos entre él y el clan que dejó. Mientras dura, **no pasa daño en ninguna dirección** entre ese jugador y cualquiera que siga en el clan, o en un clan aliado con él. Al atacante se le dice por qué, con los segundos que quedan. Empieza desde cualquier vía de salida: los botones de expulsar y banear, `/clan kick`, `/clan ban` y `/clanadmin forcekick`.
 
-Se arma desde todas las salidas: los botones de expulsar y banear del menú de miembros, `/clan kick`,
-`/clan ban` y `/clanadmin forcekick`. En una red sigue al jugador expulsado al servidor al que se mueva.
-
-<Callout type="warning" title="La tregua gana a `forced-ff-worlds`">
-Se comprueba **antes** que las reglas de friendly fire, así que a un jugador expulsado tampoco se le
-puede rematar en un mundo de arena. Dos minutos es lo que viene por defecto; `enabled: false` lo apaga
-entero y un jugador expulsado queda a tiro al instante.
+<Callout type="warning" title="La tregua gana a forced-ff-worlds">
+Se comprueba antes que las reglas de fuego amigo, así que un jugador expulsado tampoco puede ser rematado en un mundo de arena. Pon `enabled: false` para que un expulsado sea objetivo al instante.
 </Callout>
 
+## Para ir más lejos
 
-`/clan ff` lo alterna y necesita `TOGGLE_FRIENDLY_FIRE`. Los proyectiles se resuelven a quien los disparó,
-así que una flecha sigue las mismas reglas que una espada. Un jugador sin clan nunca está protegido por
-nada de esto.
+Los admins pueden escribir relaciones directamente, sin petición, sin comprobar límites ni permisos de rango:
 
-`forced-ff-worlds` ignora el ajuste de cada clan: el mundo de arena donde todos pegan a todos.
+- `/clanadmin addally <clanA> <clanB>` y `/clanadmin removeally <clanA> <clanB>`
+- `/clanadmin addrival <clanA> <clanB>` y `/clanadmin removerival <clanA> <clanB>`
 
-## Admin
+<Details title="Detalles técnicos">
+Alianzas y rivalidades viven en la tabla `clan_relations`, guardadas por dirección: una fila significa "el clan A ve al clan B así". Una alianza necesita las dos filas, una rivalidad una. Aceptar una alianza escribe ambas a la vez y quitarla borra ambas. Las peticiones pendientes viven en `clan_alliance_requests`, así que sobreviven a un reinicio y se pueden responder desde cualquier servidor de una red; solo los miembros con `ACCEPT_ALLIANCE` reciben el aviso, y al clan que pide se le avisa al caducar. Mira [Base de datos](/docs/exylialib/database).
 
-```
-/clanadmin addally <clanA> <clanB>
-/clanadmin removeally <clanA> <clanB>
-/clanadmin addrival <clanA> <clanB>
-/clanadmin removerival <clanA> <clanB>
-```
+| Se rechaza cuando | Mensaje |
+|---|---|
+| Un clan está en su límite de alianzas | `errors.max-allies` / `errors.target-max-allies` |
+| Los clanes ya son aliados | `errors.already-allies` |
+| Ya hay una petición pendiente | `errors.alliance-request-already-sent` |
+| Aceptas sin nada pendiente | `errors.alliance-request-not-found` |
+| En el límite de rivales | `errors.max-rivals` |
+| Ya declarado rival | `errors.already-rivals` |
+| El objetivo es un aliado | `errors.cannot-rival-ally` |
 
-Escriben las filas directamente, sin petición, sin comprobar topes y sin comprobar permisos dentro del
-clan.
+Cada clan alcanzable por alianzas se pone en un único equipo del cliente, así los aliados aparecen como compañeros en un cliente modificado. Donde hay TAB, su gestión de equipos se pausa para un jugador que este plugin está coloreando y se reanuda al salir del clan. En una red la tregua sigue al expulsado al servidor al que entre.
+</Details>
+
+<Cards>
+  <Card title="Niveles" href="/docs/exyliaclans/niveles">Sube los límites de aliados y rivales y la EXP de rivales.</Card>
+  <Card title="Herramientas de guerra" href="/docs/exyliaclans/herramientas-de-guerra">Focus, campeo y rally contra rivales.</Card>
+</Cards>

@@ -10,83 +10,114 @@ badge: "guide"
 updated: "1.4.0"
 ---
 
-El nivel de un clan no se guarda. Se deriva de su EXP cada vez que se lee: el nivel más alto cuyo
-`required-exp` haya alcanzado el clan, con tope en `max-level`.
+Haz que los clanes crezcan: ganan EXP con las bajas, la pierden con muertes e incursiones, y cada nivel sube cuántos miembros, aliados y rivales pueden tener.
 
-## Ganar y perder
+## Antes de empezar
 
+- El módulo `levels` debe estar encendido (lo está por defecto), mira [Apaga y enciende sistemas del clan](/docs/exyliaclans/modulos).
+- Los cambios de niveles en `config.yml` se aplican a todos los clanes tras `/clanadmin reload`. El nivel de un clan no se guarda: se calcula desde su EXP cada vez, como el nivel más alto cuyo `required-exp` ha alcanzado.
+
+## Pasos
+
+<Steps>
+  <Step title="Mira lo que ven los jugadores">
+    Ejecuta `/clan` y haz clic en **Nivel**. El menú lista cada nivel con el actual marcado, una barra de progreso y lo que desbloquea cada uno.
+  </Step>
+  <Step title="Abre la tabla">
+    Abre `plugins/ExyliaClans/config.yml` y busca `levels.level-definitions`. Cada fila es un nivel: `required-exp` es la EXP **total** necesaria (7 000 significa 7 000 en total, no desde el nivel anterior) y los tres valores `*-bonus` se suman a los límites base.
+  </Step>
+  <Step title="Edita y recarga">
+    Cambia los números y ejecuta `/clanadmin reload`.
+  </Step>
+</Steps>
+
+## Comprueba que funciona
+
+Ejecuta `/clanadmin setlevel <clan> <nivel>` en un clan de prueba, luego abre `/clan` y **Nivel** como uno de sus miembros: el nivel aparece marcado y los límites de miembros, aliados y rivales coinciden con la fila que editaste. Al cruzar un umbral se avisa a todos los miembros conectados (`level.level-up` o `level.level-down` en el archivo de idioma, mira [Mensajes e idiomas](/docs/exylialib/messages-and-languages)).
+
+## Qué da cada nivel
+
+Los bonos se suman a los límites base de `settings` y no se acumulan entre niveles: un clan de nivel 10 recibe exactamente la fila del nivel 10.
+
+| Límite | Base (por defecto) | En nivel 10 (por defecto) |
+|---|---|---|
+| Miembros | `max-members`, 30 | 30 + 50 = **80** |
+| Aliados | `max-alliances`, 5 | 5 + 5 = **10** |
+| Rivales | `max-rivals`, 10 | 10 + 10 = **20** |
+
+Plazas extra de miembros para un clan: `/clanadmin setslots <clan> <SET|ADD|REMOVE> <cantidad>`. Se suman a la base y al bono de nivel.
+
+Un líder con el permiso `exyliaclans.members.<n>`, `exyliaclans.allies.<n>` o `exyliaclans.rivals.<n>` sustituye el límite base correspondiente (gana el mayor), por ejemplo para vender clanes más grandes con un rango.
+
+## Gana y pierde EXP
+
+| Evento | Efecto por defecto |
+|---|---|
+| Un miembro mata a alguien | +10 EXP a su clan |
+| Un miembro muere | -5 EXP a su clan y se reinicia su racha |
+| El clan queda raidable | -50 EXP, una vez |
+
+La EXP nunca baja de cero. Cada uno de los tres se puede apagar o cambiar en `levels.exp-actions`.
+
+<Callout type="warning" title="Perder EXP puede perder un nivel">
+El nivel se recalcula con el nuevo total. Un clan que baja de un umbral es avisado y sus límites se reducen, pero los miembros que le sobran **no** se expulsan: simplemente no puede reclutar hasta recuperar el nivel.
+</Callout>
+
+## Para ir más lejos
+
+### Rachas de bajas
+
+La racha se cuenta por jugador y se reinicia al morir o desconectarse. El bono es el **umbral más alto igual o menor** que la racha, sumado a la EXP de la baja: con racha 7 una baja vale 10 + 10 = 20. Los umbrales por defecto son 3 (+5), 5 (+10) y 10 (+25) en `levels.kill-streak-bonuses`; añade los que quieras.
+
+### Bajas contra rivales
+
+Si el clan de la víctima es uno que el clan del asesino declaró rival, toda la EXP de la baja se multiplica por `rivals.kill-exp-multiplier` (por defecto `2.0`): (10 + 10) × 2.0 = 40. Pon `1.0` para quitar el bono. Mira [Aliados y rivales](/docs/exyliaclans/relaciones).
+
+### Potencia la EXP de bajas con un permiso
+
+La EXP de bajas pasa por los [modificadores](/docs/exylialib/economia#modificadores) de ExyliaLib como tipo `clan-exp`, fuente `clan-kills`. Un jugador con el permiso `exylia.modifier.clan-exp.clan-kills.1.5` hace que sus bajas valgan 1,5 veces más para el clan. Las muertes, incursiones y `/clanadmin setexp` nunca se potencian.
+
+### Ventajas de nivel
+
+Una fila de nivel puede llevar `modifiers` que potencian lo que ganan todos los miembros mientras el clan está en ese nivel, a través de los [modificadores](/docs/exylialib/economia#modificadores) de ExyliaLib. Cada clave es `<tipo>:<fuente>` y cada valor un factor (`1.05` es +5%). Los tipos son `money`, `xp`, `drops` u otro tipo de otro plugin; `*` como fuente cubre todas. La tabla por defecto:
+
+| Nivel | Ventajas |
+|---|---|
+| 1-2 | Ninguna |
+| 3-4 | dinero +5% |
+| 5-6 | dinero +5%, xp +5% |
+| 7-8 | dinero +10%, xp +5% |
+| 9-10 | dinero +10%, xp +10%, drops +10% |
+
+Aquí se rechaza `clan-exp`, así un nivel nunca acelera su propia subida. Una fila de ventajas es el total de ese nivel, no se suma a las inferiores.
+
+<Callout type="note" title="Los servidores anteriores empiezan sin ventajas">
+Solo las instalaciones nuevas reciben las ventajas por defecto. En un servidor que ya tenía tabla de niveles, la actualización escribe un `modifiers: {}` vacío en cada nivel, para que ningún clan gane un bono que no tenía. Rellénalas y ejecuta `/clanadmin reload` para activarlas.
+</Callout>
+
+### Añade o quita niveles
+
+Añade una fila con el número siguiente y sube `levels.max-level` a juego, o borra filas y bájalo. Una clave que no sea un número se omite, igual que un nivel menor que 1 o mayor que `max-level`.
+
+### Comandos de admin
+
+- `/clanadmin setexp <clan> <SET|ADD|REMOVE> <cantidad>`
+- `/clanadmin setlevel <clan> <nivel>`: fija la EXP al `required-exp` de ese nivel; un nivel que no está en la tabla se rechaza.
+
+La EXP se limita al umbral del nivel máximo. Con `modules.levels: false` nada gana EXP, el menú **Nivel** no se abre y todos los límites son el valor base; la EXP guardada vuelve intacta al encenderlo de nuevo.
+
+<Details title="Detalles técnicos">
 ```yaml
 levels:
   max-level: 10
   exp-actions:
-    kill:
-      enabled: true
-      exp: 10
-    death:
-      enabled: true
-      exp-loss: 5
-    raided:
-      enabled: true
-      exp-loss: 50
-```
-
-| Evento | Efecto |
-|---|---|
-| Un miembro mata a alguien | `+10` EXP al clan del asesino, antes de bonus |
-| Un miembro muere | `-5` EXP a su clan, y su racha se reinicia |
-| El clan queda raidable | `-50` EXP, una vez, al cruzar |
-
-La EXP nunca baja de cero. Un clan que ya está en `max-level` con la EXP necesaria deja de ganar, así que
-el excedente no se acumula contra un tope que subas más adelante.
-
-## Rachas de bajas
-
-```yaml
-levels:
+    kill:    { enabled: true, exp: 10 }
+    death:   { enabled: true, exp-loss: 5 }
+    raided:  { enabled: true, exp-loss: 50 }
   kill-streak-bonuses:
     "3": 5
     "5": 10
     "10": 25
-```
-
-La racha se cuenta por jugador y se reinicia al morir, al desconectar o al recargar el módulo de niveles.
-El bonus que se aplica es el **umbral más alto igual o por debajo** de la racha actual, sumado a la EXP
-base — así que con racha 7 una baja vale 10 + 10 = 20, y con 12 vale 10 + 25 = 35.
-
-Las claves son tuyas: añade los umbrales que quieras, en cualquier orden. Una clave que no sea un número
-cuesta esa entrada y nada más.
-
-## Bajas contra rivales
-
-Si la víctima estaba en un clan que el clan del asesino ha declarado rival, toda la EXP de la baja — base
-más bonus de racha — se multiplica por `rivals.kill-exp-multiplier`, que viene a `2.0`.
-
-```
-(10 base + 10 racha) × 2.0 = 40 EXP
-```
-
-La relación se mira en un solo sentido: basta con que el clan del asesino haya declarado al de la víctima,
-haya o no declaración de vuelta. Con el módulo `rivals` apagado, o el multiplicador a `1.0`, no se hace
-ninguna consulta.
-
-## Potenciar la EXP por bajas
-
-La EXP de una baja — base, bonus de racha y multiplicador por rival juntos — pasa por los
-[modificadores](/docs/exylialib/economia#modificadores) de ExyliaLib como tipo `clan-exp`, fuente
-`clan-kills`, una vez por asesino. Cualquier potenciador que tenga un jugador para ella multiplica lo que
-su baja vale para el clan; sin nada instalado el factor es `1.0`. La forma por permiso que trae la
-librería es:
-
-```
-exylia.modifier.clan-exp.clan-kills.1.5
-```
-
-Las muertes, los raideos y `/clanadmin setexp` nunca se potencian.
-
-## La tabla de niveles
-
-```yaml
-levels:
   level-definitions:
     "1":  { required-exp: 0,     max-members-bonus: 0,  max-alliances-bonus: 0, max-rivals-bonus: 0 }
     "2":  { required-exp: 500,   max-members-bonus: 5,  max-alliances-bonus: 1, max-rivals-bonus: 1 }
@@ -100,100 +131,10 @@ levels:
     "10": { required-exp: 75000, max-members-bonus: 50, max-alliances-bonus: 5, max-rivals-bonus: 10 }
 ```
 
-`required-exp` es un **total**, no un escalón: un clan es nivel 5 cuando tiene 7 000 EXP acumulada, no
-cuando ha ganado 7 000 desde el nivel 4.
+La comprobación de rival va en un solo sentido: basta con que el clan del asesino haya declarado al de la víctima. Con el módulo `rivals` apagado, o el multiplicador a `1.0`, no se hace ninguna consulta. Un clan en `max-level` deja de ganar EXP, así que el exceso no se acumula. Las líneas de ventajas del menú de nivel usan `level.perk-line`, `level.perk-types` y `level.perks-none` del archivo de idioma.
+</Details>
 
-Los bonus se suman a los topes base de `settings`, y no se acumulan entre niveles — un clan de nivel 10
-recibe exactamente la fila del nivel 10:
-
-| Tope | Base | En nivel 10 |
-|---|---|---|
-| Miembros | `max-members`, 30 | 30 + 50 = **80** |
-| Alianzas | `max-alliances`, 5 | 5 + 5 = **10** |
-| Rivales | `max-rivals`, 10 | 10 + 10 = **20** |
-
-El tope de miembros lleva un término más: los huecos que un administrador da a un solo clan con
-`/clanadmin setslots <clan> <SET|ADD|REMOVE> <cantidad>`. Van encima de la base y del bonus de nivel, sea
-cual sea el nivel, y se guardan en el clan.
-
-Las claves son tuyas. Añade un nivel once y sube `max-level` a 11, o borra filas para acortar la
-escalera. Una clave que no sea un número se salta, y también cualquier nivel **por debajo de 1 o por
-encima de `max-level`** — así que añadir una fila once sin subir `max-level` la deja sin leer.
-
-Todos los topes que aplica el plugin se derivan de esta tabla en el momento en que se consultan, así que
-una edición y un `/clanadmin reload` cambian de inmediato lo que pueden hacer los clanes que ya existen.
-
-## Ventajas de nivel
-
-Cada fila puede llevar también `modifiers`: ganancias que se potencian a todos los miembros mientras el
-clan esté en ese nivel. Entran en los [modificadores](/docs/exylialib/economia#modificadores) de ExyliaLib,
-así que se aplican a cualquier plugin que pague a través de ellos, y se multiplican con el resto de
-potenciadores del jugador.
-
-```yaml
-levels:
-  level-definitions:
-    "5":
-      required-exp: 7000
-      max-members-bonus: 20
-      max-alliances-bonus: 2
-      max-rivals-bonus: 3
-      modifiers:
-        "money:*": 1.05
-        "xp:*": 1.05
-```
-
-Cada clave es `<tipo>:<fuente>` y cada valor un factor: `1.05` es +5 %. Los tipos son `money`, `xp`,
-`drops`, u otro propio de otro plugin, que solo coincide si se nombra. Una fuente `*` cubre todas las
-fuentes de ese tipo, y una fuente exacta gana a `*`. Como los topes, una fila es el **total** de ese
-nivel, no se suma a las de debajo. `clan-exp` se rechaza aquí (con un aviso en consola), para que un
-nivel nunca acelere su propia subida; una clave que no sea `<tipo>:<fuente>` se salta igual.
-
-| Nivel | Viene con |
-|---|---|
-| 1–2 | Nada |
-| 3–4 | `money:*` 1.05 |
-| 5–6 | `money:*` 1.05, `xp:*` 1.05 |
-| 7–8 | `money:*` 1.10, `xp:*` 1.05 |
-| 9–10 | `money:*` 1.10, `xp:*` 1.10, `drops:*` 1.10 |
-
-El menú de nivel lista las ventajas de cada fila bajo **Ventajas**, con el texto de `level.perk-line`,
-`level.perk-types` y `level.perks-none` en `messages.yml`.
-
-<Callout type="note" title="Los servidores anteriores a las ventajas arrancan sin ellas">
-Solo las instalaciones nuevas reciben las ventajas de fábrica. En un servidor que ya tenía tabla de
-niveles, la actualización escribe un `modifiers: {}` vacío en cada nivel de fábrica que encuentra, para
-que ningún clan gane un potenciador que nunca tuvo. Rellénalos y haz `/clanadmin reload` para activarlas.
-</Callout>
-
-<Callout type="warning" title="Perder EXP puede perder un nivel">
-Las muertes y los raideos quitan EXP, y el nivel se recalcula sobre el total nuevo. A un clan que baja de
-un umbral se le avisa, y sus topes encogen con él — lo que **no** expulsa a los miembros que ahora le
-sobran. Simplemente no puede reclutar hasta volver a subir.
-</Callout>
-
-## Cómo se ve una subida
-
-Cruzar un umbral envía `level.level-up` a todos los miembros conectados; bajar de uno envía
-`level.level-down`. `/clan` → **Nivel de clan** muestra toda la escalera con el nivel actual marcado, la
-barra de progreso y los bonus de cada fila, con el estilo del bloque `level.*` de `messages.yml`.
-
-## Admin
-
-```
-/clanadmin setexp <clan> <SET|ADD|REMOVE> <cantidad>
-/clanadmin setlevel <clan> <nivel>
-```
-
-`setlevel` es un atajo para poner la EXP en el `required-exp` de ese nivel. Un nivel que no esté en la
-tabla se rechaza con `admin.invalid-level`. Los dos informan de módulo desactivado cuando
-`modules.levels` está en `false`.
-
-La EXP se limita al umbral del nivel más alto, así que a un clan en `max-level` no se le puede pasar de
-ahí con `setexp ADD`.
-
-## Apagar los niveles
-
-Con `modules.levels: false` nada gana ni pierde EXP, el menú de niveles no abre, y todos los topes son el
-valor base de `settings`. La EXP existente se queda en la tabla `clans` y vuelve intacta al reactivar el
-módulo.
+<Cards>
+  <Card title="Aliados y rivales" href="/docs/exyliaclans/relaciones">Las bajas contra rivales dan más EXP.</Card>
+  <Card title="Economía" href="/docs/exylialib/economia">Cómo funcionan los modificadores que potencian ganancias.</Card>
+</Cards>

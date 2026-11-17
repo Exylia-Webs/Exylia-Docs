@@ -10,82 +10,114 @@ badge: "guide"
 updated: "1.4.0"
 ---
 
-A clan's level is not stored. It is derived from its EXP every time it is read: the highest level whose
-`required-exp` the clan has reached, capped at `max-level`.
+Make clans grow: they earn EXP from kills, lose it from deaths and raids, and every level raises how many members, allies and rivals they can have.
 
-## Earning and losing
+## Before you start
 
+- The `levels` module must be on (it is by default), see [Turn clan systems on and off](/docs/exyliaclans/modules).
+- Level changes you make in `config.yml` apply to every clan after `/clanadmin reload`. A clan's level is not stored: it is worked out from its EXP every time, as the highest level whose `required-exp` the clan has reached.
+
+## Steps
+
+<Steps>
+  <Step title="See what players see">
+    Run `/clan` and click **Level**. The menu lists every level with the current one marked, a progress bar and what each level unlocks.
+  </Step>
+  <Step title="Open the table">
+    Open `plugins/ExyliaClans/config.yml` and find `levels.level-definitions`. Each row is one level: `required-exp` is the **total** EXP needed (7 000 means 7 000 in total, not 7 000 since the last level), and the three `*-bonus` values add to the base caps.
+  </Step>
+  <Step title="Edit and reload">
+    Change the numbers, then run `/clanadmin reload`.
+  </Step>
+</Steps>
+
+## Check that it works
+
+Run `/clanadmin setlevel <clan> <level>` on a test clan, then open `/clan` and **Level** as one of its members: the level is marked, and the caps for members, allies and rivals match the row you edited. Crossing a threshold tells every online member (`level.level-up` or `level.level-down` in the language file, see [Messages](/docs/exylialib/messages-and-languages)).
+
+## What each level gives
+
+The bonuses are added to the base caps in `settings` and do not stack across levels: a level 10 clan gets exactly the level 10 row.
+
+| Cap | Base (shipped) | At level 10 (shipped) |
+|---|---|---|
+| Members | `max-members`, 30 | 30 + 50 = **80** |
+| Alliances | `max-alliances`, 5 | 5 + 5 = **10** |
+| Rivals | `max-rivals`, 10 | 10 + 10 = **20** |
+
+Extra member slots for one clan: `/clanadmin setslots <clan> <SET|ADD|REMOVE> <amount>`. They sit on top of the base and the level bonus.
+
+A clan leader with the permission `exyliaclans.members.<n>`, `exyliaclans.allies.<n>` or `exyliaclans.rivals.<n>` replaces the matching base cap (highest wins), for example to sell bigger clans on a rank.
+
+## Earn and lose EXP
+
+| Event | Shipped effect |
+|---|---|
+| A member kills somebody | +10 EXP to their clan |
+| A member dies | -5 EXP from their clan, and their kill streak resets |
+| The clan goes raidable | -50 EXP, once |
+
+EXP never drops below zero. Each of the three can be turned off or changed under `levels.exp-actions`.
+
+<Callout type="warning" title="Losing EXP can lose a level">
+The level is recomputed from the new total. A clan that drops below a threshold is told and its caps shrink, but members it now has too many of are **not** kicked: it just cannot recruit until it climbs back.
+</Callout>
+
+## Going further
+
+### Kill streaks
+
+A streak is counted per player and reset by dying or logging out. The bonus is the **highest threshold at or below** the streak, added to the kill EXP: at a streak of 7 a kill is worth 10 + 10 = 20. Shipped thresholds are 3 (+5), 5 (+10) and 10 (+25) under `levels.kill-streak-bonuses`; add as many as you like.
+
+### Rival kills
+
+If the victim's clan is one the killer's clan declared a rival, the whole kill EXP is multiplied by `rivals.kill-exp-multiplier` (shipped `2.0`): (10 + 10) × 2.0 = 40. Set it to `1.0` for no bonus. See [Allies and rivals](/docs/exyliaclans/relations).
+
+### Boost kill EXP with a permission
+
+Kill EXP goes through ExyliaLib's [modifiers](/docs/exylialib/economy#modifiers) as type `clan-exp`, source `clan-kills`. A player with the permission `exylia.modifier.clan-exp.clan-kills.1.5` makes their kills worth 1.5 times as much to the clan. Deaths, raids and `/clanadmin setexp` are never boosted.
+
+### Level perks
+
+A level row can carry `modifiers` that boost what every member earns while the clan is at that level, through ExyliaLib's [modifiers](/docs/exylialib/economy#modifiers). Each key is `<type>:<source>` and each value is a factor (`1.05` is +5%). Types are `money`, `xp`, `drops`, or another plugin's own type; `*` as the source covers every source. The shipped table:
+
+| Level | Perks |
+|---|---|
+| 1-2 | None |
+| 3-4 | money +5% |
+| 5-6 | money +5%, xp +5% |
+| 7-8 | money +10%, xp +5% |
+| 9-10 | money +10%, xp +10%, drops +10% |
+
+`clan-exp` is refused here, so a level can never speed up its own climb. A perks row is the total at that level, not added to lower ones.
+
+<Callout type="note" title="Servers that predate perks start without them">
+Only fresh installs get the shipped perks. On a server that already had a level table the update writes an empty `modifiers: {}` into each level, so no clan gains a boost it never had. Fill them in and run `/clanadmin reload` to turn perks on.
+</Callout>
+
+### Add or remove levels
+
+Add a row with the next number and raise `levels.max-level` to match, or delete rows and lower it. A key that is not a number is skipped, and so is a level below 1 or above `max-level`.
+
+### Admin commands
+
+- `/clanadmin setexp <clan> <SET|ADD|REMOVE> <amount>`
+- `/clanadmin setlevel <clan> <level>`: sets the EXP to that level's `required-exp`; a level not in the table is refused.
+
+EXP is clamped at the top level's threshold. With `modules.levels: false` nothing earns EXP, the **Level** menu does not open and every cap is the base value; the stored EXP comes back untouched when you switch it on again.
+
+<Details title="Technical details">
 ```yaml
 levels:
   max-level: 10
   exp-actions:
-    kill:
-      enabled: true
-      exp: 10
-    death:
-      enabled: true
-      exp-loss: 5
-    raided:
-      enabled: true
-      exp-loss: 50
-```
-
-| Event | Effect |
-|---|---|
-| A member kills somebody | `+10` EXP to the killer's clan, before bonuses |
-| A member dies | `-5` EXP from their clan, and their kill streak resets |
-| The clan goes raidable | `-50` EXP, once, on the crossing |
-
-EXP never drops below zero. A clan already at `max-level` with the EXP for it stops gaining, so overflow
-is not banked against a level cap you raise later.
-
-## Kill streaks
-
-```yaml
-levels:
+    kill:    { enabled: true, exp: 10 }
+    death:   { enabled: true, exp-loss: 5 }
+    raided:  { enabled: true, exp-loss: 50 }
   kill-streak-bonuses:
     "3": 5
     "5": 10
     "10": 25
-```
-
-A streak is counted per player and is reset by dying, by logging out, or by the level module being
-reloaded. The bonus applied is the **highest threshold at or below** the current streak, added to the
-base kill EXP — so at a streak of 7 a kill is worth 10 + 10 = 20, and at 12 it is 10 + 25 = 35.
-
-The keys are yours: add as many thresholds as you like, in any order. A key that is not a number costs
-that entry and nothing else.
-
-## Rival kills
-
-If the victim was in a clan the killer's clan has declared a rival, the whole kill EXP — base plus
-streak bonus — is multiplied by `rivals.kill-exp-multiplier`, which ships at `2.0`.
-
-```
-(10 base + 10 streak) × 2.0 = 40 EXP
-```
-
-The relation is checked one way only: it is enough that the killer's clan declared the victim's, whether
-or not the victim declared back. With the `rivals` module off, or the multiplier at `1.0`, no lookup is
-done at all.
-
-## Boosting kill EXP
-
-Kill EXP — base, streak bonus and rival multiplier together — goes through ExyliaLib's
-[modifiers](/docs/exylialib/economy#modifiers) as type `clan-exp`, source `clan-kills`, once per killer.
-Any booster a player holds for it multiplies what their kill is worth to the clan; with nothing
-installed the factor is `1.0`. The built-in permission form is:
-
-```
-exylia.modifier.clan-exp.clan-kills.1.5
-```
-
-Deaths, raids and `/clanadmin setexp` are never boosted.
-
-## The level table
-
-```yaml
-levels:
   level-definitions:
     "1":  { required-exp: 0,     max-members-bonus: 0,  max-alliances-bonus: 0, max-rivals-bonus: 0 }
     "2":  { required-exp: 500,   max-members-bonus: 5,  max-alliances-bonus: 1, max-rivals-bonus: 1 }
@@ -99,98 +131,10 @@ levels:
     "10": { required-exp: 75000, max-members-bonus: 50, max-alliances-bonus: 5, max-rivals-bonus: 10 }
 ```
 
-`required-exp` is a **total**, not a step: a clan is level 5 once it has 7 000 EXP in the bank, not once
-it has earned 7 000 since level 4.
+The rival check is one way: it is enough that the killer's clan declared the victim's. With the `rivals` module off, or the multiplier at `1.0`, no lookup is done. A clan at `max-level` stops gaining EXP, so overflow is not banked. The perk lines in the level menu use `level.perk-line`, `level.perk-types` and `level.perks-none` in the language file.
+</Details>
 
-The bonuses are added to the base caps in `settings`, and they do not stack across levels — a level 10
-clan gets exactly the level 10 row:
-
-| Cap | Base | At level 10 |
-|---|---|---|
-| Members | `max-members`, 30 | 30 + 50 = **80** |
-| Alliances | `max-alliances`, 5 | 5 + 5 = **10** |
-| Rivals | `max-rivals`, 10 | 10 + 10 = **20** |
-
-The member cap takes one more term: slots an administrator grants a single clan with
-`/clanadmin setslots <clan> <SET|ADD|REMOVE> <amount>`. They sit on top of the base and the level bonus,
-whatever the level, and are stored on the clan.
-
-The keys are yours. Add an eleventh level and raise `max-level` to 11, or delete rows to shorten the
-ladder. A key that is not a number is skipped, and so is any level **below 1 or above `max-level`** — so
-adding an eleventh row without raising `max-level` leaves it unread.
-
-Every cap the plugin enforces is derived from this table at the moment it is asked, so an edit and a
-`/clanadmin reload` change what existing clans may do straight away.
-
-## Level perks
-
-Each row can also carry `modifiers`: earnings every member gets boosted while the clan is at that level.
-They are fed into ExyliaLib's [modifiers](/docs/exylialib/economy#modifiers), so they apply to any plugin
-that pays through it, and multiply with every other booster the player has.
-
-```yaml
-levels:
-  level-definitions:
-    "5":
-      required-exp: 7000
-      max-members-bonus: 20
-      max-alliances-bonus: 2
-      max-rivals-bonus: 3
-      modifiers:
-        "money:*": 1.05
-        "xp:*": 1.05
-```
-
-Each key is `<type>:<source>` and each value a factor: `1.05` is +5%. The types are `money`, `xp`,
-`drops`, or another plugin's own type, which only matches when named. A source of `*` covers every
-source of that type, and an exact source wins over `*`. Like the caps, a row is the **total** at that
-level, not added to the rows below. `clan-exp` is refused here (with a console warning), so a level can
-never speed up its own climb; a key that is not `<type>:<source>` is skipped the same way.
-
-| Level | Ships with |
-|---|---|
-| 1–2 | Nothing |
-| 3–4 | `money:*` 1.05 |
-| 5–6 | `money:*` 1.05, `xp:*` 1.05 |
-| 7–8 | `money:*` 1.10, `xp:*` 1.05 |
-| 9–10 | `money:*` 1.10, `xp:*` 1.10, `drops:*` 1.10 |
-
-The level menu lists each row's perks under **Perks**, worded by `level.perk-line`, `level.perk-types` and `level.perks-none` in `messages.yml`.
-
-<Callout type="note" title="Servers that predate perks start without them">
-Only fresh installs get the shipped perks. On a server that already had a level table, the update writes
-an empty `modifiers: {}` into each shipped level it finds, so no clan gains a boost it never had. Fill
-them in and `/clanadmin reload` to turn perks on.
-</Callout>
-
-<Callout type="warning" title="Losing EXP can lose a level">
-Deaths and raids remove EXP, and the level is recomputed from the new total. A clan that drops below a
-threshold is told, and its caps shrink with it — which does **not** kick members it now has too many of.
-It simply cannot recruit until it climbs back.
-</Callout>
-
-## What a level-up looks like
-
-Crossing a threshold broadcasts `level.level-up` to every online member; dropping below one broadcasts
-`level.level-down`. `/clan` → **Clan level** shows the whole ladder with the current level marked, the
-progress bar and each row's bonuses, styled by the `level.*` block in `messages.yml`.
-
-## Admin
-
-```
-/clanadmin setexp <clan> <SET|ADD|REMOVE> <amount>
-/clanadmin setlevel <clan> <level>
-```
-
-`setlevel` is a shortcut for setting the EXP to that level's `required-exp`. A level that is not in the
-table is refused with `admin.invalid-level`. Both report the module as disabled when `modules.levels`
-is `false`.
-
-EXP is clamped at the highest level's threshold, so a clan at `max-level` cannot be pushed past it with
-`setexp ADD`.
-
-## Turning levels off
-
-With `modules.levels: false` nothing earns or loses EXP, the level menu refuses to open, and every cap
-is the base value in `settings`. Existing EXP stays in the `clans` table and comes back untouched when
-the module is switched on again.
+<Cards>
+  <Card title="Allies and rivals" href="/docs/exyliaclans/relations">Rival kills pay more EXP.</Card>
+  <Card title="Economy" href="/docs/exylialib/economy">How the modifiers that boost earnings work.</Card>
+</Cards>
