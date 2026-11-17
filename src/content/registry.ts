@@ -1472,29 +1472,20 @@ const COMBAT_NAV: NavGroup[] = [
     pages: [
       page("introduction", "introduction", "introduccion"),
       page("installation", "installation", "instalacion"),
+      page("first-steps", "first-steps", "primeros-pasos"),
     ],
   },
   {
-    label: { en: "Combat", es: "Combate" },
+    label: { en: "Guides", es: "Guías" },
     pages: [
       page("combat-tag", "combat-tag", "etiqueta-de-combate"),
       page("logging-out", "logging-out", "desconexion"),
       page("restrictions", "restrictions", "restricciones"),
       page("protection", "protection", "proteccion"),
       page("cooldowns", "cooldowns", "cooldowns"),
-    ],
-  },
-  {
-    label: { en: "Kills", es: "Kills" },
-    pages: [
       page("stats", "stats", "estadisticas"),
       page("kill-rewards", "kill-rewards", "recompensas"),
       page("bounties", "bounties", "recompensas-por-cabeza"),
-    ],
-  },
-  {
-    label: { en: "Network", es: "Red" },
-    pages: [
       page("cross-server", "cross-server", "multiservidor"),
       page("integrations", "integrations", "integraciones"),
     ],
@@ -1507,6 +1498,12 @@ const COMBAT_NAV: NavGroup[] = [
       page("placeholders", "placeholders", "placeholders"),
       page("configuration", "configuration", "configuracion"),
       page("api", "api", "api"),
+    ],
+  },
+  {
+    label: { en: "Help", es: "Ayuda" },
+    pages: [
+      page("troubleshooting", "troubleshooting", "problemas-comunes"),
       page("faq", "faq", "faq"),
     ],
   },
