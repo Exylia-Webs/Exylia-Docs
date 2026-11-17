@@ -998,25 +998,15 @@ const PRACTICE_NAV: NavGroup[] = [
     ],
   },
   {
-    label: { en: "Arenas", es: "Arenas" },
+    label: { en: "Guides", es: "Guías" },
     pages: [
       page("arenas", "arenas", "arenas"),
       page("clones", "clones", "clones"),
       page("extra-regions", "extra-regions", "regiones-extra"),
-    ],
-  },
-  {
-    label: { en: "Kits", es: "Kits" },
-    pages: [
       page("kits", "kits", "kits"),
       page("kit-rules", "kit-rules", "reglas-de-kit"),
       page("special-conditions", "special-conditions", "condiciones-especiales"),
       page("kit-editor", "kit-editor", "editor-de-kits"),
-    ],
-  },
-  {
-    label: { en: "Playing", es: "Jugar" },
-    pages: [
       page("queue", "queue", "cola"),
       page("duels", "duels", "duelos"),
       page("parties", "parties", "parties"),
@@ -1026,7 +1016,7 @@ const PRACTICE_NAV: NavGroup[] = [
     ],
   },
   {
-    label: { en: "Competitive", es: "Competitivo" },
+    label: { en: "How it works", es: "Cómo funciona" },
     pages: [
       page("elo", "elo", "elo"),
       page("seasons", "seasons", "temporadas"),
@@ -1045,6 +1035,12 @@ const PRACTICE_NAV: NavGroup[] = [
       page("database", "database", "base-de-datos"),
       page("web-api", "web-api", "web-api"),
       page("api", "api", "api"),
+    ],
+  },
+  {
+    label: { en: "Help", es: "Ayuda" },
+    pages: [
+      page("troubleshooting", "troubleshooting", "problemas-comunes"),
       page("faq", "faq", "faq"),
     ],
   },
