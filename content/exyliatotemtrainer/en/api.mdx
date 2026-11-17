@@ -74,7 +74,7 @@ so `arenas()` is not a list of free space; `TotemArena.isReady()` says which of 
 | `CompletableFuture<TotemProfile> loadProfile(UUID)` | The profile, from the database when it is not in memory. A player who has never trained gets a fresh, empty one rather than nothing. |
 | `CompletableFuture<List<MatchRecord>> history(UUID)` | A player's last duels, newest first, as many as the server keeps. |
 | `CompletableFuture<List<TrainingRecord>> records(UUID)` | A player's best training results, one row per mode and speed. |
-| `CompletableFuture<List<TrainingRecord>> leaderboard(String modeId, RecordCategory category, int ticks)` | One mode's training board, longest-standing records first. `ticks` restricts it to one interval, or `0` for every speed at once. |
+| `CompletableFuture<List<TrainingRecord>> leaderboard(String modeId, RecordCategory category, int ticks)` | One mode's training board, sorted by `category`. `ticks` restricts it to one interval, or `0` for every speed at once. |
 
 `profile` being empty during a load is deliberate: a caller on the server thread should degrade rather
 than wait, and one that can wait should ask `loadProfile` instead. The board is served from a cache the
@@ -132,8 +132,9 @@ Everything here is an immutable record or an enum, and every collection inside o
 
 A few of these carry something that is not obvious from the field names.
 
-**`TrainingRules`** is three independent choices, which is why nothing in it is named after a mode:
-`totems` says how the inventory is stocked (`isStocked()`), a window says the interval is drawn rather
+**`TrainingRules`** is a set of independent choices, which is why nothing in it is named after a mode:
+`totems` and `refill` say how the inventory is stocked (`isStocked()`), `closeInventory` says it shuts on
+every pop, a window says the interval is drawn rather
 than kept (`drawsInterval()`), and a speed-up says it shortens as hits add up (`speedsUp()`). A mode may
 do both of the last two; one that does neither runs flat. `ticks` is the interval the player chose, and
 a window is shifted so that interval sits at its centre — a 10..30 window on a 25-tick session draws
@@ -221,7 +222,7 @@ public void onPop(TotemPopEvent event) {
 
 ## What it does not expose
 
-No menu openers, no arena editor, no writes to modes or to the grading profile, and no way to edit a
+No arena editor, no writes to modes or to the grading profile, and no way to edit a
 profile or a record row. Rounds are read through `RoundEndEvent` rather than off a match, and a duel is
 built by `duel(...)` with a mode id and a speed rather than by handing the plugin a rules object of
 your own.
