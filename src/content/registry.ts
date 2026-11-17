@@ -1190,15 +1190,17 @@ const CASINO_NAV: NavGroup[] = [
     pages: [
       page("introduction", "introduction", "introduccion"),
       page("installation", "installation", "instalacion"),
-      page("playing", "playing", "jugar"),
+      page("first-steps", "first-steps", "primeros-pasos"),
     ],
   },
   {
-    label: { en: "Games", es: "Juegos" },
+    label: { en: "Guides", es: "Guías" },
     pages: [
+      page("playing", "playing", "jugar"),
       page("games", "games", "juegos"),
       page("tables", "tables", "mesas"),
       page("live-stations", "live-stations", "estaciones-en-vivo"),
+      page("bank", "bank", "banca"),
     ],
   },
   {
@@ -1208,6 +1210,12 @@ const CASINO_NAV: NavGroup[] = [
       page("permissions", "permissions", "permisos"),
       page("placeholders", "placeholders", "placeholders"),
       page("configuration", "configuration", "configuracion"),
+    ],
+  },
+  {
+    label: { en: "Help", es: "Ayuda" },
+    pages: [
+      page("troubleshooting", "troubleshooting", "problemas-comunes"),
       page("faq", "faq", "faq"),
     ],
   },
