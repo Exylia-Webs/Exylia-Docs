@@ -17,7 +17,7 @@ Follow WRITING.md. ExyliaFFA is the model. One row per plugin; mark done after r
 | `exyliacombat` | `ExyliaCombat` | done |
 | `exyliacrates` | `ExyliaCrates` | done (guide bodies spot-checked only) |
 | `exyliadisplays` | `ExyliaDisplays` | done |
-| `exyliaduels` | `ExyliaDuels` | done (es labels of kit-rules and history unchecked) |
+| `exyliaduels` | `ExyliaDuels` | done |
 | `exyliaeconomy` | `ExyliaEconomy` | done |
 | `exyliaemotes` | `ExyliaEmotes` | done |
 | `exyliaevents` | `ExyliaEvents` | done |
@@ -38,7 +38,7 @@ Follow WRITING.md. ExyliaFFA is the model. One row per plugin; mark done after r
 | `exyliaprotections` | `ExyliaProtections` | done |
 | `exyliaproxyutils` | `ExyliaProxyUtils` | done |
 | `exyliarandomkits` | `ExyliaRandomKitsCore` | done (notes) |
-| `exyliarewards` | `ExyliaRewards` | done (faq lacks battle pass) |
+| `exyliarewards` | `ExyliaRewards` | done (configuration key tables unverified) |
 | `exyliasandbox` | `ExyliaSandBox` | done |
 | `exyliascreens` | `ExyliaScreens` | done |
 | `exyliashields` | `ExyliaShields` | done |
