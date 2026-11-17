@@ -33,6 +33,8 @@ content truly moved; then fix every link to it (the test finds them).
 - Start every page with what the reader will get, in one or two sentences. No history, no
   architecture, no "this module is responsible for".
 - Name things the way the player sees them: the button text in the menu, the command they type.
+  Spanish pages use the labels from the plugin's `lang/es/` files when they exist (English labels
+  only when the plugin has no Spanish menus).
   Internal names (`arenaId`, `iconMaterial`, class names, enum values) only in Reference or inside
   `<Details>`.
 - Say defaults and limits plainly: "By default everyone can join. To limit it, …".
@@ -157,3 +159,10 @@ source wins. Never invent a feature; if unsure, leave it out and say so in your 
 DOCS_PLUGIN=exyliaffa pnpm test   # pages exist, compile, links resolve, data rows exist
 pnpm typecheck                    # only if you changed code
 ```
+
+## Working in chunks (agents)
+
+A plugin is too big for one pass. Keep `content/<plugin>/.rewrite-notes.md` up to date (done /
+remaining / unverified facts) after every few pages, so the next pass continues instead of starting
+over. Order: data.json + reference pages → getting started + troubleshooting → guides → the rest.
+Write each page whole (en and es together), and run the plugin's test after each step.
