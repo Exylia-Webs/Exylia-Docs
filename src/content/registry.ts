@@ -133,17 +133,12 @@ const CAPTURE_NAV: NavGroup[] = [
     ],
   },
   {
-    label: { en: "Configuring", es: "Configurar" },
+    label: { en: "Guides", es: "Guías" },
     pages: [
       page("event-types", "event-types", "tipos-de-evento"),
       page("zones", "zones", "zonas"),
       page("rewards", "rewards", "recompensas"),
       page("scheduling", "scheduling", "programacion"),
-    ],
-  },
-  {
-    label: { en: "Systems", es: "Sistemas" },
-    pages: [
       page("clans", "clans", "clanes"),
       page("stats", "stats", "estadisticas"),
       page("visuals", "visuals", "visuales"),
@@ -154,9 +149,16 @@ const CAPTURE_NAV: NavGroup[] = [
     label: { en: "Reference", es: "Referencia" },
     pages: [
       page("commands", "commands", "comandos"),
+      page("permissions", "permissions", "permisos"),
       page("placeholders", "placeholders", "placeholders"),
       page("configuration", "configuration", "configuracion"),
       page("api", "api", "api"),
+    ],
+  },
+  {
+    label: { en: "Help", es: "Ayuda" },
+    pages: [
+      page("troubleshooting", "troubleshooting", "problemas-comunes"),
       page("faq", "faq", "faq"),
     ],
   },
