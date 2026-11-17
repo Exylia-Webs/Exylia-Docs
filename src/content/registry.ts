@@ -1537,19 +1537,15 @@ const REWARDS_NAV: NavGroup[] = [
     pages: [
       page("introduction", "introduction", "introduccion"),
       page("installation", "installation", "instalacion"),
+      page("first-steps", "first-steps", "primeros-pasos"),
     ],
   },
   {
-    label: { en: "Rewards", es: "Recompensas" },
+    label: { en: "Guides", es: "Guías" },
     pages: [
       page("rewards", "rewards", "recompensas"),
       page("calendar", "calendar", "calendario"),
       page("codes", "codes", "codigos"),
-    ],
-  },
-  {
-    label: { en: "Modules", es: "Módulos" },
-    pages: [
       page("afk-zones", "afk-zones", "zonas-afk"),
       page("votes", "votes", "votos"),
       page("referrals", "referrals", "referidos"),
@@ -1563,6 +1559,12 @@ const REWARDS_NAV: NavGroup[] = [
       page("placeholders", "placeholders", "placeholders"),
       page("configuration", "configuration", "configuracion"),
       page("network", "network", "red"),
+    ],
+  },
+  {
+    label: { en: "Help", es: "Ayuda" },
+    pages: [
+      page("troubleshooting", "troubleshooting", "problemas-comunes"),
       page("faq", "faq", "faq"),
     ],
   },
