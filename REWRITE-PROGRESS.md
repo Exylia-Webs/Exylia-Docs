@@ -7,7 +7,7 @@ Follow WRITING.md. ExyliaFFA is the model. One row per plugin; mark done after r
 | `exyliaaimtrainer` | `ExyliaAimTrainer` | todo |
 | `exyliaanalytics` | `ExyliaAnalytics` | todo |
 | `exyliaarmorskin` | `ExyliaArmorSkin` | todo |
-| `exyliaarmortrims` | `ExyliaArmorTrims` | todo |
+| `exyliaarmortrims` | `ExyliaArmorTrims` | done |
 | `exyliaarrows` | `ExyliaArrows` | todo |
 | `exyliacapture` | `ExyliaCapture` | todo |
 | `exyliacasino` | `ExyliaCasino` | done (playing idle-clock table unverified) |
