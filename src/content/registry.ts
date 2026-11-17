@@ -1336,25 +1336,20 @@ const MARKET_NAV: NavGroup[] = [
     ],
   },
   {
-    label: { en: "Between players", es: "Entre jugadores" },
+    label: { en: "Guides", es: "Guías" },
     pages: [
       page("auction-house", "auction-house", "casa-de-subastas"),
       page("auctions", "auctions", "subastas"),
       page("orders", "orders", "pedidos"),
       page("bazaar", "bazaar", "bazar"),
       page("trade", "trade", "intercambios"),
-    ],
-  },
-  {
-    label: { en: "Selling to the server", es: "Vender al servidor" },
-    pages: [
       page("shop", "shop", "tienda"),
       page("selling", "selling", "venta"),
       page("sell-wands", "sell-wands", "varitas-de-venta"),
     ],
   },
   {
-    label: { en: "Systems", es: "Sistemas" },
+    label: { en: "How it works", es: "Cómo funciona" },
     pages: [
       page("collect", "collect", "recoger"),
       page("prices", "prices", "precios"),
@@ -1370,6 +1365,12 @@ const MARKET_NAV: NavGroup[] = [
       page("placeholders", "placeholders", "placeholders"),
       page("configuration", "configuration", "configuracion"),
       page("api", "api", "api"),
+    ],
+  },
+  {
+    label: { en: "Help", es: "Ayuda" },
+    pages: [
+      page("troubleshooting", "troubleshooting", "problemas-comunes"),
       page("faq", "faq", "faq"),
     ],
   },
