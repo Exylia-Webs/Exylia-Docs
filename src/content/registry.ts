@@ -1274,15 +1274,17 @@ const MOBS_NAV: NavGroup[] = [
     pages: [
       page("introduction", "introduction", "introduccion"),
       page("installation", "installation", "instalacion"),
+      page("first-steps", "first-steps", "primeros-pasos"),
     ],
   },
   {
-    label: { en: "Systems", es: "Sistemas" },
+    label: { en: "Guides", es: "Guías" },
     pages: [
       page("building-mobs", "building-mobs", "crear-mobs"),
-      page("models", "models", "modelos"),
       page("rewards", "rewards", "recompensas"),
       page("generators", "generators", "generadores"),
+      page("models", "models", "modelos"),
+      page("settings", "settings", "ajustes"),
     ],
   },
   {
@@ -1292,6 +1294,12 @@ const MOBS_NAV: NavGroup[] = [
       page("permissions", "permissions", "permisos"),
       page("configuration", "configuration", "configuracion"),
       page("api", "api", "api"),
+    ],
+  },
+  {
+    label: { en: "Help", es: "Ayuda" },
+    pages: [
+      page("troubleshooting", "troubleshooting", "problemas-comunes"),
       page("faq", "faq", "faq"),
     ],
   },
