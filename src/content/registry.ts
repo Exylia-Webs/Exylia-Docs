@@ -2040,7 +2040,7 @@ const JOURNEY_NAV: NavGroup[] = [
     ],
   },
   {
-    label: { en: "Journeys", es: "Recorridos" },
+    label: { en: "Guides", es: "Guías" },
     pages: [
       page("journeys", "journeys", "recorridos"),
       page("steps", "steps", "pasos"),
@@ -2053,7 +2053,7 @@ const JOURNEY_NAV: NavGroup[] = [
     ],
   },
   {
-    label: { en: "Insights", es: "Datos" },
+    label: { en: "How it works", es: "Cómo funciona" },
     pages: [
       page("analytics", "analytics", "analitica"),
       page("integrations", "integrations", "integraciones"),
@@ -2067,6 +2067,12 @@ const JOURNEY_NAV: NavGroup[] = [
       page("placeholders", "placeholders", "placeholders"),
       page("configuration", "configuration", "configuracion"),
       page("api", "api", "api"),
+    ],
+  },
+  {
+    label: { en: "Help", es: "Ayuda" },
+    pages: [
+      page("troubleshooting", "troubleshooting", "problemas-comunes"),
       page("faq", "faq", "faq"),
     ],
   },
