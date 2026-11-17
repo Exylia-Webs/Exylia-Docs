@@ -8,95 +8,72 @@ questions:
 updated: "1.8.0"
 ---
 
-Freezing a player pins them in place on the client: every position packet is dropped and answered
-with a teleport back, so there is no rubber-banding fight with a movement plugin. They are blinded,
-their armour is taken off and replaced with a block of ice on the head, they glow, and the only chat
-they read is staff talking to them.
+Freezing locks a suspect in place for a screenshare. The frozen player cannot move, act or run commands, sees only a reminder and staff chat, and stays frozen if they log out. You freeze with one command or one click.
 
-Module id `freeze`, switch `modules.freeze`, files under `modules/freeze/`. Uses PacketEvents when it is installed and pins movement without it.
+## Before you start
 
-## Commands
+- Give the staff rank `exyliastaff.freeze`. To make a rank immune, give it `exyliastaff.freeze.bypass`.
+- The module switch is `modules.freeze` in `plugins/ExyliaStaff/config.yml`.
+- With [PacketEvents](/docs/exyliastaff/installation), the client is pinned by dropping every position packet and answering with a teleport back, so there is no rubber-banding. Without it freeze still works but pins the player with server-side movement checks instead.
 
-| Command | Permission | What it does |
-|---|---|---|
-| `/freeze <player> [reason]` | `exyliastaff.freeze` | Freezes. The reason is shown to the player and kept with the session. `/ss` is an alias. |
-| `/unfreeze <player>` | `exyliastaff.freeze` | Releases. `/unss` is an alias. |
-| `/freezetoggle <player>` | `exyliastaff.freeze` | One or the other. `/sstoggle` is an alias. |
+## Steps
 
-The console can freeze too. The packed ice in the hotbar toggles the freeze of the player you look
-at, within five blocks. A player cannot freeze themself, and a target holding
-`exyliastaff.freeze.bypass` cannot be frozen.
+<Steps>
+  <Step title="Freeze the player">
+    Run `/freeze <player> [reason]` (alias `/ss`), or look at the player within five blocks and click the **Packed ice** (**FREEZE**, slot 8) in the [staff mode](/docs/exyliastaff/staff-mode) hotbar. The reason is shown to the player and kept with the session.
+  </Step>
+  <Step title="Talk to them">
+    Type in public chat. Your lines and theirs go to a private freeze chat that every staff member with `exyliastaff.freeze` can read.
+  </Step>
+  <Step title="Release">
+    Run `/unfreeze <player>` (alias `/unss`), or click the ice again. `/freezetoggle <player>` (alias `/sstoggle`) does one or the other.
+  </Step>
+</Steps>
+
+The console can freeze too. You cannot freeze yourself, and a target holding `exyliastaff.freeze.bypass` cannot be frozen.
+
+## Check that it works
+
+Freeze a test player. They should be unable to move, see a blinding effect with a **FROZEN** title and a block of ice on their head, glow for staff, and receive a reminder every five seconds. Release them: armour comes back and the effects clear.
 
 ## What the frozen player gets
 
-- The `frozen` lines, with the staff member's name and the reason; a line holding `%reason%` is left
-  out when the freeze has none. Then a reminder every `reminder-seconds`:
-  a title, an action bar and a sound, set by `reminder` in the messages file.
+- The `frozen` message lines with your name and the reason (a line holding `%reason%` is left out when there is none), then a reminder every `reminder-seconds`: a title, an action bar and a sound.
 - The `frozen` sidebar: who froze them and for how long.
-- Glow, the potion effects in `look.effects`, and the helmet, after the armour is saved to a snapshot.
-  The armour comes back on release, and after a crash on the next join, on the server it came off:
-  a player who reconnects to a lobby gets it back when they walk into that server again, not where a
-  hub plugin might empty their inventory. The helmet is recognised by a tag, so changing its name or
-  the language mid-freeze still takes it off.
+- Glow, the potion effects in `look.effects`, and a helmet, after their armour is saved. The armour comes back on release, and after a crash on the next join, on the server it came off. The helmet is recognised by a tag, so changing its name or the language mid-freeze still takes it off.
 
-## What they cannot do
+They cannot move, break, place, drop or pick up items, or run commands outside `allowed-commands` (by default `msg`, `r`, `reply`, `tell`, `w`). Configurable: damage (`block-damage`), opening inventories (`block-inventories`) and being teleported except by a plugin (`block-teleports`). Plugin teleports pass on purpose, so a staff `/tphere` on a frozen player works. The "you cannot do that" line is sent at most once every two seconds.
 
-| Always | Configurable |
-|---|---|
-| Move | Take or deal damage (`block-damage`) |
-| Break, place, drop, pick up items | Open any inventory (`block-inventories`) |
-| Run commands outside `allowed-commands` | Be teleported, except by a plugin (`block-teleports`) |
+## Going further
 
-Plugin teleports pass on purpose: a staff `/tphere` on a frozen player works. The "you cannot do that"
-line is sent at most once every two seconds.
+### The chat
 
-## The chat
+What the frozen player and the staff member holding them type in public chat is taken out of it before any other plugin or a Discord bridge reads it, and goes to the freeze chat on every server: the frozen player's lines use `chat-format`, the staff member's `chat-staff-format`. Every staff member with `exyliastaff.freeze` reads every session so a colleague can step in; the frozen player reads only the staff member holding them. The frozen player hears staff and nobody else, and the staff member holding them hears staff and frozen players. Global chat bypasses this like every other chat rule.
 
-A screenshare is one conversation. What the frozen player and the staff member holding them type in
-public chat is taken out of it, before any other plugin or a Discord bridge reads it, and goes to the
-freeze chat on every server instead: the frozen player's lines in `chat-format`, the staff member's in
-`chat-staff-format`. Every staff member with `exyliastaff.freeze` reads every session, so a colleague
-can follow and step in; the frozen player reads only the staff member holding them.
+### Logging out
 
-For as long as the freeze lasts, the plugin's chat rule also keeps the rest of public chat away: the
-frozen player hears staff and nobody else, and the staff member holding them hears staff and frozen
-players. Global chat bypasses this rule like every other.
+Logging out does not end a freeze. With `persist-on-quit` on (the default), the player comes back frozen on whichever server of the network they join, and staff everywhere get `alert-rejoin`. With it off, the freeze ends on quit and the player rejoins free.
 
-## Logging out
-
-Logging out does not get a player out of a freeze. With `persist-on-quit` on, the default since 1.5.0,
-every server drops the session but the row stays: the player comes back frozen, on whichever server of
-the network they join, and staff everywhere get `alert-rejoin`. With it off, the freeze ends on quit:
-the row is deleted and the player rejoins free.
-
-Either way, logging out is how a player refuses a screenshare, so the server reacts to it. If
-`alert-quit` is on, every staff member with `exyliastaff.freeze` on every server is told they logged
-out, and `quit-commands` run with `%player%`:
+Either way, logging out is how a player refuses a screenshare, so the server reacts. With `alert-quit` on, every staff member with `exyliastaff.freeze` on every server is told, and the `quit-commands` run with `%player%`:
 
 ```yaml
 quit-commands:
   - 'console-proxy:ban %player% Logged out while frozen'
 ```
 
-Other plugins hear it as `FrozenPlayerQuitEvent`; see the [API](/docs/exyliastaff/api#freezes-and-reports).
+Other plugins hear it as `FrozenPlayerQuitEvent`; see the [API](/docs/exyliastaff/api#freezes-and-reports). A `/stop` ends every freeze whatever `persist-on-quit` says, but runs no quit commands and raises no alert.
 
-A `/stop` ends every freeze, whatever `persist-on-quit` says, but runs no quit commands, fires no event
-and raises no alert: a server going down is not a player running away. With `persist-on-quit` off, a
-row left behind by a crash is dropped on the next join, and the armour handed back.
+### Replay and other servers
 
-## The replay
+The moment a freeze starts, the last minute before it is saved as a [replay](/docs/exyliastaff/replays) (`capture.freeze` in the replay module). Every freeze and release is published on the `freeze` channel: staff on every server get the `alert-frozen` and `alert-unfrozen` lines with the server name, and a server that has the player online applies or releases the freeze.
 
-The moment a freeze starts, the last minute before it is saved as a [replay](/docs/exyliastaff/replays),
-with `capture.freeze` in the replay module: what the staff member is about to ask about. Another plugin
-can refuse a freeze before anything happens, through `PlayerFreezeEvent`.
+## Commands and permissions
 
-## Across servers
+<Commands group="freeze" />
 
-Every freeze and release is published on the `freeze` channel. Staff on every server get the
-`alert-frozen` and `alert-unfrozen` lines with the server name, and a server that has the player
-online applies or releases the freeze when another one says so.
+<Permissions group="freeze" />
 
-## Configuration
+<Details title="Configuration (modules/freeze/config.yml)">
 
 ```yaml title="plugins/ExyliaStaff/modules/freeze/config.yml"
 reminder-seconds: 5
@@ -126,41 +103,21 @@ quit-commands: []
 | `reminder-seconds` | `5` | Seconds between reminders. |
 | `look.strip-armor` | `true` | Take the armour off, give it back on release. |
 | `look.helmet` | `PACKED_ICE` | Worn on the head. Empty for none. Its name is `helmet-name` in the messages file. |
+| `look.glow` | `true` | The frozen player glows. |
 | `look.effects` | blindness, darkness | Potion effects held for the whole freeze. Unknown names are skipped. |
+| `block-damage`, `block-inventories`, `block-teleports` | `true` | The configurable restrictions above. |
 | `allowed-commands` | `msg`, `r`, `reply`, `tell`, `w` | Commands a frozen player may still run, matched on the bare label. |
+| `alert-quit` | `true` | Tell staff on every server when a frozen player logs out. |
 | `persist-on-quit` | `true` | Keep a player frozen when they log out, until they come back on any server. |
 | `quit-commands` | `[]` | Run on logout. `console-proxy:` needs the library's proxy bridge. |
 
-## Messages
+Messages are in `lang/<language>/modules/freeze/messages.yml`: `frozen` (list of lines, `%staff%` and `%reason%`), `unfrozen`, `froze`, `unfroze`, `already-frozen`, `not-frozen` and `bypass` (`%target%`), `self`, `no-target`, the alerts `alert-frozen`, `alert-unfrozen`, `alert-quit` and `alert-rejoin` (`%staff%`, `%target%`, `%server%`), `chat-format` and `chat-staff-format` (`%server%`, `%player%`, `%message%`), `blocked-command`, `blocked-action`, `reminder` (title, action bar and sound played on every reminder) and `helmet-name`. See [ExyliaLib messages](/docs/exylialib/messages-and-languages) and [colours](/docs/exylialib/colours).
 
-`lang/<language>/modules/freeze/messages.yml`: `frozen` is a list of lines with `%staff%` and
-`%reason%`, `unfrozen` one with `%staff%`; `froze`, `unfroze`, `already-frozen`, `not-frozen` and `bypass` with `%target%`; `self`,
-`no-target`; the four alerts `alert-frozen`, `alert-unfrozen`, `alert-quit` and `alert-rejoin` with `%staff%`,
-`%target%` and `%server%`; `chat-format` and `chat-staff-format` with `%server%`, `%player%` and
-`%message%`; `blocked-command` and `blocked-action`; `reminder`, the library effect played on every
-reminder; and `helmet-name`.
+Placeholders: `%staff_freeze_by%` (who froze the viewer), `%staff_freeze_time%` (how long, as a clock), `%staff_freeze_target%` (who the viewer has frozen here) and `%staff_frozen%`. See [Placeholders](/docs/exyliastaff/placeholders).
 
-```yaml title="plugins/ExyliaStaff/lang/en/modules/freeze/messages.yml"
-reminder:
-  title:
-    text: '{error}&lFROZEN'
-    subtitle: '{letters}Do not disconnect'
-    stay: 3
-    fade-out: 1
-  action-bar:
-    text: '{warning}➥ Wait for staff instructions'
-    duration: 4
-  sound:
-    name: BLOCK_NOTE_BLOCK_BASS
-    pitch: 0.6
-helmet-name: '{error}&lFROZEN'
-```
+</Details>
 
-## Placeholders
-
-| Placeholder | Value |
-|---|---|
-| `%staff_freeze_by%` | Who froze the viewer. Empty otherwise. |
-| `%staff_freeze_time%` | How long, as a clock: the viewer's own freeze, or the one they are holding. |
-| `%staff_freeze_target%` | Who the viewer has frozen on this server. |
-| `%staff_frozen%` | `true` while frozen, from the core. |
+<Cards>
+  <Card title="Next: Inspect a player" href="/docs/exyliastaff/inspect">Look into their inventory without them noticing.</Card>
+  <Card title="Punish" href="/docs/exyliastaff/punishments">What to do once the screenshare is over.</Card>
+</Cards>
