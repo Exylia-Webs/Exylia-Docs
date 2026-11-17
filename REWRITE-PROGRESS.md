@@ -24,7 +24,7 @@ Follow WRITING.md. ExyliaFFA is the model. One row per plugin; mark done after r
 | `exyliaffa` | `ExyliaFFA` | done |
 | `exyliagraves` | `ExyliaGraves` | done (staff, network, configuration, faq, installation on old text) |
 | `exyliahiteffect` | `ExyliaHitEffect` | todo |
-| `exyliajobs` | `ExyliaJobs` | partial (guides in progress) |
+| `exyliajobs` | `ExyliaJobs` | done |
 | `exyliajourney` | `ExyliaJourney` | todo |
 | `exyliakillcam` | `ExyliaKillCam` | done (pages left on old text: see .rewrite-notes) |
 | `exylialobby` | `ExyliaLobby` | todo |
