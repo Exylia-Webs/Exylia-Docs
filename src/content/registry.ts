@@ -2855,7 +2855,7 @@ export const plugins: Plugin[] = [
     version: "1.3.0",
     status: "stable",
     category: { en: "Survival", es: "Survival" },
-    minecraft: "1.21+",
+    minecraft: "1.21.4+",
     banner: "https://s3.exylia.net/exylia-plugins/public/static/images/plugins/economy/ExyliaEconomyBanner.webp",
     download: "https://modrinth.com/plugin/exyliaeconomy",
     tags: [
