@@ -19,7 +19,7 @@ Follow WRITING.md. ExyliaFFA is the model. One row per plugin; mark done after r
 | `exyliadisplays` | `ExyliaDisplays` | started (guide bodies pending) |
 | `exyliaduels` | `ExyliaDuels` | started (guide bodies pending) |
 | `exyliaeconomy` | `ExyliaEconomy` | todo |
-| `exyliaemotes` | `ExyliaEmotes` | todo |
+| `exyliaemotes` | `ExyliaEmotes` | started (guide bodies pending) |
 | `exyliaevents` | `ExyliaEvents` | todo |
 | `exyliaffa` | `ExyliaFFA` | done |
 | `exyliagraves` | `ExyliaGraves` | done (staff, network, configuration, faq, installation on old text) |
