@@ -33,7 +33,7 @@ Follow WRITING.md. ExyliaFFA is the model. One row per plugin; mark done after r
 | `exyliamines` | `ExyliaMines` | done (integrations, configuration, api, faq leftovers) |
 | `exyliamobs` | `ExyliaMobs` | done |
 | `exyliaplayervaults` | `ExyliaPlayerVaults` | done (purchases, staff, network, configuration, faq on old text) |
-| `exyliapractice` | `ExyliaPracticeCore` | todo |
+| `exyliapractice` | `ExyliaPracticeCore` | started (guide bodies pending) |
 | `exyliapracticebot` | `ExyliaPracticeBotV3` | todo |
 | `exyliaprotections` | `ExyliaProtections` | done (configuration, api, faq leftovers) |
 | `exyliaproxyutils` | `ExyliaProxyUtils` | done (reference pages left on old text) |
