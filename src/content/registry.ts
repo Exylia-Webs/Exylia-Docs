@@ -2591,7 +2591,7 @@ export const plugins: Plugin[] = [
     purchase: "https://builtbybit.com/resources/exylia-jobs.136377/",
     status: "beta",
     category: { en: "Survival", es: "Survival" },
-    minecraft: "1.21.1+",
+    minecraft: "1.21.4+",
     banner: "https://s3.exylia.net/exylia-plugins/public/static/images/plugins/jobs/ExyliaJobsBanner.webp",
     tags: [
       { en: "Jobs", es: "Trabajos" },
