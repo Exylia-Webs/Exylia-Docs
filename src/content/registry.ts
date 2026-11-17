@@ -651,10 +651,9 @@ const EMOTES_NAV: NavGroup[] = [
     ],
   },
   {
-    label: { en: "Configuring", es: "Configurar" },
+    label: { en: "Guides", es: "Guías" },
     pages: [
       page("emotes", "emotes", "emotes"),
-      page("playing", "playing", "reproducir"),
       page("duets", "duets", "duetos"),
       page("menu", "menu", "menu"),
       page("3d-selector", "3d-selector", "selector-3d"),
@@ -663,12 +662,24 @@ const EMOTES_NAV: NavGroup[] = [
     ],
   },
   {
+    label: { en: "How it works", es: "Cómo funciona" },
+    pages: [
+      page("playing", "playing", "reproducir"),
+    ],
+  },
+  {
     label: { en: "Reference", es: "Referencia" },
     pages: [
       page("commands", "commands", "comandos"),
       page("permissions", "permissions", "permisos"),
-      page("configuration", "configuration", "configuracion"),
       page("placeholders", "placeholders", "placeholders"),
+      page("configuration", "configuration", "configuracion"),
+    ],
+  },
+  {
+    label: { en: "Help", es: "Ayuda" },
+    pages: [
+      page("troubleshooting", "troubleshooting", "problemas-comunes"),
       page("faq", "faq", "faq"),
     ],
   },
