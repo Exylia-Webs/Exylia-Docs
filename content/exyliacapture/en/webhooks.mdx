@@ -5,84 +5,102 @@ questions:
   - "How do I send events to Discord?"
   - "How do I ping a role when an event starts?"
   - "What messages does the Discord webhook send?"
+  - "Why does ExyliaCapture not post to Discord?"
+  - "How do I change the Discord message text?"
 updated: "1.3.0"
 ---
 
-Event starts and results can be posted to a Discord channel through a webhook. Messages are sent off
-the main thread, Discord's rate limits are respected, and player names are escaped so they can never
-ping anyone.
+By the end of this page ExyliaCapture posts a card in a Discord channel when an event starts and when it ends, with the winner, the podium and the rewards. Messages are sent off the main thread, Discord's rate limits are respected, and player names are escaped so they can never ping anyone.
 
-## Setting it up
+## Before you start
+
+- A Discord channel where you can manage webhooks.
+- Access to `plugins/ExyliaCapture/config.yml`. The webhook URL is the one value you cannot type in the in-game menu, because it is a secret.
+
+## Steps
 
 <Steps>
-  <Step title="Copy the webhook URL">
-    In Discord, **Channel settings → Integrations → Webhooks → Copy Webhook URL**. Keep it private:
-    anyone with it can post as the webhook.
+  <Step title="Create the webhook">
+    In Discord open **Channel settings ▸ Integrations ▸ Webhooks**, create a webhook and click **Copy Webhook URL**. Keep it private: anyone who has it can post as the webhook.
   </Step>
-  <Step title="Write it into config.yml">
-    ```yaml title="config.yml"
+  <Step title="Paste it in config.yml">
+    Open `plugins/ExyliaCapture/config.yml` and fill the `webhooks` block. Never share or publish this file with the URL in it.
+    ```yaml title="plugins/ExyliaCapture/config.yml"
     webhooks:
       enabled: true
-      url: "https://discord.com/api/webhooks/123456789012345678/your-token"
-      server-name: "Exylia Network"
+      url: "https://discord.com/api/webhooks/<id>/<token>"
+      server-name: "My Server"
     ```
   </Step>
+  <Step title="Or switch it on in game">
+    Run `/captureadmin`, click **Settings**, then **Discord**. **Announcements** turns posting on or off and **Server name** sets the name used in the footer.
+  </Step>
   <Step title="Reload">
-    Run `/captureadmin reload`.
+    Run `/captureadmin reload`, or click **Reload** in `/captureadmin`.
   </Step>
 </Steps>
 
-<Field name="enabled" type="boolean" defaultValue="false">
-Whether anything is posted.
-</Field>
+## Check that it works
 
-<Field name="url" type="string" defaultValue="empty">
-The webhook URL. One that is not a Discord webhook URL is refused with a single console warning naming
-the reason, and nothing is sent.
-</Field>
-
-<Field name="server-name" type="string" defaultValue="empty">
-Fills `%server%`, which the shipped messages use as their footer. Discord markdown works here.
-</Field>
+Start any event with `/captureadmin start <id>`. A "started" card should appear in the channel within a few seconds. Stop it with `/captureadmin stop <id>` and a "stopped" card follows. If nothing arrives, read the console after the reload: a URL that is not a Discord webhook URL is refused with one warning that says why, and nothing is sent. See [Common problems](/docs/exyliacapture/troubleshooting).
 
 <Callout type="warning" title="A deleted webhook stops sending">
-If Discord reports the webhook as deleted or its token as wrong, a warning is logged and nothing more
-is sent until the next reload.
+If Discord reports the webhook as deleted or its token as wrong, a warning is logged and nothing more is sent until the next reload.
 </Callout>
 
-## The messages
+## Going further
 
-They live under `webhooks` in `messages.yml`, so they follow the plugin's language. Each one is a full
-ExyliaLib webhook template, sent as a Discord Components V2 card: `enabled`, `message`, `color`,
-`title`, `description`, `author`, `thumbnail`, `image`, `fields`, `buttons`, `footer`, `timestamp`,
-`coalesce` and the rest. Set `enabled: false` to silence one.
+### Change what the messages say
 
-| Message | Posted when | Placeholders |
-|---|---|---|
-| `started` | An event begins. | `%time_limit%`, `%rewards%` |
-| `won` | One player or one clan won — KOTH, Payload, Bounty. | `%winner%`, `%clan%`, `%winner_head%`, `%rewards%` |
-| `podium` | A scored event ends — the points KOTHs, Capture Points, DTC, Conquest. | `%top1_name%`, `%top1_pts%` … `%top3_name%`, `%top3_pts%` |
-| `no-winner` | The clock ran out with nobody winning. | — |
-| `stopped` | An operator stopped the event before anyone won. | — |
+The messages live under `webhooks` in `lang/<code>/messages.yml`, so they follow the plugin's language. Edit the `title`, `description` and `fields` of the one you want, then reload. Set `enabled: false` on a message to silence it. Colours and the language system are explained in [Colours](/docs/exylialib/colours) and [Messages and languages](/docs/exylialib/messages-and-languages).
 
-Every message also fills `%event_name%`, `%event_type%`, `%duration%` — how long the event has run —
-and `%server%`. `%winner_head%` is the winner's head as an image URL, and is empty when a clan won.
+| Message | Posted when |
+|---|---|
+| `started` | An event begins. |
+| `won` | One player or one clan won: KOTH, Payload, Bounty. |
+| `podium` | A scored event ends: the points KOTHs, Capture Points, Destroy The Core, Conquest. |
+| `no-winner` | The clock ran out with nobody winning. |
+| `stopped` | An operator stopped the event before anyone won. |
+
+### Ping a role
+
+Only the `message` line above the card can ping, and only with what you write in the template yourself:
+
+```yaml title="lang/en/messages.yml"
+webhooks:
+  started:
+    message: "<@&ROLE_ID> A capture just started!"
+```
+
+Replace `ROLE_ID` with your role's id (Discord developer mode, right-click the role, **Copy Role ID**).
+
+### Add a link button
 
 Link buttons are written `label|url` or `label|url|emoji`:
 
-```yaml title="messages.yml"
+```yaml title="lang/en/messages.yml"
 webhooks:
   started:
     buttons:
       - "Live map|https://map.example.com|🗺️"
 ```
 
-## Pinging a role
+<Details title="Fields, placeholders and every template key">
+`url` is the webhook address; if it is empty or not a Discord webhook URL the plugin sends nothing. `enabled` defaults to `false`. `server-name` defaults to empty and fills `%server%`, which the shipped messages use as their footer; Discord markdown works there.
 
-Only the `message` line above the card can ping, and only with what the template itself writes:
+Each message is a full ExyliaLib webhook template sent as a Discord Components V2 card: `enabled`, `message`, `color`, `title`, `description`, `author`, `thumbnail`, `image`, `fields`, `buttons`, `footer`, `timestamp`, `coalesce` and the rest. They are all described in [Discord webhooks](/docs/exylialib/discord-webhooks).
 
-```yaml title="messages.yml"
-webhooks:
-  started:
-    message: "<@&123456789012345678> A capture just started!"
-```
+| Message | Its own placeholders |
+|---|---|
+| `started` | `%time_limit%`, `%rewards%` |
+| `won` | `%winner%`, `%clan%`, `%winner_head%`, `%rewards%` |
+| `podium` | `%top1_name%`, `%top1_pts%` up to `%top3_name%`, `%top3_pts%` |
+| `no-winner`, `stopped` | none |
+
+Every message also fills `%event_name%`, `%event_type%`, `%duration%` (how long the event has run) and `%server%`. `%winner_head%` is the winner's head as an image URL and is empty when a clan won.
+</Details>
+
+<Cards>
+  <Card title="Customise boss bars, holograms and sidebars" href="/docs/exyliacapture/visuals">What players see in game.</Card>
+  <Card title="Discord webhooks in ExyliaLib" href="/docs/exylialib/discord-webhooks">Every key a message template accepts.</Card>
+</Cards>
