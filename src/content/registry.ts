@@ -2037,7 +2037,7 @@ const SPAWNERS_NAV: NavGroup[] = [
     ],
   },
   {
-    label: { en: "Spawners", es: "Spawners" },
+    label: { en: "Guides", es: "Guías" },
     pages: [
       page("spawners", "spawners", "spawners"),
       page("types-and-tiers", "types-and-tiers", "tipos-y-tiers"),
@@ -2065,6 +2065,12 @@ const SPAWNERS_NAV: NavGroup[] = [
       page("placeholders", "placeholders", "placeholders"),
       page("configuration", "configuration", "configuracion"),
       page("api", "api", "api"),
+    ],
+  },
+  {
+    label: { en: "Help", es: "Ayuda" },
+    pages: [
+      page("troubleshooting", "troubleshooting", "problemas-comunes"),
       page("faq", "faq", "faq"),
     ],
   },
