@@ -42,7 +42,7 @@ Follow WRITING.md. ExyliaFFA is the model. One row per plugin; mark done after r
 | `exyliasandbox` | `ExyliaSandBox` | todo |
 | `exyliascreens` | `ExyliaScreens` | todo |
 | `exyliashields` | `ExyliaShields` | done (pages left on old text: see .rewrite-notes) |
-| `exyliaspecials` | `ExyliaSpecials` | started (guide bodies pending) |
+| `exyliaspecials` | `ExyliaSpecials` | done (config/api/faq pending) |
 | `exyliaspawners` | `ExyliaSpawners` | done (faq/api not rechecked) |
 | `exyliawarzone` | `ExyliaWarzone` | todo |
 | `exyliastaff` | `ExyliaStaff` | todo |
