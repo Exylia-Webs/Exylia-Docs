@@ -44,7 +44,7 @@ Follow WRITING.md. ExyliaFFA is the model. One row per plugin; mark done after r
 | `exyliashields` | `ExyliaShields` | done (pages left on old text: see .rewrite-notes) |
 | `exyliaspecials` | `ExyliaSpecials` | done (config/api/faq pending) |
 | `exyliaspawners` | `ExyliaSpawners` | done (faq/api not rechecked) |
-| `exyliawarzone` | `ExyliaWarzone` | todo |
+| `exyliawarzone` | `ExyliaWarzone` | started (guide bodies pending) |
 | `exyliastaff` | `ExyliaStaff` | started (guide bodies pending) |
 | `exyliasurvivalcore` | `ExyliaSurvivalCore` | todo |
 | `exyliatabletop` | `ExyliaTabletop` | todo |
