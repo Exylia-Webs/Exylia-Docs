@@ -8,132 +8,156 @@ questions:
 updated: "1.0.0"
 ---
 
-`hud.yml` mantiene texto en la pantalla de los jugadores mientras juegan, sin quitarles nunca el control: una esquina con su nivel y su mundo, un aviso de "spawn · zona segura", una alerta de vida baja y avisos que entran deslizándose cuando pasa algo (una kill, una subida de nivel, la primera entrada).
+Al terminar tendrás texto en la pantalla de los jugadores mientras juegan, sin quitarles nunca el control: una esquina con su nivel y su mundo, un aviso de "spawn · zona segura", una alerta de vida baja, un sidebar, una bossbar y avisos que entran deslizándose cuando pasa algo (una kill, una subida de nivel, la primera entrada).
 
 - No tiembla al caminar ni al saltar, y se queda en su sitio al esprintar.
-- Se aparta mientras hay una screen abierta, durante una cinemática, al morir y en modo espectador.
+- Se aparta mientras hay una pantalla abierta, durante una cinemática, al morir y en modo espectador.
 - Cada jugador puede apagarlo en `/settings` (**Mostrar HUD**); la elección se guarda entre reinicios.
-- Un display por bloque de texto y nada superpuesto: una esquina de tres líneas le cuesta al cliente tres entidades.
+- Un display por línea de texto y nada superpuesto: una esquina de tres líneas le cuesta al cliente tres entidades.
 
-```yaml
-widgets:
-  low_health:
-    anchor: above-hotbar
-    when: "health() < 7"
-    every: 5
-    text: "{error}❤ {letters}Vida baja {letters_black}· {error}busca refugio"
-  level:
-    anchor: top-left
-    every: 20
-    text:
-      - "{primary}✦ {letters}Nivel{letters_black}: {info}%player_level%"
-      - "{primary}♦ {letters}Mundo{letters_black}: {info}%player_world%"
-notices:
-  kill:
-    event: kill
-    group: kill
-    text: "{error}⚔ {letters}Derrotaste a {highlight}%victim%"
-  level_up:
-    event: level-up
-    moment: true
-    text: "{highlight}&lNIVEL %level%"
-```
+## Antes de empezar
 
-El archivo de ejemplo trae todas las entradas con `enabled: false`: activa las que quieras. Además de la tarjeta de vitales trae un pequeño kit de diseños (barra de estado, barra de nivel, minimapa, perfil, panel lateral, avisos de poca vida y de spawn) en `hud/`: edítalos con libertad.
+- El HUD lo dibujan los clientes de Java 1.20.2 o superior. El resto conserva el sidebar y la bossbar de vanilla (mira más abajo).
+- `hud.yml` viene con todas las entradas en `enabled: false`, junto a un kit de diseños en `hud/` (barra de estado, barra de nivel, minimapa, perfil, panel lateral, avisos de vida baja y de spawn). Activa los que quieras y edítalos libremente.
+- Los colores y `{icon:...}` se explican en [colores de ExyliaLib](/docs/exylialib/colours); el HUD en sí, y el placeholder `%player_hud%` que otros plugins usan para seguir la misma elección, están en la [página de HUD de ExyliaLib](/docs/exylialib/hud).
 
-## Widgets
+## Pasos
 
-Un widget se queda en pantalla. Su texto se vuelve a leer cada `every` ticks, así que los placeholders se mantienen al día.
+<Steps>
+  <Step title="Activa un widget">
+    Un widget se queda en pantalla. Su texto se vuelve a leer cada `every` ticks, así que los placeholders siguen al día.
+    ```yaml
+    widgets:
+      low_health:
+        anchor: above-hotbar
+        when: "health() < 7"
+        every: 5
+        text: "{error}❤ {letters}Vida baja {letters_black}· {error}busca cobertura"
+      level:
+        anchor: top-left
+        every: 20
+        text:
+          - "{primary}✦ {letters}Nivel{letters_black}: {info}%player_level%"
+          - "{primary}♦ {letters}Mundo{letters_black}: {info}%player_world%"
+    ```
+    Un widget cuyo `when` deja de cumplirse sale deslizándose, y vuelve a entrar cuando se cumple otra vez. Para dibujar tarjetas, barras y degradados en lugar de texto plano, escribe `design: vitals` y edita `hud/vitals.html` y `hud/vitals.css` como harías con una pantalla.
+  </Step>
+  <Step title="Añade un aviso para un evento">
+    Un aviso entra deslizándose cuando ocurre su evento, se queda unos segundos y se va. Los más nuevos quedan más cerca del borde; pasados cinco en un mismo ancla, el más antiguo se va antes.
+    ```yaml
+    notices:
+      kill:
+        event: kill
+        group: kill
+        text: "{error}⚔ {letters}Has derrotado a {highlight}%victim%"
+      level_up:
+        event: level-up
+        moment: true
+        text: "{highlight}&lNIVEL %level%"
+    ```
+    Un aviso de muerte espera a que el jugador reaparezca. Cualquier acción de menú o pantalla también puede mostrar uno:
+    ```yaml
+    actions:
+      - "[HUD] {success}+50 {letters}monedas;group:coins;seconds:4"
+      - "[MOMENT] {highlight}&lPREMIAZO"
+    ```
+  </Step>
+  <Step title="Dale al sidebar y a la bossbar una forma de HUD">
+    `scoreboards.yml` y `bossbars.yml` escriben cada uno dos veces: un `design` dibujado en el HUD y las palabras de vanilla.
+    ```yaml
+    scoreboards:
+      main:
+        priority: 0
+        every: 20
+        design: sidebar
+        title: '{primary}&lPERFIL'
+        lines:
+          - '  {letters_black}· {info}{icon:book} {letters}Nombre{letters_black}: {info}%player_name%'
+          - '{muted}{server-ip}'
+    bossbars:
+      event:
+        design: event_bar
+        text: '{primary}✦ {letters}¡Monedas dobles este fin de semana!'
+        color: PURPLE
+        overlay: PROGRESS
+        progress: '%player_health% / 20'
+    ```
+  </Step>
+</Steps>
+
+## Comprueba que funciona
+
+Pon `enabled: true` en las entradas que quieras (el archivo se recarga en dos segundos) y entra: aparecen los widgets, una kill desliza su aviso y el sidebar se dibuja en el HUD sin ninguna barra de vanilla. Apaga **Mostrar HUD** en `/settings` y el mismo sidebar y la misma bossbar pasan a su forma de vanilla al instante. `/screensadmin check` lista lo que no se lee en `hud.yml`, `scoreboards.yml` y `bossbars.yml` (un evento o ancla desconocidos, una condición con una errata).
+
+Un jugador cuyo cliente dibuja el HUD y que lo mantiene encendido ve el diseño, y ninguna barra de vanilla ocupa la parte alta de su pantalla. El resto (Bedrock mediante Geyser, clientes antiguos, un jugador que apagó el HUD) recibe la forma de vanilla; cada jugador se comprueba dos veces por segundo. El sidebar de otro plugin (un duelo, un evento) sigue mostrándose por encima de este mientras dure.
+
+## Anclajes
+
+| Ancla | Dónde |
+| --- | --- |
+| `top-left` | la esquina superior izquierda, libre en vanilla |
+| `top` | el centro superior, bajo una bossbar |
+| `top-right` | la esquina superior derecha, bajo los iconos de pociones |
+| `left` | el borde izquierdo, sobre el chat |
+| `center` | justo sobre la mirilla |
+| `right` | el borde derecho, donde va el sidebar |
+| `above-hotbar` | sobre la barra rápida, los corazones y la barra de experiencia |
+| `bottom-right` | la esquina inferior derecha |
+
+<Callout type="warning">Un objeto en la mano principal tapa `bottom-right`: el juego dibuja la mano sobre todo lo demás. Una mano vacía no.</Callout>
+
+Las posiciones se miden en una ventana 16:9 con el campo de visión por defecto de 70. Un campo de visión mayor dibuja todo un poco más cerca del centro, nunca fuera de la pantalla; una ventana 4:3 puede cortar los anclajes laterales.
+
+## Para ir más lejos
+
+<Details title="Claves de un widget">
 
 | Clave | Qué hace | Por defecto |
 | --- | --- | --- |
-| `anchor` | dónde se coloca (ver abajo) | `top-left` |
+| `anchor` | dónde se sitúa (mira arriba) | `top-left` |
 | `text` | una línea o una lista de líneas; funcionan colores, `{icon:...}` y placeholders | |
-| `when` | solo se muestra mientras se cumple, escrito como el `require:` de un menú (`health() < 7`, `world() == 'spawn'`, `perm('vip')`, `balance() >= 100`) | siempre |
-| `order` | su lugar en la pila de su anclaje; el más bajo, más cerca del borde | `0` |
-| `every` | cada cuánto se vuelve a leer, en ticks (20 es un segundo) | `10` |
-| `permission` | solo lo ven los jugadores con ese permiso | todos |
+| `when` | se muestra solo mientras se cumple, escrito como el `require:` de un menú (`health() < 7`, `world() == 'spawn'`, `perm('vip')`, `balance() >= 100`) | siempre |
+| `order` | su lugar en la pila de su ancla, el menor más cerca del borde | `0` |
+| `every` | cada cuánto se vuelve a leer, en ticks (20 es un segundo, 2 como mínimo) | `10` |
+| `permission` | solo lo ven los jugadores que lo tienen | todos |
 | `worlds` | solo en estos mundos | todos los mundos |
 | `scale` | su tamaño, `1` el normal | `1` |
 | `panel` | `true` dibuja un panel oscuro detrás | `false` |
-| `design` | dibuja `hud/<nombre>.html` (con el estilo de `hud/<nombre>.css`) en lugar de `text`, así que tarjetas, barras y degradados se escriben como una pantalla; entonces `text` no hace falta | ninguno |
+| `design` | dibuja `hud/<nombre>.html` (con estilo de `hud/<nombre>.css`) en lugar de `text`, de modo que tarjetas, barras y degradados se escriben como una pantalla; entonces `text` no hace falta | ninguno |
 | `enabled` | `false` lo deja escrito pero no se lo muestra a nadie | `true` |
 
-Un widget cuya condición deja de cumplirse sale deslizándose, y vuelve a entrar cuando se cumple de nuevo.
+</Details>
 
-## Avisos
-
-Un aviso entra deslizándose cuando ocurre su evento, se queda unos segundos y sale. Los más nuevos quedan más cerca del borde; con más de cinco en un mismo anclaje, el más antiguo se va antes.
+<Details title="Claves de un aviso">
 
 | Clave | Qué hace | Por defecto |
 | --- | --- | --- |
 | `event` | `join`, `first-join`, `death`, `kill`, `world-change`, `level-up`, `advancement` | |
 | `text` | lo que dice; `%killer%` en `death`, `%victim%` en `kill`, `%world%`, `%level%`, `%advancement%` | |
-| `group` | las repeticiones del mismo grupo se juntan en una línea que las cuenta (`×3`) | ninguno |
-| `moment` | `true` lo dibuja grande sobre la mira, de uno en uno | `false` |
-| `seconds` | cuánto tiempo se queda | `3` (`2` para un momento) |
-| `anchor`, `permission`, `worlds`, `enabled` | como en los widgets | `top-right` (`center` para un momento) |
+| `group` | las repeticiones del mismo grupo se funden en una línea que las cuenta (`×3`) | ninguno |
+| `moment` | `true` lo dibuja grande sobre la mirilla, de uno en uno | `false` |
+| `seconds` | cuánto se queda | `3` (`2` en un momento) |
+| `anchor`, `permission`, `worlds`, `enabled` | como en los widgets | `top-right` (`center` en un momento) |
 
-Un aviso de muerte espera a que el jugador reaparezca.
+</Details>
 
-Cualquier acción de un menú o de una screen también puede mostrar uno:
-
-```yaml
-actions:
-  - "[HUD] {success}+50 {letters}monedas;group:coins;seconds:4"
-  - "[MOMENT] {highlight}&lJACKPOT"
-```
-
-## Barras laterales y bossbars
-
-`scoreboards.yml` y `bossbars.yml` escriben cada barra lateral y cada bossbar dos veces: un `design` dibujado en el HUD y las palabras de vanilla. Un jugador cuyo cliente dibuja el HUD (Java 1.20.2 o superior) y que lo tiene activado en `/settings` ve el diseño, y ninguna barra de vanilla ocupa la parte superior de su pantalla. Los demás (Bedrock con Geyser, clientes antiguos, quien desactivó el HUD) reciben la barra lateral o la bossbar de vanilla. Cada jugador se comprueba dos veces por segundo, así que desactivar el HUD cambia la forma al instante.
-
-```yaml
-scoreboards:
-  main:
-    priority: 0
-    every: 20
-    design: sidebar
-    title: '{primary}&lPERFIL'
-    lines:
-      - '  {letters_black}· {info}{icon:book} {letters}Nombre{letters_black}: {info}%player_name%'
-      - '{muted}{server-ip}'
-bossbars:
-  event:
-    design: event_bar
-    text: '{primary}✦ {letters}¡Monedas dobles este fin de semana!'
-    color: PURPLE
-    overlay: PROGRESS
-    progress: '%player_health% / 20'
-```
+<Details title="Claves de un sidebar y una bossbar">
 
 | Clave | Qué hace | Por defecto |
 | --- | --- | --- |
-| `design` | el `hud/<nombre>.html` dibujado en el HUD; sin él, todos ven la forma de vanilla | ninguno |
-| `anchor`, `order` | como en los widgets | `right` en una barra lateral, `top` y `-100` en una bossbar |
+| `design` | el `hud/<nombre>.html` dibujado en el HUD; omítelo para mostrar la forma de vanilla a todos | ninguno |
+| `anchor`, `order` | como en los widgets | `right` en un sidebar, `top` y `-100` en una bossbar |
 | `when`, `permission`, `worlds`, `every` | como en los widgets | siempre, todos, todos los mundos, `20` |
-| `priority` | solo barras laterales: se muestra una a la vez, la de mayor prioridad cuyas condiciones se cumplan | `0` |
-| `title`, `lines` | la barra lateral de vanilla: 15 líneas como máximo; funcionan los colores, `{icon:...}`, `{server-ip}` y los placeholders. Sin ellos, solo se muestra en el HUD | |
+| `priority` | solo sidebars: se muestra uno a la vez, el de más prioridad cuyas condiciones se cumplan | `0` |
+| `title`, `lines` | el sidebar de vanilla: 15 líneas como máximo; funcionan colores, `{icon:...}`, `{server-ip}` y placeholders. Omítelos para mostrarlo solo en el HUD | |
 | `text`, `color`, `overlay`, `progress` | la bossbar de vanilla. `color` es `PINK`, `BLUE`, `RED`, `GREEN`, `YELLOW`, `PURPLE` o `WHITE`; `overlay` es `PROGRESS` o `NOTCHED_6`, `_10`, `_12`, `_20`; `progress` va de 0 a 1, un número o una fórmula | `PURPLE`, `PROGRESS`, `1` |
 | `enabled` | `false` lo deja escrito pero no se lo muestra a nadie | `true` |
 
-La barra lateral de otro plugin (un duelo, un evento) se sigue mostrando encima de esta mientras dure. Otros plugins pueden tomar la misma decisión con `%player_hud%`, verdadero cuando se dibuja un HUD para el jugador. Ambos archivos se pueden editar desde el navegador con el editor web.
+</Details>
 
-## Anclajes
+Los tres archivos se pueden editar en el navegador con el [editor web](/docs/exylialib/editor-web).
 
-| Anclaje | Dónde |
-| --- | --- |
-| `top-left` | la esquina superior izquierda, libre en vanilla |
-| `top` | arriba en el centro, bajo una barra de jefe |
-| `top-right` | arriba a la derecha, bajo los iconos de efectos |
-| `left` | el borde izquierdo, por encima del chat |
-| `center` | justo encima de la mira |
-| `right` | el borde derecho, donde va la sidebar |
-| `above-hotbar` | sobre la hotbar, los corazones y la barra de experiencia |
-| `bottom-right` | la esquina inferior derecha |
-
-<Callout type="warning">Un ítem en la mano principal tapa `bottom-right`: el juego dibuja la mano por encima de todo lo demás. Con la mano vacía no pasa.</Callout>
-
-Las posiciones se miden en una ventana 16:9 con el campo de visión por defecto de 70. Un campo de visión más amplio lo dibuja todo un poco más cerca del centro, nunca fuera de la pantalla; una ventana 4:3 puede cortar los anclajes laterales.
-
-`/screensadmin check` lista lo que no se puede leer en `hud.yml`, `scoreboards.yml` y `bossbars.yml` (un evento o anclaje desconocido, una condición con una errata), y el archivo se recarga solo a los dos segundos de guardarlo. También se puede editar desde el navegador con el editor web.
+<Cards>
+  <Card title="Dale estilo a tus pantallas" href="/docs/exyliascreens/estilo">Las etiquetas y el CSS en que se escribe un diseño de HUD.</Card>
+  <Card title="Añade acciones y requisitos" href="/docs/exyliascreens/acciones-y-requisitos">Las expresiones `when` y las acciones `[HUD]` y `[MOMENT]`.</Card>
+</Cards>

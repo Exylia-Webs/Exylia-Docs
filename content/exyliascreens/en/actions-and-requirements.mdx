@@ -1,24 +1,54 @@
 ---
 title: "Add actions and requirements to a click"
-description: "Run commands, messages, sounds and money when a button is clicked, and decide who is allowed to click."
+description: "Make a button run commands, messages, sounds and payments, and decide who is allowed to click it, with cooldowns and expressions."
 questions:
   - "How do I run a command when a button is clicked?"
   - "How do I charge money for a button?"
   - "How do I make a button only for players with a permission?"
+  - "How do I stop players claiming a reward twice in a day?"
+  - "Which expressions can I use in if and require?"
 updated: "1.0.0"
 ---
 
+You end up with a button that does something when clicked (gives an item, charges coins, plays a sound) and refuses politely when the player is not allowed. The same lines work in [screens](/docs/exyliascreens/screens), [chest menus](/docs/exyliascreens/chest-menus) and [3D menus](/docs/exyliascreens/3d-menus).
+
+## Before you start
+
+You need a menu with a clickable element: a `<button>` or `<card>` in a screen, or an item with a `click` list in a chest or 3D menu. Payments use the server's economy, see [ExyliaLib: Economy](/docs/exylialib/economy).
+
+## Steps
+
+<Steps>
+  <Step title="Add the action">
+    In a screen, `action` runs on a left click, `action-right` on a right click and `action-shift` on a click with sprint held. Separate steps with `;`; they run in order. In chest and 3D menus the same steps are `click` lines, written in brackets.
+  </Step>
+  <Step title="Add the requirement">
+    `require="<expression>"` goes on the same element. When it is false the click runs `deny` instead (or a quiet refusal sound).
+  </Step>
+  <Step title="Test it">
+    Click as a player who can pay, then as one who cannot. Run `/screensadmin check` if nothing happens: it names expressions that do not read.
+  </Step>
+</Steps>
+
+```html
+<card require="balance() >= 50" deny="toast error 'You need 50 coins'; sound entity.villager.no"
+      action="[MONEY] take 50; [CONSOLE] give %player_name% bread 16; toast success 'Bought 16 bread'">
+```
+
+## Check that it works
+
+With 50 coins the click takes them, gives 16 bread and shows the "Bought 16 bread" toast. Without them it shows the error toast and plays the villager sound, and nothing is taken. `[MONEY] take` stops every step after it when the player cannot afford it, so put the payment before the reward.
+
 ## Actions
 
-In a screen, `action` runs on a left click, `action-right` on a right click and `action-shift` on a click with sprint held. Steps are separated by `;` and run in order. In chest and 3D menus
-the same steps are `click` lines, written in brackets.
+<Details title="Every step you can write">
 
 | Step | Does |
 |---|---|
 | `[PLAYER] spawn` | The player runs `/spawn` (also `player: spawn`). |
 | `[CONSOLE] give %player_name% diamond 1` | The console runs it (also `console: ...`). |
 | `[MESSAGE] {success}Done` | A chat line to the player. |
-| `[MONEY] take 100`, `[MONEY] give 100 [currency]` | The server's economy, as ExyliaLib's `economy.yml` says. A take they cannot afford stops every step after it. |
+| `[MONEY] take 100`, `[MONEY] give 100 [currency]` | The server's economy. A take they cannot afford stops every step after it. |
 | `[SERVER] survival` | Sends them to another server of the network. |
 | `[TELEPORT] world,0,64,0` | Moves them on this server (commas, since `;` separates steps). |
 | `[DELAY] 1s` | Waits before the lines after it. |
@@ -26,7 +56,7 @@ the same steps are `click` lines, written in brackets.
 | `[HUD] text;group:coins` | A notice sliding onto the player's [HUD](/docs/exyliascreens/hud); options `anchor:`, `seconds:`, `group:`. |
 | `[MOMENT] text` | A big moment just above the crosshair. |
 | `[BROADCAST] {highlight}%player_name% {letters}won!` | One chat line to everybody online. |
-| `[DATA] set daily true` | Remembers a value for the player. See [Player data](/docs/exyliascreens/player-data). |
+| `[DATA] set daily true` | Remembers a value for the player. See [Remember a value per player](/docs/exyliascreens/player-data). |
 | `[TITLE] ...`, `[ACTION_BAR] ...`, `[ACTION] ns:id` | ExyliaLib's interaction tokens. |
 | `open shop` | Opens another screen (`open shop tab=food` sets its state). |
 | `close`, `back` | Closes the screen; goes back to the one before. |
@@ -35,38 +65,19 @@ the same steps are `click` lines, written in brackets.
 | `confirm 'Buy it for 1,000?' yes=Buy no=Cancel then ...` | Asks first; the rest runs only on yes. |
 | `input text name 'Your nickname' then [PLAYER] nick ${name}` | Asks for a line of text, then goes on. |
 | `set tab food`, `toggle open`, `clear tab` | Screen state, read as `%tab%` or `tab` in expressions. |
-| `animate shake`, `animate #balance pop 8t back` | Plays an animation once on the clicked element (it needs an `id`) or on the one named. See [Motion](/docs/exyliascreens/motion#animations-from-a-click). Screens only. |
+| `animate shake`, `animate #balance pop 8t back` | Plays an animation once on the clicked element (it needs an `id`) or on the one named. See [Animate a screen](/docs/exyliascreens/motion#animations-from-a-click). Screens only. |
 
-In chest and 3D menus, `[CLOSE]` closes the menu and `[SCREEN] <id>` opens a menu of any form.
+In chest and 3D menus, `[CLOSE]` closes the menu and `[SCREEN] <id>` opens a menu of any form. A value never becomes another step: a player name with a `;` in it stays one word. Quote a word to keep spaces or `;` in it: `[CONSOLE] say 'hello; world'`.
 
-A value never becomes another step: a player name with a `;` in it stays one word. Quote a word to keep spaces or `;` in it: `[CONSOLE] say 'hello; world'`.
+</Details>
 
 ## Requirements
 
-`require="<expression>"` on a clickable element: when it is false the click runs `deny` instead (or a quiet refusal sound). `require-right`/`deny-right` and `require-shift`/`deny-shift` gate only
-that click.
-
-```html
-<card require="balance() >= 50" deny="toast error 'You need 50 coins'; sound entity.villager.no"
-      action="[MONEY] take 50; [CONSOLE] give %player_name% bread 16; toast success 'Bought 16 bread'">
-```
-
-A refusal reads better when the card itself reacts: `deny="animate shake; sound entity.villager.no 0.4; toast error 'You need 50 coins'"`.
-
-The same `require` and `deny` work on a whole menu (see [Opening and fallbacks](/docs/exyliascreens/opening-and-fallbacks)) and, in chest menus, on a slot.
+A refusal reads better when the card itself reacts: `deny="animate shake; sound entity.villager.no 0.4; toast error 'You need 50 coins'"`. The same `require` and `deny` also work on a whole menu (see [Open a menu and set its fallback](/docs/exyliascreens/opening-and-fallbacks)) and on a chest slot. `require-right`/`deny-right` and `require-shift`/`deny-shift` gate only that click.
 
 ## Cooldowns
 
-`cooldown` on a clickable element of a screen makes its `action` wait between clicks:
-
-| Written | Means |
-|---|---|
-| `cooldown="5s"` | 5 seconds between clicks of this element (kept under its `id`). |
-| `cooldown="daily 24h"` | A wait called `daily`, shared by every screen that names it. |
-
-Times are `500ms`, `20t`, `5s`, `10m`, `24h`, `7d` or several together (`1h30m`). A wait of 5 minutes or more
-survives restarts. While it runs, a click plays `deny-cooldown` instead (by default a refusal sound and a "Ready
-again in …" toast in the player's language). A click that its `require` turned away starts no wait.
+`cooldown` on a clickable element of a screen makes its `action` wait between clicks. `cooldown="5s"` waits 5 seconds between clicks of this element (kept under its `id`); `cooldown="daily 24h"` is a wait called `daily`, shared by every screen that names it. Times are `500ms`, `20t`, `5s`, `10m`, `24h`, `7d` or several together (`1h30m`). A wait of 5 minutes or more survives restarts. While it runs, a click plays `deny-cooldown` instead (by default a refusal sound and a "Ready again in ..." toast in the player's language). A click that its `require` turned away starts no wait.
 
 ```html
 <card id="claim" cooldown="daily 24h"
@@ -81,6 +92,15 @@ again in …" toast in the player's language). A click that its `require` turned
 
 ## Expressions
 
+Expressions work in `if="..."` (draw it or not), in `${...}` (any text) and in `require`. Chest and 3D menus use `if:` and `require:` with the same expressions.
+
+```html
+<small if="balance() >= 50" class="price-ok">50 coins</small>
+<small else class="price-short">50 coins</small>
+```
+
+<Details title="Every function and operator">
+
 | | |
 |---|---|
 | Checks | `perm('node')`, `balance()` / `balance('points')`, `has_item('diamond', 16)`, `level()`, `world()`, `health()`, `food()`, `data('key')`, `chance(30)`, `cooldown('key')` |
@@ -90,9 +110,9 @@ again in …" toast in the player's language). A click that its `require` turned
 | Values | `%any_placeholder%`, numbers, `'text'` |
 | Operators | `== != < <= > >=`, `and or not`, `+ - * /`, `a ? b : c` |
 
-They work in `if="..."` (draw or not), in `${...}` (any text) and in `require` alike. Chest and 3D menus use `if:` and `require:` with the same expressions.
+</Details>
 
-```html
-<small if="balance() >= 50" class="price-ok">50 coins</small>
-<small else class="price-short">50 coins</small>
-```
+<Cards>
+  <Card title="Next: Remember a value per player" href="/docs/exyliascreens/player-data">Keep a claimed reward or a choice across restarts.</Card>
+  <Card title="Animate a screen" href="/docs/exyliascreens/motion">Make a click shake, pop or fade.</Card>
+</Cards>

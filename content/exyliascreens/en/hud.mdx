@@ -8,116 +8,88 @@ questions:
 updated: "1.0.0"
 ---
 
-`hud.yml` keeps text on players' screens while they play, without ever taking their controls: a level and world corner, a "spawn · safe zone" banner, a low-health warning, and notices that slide in when something happens (a kill, a level-up, the first join).
+You end up with text on players' screens while they play, without ever taking their controls: a level and world corner, a "spawn · safe zone" banner, a low-health warning, a sidebar, a boss bar, and notices that slide in when something happens (a kill, a level-up, the first join).
 
 - It never shakes while players walk or jump, and keeps its place while they sprint.
 - It steps aside while a screen is open, while a cinematic plays, while dead and in spectator mode.
 - Each player can turn it off in `/settings` (**Show HUD**); the choice is kept across restarts.
 - One display per line of text and nothing layered: a corner of three lines costs the client three entities.
 
-```yaml
-widgets:
-  low_health:
-    anchor: above-hotbar
-    when: "health() < 7"
-    every: 5
-    text: "{error}❤ {letters}Low health {letters_black}· {error}find cover"
-  level:
-    anchor: top-left
-    every: 20
-    text:
-      - "{primary}✦ {letters}Level{letters_black}: {info}%player_level%"
-      - "{primary}♦ {letters}World{letters_black}: {info}%player_world%"
-notices:
-  kill:
-    event: kill
-    group: kill
-    text: "{error}⚔ {letters}You defeated {highlight}%victim%"
-  level_up:
-    event: level-up
-    moment: true
-    text: "{highlight}&lLEVEL %level%"
-```
+## Before you start
 
-The example file ships with every entry `enabled: false`: turn on the ones you want. Besides the vitals card it ships a small kit of designs (status bar, level bar, minimap, profile, side panel, low-health and spawn banners) in `hud/`: edit them freely.
+- The HUD is drawn by clients on Java 1.20.2 or newer. Everyone else keeps the vanilla sidebar and boss bar (see below).
+- `hud.yml` ships with every entry `enabled: false`, next to a kit of designs in `hud/` (status bar, level bar, minimap, profile, side panel, low-health and spawn banners). Turn on the ones you want and edit them freely.
+- Colours and `{icon:...}` are explained in [ExyliaLib colours](/docs/exylialib/colours); the HUD itself, and the `%player_hud%` placeholder other plugins use to follow the same choice, are in [ExyliaLib's HUD page](/docs/exylialib/hud).
 
-## Widgets
+## Steps
 
-A widget stays on screen. Its text is read again every `every` ticks, so placeholders stay current.
+<Steps>
+  <Step title="Turn on a widget">
+    A widget stays on screen. Its text is read again every `every` ticks, so placeholders stay current.
+    ```yaml
+    widgets:
+      low_health:
+        anchor: above-hotbar
+        when: "health() < 7"
+        every: 5
+        text: "{error}❤ {letters}Low health {letters_black}· {error}find cover"
+      level:
+        anchor: top-left
+        every: 20
+        text:
+          - "{primary}✦ {letters}Level{letters_black}: {info}%player_level%"
+          - "{primary}♦ {letters}World{letters_black}: {info}%player_world%"
+    ```
+    A widget whose `when` stops holding slides out, and slides back in when it holds again. To draw cards, bars and gradients instead of plain text, write `design: vitals` and edit `hud/vitals.html` and `hud/vitals.css` as you would a screen.
+  </Step>
+  <Step title="Add a notice for an event">
+    A notice slides in when its event happens, stays a few seconds and slides away. Newer notices stand nearest the edge; past five at one anchor the oldest leaves early.
+    ```yaml
+    notices:
+      kill:
+        event: kill
+        group: kill
+        text: "{error}⚔ {letters}You defeated {highlight}%victim%"
+      level_up:
+        event: level-up
+        moment: true
+        text: "{highlight}&lLEVEL %level%"
+    ```
+    A death notice waits for the player to respawn. Any menu or screen action can show one too:
+    ```yaml
+    actions:
+      - "[HUD] {success}+50 {letters}coins;group:coins;seconds:4"
+      - "[MOMENT] {highlight}&lJACKPOT"
+    ```
+  </Step>
+  <Step title="Give the sidebar and boss bar a HUD form">
+    `scoreboards.yml` and `bossbars.yml` write each one twice: a `design` drawn on the HUD, and the vanilla words.
+    ```yaml
+    scoreboards:
+      main:
+        priority: 0
+        every: 20
+        design: sidebar
+        title: '{primary}&lPROFILE'
+        lines:
+          - '  {letters_black}· {info}{icon:book} {letters}Name{letters_black}: {info}%player_name%'
+          - '{muted}{server-ip}'
+    bossbars:
+      event:
+        design: event_bar
+        text: '{primary}✦ {letters}Double coins this weekend!'
+        color: PURPLE
+        overlay: PROGRESS
+        progress: '%player_health% / 20'
+    ```
+  </Step>
+</Steps>
 
-| Key | Does | Default |
-| --- | --- | --- |
-| `anchor` | where it sits (see below) | `top-left` |
-| `text` | one line or a list of lines; colours, `{icon:...}` and placeholders work | |
-| `when` | shown only while this holds, written as a menu's `require:` (`health() < 7`, `world() == 'spawn'`, `perm('vip')`, `balance() >= 100`) | always |
-| `order` | its place in its anchor's stack, lowest nearest the edge | `0` |
-| `every` | how often it is read again, in ticks (20 is a second) | `10` |
-| `permission` | only players with it see it | everybody |
-| `worlds` | only in these worlds | every world |
-| `scale` | its size, `1` the default | `1` |
-| `panel` | `true` draws a dark panel behind it | `false` |
-| `design` | draws `hud/<name>.html` (styled by `hud/<name>.css`) instead of `text`, so cards, bars and gradients are written as a screen is; `text` is then not needed | none |
-| `enabled` | `false` keeps it written but shows it to nobody | `true` |
+## Check that it works
 
-A widget whose condition stops holding slides out, and slides back in when it holds again.
+Set `enabled: true` on the entries you want (the file reloads within two seconds) and join: the widgets appear, a kill slides its notice in, and the sidebar is drawn on the HUD with no vanilla bar. Turn **Show HUD** off in `/settings` and the same sidebar and boss bar swap to their vanilla form at once. `/screensadmin check` lists anything in `hud.yml`, `scoreboards.yml` and `bossbars.yml` that does not read (an unknown event or anchor, a condition with a typo).
 
-## Notices
-
-A notice slides in when its event happens, stays a few seconds and slides away. Newer notices stand nearest the edge; past five at one anchor the oldest leaves early.
-
-| Key | Does | Default |
-| --- | --- | --- |
-| `event` | `join`, `first-join`, `death`, `kill`, `world-change`, `level-up`, `advancement` | |
-| `text` | what it says; `%killer%` on `death`, `%victim%` on `kill`, `%world%`, `%level%`, `%advancement%` | |
-| `group` | repeats of the same group merge into one line that counts them (`×3`) | none |
-| `moment` | `true` draws it large over the crosshair, one at a time | `false` |
-| `seconds` | how long it stays | `3` (`2` for a moment) |
-| `anchor`, `permission`, `worlds`, `enabled` | as for widgets | `top-right` (`center` for a moment) |
-
-A death notice waits for the player to respawn.
-
-Any menu or screen action can show one too:
-
-```yaml
-actions:
-  - "[HUD] {success}+50 {letters}coins;group:coins;seconds:4"
-  - "[MOMENT] {highlight}&lJACKPOT"
-```
-
-## Sidebars and boss bars
-
-`scoreboards.yml` and `bossbars.yml` write each sidebar and boss bar twice: a `design` drawn on the HUD, and the vanilla words. A player whose client draws the HUD (Java 1.20.2 or newer) and who keeps it on in `/settings` sees the design, and no vanilla bar takes the top of their screen. Everyone else (Bedrock through Geyser, older clients, a player who turned the HUD off) gets the vanilla sidebar or boss bar. Each player is checked twice a second, so turning the HUD off swaps the form at once.
-
-```yaml
-scoreboards:
-  main:
-    priority: 0
-    every: 20
-    design: sidebar
-    title: '{primary}&lPROFILE'
-    lines:
-      - '  {letters_black}· {info}{icon:book} {letters}Name{letters_black}: {info}%player_name%'
-      - '{muted}{server-ip}'
-bossbars:
-  event:
-    design: event_bar
-    text: '{primary}✦ {letters}Double coins this weekend!'
-    color: PURPLE
-    overlay: PROGRESS
-    progress: '%player_health% / 20'
-```
-
-| Key | Does | Default |
-| --- | --- | --- |
-| `design` | the `hud/<name>.html` drawn on the HUD; leave it out to show the vanilla form to everybody | none |
-| `anchor`, `order` | as for widgets | `right` for a sidebar, `top` and `-100` for a boss bar |
-| `when`, `permission`, `worlds`, `every` | as for widgets | always, everybody, every world, `20` |
-| `priority` | sidebars only: one shows at a time, the highest whose conditions hold | `0` |
-| `title`, `lines` | the vanilla sidebar: at most 15 lines; colours, `{icon:...}`, `{server-ip}` and placeholders work. Leave them out to show it only on the HUD | |
-| `text`, `color`, `overlay`, `progress` | the vanilla boss bar. `color` is `PINK`, `BLUE`, `RED`, `GREEN`, `YELLOW`, `PURPLE` or `WHITE`; `overlay` is `PROGRESS` or `NOTCHED_6`, `_10`, `_12`, `_20`; `progress` is 0 to 1, a number or a formula | `PURPLE`, `PROGRESS`, `1` |
-| `enabled` | `false` keeps it written but shows it to nobody | `true` |
-
-Another plugin's sidebar (a duel, an event) still shows over this one while it lasts. Other plugins can make the same choice with `%player_hud%`, true when a HUD is drawn for the player. Both files are editable in the browser through the web editor.
+A player whose client draws the HUD and who keeps it on sees the design, and no vanilla bar takes the top of their screen. Everyone else (Bedrock through Geyser, older clients, a player who turned the HUD off) gets the vanilla form; each player is checked twice a second. Another plugin's sidebar (a duel, an event) still shows over this one while it lasts.
 
 ## Anchors
 
@@ -136,4 +108,56 @@ Another plugin's sidebar (a duel, an event) still shows over this one while it l
 
 Positions are measured on a 16:9 window at the default field of view of 70. A wider field of view draws everything a little nearer the centre, never off screen; a 4:3 window can cut the side anchors.
 
-`/screensadmin check` lists anything in `hud.yml`, `scoreboards.yml` and `bossbars.yml` that does not read (an unknown event or anchor, a condition with a typo), and the file reloads by itself within two seconds of being saved. It is also editable in the browser through the web editor.
+## Going further
+
+<Details title="Widget keys">
+
+| Key | Does | Default |
+| --- | --- | --- |
+| `anchor` | where it sits (see above) | `top-left` |
+| `text` | one line or a list of lines; colours, `{icon:...}` and placeholders work | |
+| `when` | shown only while this holds, written as a menu's `require:` (`health() < 7`, `world() == 'spawn'`, `perm('vip')`, `balance() >= 100`) | always |
+| `order` | its place in its anchor's stack, lowest nearest the edge | `0` |
+| `every` | how often it is read again, in ticks (20 is a second, 2 at least) | `10` |
+| `permission` | only players with it see it | everybody |
+| `worlds` | only in these worlds | every world |
+| `scale` | its size, `1` the default | `1` |
+| `panel` | `true` draws a dark panel behind it | `false` |
+| `design` | draws `hud/<name>.html` (styled by `hud/<name>.css`) instead of `text`, so cards, bars and gradients are written as a screen is; `text` is then not needed | none |
+| `enabled` | `false` keeps it written but shows it to nobody | `true` |
+
+</Details>
+
+<Details title="Notice keys">
+
+| Key | Does | Default |
+| --- | --- | --- |
+| `event` | `join`, `first-join`, `death`, `kill`, `world-change`, `level-up`, `advancement` | |
+| `text` | what it says; `%killer%` on `death`, `%victim%` on `kill`, `%world%`, `%level%`, `%advancement%` | |
+| `group` | repeats of the same group merge into one line that counts them (`×3`) | none |
+| `moment` | `true` draws it large over the crosshair, one at a time | `false` |
+| `seconds` | how long it stays | `3` (`2` for a moment) |
+| `anchor`, `permission`, `worlds`, `enabled` | as for widgets | `top-right` (`center` for a moment) |
+
+</Details>
+
+<Details title="Sidebar and boss bar keys">
+
+| Key | Does | Default |
+| --- | --- | --- |
+| `design` | the `hud/<name>.html` drawn on the HUD; leave it out to show the vanilla form to everybody | none |
+| `anchor`, `order` | as for widgets | `right` for a sidebar, `top` and `-100` for a boss bar |
+| `when`, `permission`, `worlds`, `every` | as for widgets | always, everybody, every world, `20` |
+| `priority` | sidebars only: one shows at a time, the highest whose conditions hold | `0` |
+| `title`, `lines` | the vanilla sidebar: at most 15 lines; colours, `{icon:...}`, `{server-ip}` and placeholders work. Leave them out to show it only on the HUD | |
+| `text`, `color`, `overlay`, `progress` | the vanilla boss bar. `color` is `PINK`, `BLUE`, `RED`, `GREEN`, `YELLOW`, `PURPLE` or `WHITE`; `overlay` is `PROGRESS` or `NOTCHED_6`, `_10`, `_12`, `_20`; `progress` is 0 to 1, a number or a formula | `PURPLE`, `PROGRESS`, `1` |
+| `enabled` | `false` keeps it written but shows it to nobody | `true` |
+
+</Details>
+
+All three files are editable in the browser through the [web editor](/docs/exylialib/web-editor).
+
+<Cards>
+  <Card title="Style your screens" href="/docs/exyliascreens/styling">The tags and CSS a HUD design is written in.</Card>
+  <Card title="Add actions and requirements" href="/docs/exyliascreens/actions-and-requirements">The `when` expressions and the `[HUD]` and `[MOMENT]` actions.</Card>
+</Cards>

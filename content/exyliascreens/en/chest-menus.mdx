@@ -1,56 +1,68 @@
 ---
 title: "Build a chest menu"
-description: "Write a normal chest window in menus/<id>.yml, with conditions, click requirements and lists that fill themselves."
+description: "Write a normal chest window in menus/<id>.yml with a command, items that appear only for some players, click requirements and lists that fill themselves."
 questions:
   - "How do I make a chest menu?"
   - "How do I show an item only when a condition holds?"
   - "How do I list online players in a chest menu?"
+  - "How do I make a chest menu the fallback of a screen?"
+  - "Why does my menu never open?"
 updated: "1.0.0"
 ---
 
-`menus/<id>.yml` is a normal chest window, drawn for every client. The format is ExyliaLib's (lists, pages, fillers and groups are on [ExyliaLib: Menus](/docs/exylialib/menus)), plus what
-a DeluxeMenus file does. Opening keys (`command`, `permission`, `fallback`...) are on [Opening and fallbacks](/docs/exyliascreens/opening-and-fallbacks).
+You end up with a chest window opened by a command, whose items can depend on permissions, level or money. Every client can draw it, so it is also the safe fallback for [screens](/docs/exyliascreens/screens) and [3D menus](/docs/exyliascreens/3d-menus).
 
-```yaml
-command: kits
-title: "{primary}&lKITS"
-size: 27
-items:
-  vip_kit:
-    slot: 13
-    priority: 1                               # lowest first among the items of a slot
-    if: "perm('kits.vip') and level() >= 5"   # the item is only there while this holds
-    material: DIAMOND_SWORD
-    name: "{letters}Kit {letters_black}▸ <gradient:{highlight}:{warning_light}>VIP</gradient>"
-    require: "balance() >= 100"               # must hold for a click to run
-    deny: ["[MESSAGE] {error}You need $100."] # run when it does not
-    click:
-      - "left: [MONEY] take 100"
-      - "left: [CONSOLE] kit give vip %player_name%"
-      - "right: [MESSAGE] {letters}The VIP kit."
-      - "shift_left: [SCREEN] kit_preview"
-  member_kit:
-    slot: 13                                  # shown when vip_kit is not
-    priority: 2
-    material: IRON_SWORD
-```
+## Before you start
 
-## Slots
+The format is ExyliaLib's (lists, pages, fillers and groups are on [ExyliaLib: Menus](/docs/exylialib/menus)), plus the conditions and click lines below. Colours are palette tokens, see [ExyliaLib: Colours](/docs/exylialib/colours). The id of a menu is its file name, and it is shared with `screens/` and `spatial/`: two files with the same id means the second never opens, and `/screensadmin check` says so.
 
-| Key | Does |
-|---|---|
-| `slot`, `slots` | Where the item goes. |
-| `priority` | Several items may share a slot; the lowest priority whose `if` holds is shown. |
-| `if` | An [expression](/docs/exyliascreens/actions-and-requirements#requirements); the item exists only while it is true. |
-| `require`, `deny` | Checked on a click. Also `require-left`, `-right`, `-middle`, `-shift-left`, `-shift-right` with matching `deny-...`. |
-| `click` | A list of [interaction lines](/docs/exyliascreens/actions-and-requirements#actions), each optionally prefixed by `left:`, `right:`, `shift_left:`... |
+## Steps
 
-`[CLOSE]` closes the menu and `[SCREEN] <id>` opens any menu, whatever its form. Everything a screen step written in brackets does works here. `actions:` (`next_page`, `previous_page`, `back`,
-`refresh`) stay for the menu's own buttons. These keys live in ExyliaLib, so every Exylia plugin's menus can use them.
+<Steps>
+  <Step title="Create the file">
+    Make `plugins/ExyliaScreens/menus/kits.yml`.
+  </Step>
+  <Step title="Write the menu">
+    ```yaml
+    command: kits
+    title: "{primary}&lKITS"
+    size: 27
+    items:
+      vip_kit:
+        slot: 13
+        priority: 1                               # lowest first among the items of a slot
+        if: "perm('kits.vip') and level() >= 5"   # the item is only there while this holds
+        material: DIAMOND_SWORD
+        name: "{letters}Kit {letters_black}▸ <gradient:{highlight}:{warning_light}>VIP</gradient>"
+        require: "balance() >= 100"               # must hold for a click to run
+        deny: ["[MESSAGE] {error}You need $100."] # run when it does not
+        click:
+          - "left: [MONEY] take 100"
+          - "left: [CONSOLE] kit give vip %player_name%"
+          - "right: [MESSAGE] {letters}The VIP kit."
+          - "shift_left: [SCREEN] kit_preview"
+      member_kit:
+        slot: 13                                  # shown when vip_kit is not
+        priority: 2
+        material: IRON_SWORD
+    ```
+  </Step>
+  <Step title="Save and test">
+    The file loads within two seconds. Run `/screensadmin check` for mistakes.
+  </Step>
+</Steps>
+
+## Check that it works
+
+Run `/kits`. A player with `kits.vip` and level 5 sees the diamond sword; everyone else sees the iron sword in the same slot. Left-click the sword without $100 and the `deny` line answers instead of taking anything.
+
+## Show items only when they apply
+
+Several items may share a slot: the one with the lowest `priority` whose `if` holds is drawn. `require` and `deny` decide what a click does, and `click` lists the [actions](/docs/exyliascreens/actions-and-requirements#actions) to run, each optionally prefixed by `left:`, `right:` or `shift_left:`. `[CLOSE]` closes the menu and `[SCREEN] <id>` opens any menu, whatever its form. The `actions:` entries `next_page`, `previous_page`, `back` and `refresh` stay for the menu's own buttons.
 
 ## Lists that fill themselves
 
-A `pagination` block can list its own rows, paged by the arrows under `navigation`, with no Java.
+A `pagination` block can list its own rows, paged by the arrows under `navigation`, with no Java:
 
 ```yaml
 pagination:
@@ -73,12 +85,11 @@ pagination:
     next: { slot: 32 }
 ```
 
-An entry takes every key a slot does. There is one list per menu.
+An entry takes every key a slot does. A menu has one list.
 
 ### Online players
 
-`source: online-players` lists everybody the viewer can see instead, drawn by `item_template` with `%target_name%` and `%target_uuid%`. `skip-viewer: true` leaves the viewer out. The list follows
-players joining and leaving while it is open. `menus/players.yml` is a full example.
+`source: online-players` lists everybody the viewer can see instead of written entries, sorted by name and drawn by `item_template` with `%target_name%` and `%target_uuid%`. `skip-viewer: true` leaves the viewer out. The list follows players joining and leaving while it is open. Any other `source` value is reported by `/screensadmin check`. `menus/players.yml` (`/players`) is a full example.
 
 ```yaml
 pagination:
@@ -89,3 +100,22 @@ pagination:
     material: "playerhead-%target_name%"
     name: "{info}%target_name%"
 ```
+
+<Details title="Item keys that ExyliaScreens adds">
+
+| Key | Does |
+|---|---|
+| `slot`, `slots` | Where the item goes. |
+| `priority` | Order among the items of a slot; lowest first. |
+| `if` | An [expression](/docs/exyliascreens/actions-and-requirements#requirements); the item exists only while it is true. |
+| `require`, `deny` | Checked on a click. Also `require-left`, `-right`, `-middle`, `-shift-left`, `-shift-right` with matching `deny-...`. |
+| `click` | A list of interaction lines, each optionally prefixed by `left:`, `right:`, `shift_left:`, `shift_right:`. |
+
+These keys live in ExyliaLib, so the menus of every Exylia plugin can use them.
+
+</Details>
+
+<Cards>
+  <Card title="Next: Open a menu and set its fallback" href="/docs/exyliascreens/opening-and-fallbacks">Choose the command, the permission and what other clients get.</Card>
+  <Card title="Actions and requirements" href="/docs/exyliascreens/actions-and-requirements">Everything a click line can do.</Card>
+</Cards>
