@@ -1,19 +1,20 @@
 ---
 title: "Create a currency"
-description: "Stored, item, experience and display-only currencies, every field a currency has, the economy settings, and the per-currency commands."
+description: "Create stored, item, experience and display-only currencies in game, set their rules, tax and exchange rates, and give each its own command."
 questions:
   - "What kinds of currency are there?"
+  - "How do I create a currency?"
   - "How do I rename a currency's command?"
   - "How do I add a transfer tax to a currency?"
   - "How do I make a currency VIP only?"
 updated: "1.4.0"
 ---
 
-A currency is a row in the database, created and edited in game with `/economyadmin`. There is no
-currency file to edit: the one the first start imported is renamed to `currencies.yml.imported` and
-never read again.
+You end up with a new currency that players can see in `/wallet`, read with its own command and pay each other in. Currencies are created and edited in game with `/economyadmin`; there is no currency file to edit.
 
-## Kinds
+## Before you start
+
+You need `exyliaeconomy.admin` (operators have it) and a first currency check, see [Your first currency](/docs/exyliaeconomy/first-steps). Decide the kind first:
 
 | Kind | What it is |
 |---|---|
@@ -21,141 +22,61 @@ never read again.
 | **Item** | An exact item in the player's inventory. The balance is how many they carry; paying takes them out, being paid puts them in. |
 | **Display only** | No balance of its own: the name, symbol, decimals and format another plugin's currency is shown with, such as `vault` or `points`. |
 
-Experience is a fourth source, switched on in the economy settings rather than created: `xp_levels` and
-`xp_points` become currency ids a shop can price in.
+Experience is a fourth source. You do not create it, you switch it on in **Economy settings**: `xp_levels` and `xp_points` become currency ids a shop can price in.
 
-<Callout type="note" title="Items and experience live on the player">
-An item or experience currency only has a balance while the player is on this server. A payment to
-somebody who is not here — or whose inventory is full — is kept and handed over on their next join,
-with *"Delivered N payments that were waiting for you."* Taking from somebody who is not here fails.
-</Callout>
+## Steps
 
-An item currency is the whole item — name, lore, model and enchantments — and only a stack exactly like
-it counts. A renamed copy is a different item.
+<Steps>
+  <Step title="Open the list">
+    Run `/economyadmin`. Every currency is listed in sort order.
+  </Step>
+  <Step title="Create it">
+    Click **Create currency**. Type an id in chat (`a-z`, `0-9` and `_`, up to 32; it never changes later), then pick **Stored**, **Item** or **Display only**. For an item currency you are then asked to place the exact item.
+  </Step>
+  <Step title="Give it a look">
+    Left-click your currency, then the **General** card. **Icon**, **Appearance** (name, plural, symbol, decimals, format, compact format) and **Order** are here. The summary on the edit screen shows a full and a compact preview.
+  </Step>
+  <Step title="Set the rules">
+    Back to the edit screen, **Rules**: starting balance, balance ceiling, permission, least a player may send and transfer tax. Use **Payments**, **Exchange**, **Interest** and **Integrations** for the rest, see the list below.
+  </Step>
+  <Step title="Check the command">
+    **Commands** holds the names, separated by commas and without the slash. The first is the command, the rest are aliases.
+  </Step>
+</Steps>
 
-## What a currency has
-
-| Field | Kinds | New currency | What it does |
-|---|---|---|---|
-| Id | all | typed on creation | `a-z`, `0-9` and `_`, up to 32. The key balances are stored under, so it never changes. |
-| Icon | all | `GOLD_INGOT`; an item currency uses its item | What wallets and lists draw. Picked from an icon chooser. |
-| Name, plural | all | empty | One unit and many. Colours work. |
-| Symbol | all | empty | Blank for none. |
-| Decimals | all | `0`; display only `-1` | `0` to `8`. `-1` on a display-only currency keeps what the provider says. |
-| Format | all | `%amount% %name%` | `%amount%`, `%symbol%` and `%name%`. |
-| Compact format | all | empty | The same for scoreboards, where `%amount%` reads `1.2k`. |
-| Command names | stored, item | the id | The first is the command, the rest its aliases. |
-| Sort order | all | after the last one | Lower is shown first, in wallets, lists and every other plugin's currency picker. |
-| Item | item | asked for on creation | The exact item. |
-| Starting balance | stored | `0` | What a player begins with the first time a balance is created for them. |
-| Balance ceiling | stored | `-1` | The most a balance may hold. `-1`, or anything not above zero, for none. |
-| Permission | stored | empty | Needed to see and use the currency at all. Blank: nobody needs one. |
-| Least a player may send | stored | `1` | The minimum for `/pay`. |
-| Transfer tax | stored | `0` | A percentage, `0` to `100`, charged to the sender **on top of** the amount. |
-| Exchange rates | stored | none | `other_id=rate`: `shards=0.01` means 1 of this is 0.01 shards. |
-| Transfers | stored | on | Whether players can pay each other. |
-| Exchange | stored | off | Whether it can be swapped at its rates. |
-| Leaderboard | stored | on | Whether its top list, rank and supply work. |
-| Network scope | stored | global | Who shares a balance: every server, the server's network group, or each server alone. See [Network](/docs/exyliaeconomy/network). |
-| Available on | stored | everywhere | Groups or server ids the currency exists on; blank is every server. A server left out has no command, no Vault and no balance of it. |
-| Pay confirmation | stored | `0` | A `/pay` above it asks first; `0` never. See [Payments](/docs/exyliaeconomy/payments). |
-| Banknotes | stored | off | Whether `/withdraw` prints notes of it. See [Banknotes](/docs/exyliaeconomy/banknotes). |
-| Interest | stored | none | Rate, interval, cap and offline payout. See [Interest](/docs/exyliaeconomy/interest). |
-| Commands enabled | stored | on | Whether its command names exist at all. |
-| Vault economy | stored | off | Whether it is the currency published to Vault. See [Vault](/docs/exyliaeconomy/vault). |
-
-<Callout type="warning" title="The permission hides the currency everywhere">
-The editor's hint says the permission is "needed to use its commands". It does more than that: a
-player without it does not see the currency in their wallet or in command suggestions, cannot be
-handed it by `/economyadmin giveall`, cannot redeem its banknotes and earns no interest in it, and every
-command refuses them with *"You may not use …"*. Plugins asking ExyliaLib whether a player may use a
-currency get the same answer.
-</Callout>
-
-<Callout type="warning" title="The tax is not kept back">
-The editor's hint says the tax is "kept back from every transfer". It is not: the receiver gets the
-full amount, and the sender pays the tax on top of it. `/pay 100` with a 5 % tax costs the sender 105.
-The tax goes to nobody. See [Payments](/docs/exyliaeconomy/payments).
-</Callout>
-
-### Ceilings
-
-A deposit that would take a balance past its ceiling is refused whole, never cut down: *"That would take
-the balance over its ceiling of …"*, or *"The balance is at its ceiling of …"* when it is already there.
-A payment refused this way charges the sender nothing.
-
-A change for a player who is not on this server is checked against the last balance read for them. If
-it still lands over the ceiling — two servers paid them at once — it is cut to the ceiling as it lands:
-the part of a payment that did not fit goes back to the payer, and anything else is logged in the
-console with the amount.
-
-Whatever the currency says, no balance can pass 10<sup>18</sup> (1,000,000,000,000,000,000), the
-largest number the database column holds with room to spare. `-1` means no ceiling of the currency's
-own, not no ceiling at all.
-
-### Exchange rates
-
-Rates are typed as `other_id=rate`, separated by commas: `shards=0.01, gems=2`. A rate must be a
-positive number; anything else is refused with what could not be read. The target can be any currency
-the server runs — stored, item, experience or another plugin's.
-
-`/economy exchange <amount> <from> <to>` swaps at the source currency's rate, and needs **Exchange** on
-the source. What is received is the amount, cut to the source's decimals, times the rate, cut to the
-target's decimals; only what that costs is taken, so the fraction the target's decimals round away
-stays with the player. The source is taken first, and a target that refuses gives it back.
-
-## Creating, editing and deleting
-
-`/economyadmin` opens the list of every currency, in sort order. Left-click one to edit it,
-right-click to delete it. **Create currency** asks for an id, then the kind, then — for an item
-currency — the item itself.
-
-The edit screen is a hub of seven cards, and shows only what a currency's kind uses. Each card opens a page
-of its own, with **Back** to the hub.
+The edit screen is a hub of cards and shows only what the currency's kind uses. Each card opens a page of its own, with a **Back** button:
 
 | Card | What it holds |
 |---|---|
-| General | Icon, appearance (name, plural, symbol, decimals, format, compact format) and sort order. |
-| Commands | Command names, separated by commas, without the slash (anything not `a-z`, `0-9` or `_` is dropped), and the commands switch. |
-| Rules | Starting balance, ceiling, permission, minimum, tax. For an item currency, the item. |
+| General | Icon, appearance and sort order. |
+| Commands | Command names and the switch that turns the commands on or off. |
+| Rules | Starting balance, ceiling, permission, minimum, tax and where the currency exists. For an item currency, the **Item** card holds the item. |
 | Payments | Transfers switch, pay confirmation, banknotes. |
 | Exchange | The exchange switch and the rates. |
 | Interest | Rate, interval, cap and interest while offline. |
-| Integrations | Leaderboard, network scope (click cycles global, group, server; the status also shows where it exists) and Vault economy. |
+| Integrations | Leaderboard, network scope and Vault economy. |
 
-Deleting asks first.
+Every change is saved to the database at once, registered on this server and announced to the other servers on the same Redis, which reinstall the currency commands. If the database refuses a write you read *"Could not save … to the database."*
 
-Every change is written to the database, registered on this server at once, and announced to the other
-servers on the same Redis, which read it again and reinstall the currency commands. A write the
-database refuses is reported: *"Could not save … to the database."*
+## Check that it works
 
-**Deleting** a stored currency leaves its balances in the database, unused until a currency with that
-id exists again. Deleting the currency published to Vault unpublishes it.
+<Steps>
+  <Step title="Give yourself some">
+    Run `/economyadmin give <you> 500 <id>`.
+  </Step>
+  <Step title="Read it">
+    Run `/<id>` (the command you named). It shows your balance. `/wallet` lists every currency you may use.
+  </Step>
+  <Step title="Pay somebody">
+    `/<id> pay <player> 100` sends 100.
+  </Step>
+</Steps>
 
-<Callout type="warning" title="Network scope locks once balances exist">
-The scope decides which rows hold the balances, so it only changes while the currency holds nothing but
-starting balances: *"… already holds balances, so it cannot switch between networked and per-server."* Decide
-it before players earn any.
-</Callout>
+## Going further
 
-## The economy settings
+### Give a currency its own command
 
-**Economy settings**, on the currency list, are the switches that belong to no single currency. They are
-one row in the database, shared by every server.
-
-| Setting | Fresh server | What it does |
-|---|---|---|
-| Experience levels | off | Makes `xp_levels` a currency. |
-| Experience points | on | Makes `xp_points` a currency. |
-| Ledger | on | Writes down every movement of a stored currency. See [Ledger](/docs/exyliaeconomy/ledger). |
-| Vault on top | on | Serves Vault even when another economy plugin is installed. |
-| Ledger retention | 90 days | Cycles through 30, 90, 180, 365 days and forever. Older lines are deleted every hour. |
-| Vault economy | `dollars` | Which currency is published, shown here and chosen on a stored currency's screen. |
-
-## A command per currency
-
-Every stored currency with **Commands enabled** and at least one command name gets its own command,
-installed the moment it is saved and removed the moment it is turned off:
+Every stored currency with **Commands enabled** and at least one command name gets its own command, installed the moment it is saved and removed when it is turned off. For a currency called `shards`:
 
 ```text
 /shards                              your balance
@@ -168,16 +89,94 @@ installed the moment it is saved and removed the moment it is turned off:
 /shards reset <player>                    administrators
 ```
 
-It needs `exyliaeconomy.use`, plus the currency's own permission when it names one. A name another
-plugin already holds still answers as `/exyliaeconomy:<name>`, and the console says so.
+It needs `exyliaeconomy.use`, plus the currency's own permission if it has one. A name another plugin already holds still answers as `/exyliaeconomy:<name>`, and the console says so. Item currencies keep their command names on the screen, but only stored currencies get a command.
 
-<Callout type="note" title="Item currencies get no command">
-An item currency has command names on its screen, and they are saved, but only stored currencies are
-given a command.
+### Make a currency VIP only
+
+In **Rules**, type a permission such as `economy.gems` and give it to the rank in your permissions plugin, see [Permissions](/docs/exyliaeconomy/permissions). The editor's hint says it is "needed to use its commands". It does more: a player without it does not see the currency in their wallet or in command suggestions, cannot be handed it by `/economyadmin giveall`, cannot redeem its banknotes, earns no interest in it, and every command refuses them with *"You may not use …"*. Plugins asking ExyliaLib whether a player may use a currency get the same answer.
+
+### Add a transfer tax
+
+In **Rules**, set **Transfer tax** from `0` to `100`. The editor's hint says the tax is "kept back from every transfer". It is not: the receiver gets the full amount and the sender pays the tax on top. `/pay 100` with a 5 % tax costs the sender 105, and the tax goes to nobody. See [Payments](/docs/exyliaeconomy/payments).
+
+### Cap balances
+
+**Balance ceiling** is the most a balance may hold; `-1`, or anything not above zero, means none. A deposit that would pass it is refused whole, never cut down: *"That would take the balance over its ceiling of …"*, or *"The balance is at its ceiling of …"* when it is already there. A payment refused this way charges the sender nothing.
+
+A change for a player who is not on this server is checked against the last balance read for them. If it still lands over the ceiling (two servers paid them at once) it is cut to the ceiling as it lands: the part of a payment that did not fit goes back to the payer, and anything else is logged in the console with the amount.
+
+Whatever the currency says, no balance can pass 10<sup>18</sup>, the largest number the database column holds with room to spare. `-1` means no ceiling of the currency's own, not no ceiling at all.
+
+### Exchange rates
+
+In **Exchange**, switch it on and type the rates as `other_id=rate`, separated by commas: `shards=0.01, gems=2` means 1 of this currency is worth 0.01 shards and 2 gems. A rate must be a positive number; anything else is refused with what could not be read. The target can be any currency the server runs: stored, item, experience or another plugin's.
+
+Players run `/economy exchange <amount> <from> <to>`. It swaps at the source currency's rate and needs **Exchange** on the source. What is received is the amount, cut to the source's decimals, times the rate, cut to the target's decimals. Only what that costs is taken, so the fraction the target's decimals round away stays with the player. The source is taken first and a target that refuses gives it back.
+
+### Decimals
+
+Every amount is cut to the currency's decimals before it moves: `/pay Steve 10.567` in a currency with two decimals sends `10.56`. A currency with `0` decimals is whole numbers only, and an amount that rounds down to nothing is refused as not an amount.
+
+### Items and experience live on the player
+
+An item or experience currency only has a balance while the player is on this server. A payment to somebody who is not here, or whose inventory is full, is kept and handed over on their next join with *"Delivered N payments that were waiting for you."* Taking from somebody who is not here fails. An item currency is the whole item (name, lore, model and enchantments): only a stack exactly like it counts, and a renamed copy is a different item.
+
+### Delete a currency
+
+Right-click it in the `/economyadmin` list and confirm. A stored currency's balances stay in the database, unused until a currency with that id exists again. Deleting the currency published to Vault unpublishes it.
+
+<Callout type="warning" title="Network scope locks once balances exist">
+The scope decides which rows hold the balances, so it only changes while the currency holds nothing but starting balances: *"… already holds balances, so it cannot switch between networked and per-server."* Decide it before players earn any. See [Network](/docs/exyliaeconomy/network).
 </Callout>
 
-## What decimals do
+### Economy settings
 
-Every amount is cut to the currency's decimals before it moves: `/pay Steve 10.567` in a currency with
-two decimals sends `10.56`. A currency with `0` decimals is whole numbers only, and an amount that rounds
-down to nothing is refused as not an amount.
+**Economy settings** (bottom of the currency list) are the switches that belong to no single currency. They are one row in the database, shared by every server.
+
+| Setting | Fresh server | What it does |
+|---|---|---|
+| Experience levels | off | Makes `xp_levels` a currency. |
+| Experience points | on | Makes `xp_points` a currency. |
+| Ledger | on | Writes down every movement of a stored currency. See [Ledger](/docs/exyliaeconomy/ledger). |
+| Ledger retention | 90 days | Cycles through 30, 90, 180, 365 days and forever. Older lines are deleted every hour. |
+| Vault on top | on | Serves Vault even when another economy plugin is installed. |
+| Vault economy | `dollars` | Which currency is published; shown here, chosen on a stored currency's **Integrations** card. |
+| Offline pay notice | on | Tells a player on join what they were paid while away. |
+| Language | server's | Language of the plugin's menus and messages; cycles through the server default, en, es, pt, fr, ru and tr. See [messages and languages](/docs/exylialib/messages-and-languages). |
+| Debug | off | Makes the log explain what the plugin does. |
+
+<Details title="Every field of a currency">
+| Field | Kinds | New currency | What it does |
+|---|---|---|---|
+| Id | all | typed on creation | The key balances are stored under. |
+| Icon | all | `GOLD_INGOT`; an item currency uses its item | What wallets and lists draw. |
+| Name, plural | all | empty | One unit and many. Colours work, see [colours](/docs/exylialib/colours). |
+| Symbol | all | empty | Blank for none. |
+| Decimals | all | `0`; display only `-1` | `0` to `8`. `-1` on a display-only currency keeps what the provider says. |
+| Format | all | `%amount% %name%` | `%amount%`, `%symbol%` and `%name%`. |
+| Compact format | all | empty | The same for scoreboards, where `%amount%` reads `1.2k`. |
+| Command names | stored, item | the id | The first is the command, the rest its aliases. Anything not `a-z`, `0-9` or `_` is dropped. |
+| Sort order | all | after the last one | Lower is shown first, in wallets, lists and every other plugin's currency picker. |
+| Item | item | asked for on creation | The exact item. |
+| Starting balance | stored | `0` | What a player begins with the first time a balance is created for them. |
+| Balance ceiling | stored | `-1` | The most a balance may hold. |
+| Permission | stored | empty | Needed to see and use the currency at all. |
+| Least a player may send | stored | `1` | The minimum for `/pay`. |
+| Transfer tax | stored | `0` | A percentage, `0` to `100`, charged to the sender on top of the amount. |
+| Exchange rates | stored | none | `other_id=rate`. |
+| Transfers | stored | on | Whether players can pay each other. |
+| Exchange | stored | off | Whether it can be swapped at its rates. |
+| Leaderboard | stored | on | Whether its top list, rank and supply work. See [Leaderboards](/docs/exyliaeconomy/leaderboards). |
+| Network scope | stored | global | Every server, the server's network group, or each server alone. A click cycles them. |
+| Available on | stored | everywhere | Groups or server ids the currency exists on; blank is every server. A server left out has no command, no Vault and no balance of it. |
+| Pay confirmation | stored | `0` | A `/pay` above it asks first; `0` never. |
+| Banknotes | stored | off | Whether `/withdraw` prints notes of it. See [Banknotes](/docs/exyliaeconomy/banknotes). |
+| Interest | stored | none | Rate, interval, cap and offline payout. See [Interest](/docs/exyliaeconomy/interest). |
+| Commands enabled | stored | on | Whether its command names exist at all. |
+| Vault economy | stored | off | Whether it is the currency published to Vault. See [Vault](/docs/exyliaeconomy/vault). |
+</Details>
+
+<Cards>
+  <Card title="Next: Payments" href="/docs/exyliaeconomy/payments">Confirmations, taxes and /paytoggle.</Card>
+  <Card title="Shared economy page" href="/docs/exylialib/economy">How other plugins use your currencies.</Card>
+</Cards>

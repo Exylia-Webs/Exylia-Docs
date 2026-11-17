@@ -1,62 +1,76 @@
 ---
-title: "Migra desde otra economía"
-description: "Venir del módulo de economía de ExyliaSurvivalCore, un config.yml antiguo, la importación de currencies.yml del primer arranque y traer saldos desde Vault, EssentialsX, CMI o PlayerPoints."
+title: "Pasa desde otra economía"
+description: "Trae los saldos a ExyliaEconomy desde Vault, EssentialsX, CMI o PlayerPoints, o pasa desde el módulo de economía de ExyliaSurvivalCore y un config.yml antiguo."
 questions:
-  - "¿Cómo importo saldos de EssentialsX?"
-  - "¿Cómo migro desde ExyliaSurvivalCore?"
+  - "¿Cómo importo los saldos de EssentialsX?"
+  - "¿Cómo paso desde ExyliaSurvivalCore?"
   - "¿Puedo importar dos veces?"
+  - "¿Por qué no se importaron algunos jugadores?"
 updated: "1.4.0"
 ---
 
-## Desde ExyliaSurvivalCore
+Al terminar tendrás los saldos de tu economía anterior dentro de una moneda de ExyliaEconomy y Vault servido por ella. La misma página cubre un servidor que viene de ExyliaSurvivalCore.
 
-ExyliaEconomy es el módulo `economy` de ExyliaSurvivalCore convertido en plugin propio. Los saldos, los
-cambios en cola y el registro ya vivían en tablas con nombres neutros (`exylia_balances`,
-`exylia_balance_pending`, `exylia_ledger`), así que pasarse consiste en abrir la misma base de datos.
+## Antes de empezar
+
+Necesitas una moneda almacenada que reciba los saldos, ver [Crea una moneda](/docs/exyliaeconomy/monedas), y `exyliaeconomy.admin`. Ejecuta la importación en el servidor donde están tus jugadores: ni Vault ni PlayerPoints pueden listar saldos, así que la importación recorre la lista de jugadores del propio servidor, y un jugador que nunca entró en este servidor no se importa.
+
+## Desde Vault o PlayerPoints
+
+`/economyadmin import <from> <into>` suma el saldo de cada jugador en una moneda a una almacenada. `from` puede ser cualquier moneda del servidor, incluida `vault` mientras EssentialsX o CMI aún la sirve, o `points` para PlayerPoints.
+
+<Steps>
+  <Step title="Deja la economía antigua sirviendo por ahora">
+    Deja EssentialsX, CMI o PlayerPoints instalado, para que `vault` o `points` sigan leyendo sus saldos.
+  </Step>
+  <Step title="Importa">
+    Ejecuta `/economyadmin import vault dollars`. Recorre a cada jugador que ha entrado alguna vez en este servidor, lee su saldo de uno en uno e ingresa lo que sea positivo. A los jugadores de este servidor se les paga al momento; a los demás se les deja un cambio en cola. La consola nombra cualquier saldo por encima del máximo del destino, que se omite.
+  </Step>
+  <Step title="Pasa Vault a la nueva">
+    Quita el plugin de economía antiguo, o activa **Vault por encima** en **Ajustes de economía**, para que la moneda almacenada sirva Vault. Ver [Elige qué ve Vault](/docs/exyliaeconomy/vault).
+  </Step>
+</Steps>
+
+## Comprueba que funciona
+
+Ejecuta `/balance` como un jugador que tenía dinero antes: muestra la cantidad antigua en la moneda de destino. `/economy history <currency> <jugador>` muestra la línea `import:<from>`, ver [Registro](/docs/exyliaeconomy/registro).
+
+## Ir más allá
+
+### Ejecútala una sola vez
+
+Una importación se **suma**, nunca se fija:
+
+- una segunda importación de la misma pareja se rechaza salvo que añadas `again`: `/economyadmin import <from> <into> again`;
+- con `again`, solo se paga a los jugadores aún no importados, así que nadie cobra dos veces, ni siquiera tras una importación que se paró a medias o una iniciada en dos servidores a la vez;
+- una importación entre una moneda y ella misma, incluida `vault` en la moneda que sirve `vault`, se rechaza;
+- una segunda ejecución escrita mientras otra está leyendo se rechaza: *"That import is already running."*
+
+Cada jugador importado queda anotado en `exylia_balance_imports`, y el registro lee `import:<from>`.
+
+### Desde ExyliaSurvivalCore
+
+ExyliaEconomy es el módulo `economy` de ExyliaSurvivalCore, como plugin propio. Los saldos, los cambios en cola y el registro ya vivían en tablas con nombres neutros (`exylia_balances`, `exylia_balance_pending`, `exylia_ledger`), así que pasar es cuestión de abrir la misma base de datos.
 
 <Callout type="warning" title="La importación automática ya no existe">
-Desde la 1.2.1 el plugin ya no copia el `database.yml` del survival core, ni sus monedas, ajustes,
-mensajes o menús, y los nombres de permiso `exyliasurvivalcore.economy…` ya no conceden nada. Pásate con
-una versión anterior a la 1.2.1 en todos los servidores de la red a la vez y después actualiza; o copia a
-mano `plugins/ExyliaSurvivalCore/database.yml` aquí, para que el plugin abra la base de datos donde están
-los saldos, y vuelve a crear las monedas en `/economyadmin`. Concede los nodos `exyliaeconomy.…` en lugar
-de los antiguos.
+Las versiones desde la 1.2.1 ya no copian el `database.yml`, las monedas, los ajustes, los mensajes ni los menús del survival core, y sus permisos `exyliasurvivalcore.economy...` ya no conceden nada. Pasa con una versión anterior a la 1.2.1 en todos los servidores de la red a la vez y después actualiza; o copia a mano `plugins/ExyliaSurvivalCore/database.yml` aquí, para que el plugin abra la base de datos donde están los saldos (ver [base de datos](/docs/exylialib/database)), y recrea las monedas en `/economyadmin`. Concede los nodos `exyliaeconomy.` en lugar de los antiguos.
 </Callout>
 
-Actualiza todos los servidores a la vez: los servidores se avisan de los cambios de saldo por un canal de
-Redis cuya clave incluye el nombre del plugin, así que un servidor que aún usa el módulo antiguo no oye a
-uno con ExyliaEconomy, ni al revés.
+Actualiza todos los servidores juntos: los servidores se avisan de los cambios de saldo por un canal de Redis cuya clave incluye el nombre del plugin, así que un servidor que aún ejecuta el módulo antiguo no oye a uno que ejecuta ExyliaEconomy, ni al revés.
 
-## Un config.yml antiguo
+Los comandos mantienen sus nombres (`/balance`, `/pay`, `/baltop`, `/wallet`, `/economy`, `/economyadmin` y los comandos de las monedas), y también las grafías antiguas de administración `/eco give`, `/eco take`, `/eco set`, `/eco reset` y `/eco import`, con las que están escritos los archivos de recompensas y cajas de servidores en marcha. Los placeholders son ahora de este plugin: `%exyliasurvivalcore_economy_balance_<currency>%` pasa a ser `%exyliaeconomy_economy_balance_<currency>%`, y igual con el resto. Ver [Placeholders](/docs/exyliaeconomy/placeholders).
 
-Una versión anterior a la 1.2.0 guardaba en `config.yml` el idioma, la depuración, la confirmación de
-`/pay`, el aviso de pagos sin conexión, `banknotes` e `interest`. El primer arranque de una más nueva los
-importa a la base de datos donde todavía no hay nada fijado — el idioma y los interruptores a **Ajustes de
-economía**, las cantidades de confirmación, la lista de billetes y los bloques de intereses a cada moneda —
-y renombra el archivo a `config.yml.migrated`. Un `config.yml` que solo contenga `language` se importa
-igual. Desde entonces se editan en `/economyadmin`; el plugin ya no escribe `config.yml`.
+### Un config.yml antiguo
 
-### Comandos y placeholders
+Una versión anterior a la 1.2.0 guardaba el idioma, el interruptor de depuración, la confirmación de `/pay`, el aviso sin conexión, `banknotes` e `interest` en `config.yml`. El primer arranque de una versión más nueva los importa a la base de datos donde aún no hay nada fijado (el idioma y los interruptores a los **Ajustes de economía**, las cantidades de confirmación, la lista de billetes y los bloques de interés a cada moneda) y renombra el archivo a `config.yml.migrated`. Un `config.yml` que solo tenga `language` se importa igual. Edítalos desde `/economyadmin` a partir de entonces; el plugin ya no escribe ningún `config.yml`.
 
-Los comandos conservan sus nombres — `/balance`, `/pay`, `/baltop`, `/wallet`, `/economy`, `/economyadmin` y
-los comandos de las monedas —, igual que las antiguas formas de administración `/eco give`, `/eco take`,
-`/eco set`, `/eco reset` y `/eco import`, con las que están escritos los archivos de recompensas y cajas de
-los servidores en marcha.
+<Details title="El archivo de monedas del primer arranque">
+Las monedas viven en la base de datos. La primera vez que las tablas están vacías (un servidor nuevo, o uno cuyo survival core no tenía monedas que copiar) el plugin importa un `currencies.yml`, en este orden:
 
-Los placeholders pertenecen ahora a este plugin: `%exyliasurvivalcore_economy_balance_<currency>%` pasa a ser
-`%exyliaeconomy_economy_balance_<currency>%`, y lo mismo para el resto. Ver
-[Placeholders](/docs/exyliaeconomy/placeholders).
+1. `plugins/ExyliaEconomy/currencies.yml`, si pusiste uno;
+2. los valores que trae: `dollars`, `shards`, `netherite_ingots`, y las capas `vault` y `points`.
 
-## El archivo de monedas del primer arranque
-
-Las monedas viven en la base de datos. La primera vez que las tablas están vacías — un servidor nuevo, o uno
-cuyo survival core no tenía monedas que copiar —, el plugin importa un `currencies.yml`, en este orden:
-
-1. `plugins/ExyliaEconomy/currencies.yml`, si pusiste uno ahí;
-2. las monedas de serie: `dollars`, `shards`, `netherite_ingots`, y las superposiciones `vault` y `points`.
-
-Después el archivo se renombra a `currencies.yml.imported` y no se vuelve a leer. Su formato, para un
-servidor que quiera preparar uno:
+Después el archivo se renombra a `currencies.yml.imported` y no se vuelve a leer. Su estructura, para un servidor que quiera prepararlo:
 
 ```yaml title="plugins/ExyliaEconomy/currencies.yml"
 stored:
@@ -108,45 +122,10 @@ ledger:
   enabled: true
 ```
 
-Un ID de moneda almacenada que no sea `a-z`, `0-9` y `_` hasta 32, o una moneda de ítem sin ítem, se omite
-con un aviso. Un bloque almacenado sin `exchange.enabled` lo lee como **activado**.
+Un ID almacenado que no sea `a-z`, `0-9` y `_` de hasta 32, o una moneda de ítem sin ítem, se omite con un aviso. Un bloque almacenado sin `exchange.enabled` lo lee como **activado**.
+</Details>
 
-## Desde Vault o PlayerPoints
-
-`/economyadmin import <from> <into>` suma el saldo de cada jugador en una moneda a una moneda almacenada.
-`from` puede ser cualquier moneda del servidor, incluida `vault` mientras EssentialsX o CMI la sigan
-sirviendo, o `points` para PlayerPoints.
-
-<Steps>
-  <Step title="Deja la economía antigua sirviendo por ahora">
-    Mantén instalados EssentialsX, CMI o PlayerPoints, para que `vault` o `points` sigan leyendo sus
-    saldos.
-  </Step>
-  <Step title="Importa">
-    `/economyadmin import vault dollars`. Recorre cada jugador que haya entrado alguna vez a este servidor,
-    lee su saldo de uno en uno e ingresa lo que sea positivo. Los jugadores de este servidor cobran al
-    momento; los demás reciben un cambio en cola. La consola nombra cualquier saldo por encima del máximo
-    del destino, que se omite.
-  </Step>
-  <Step title="Cambia Vault">
-    Quita el plugin de economía antiguo, o activa **Vault por encima**, para que la moneda almacenada sirva
-    Vault.
-  </Step>
-</Steps>
-
-Una importación **suma**, nunca fija, así que se ejecuta una vez:
-
-- una segunda importación del mismo par se rechaza salvo que añadas `again`;
-- con `again`, solo cobran los jugadores que aún no se importaron — nadie cobra dos veces, ni tras una
-  importación que se quedó a medias ni con una lanzada en dos servidores a la vez;
-- una importación entre una moneda y ella misma se rechaza, incluido `vault` hacia la moneda que sirve
-  `vault`;
-- una segunda ejecución escrita mientras otra está leyendo se rechaza: *"That import is already running."*
-
-Cada jugador importado se anota en `exylia_balance_imports`, y el registro pone `import:<from>`.
-
-<Callout type="note" title="Solo los jugadores que ha visto este servidor">
-Ni Vault ni PlayerPoints pueden listar saldos, así que la importación recorre la lista de jugadores del
-propio servidor. Un jugador que nunca entró a este servidor no se importa; ejecuta la importación en el
-servidor donde están tus jugadores.
-</Callout>
+<Cards>
+  <Card title="Siguiente: Tu primera moneda" href="/docs/exyliaeconomy/primeros-pasos">Revisa con qué arranca el servidor.</Card>
+  <Card title="Problemas comunes" href="/docs/exyliaeconomy/problemas-comunes">Cuando los saldos se ven mal tras pasar.</Card>
+</Cards>

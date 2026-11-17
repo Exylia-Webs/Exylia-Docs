@@ -1,70 +1,54 @@
 ---
 title: "Configura los pagos"
-description: "Qué comprueba /pay y en qué orden, el impuesto de transferencia, la confirmación a partir de una cantidad, el límite de un segundo, /paytoggle, los avisos de pagos recibidos, los cambios y giveall."
+description: "Deja que los jugadores se paguen con /pay, añade un impuesto de transferencia, pide confirmación en cantidades grandes y deja que cada jugador desactive los pagos."
 questions:
   - "¿Qué comprueba /pay antes de enviar?"
   - "¿Cómo añado un impuesto de transferencia?"
   - "¿Cómo pido confirmación en pagos grandes?"
-  - "¿Cómo bloquean pagos los jugadores?"
+  - "¿Cómo bloquean los jugadores los pagos?"
+  - "¿Cómo doy dinero a todos los conectados?"
 updated: "1.4.0"
 ---
 
-`/pay <player> <amount> [currency]` es la única forma en que los jugadores se pasan dinero. `/economy pay`
-y el `pay` de cada moneda (`/shards pay <player> <amount>`) ejecutan exactamente el mismo código, así que
-las reglas de abajo valen para los tres.
+Los jugadores se pagan con `/pay <player> <amount> [currency]`. Esta página fija el impuesto y la confirmación, y explica qué comprueba `/pay` para que sepas por qué se rechazó un pago. `/economy pay` y el `pay` de cada moneda (`/shards pay <player> <amount>`) ejecutan exactamente el mismo código, así que todo lo de aquí vale para los tres.
 
-## Qué comprueba un pago
+## Antes de empezar
 
-En este orden, parando en el primer rechazo:
+Necesitas una moneda almacenada, ver [Crea una moneda](/docs/exyliaeconomy/monedas). Los jugadores necesitan `exyliaeconomy.pay`, que todos tienen por defecto, ver [Permisos](/docs/exyliaeconomy/permisos).
+
+## Pasos
 
 <Steps>
-  <Step title="La moneda">
-    Debe existir, y el que paga debe tener su permiso si tiene uno. Sin tercera palabra se usa la moneda
-    por defecto.
+  <Step title="Abre la moneda">
+    Ejecuta `/economyadmin` y clic izquierdo en la moneda.
   </Step>
-  <Step title="La cantidad">
-    Una cantidad positiva escrita como la escriben los jugadores: `100`, `2.5k`, `1m`. Cualquier otra cosa
-    es *"That is not an amount."*
+  <Step title="Añade un impuesto (opcional)">
+    Pulsa **Reglas** y rellena **Impuesto de transferencia, en porcentaje** (de `0` a `100`; por defecto `0`). Aquí está también **Mínimo que un jugador puede enviar** (por defecto `1`).
   </Step>
-  <Step title="Las reglas de la moneda">
-    Una moneda almacenada debe tener **Transferencias** activado, y la cantidad debe ser al menos su
-    mínimo. Las monedas de ítem y de experiencia no tienen reglas aquí.
+  <Step title="Pide confirmación en pagos grandes (opcional)">
+    Pulsa **Pagos**, luego **Confirmación de pago**, y escribe la cantidad en **Pedir confirmación por encima de**: un `/pay` por encima pregunta primero (`0`, el valor por defecto, nunca pregunta). Las cantidades se escriben como en el comando: `10k`, `500`.
   </Step>
-  <Step title="El saldo del que paga está cargado">
-    Justo después de entrar, un saldo tarda un instante en reclamarse de la base de datos. Hasta
-    entonces: *"Your balance is still loading."*
-  </Step>
-  <Step title="El receptor">
-    Cualquiera que la red conozca, conectado, desconectado o en otro servidor. Pagarse a uno mismo se
-    rechaza.
-  </Step>
-  <Step title="El receptor acepta pagos">
-    Salvo que el que paga tenga `exyliaeconomy.paytoggle.bypass`, un receptor que desactivó los pagos con
-    `/paytoggle` lo rechaza: *"… is not accepting payments right now."*
-  </Step>
-  <Step title="La confirmación">
-    Por encima de la cantidad configurada, el pago pregunta primero. Ver más abajo.
-  </Step>
-  <Step title="El límite">
-    Un pago por segundo del mismo pagador al mismo receptor. Lo que vaya más rápido se descarta sin decir
-    nada.
-  </Step>
-  <Step title="El que paga puede permitírselo">
-    La cantidad más el impuesto.
-  </Step>
-  <Step title="Otros plugins">
-    Se dispara `EconomyPayEvent`, y un listener puede cancelarlo. Ver [API](/docs/exyliaeconomy/api).
+  <Step title="Comprueba que las transferencias están activadas">
+    En **Pagos**, **Transferencias** debe estar activado. Si no, `/pay` de esa moneda se rechaza.
   </Step>
 </Steps>
 
-Después se cobra el impuesto, se mueve la cantidad y se avisa a ambas partes. Una transferencia que falla
-después de cobrar el impuesto — normalmente por el máximo del receptor — devuelve el impuesto y explica
-por qué, con las palabras de la propia moneda.
+## Comprueba que funciona
 
-## El impuesto de transferencia
+<Steps>
+  <Step title="Paga a un amigo">
+    `/pay <jugador> 100 <moneda>`. Lees *"Pagaste 100 a Steve."*, o con impuesto *"Pagaste 100 a Steve. Impuesto: 5"*, y el receptor lee *"Steve te pagó 100."*
+  </Step>
+  <Step title="Prueba uno grande">
+    Con una confirmación de `1000`, `/pay <jugador> 2000 <moneda>` responde *"¿Enviar 2,000 a Steve? [✔ CONFIRMAR] 30s"*. Pulsa **[✔ CONFIRMAR]**.
+  </Step>
+</Steps>
 
-El **Impuesto de transferencia** de una moneda almacenada es un porcentaje que se cobra al que paga
-**además de** la cantidad:
+## Ir más allá
+
+### El impuesto de transferencia
+
+El impuesto de una moneda almacenada es un porcentaje que se cobra al que paga **además de** la cantidad:
 
 | Impuesto | `/pay Steve 100` le cuesta al que paga | Steve recibe |
 |---|---|---|
@@ -72,73 +56,46 @@ El **Impuesto de transferencia** de una moneda almacenada es un porcentaje que s
 | `5` | 105 | 100 |
 | `2.5` | 102.5 (102 en una moneda de enteros) | 100 |
 
-El impuesto se recorta a los decimales de la moneda, a favor del que paga, y no va a nadie: sale de la
-economía. Con impuesto, el que paga lee *"You paid 100 to Steve. Tax: 5"* en lugar de la línea normal. El
-registro lo anota como una línea propia, `pay:tax`.
+El impuesto se recorta a los decimales de la moneda, a favor del que paga, y no va a nadie: sale de la economía. El registro lo anota como una línea propia, `pay:tax`. Una transferencia que falla después de cobrar el impuesto (el máximo del receptor, normalmente) devuelve el impuesto y dice por qué.
 
-## Confirmación a partir de una cantidad
+Para darle a un rango un impuesto menor, dale `exyliaeconomy.tax.<n>` (`exyliaeconomy.tax.3` es el 3 %). Gana el más bajo que tenga el jugador, y solo rebaja el impuesto propio de la moneda: una moneda con un 2.5 % cobra un 1 % a quien tenga `tax.1` y un 2.5 % a quien tenga `tax.5`.
 
-Cada moneda almacenada tiene una cantidad de **Confirmación de pago**: `/economyadmin`, abre la moneda,
-**Pagos**. `0`, el valor por defecto, nunca pregunta. Las cantidades se escriben como las del comando
-(`10k`, `500`).
+### Confirmación a partir de una cantidad
 
-Un pago por encima de la cantidad responde *"Send 20,000 to Steve? [✔ CONFIRM] 30s"*. Hacer clic en
-**[✔ CONFIRM]** ejecuta `/pay Steve 20000 dollars confirm`; escribirlo funciona igual. La confirmación:
+Un pago por encima de la cantidad responde con **[✔ CONFIRMAR]**. Al pulsarlo se ejecuta `/pay Steve 20000 dollars confirm`; escribir lo mismo también vale. La confirmación:
 
 - dura 30 segundos;
-- está ligada exactamente al receptor, la moneda y la cantidad — un `confirm` para cualquier otra cosa no
-  confirma nada: *"Nothing to confirm: it expired or changed."*;
-- se gasta con el pago que permite, y la sustituye la siguiente pregunta del mismo pagador;
-- solo se pide cuando el que paga puede permitírselo, así nadie confirma un pago que luego se rechaza.
+- está atada al receptor, la moneda y la cantidad exactos; un `confirm` para otra cosa no confirma nada: *"No hay nada que confirmar: expiró o cambió."*;
+- se gasta con el pago que permite, y la sustituye la siguiente pregunta del que paga;
+- solo se pregunta cuando el que paga podría permitírselo, así que nadie confirma un pago que luego se rechaza.
 
-`/pay Steve 20000 confirm` — `confirm` justo después de la cantidad — significa la moneda por defecto.
+`/pay Steve 20000 confirm`, con `confirm` justo después de la cantidad, significa la moneda por defecto.
 
-## Desactivar los pagos
+### Deja que los jugadores desactiven los pagos
 
-`/paytoggle` hace que un jugador deje de recibir pagos, y ejecutarlo otra vez los reactiva. Se guarda en la
-base de datos, así que vale en todos los servidores de la red y sobrevive a los reinicios, y un cambio
-hecho en un servidor se aplica al siguiente pago en cualquier otro. Los jugadores con
-`exyliaeconomy.paytoggle.bypass` (operadores por defecto) les pagan igualmente.
+`/paytoggle` hace que un jugador deje de recibir pagos, y ejecutarlo otra vez los reactiva. Se guarda en la base de datos, así que vale en todos los servidores de la red y sobrevive a los reinicios. Los jugadores con `exyliaeconomy.paytoggle.bypass` (operadores por defecto) les pagan igualmente. Solo frena `/pay` y los `pay` de las monedas: los comandos de administración, los intereses, los billetes y los demás plugins les siguen pagando.
 
-Solo frena `/pay` y los `pay` de las monedas. Los comandos de administración, los intereses, los billetes y
-los demás plugins les siguen pagando.
-
-## Avisar al receptor
+### Avisar al receptor
 
 | Dónde está el receptor | Qué se le dice |
 |---|---|
-| En el servidor del que paga | Al momento: *"Steve paid you 100."* |
-| Desconectado | Nada en ese momento. Al entrar la próxima vez, en cualquier servidor de la red, tres segundos después de llegar: *"While you were away, Steve paid you 100."*, o *"… you received 300 from 3 players."* — una línea por moneda. |
+| En el servidor del que paga | Al momento: *"Steve te pagó 100."* |
+| Desconectado | Nada en ese momento. Al entrar la próxima vez, en cualquier servidor de la red, tres segundos después de llegar: *"While you were away, Steve paid you 100."*, o *"… you received 300 from 3 players."*, una línea por moneda. |
 | Conectado en otro servidor | Nada. El dinero le llega allí al instante, pero no se envía ninguna línea. |
 
-El aviso de pagos recibidos es el interruptor **Aviso de pago sin conexión** de los ajustes de economía, activado por defecto. Usa su propia
-tabla, `exylia_pay_notices`, en lugar de leer el registro, así que funciona con el registro desactivado.
-Cada aviso se muestra una sola vez, aunque el jugador entre en dos servidores seguidos.
+El aviso es el interruptor **Aviso de pagos sin conexión** de los **Ajustes de economía**, activado por defecto. Usa su propia tabla, `exylia_pay_notices`, así que funciona con el registro desactivado. Cada aviso se muestra una sola vez, aunque el jugador entre en dos servidores seguidos.
 
-## Cambiar monedas
+### Cambiar monedas
 
-`/economy exchange <amount> <from> <to>` — o `/shards exchange <amount> <to>` — cambia una moneda por otra
-según la tasa del origen. Necesita **Cambio** activado en la moneda de origen, una tasa de ella hacia el
-destino y el permiso de la moneda de destino. Antes se dispara `EconomyExchangeEvent`, y un listener puede
-cancelarlo.
+`/economy exchange <amount> <from> <to>` (o `/shards exchange <amount> <to>`) cambia una moneda por otra según la tasa del origen. Necesita **Cambio** activado en la moneda de origen, una tasa de ella hacia el destino y el permiso de la moneda de destino. El registro anota ambos lados como `exchange:<from>><to>`. Ver [Crea una moneda](/docs/exyliaeconomy/monedas#tasas-de-cambio) para cómo se redondean las cantidades.
 
-El registro anota ambos lados como `exchange:<from>><to>`. Ver
-[Monedas](/docs/exyliaeconomy/monedas#tasas-de-cambio) para cómo se redondean las cantidades.
+### Dar dinero a todos los conectados
 
-## Dar a todos
+`/economyadmin giveall <currency> <amount>` da una cantidad a cada jugador conectado **en este servidor**. Siempre pregunta primero, *"¿Dar 100 a cada uno de los 24 jugadores conectados? [✔ CONFIRMAR]"*, y el clic ejecuta el mismo comando con `confirm`. Cada jugador recibe un ingreso por separado, con su propia línea de registro (`admin:giveall`). Un jugador sin el permiso de la moneda, o cuyo máximo lo rechaza, se omite y se cuenta: *"Diste 100 a 23 jugadores. Omitidos: 1"*.
 
-`/economyadmin giveall <currency> <amount>` da una cantidad a cada jugador conectado **en este servidor**.
-Siempre pregunta primero — *"Give 100 to each of the 24 players online? [✔ CONFIRM]"* — y el clic ejecuta el
-mismo comando con `confirm`. Cada jugador recibe un ingreso por separado, con su propia línea de registro
-(`admin:giveall`) y su propio *"You received 100."*; un jugador sin el permiso de la moneda, o cuyo máximo
-lo rechaza, se omite y se cuenta: *"Gave 100 to 23 players. Skipped: 1"*.
+### Cambios de administración
 
-## Cambios de administración
-
-`/economyadmin give`, `take`, `set` y `reset` funcionan con cualquier jugador que la red conozca. Con un
-jugador que no está en este servidor, el cambio queda en cola y se aplica donde esté, o la próxima vez que
-se le vea; el administrador lee *"Queued +100 for Steve. They are away; it lands when they are next
-seen."* en lugar de un saldo. Ver [Red](/docs/exyliaeconomy/red) para qué hace un cambio en cola.
+`/economyadmin give`, `take`, `set` y `reset` funcionan con cualquier jugador que la red conozca. Con un jugador que no está en este servidor, el cambio queda en cola y se aplica donde esté, o la próxima vez que se le vea; el administrador lee *"100 en cola para Steve. No está conectado; lo recibirá la próxima vez que entre."* Ver [Red](/docs/exyliaeconomy/red).
 
 | Comando | Con un jugador aquí | En cola para un jugador en otra parte |
 |---|---|---|
@@ -147,5 +104,26 @@ seen."* en lugar de un saldo. Ver [Red](/docs/exyliaeconomy/red) para qué hace 
 | `set` | Fija el saldo; acepta `0`, rechazado por encima del máximo | Sustituye el saldo |
 | `reset` | Vuelve al saldo inicial, tras una confirmación | Sustituye el saldo |
 
-Un jugador conectado aquí recibe *"You received …"* o *"… was taken from you."*; `set` y `reset` no le
-dicen nada.
+Un jugador conectado aquí lee *"Recibiste …"* o *"Te quitaron …"*; `set` y `reset` no le dicen nada.
+
+<Details title="Qué comprueba /pay, en orden">
+Se para en el primer rechazo:
+
+1. **La moneda.** Debe existir, y el que paga debe tener su permiso si tiene uno. Sin tercera palabra se usa la moneda por defecto.
+2. **La cantidad.** Una cantidad positiva como la escriben los jugadores: `100`, `2.5k`, `1m`. Cualquier otra cosa es *"Eso no es una cantidad."*
+3. **Las reglas de la moneda.** Una moneda almacenada debe tener **Transferencias** activado y la cantidad debe ser al menos su mínimo. Las monedas de ítem y de experiencia no tienen reglas aquí.
+4. **El saldo del que paga está cargado.** Nada más entrar, un saldo tarda un momento en reclamarse de la base de datos: *"Tu saldo aún se está cargando."*
+5. **El receptor.** Cualquiera que la red conozca, conectado, desconectado o en otro servidor. Pagarte a ti mismo se rechaza.
+6. **El receptor acepta pagos.** Salvo que el que paga tenga `exyliaeconomy.paytoggle.bypass`, un receptor que usó `/paytoggle` lo rechaza: *"… no acepta pagos ahora mismo."*
+7. **La confirmación.** Por encima de la cantidad configurada el pago pregunta primero.
+8. **El freno.** Un pago por segundo del mismo pagador al mismo receptor; lo que vaya más rápido se descarta sin decir nada.
+9. **El que paga puede permitírselo.** La cantidad más el impuesto.
+10. **Otros plugins.** Se dispara `EconomyPayEvent` y un listener puede cancelarlo, ver [API](/docs/exyliaeconomy/api).
+
+Después se cobra el impuesto, se mueve la cantidad y se avisa a ambos.
+</Details>
+
+<Cards>
+  <Card title="Siguiente: Billetes" href="/docs/exyliaeconomy/billetes">Deja que los jugadores conviertan dinero en un ítem.</Card>
+  <Card title="Registro" href="/docs/exyliaeconomy/registro">Mira y deshaz cada movimiento.</Card>
+</Cards>
