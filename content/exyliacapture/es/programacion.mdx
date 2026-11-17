@@ -9,87 +9,119 @@ questions:
 updated: "1.3.0"
 ---
 
-Cada evento lleva su propia lista de horarios, editable desde las pantallas de horarios de
-`/captureadmin`. El horario en sí es el [módulo de horarios](/docs/exylialib/horarios) de ExyliaLib:
-el mismo editor, los mismos campos y las mismas reglas que cualquier otro plugin de Exylia que arranca
-cosas con reloj.
+Al terminar esta página un evento arranca solo: a horas fijas, en ciertos días o cada pocas horas, y solo cuando hay suficientes jugadores conectados. Cada evento tiene su propia lista de horarios, así que un KOTH entre semana y un Conquest el sábado no se estorban.
 
-## Qué contiene un horario
+## Antes de empezar
 
-| Campo | Significado |
+Necesitas un evento **ACTIVADO** y con su zona fijada (mira [Tu primer evento](/docs/exyliacapture/primeros-pasos)). Un evento desactivado nunca arranca, ni programado ni a mano. Si tu servidor está en otra zona horaria que tus jugadores, lee antes [Zona horaria](#zona-horaria).
+
+## Pasos
+
+<Steps>
+  <Step title="Abre los horarios">
+    Ejecuta `/captureadmin`, haz clic en **Configuraciones**, clic izquierdo en tu evento y luego en **Horarios**. El botón muestra cuántos tiene.
+  </Step>
+  <Step title="Añade uno">
+    Haz clic en el botón de añadir. El formulario ya sabe qué evento inicia, así que no pide un id.
+  </Step>
+  <Step title="Elige cuándo se ejecuta">
+    En **Cuándo se ejecuta** elige **A horas fijas** y escribe las horas en formato de 24 horas, por ejemplo `20:00, 22:30`. O elige **Repetir cada cierto tiempo** y rellena **Cada** (`2h`, `90m`) con una ventana opcional **Desde** y **Hasta**.
+  </Step>
+  <Step title="Elige los días">
+    Marca los días en que puede ejecutarse. Con todos los días marcados, o ninguno, se ejecuta a diario.
+  </Step>
+  <Step title="Guarda">
+    Deja **Activado** marcado y envía el formulario. La entrada aparece en la lista. Una línea sin hora muestra una barrera y "Define una hora antes de que pueda ejecutarse".
+  </Step>
+</Steps>
+
+## Comprueba que funciona
+
+Añade un horario para dentro de un par de minutos, espera, y el evento debería arrancar y anunciarse. `/captureadmin list` lo muestra en marcha. Para ver cuándo llega el siguiente, usa `%exyliacapture_<id>_time_until_start%` (mira [Placeholders](/docs/exyliacapture/placeholders)). Un horario que no se dispara casi siempre es una de las omisiones de [Cómo se dispara](#como-se-dispara).
+
+## Para ir más allá
+
+### Solo con suficientes jugadores conectados
+
+En el formulario marca **Editar condiciones después**. La segunda pantalla, **Condiciones del horario**, tiene:
+
+- **Mínimo de jugadores en línea** y **Máximo de jugadores en línea** (`0` es sin límite).
+- **Espera entre ejecuciones**, el intervalo más corto entre dos disparos de esta entrada, por ejemplo `1h`.
+- Casillas **Solo si ...**, una por cada comprobación con nombre que ofrece el plugin (mira abajo).
+- **Condición personalizada**, por ejemplo `%server_tps% >= 18` para omitirlo mientras el servidor va con lag.
+
+### Varios horarios para un evento
+
+Un evento puede tener tantas entradas como quieras: tres horas entre semana y una el sábado son dos entradas, una con tres horas y otra con una. Una repetición se ancla a la apertura de su ventana, no al arranque del servidor. Cada dos horas desde las `10:00` dispara a las 10:00, 12:00 y 14:00 sea a la hora que sea que reinicie el servidor.
+
+### Cómo se dispara
+
+Cuando una entrada toca, se ejecutan todas las comprobaciones y el inicio se omite (no se reintenta más tarde) si alguna falla:
+
+- Ese evento ya está en marcha. Esto se comprueba siempre.
+- Hay menos del mínimo o más del máximo de jugadores conectados.
+- La condición personalizada no se cumple, o no ha pasado la espera entre ejecuciones.
+- Una comprobación con nombre que marcaste no se cumple.
+
+Un disparo con más de dos minutos de retraso, por ejemplo tras congelarse el servidor, también se omite. Las omisiones van al registro de depuración de la consola en vez de ser silenciosas.
+
+| Comprobación | Se cumple cuando |
 |---|---|
-| `name` | Una etiqueta para la entrada. En blanco muestra las horas en su lugar. |
-| `enabled` | Si puede disparar. Activado por defecto. |
-| `days` | Nombres de días, o `*` para todos. Una lista vacía también significa todos. |
-| `times` | Las horas `HH:mm` en que dispara, como lista. Un `time` suelto se sigue leyendo. |
-| `every` | Repetir con esta frecuencia en vez de a horas fijas, como `2h` o `90m`. |
-| `from` / `to` | La ventana dentro de la que corre la repetición, como `HH:mm`. |
-| `min-players` | Jugadores que deben estar conectados para que dispare. Por defecto `0`. |
-| `max-players` | Máximo de jugadores conectados para que dispare. `0` es sin límite. |
-| `condition` | Una comparación de Exylia que debe cumplirse, como `%server_tps% >= 18`. |
-| `cooldown` | El tiempo mínimo entre dos disparos de esta entrada. |
-| `requires` | Condiciones con nombre, listadas abajo. |
+| `event-inactive` | El evento que inicia esta entrada no está en marcha. |
+| `nothing-running` | No hay ningún evento de captura en marcha en el servidor. |
 
-Un evento puede tener tantos horarios como quieras: tres horas entre semana y una el sábado son dos
-entradas, una con tres horas y otra con una. Una repetición se ancla a la apertura de su ventana, no a
-cuándo arrancó el servidor: cada dos horas desde las `10:00` dispara a las 10:00, 12:00 y 14:00 sea
-cual sea la hora a la que se reinició.
+`nothing-running` es la que debes marcar para "inicia este, pero nunca mientras haya otro evento".
 
-## Cómo dispara
+### Zona horaria
 
-Cuando toca una entrada, se comprueba cada condición y el inicio se salta — no se reintenta más tarde
-— si alguna falla:
-
-- Ese evento ya está corriendo. Esto se comprueba siempre, diga lo que diga `requires`.
-- Hay menos jugadores conectados que `min-players` o más que `max-players`.
-- La `condition` no se cumple, o no ha pasado el `cooldown`.
-- Una condición de `requires` no se cumple.
-
-Un disparo que llega más de dos minutos tarde, tras un servidor congelado, también se salta. Los
-saltos se escriben en el log de depuración de la consola en vez de quedar en silencio.
-
-### Las condiciones que ofrece este plugin
-
-| Condición | Se cumple cuando |
-|---|---|
-| `event-inactive` | El evento que arranca esta entrada no está corriendo. |
-| `nothing-running` | No hay ningún evento de captura corriendo en el servidor. |
-
-`nothing-running` es lo que la configuración sola no puede expresar: "arranca este, pero no mientras
-haya otro evento en marcha". Un nombre que el plugin no ofrece nunca se cumple, así que una errata
-impide que la entrada dispare en vez de ignorarse.
-
-## Zona horaria
-
-Todos los horarios se leen contra un mismo reloj:
+Todos los horarios se leen con un único reloj:
 
 ```yaml title="config.yml"
 scheduler:
   timezone: ""
 ```
 
-Vacío — el valor por defecto — usa el ajuste `timezone` de ExyliaLib, que es donde una red lo fija una
-sola vez para todos los plugins. Si no, acepta un identificador de zona como `America/New_York` o
-`Europe/Madrid`, y sustituye a aquel solo para este plugin.
+Vacío, que es el valor por defecto, usa el ajuste `timezone` de ExyliaLib, donde una red lo fija una vez para todos los plugins. Si no, usa un id de zona como `America/New_York` o `Europe/Madrid`, que lo sustituye solo para este plugin. En el juego, `/captureadmin`, **Ajustes** y **General** lo editan.
 
-<Callout type="warning" title="Un identificador inválido cae al de ExyliaLib">
-Un valor que no es un identificador IANA real — una abreviatura como `CET`, o una errata — se registra
-como error al cargar, y se usa en su lugar la zona horaria de ExyliaLib. Revisa la consola después de
-cambiarlo.
+<Callout type="warning" title="Un id de zona inválido vuelve al de ExyliaLib">
+Un valor que no es un id de zona real, como una abreviatura tipo `CET` o una errata, se registra como error al cargar y se usa la zona horaria de ExyliaLib. Revisa la consola tras cambiarlo.
 </Callout>
 
-## Cuánto falta para el siguiente
+### Muestra el tiempo hasta el siguiente
 
-El tiempo hasta el próximo disparo de un evento, entre todas sus entradas, es lo que alimenta:
+El tiempo hasta el próximo disparo de un evento, entre todas sus entradas, alimenta:
 
-- `%exyliacapture_<id>_time_until_start%` para un evento concreto.
-- `%exyliacapture_next_event_time_until_start%` para el evento más próximo de todo el servidor.
-- El estado `SCHEDULED` que muestra un holograma cuando el evento no corre pero tiene horario.
+- `%exyliacapture_<id>_time_until_start%` para un evento.
+- `%exyliacapture_next_event_time_until_start%` para el evento más cercano de todo el servidor.
+- El estado `SCHEDULED` que muestra un holograma cuando un evento no está en marcha pero tiene un horario próximo.
 
-Un evento sin horarios no responde nada en vez de cero, y así un holograma distingue "no está
-corriendo, pero viene" de "no está corriendo y ya está".
+Un evento sin horarios no informa de nada en vez de cero, y así un holograma distingue "no está en marcha, pero viene" de "no está en marcha".
 
-## Lanzar a mano
+### Iniciar a mano
 
-El horario no es obligatorio. `/captureadmin start <id>` lanza el evento al momento, y respeta la
-misma regla de no iniciar uno que ya está corriendo.
+Un horario es opcional. `/captureadmin start <id>` inicia un evento al instante, y también se niega a iniciar uno que ya está en marcha.
+
+<Details title="Detalles técnicos: campos de un horario">
+
+El calendario es el [módulo de horarios](/docs/exylialib/horarios) de ExyliaLib: el mismo editor, los mismos campos y las mismas reglas que cualquier otro plugin de Exylia que arranca cosas con un reloj.
+
+| Campo | Significado |
+|---|---|
+| `name` | Una etiqueta para la entrada. En blanco se muestran las horas. |
+| `enabled` | Si puede dispararse. Activado por defecto. |
+| `days` | Nombres de días de la semana, o `*` para todos. Una lista vacía también significa todos. |
+| `times` | Las horas `HH:mm` en que se dispara, como lista. Una sola `time` también se lee. |
+| `every` | Repetir con esta frecuencia en vez de a horas fijas, como `2h` o `90m`. |
+| `from` / `to` | La ventana en la que corre una repetición, como `HH:mm`. |
+| `min-players` | Jugadores que deben estar conectados. `0` por defecto. |
+| `max-players` | El máximo de jugadores que pueden estar conectados. `0` es sin límite. |
+| `condition` | Una comparación de Exylia que debe cumplirse, como `%server_tps% >= 18`. |
+| `cooldown` | El intervalo más corto entre dos disparos de esta entrada. |
+| `requires` | Comprobaciones con nombre: `event-inactive`, `nothing-running`. Un nombre que el plugin no ofrece nunca se cumple, así que una errata impide que la entrada se dispare. |
+</Details>
+
+<Cards>
+  <Card title="Siguiente: Placeholders" href="/docs/exyliacapture/placeholders">Cuentas atrás para hologramas y marcadores.</Card>
+  <Card title="Visuales" href="/docs/exyliacapture/visuales">Lo que ven los jugadores mientras corre.</Card>
+  <Card title="Horarios en ExyliaLib" href="/docs/exylialib/horarios">El módulo de horarios compartido y sus reglas.</Card>
+</Cards>
