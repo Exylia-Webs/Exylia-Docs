@@ -739,13 +739,14 @@ const ARMORTRIMS_NAV: NavGroup[] = [
     ],
   },
   {
-    label: { en: "Configuring", es: "Configurar" },
+    label: { en: "Guides", es: "Guías" },
     pages: [
       page("trims", "trims", "trims"),
       page("modes-and-items", "modes-and-items", "modos-y-objetos"),
       page("menu", "menu", "menu"),
       page("wardrobe", "wardrobe", "vestidor"),
       page("crate", "crate", "caja"),
+      page("showcases", "showcases", "showcases"),
     ],
   },
   {
@@ -756,6 +757,12 @@ const ARMORTRIMS_NAV: NavGroup[] = [
       page("configuration", "configuration", "configuracion"),
       page("placeholders", "placeholders", "placeholders"),
       page("api", "api", "api"),
+    ],
+  },
+  {
+    label: { en: "Help", es: "Ayuda" },
+    pages: [
+      page("troubleshooting", "troubleshooting", "problemas-comunes"),
       page("faq", "faq", "faq"),
     ],
   },
