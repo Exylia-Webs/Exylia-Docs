@@ -1,153 +1,122 @@
 ---
 title: "Run an auction"
-description: "Open a timed auction in any currency, bid, set an auto-bid, buy it out, and tune anti-snipe."
+description: "Open a timed auction in any currency, bid, set an auto-bid, buy it out and tune the anti-snipe."
 questions:
   - "How do I start an auction?"
   - "How do I bid or set an auto-bid?"
   - "What is anti-snipe?"
-  - "Can I buy an auction out right away?"
-  - "What happens when an auction ends with no bids?"
+  - "What happens to my bid when someone outbids me?"
+  - "Can I cancel an auction that has bids?"
 updated: "1.1.0"
 ---
 
-An auction sells to whoever bids highest before the time runs out, in whichever of the server's currencies
-the seller chose. Every bid is **paid when it is placed** and held by the auction until it is beaten or the
-auction ends, so a bid is a promise the bidder cannot walk away from.
+An auction sells to whoever bids highest before the time runs out, in the currency the seller chose. Every bid is paid when it is placed and held until it is beaten or the auction ends. The command is `/auction` (also `/auctions`) and the module is on by default.
 
-Module id `auctions`, file `modules/auctions/config.yml`, command `/auction` (also `/auctions`).
+## Before you start
 
-## Opening an auction
+The server needs an economy, see [ExyliaLib economy](/docs/exylialib/economy). For a fixed price instead of bids, use the [auction house](/docs/exyliamarket/auction-house).
 
-| From | How |
-|---|---|
-| The **Sell** button of `/auction` | Hold the item, pick a currency if there is a choice, then fill the form: starting price, buy-it-now (optional) and hours. |
-| `/auction sell <start> [hours] [buyout] [currency]` | Opens it at once, with the stack in your main hand. `hours` defaults to `default-hours`; a buyout of `0` is none. |
+## Steps
 
-There is no review screen: the auction opens as soon as the checks pass. From the form, a buy-it-now price
-far below the 7-day average asks once more.
+<Steps>
+  <Step title="Hold the item and open the form">
+    Hold the item and run `/auction`, then click **Auction what you hold**. Pick a currency if the server has more than one, then fill in the starting price, an optional buy-it-now price and the hours. A buy-it-now price far below the 7-day average asks once more.
+  </Step>
+  <Step title="Or do it in one command">
+    `/auction sell <start> [hours] [buyout] [currency]` opens it at once with the stack in your main hand. Without hours it runs 24 hours, and a buyout of `0` means none. There is no review screen: the auction opens as soon as the checks pass.
+  </Step>
+  <Step title="Bid from the other account">
+    On a second account run `/auction` and click the auction. The bid screen shows the current bid, the next bid, the number of bids, the leader and the time left. Click **Bid** with the amount shown (for example "Bid 12") to bid exactly the next bid, or **Bid another amount** to type a higher one.
+  </Step>
+  <Step title="Let it end">
+    When the time runs out the winner gets the item and the seller gets the winning bid minus the tax.
+  </Step>
+</Steps>
 
-The checks: a currency the server has, an item in hand, not in `blocked-materials`, not damaged unless
-`allow-damaged-items`, not heavier than `max-item-kilobytes`, a start of at least `min-start-price` (the
-currency's smallest amount for any currency but the default), a buyout above the start, hours between
-`min-hours` and `max-hours`, and fewer running auctions than the player's limit.
+## Check that it works
 
-`listing-fee-percent` **of the starting price** is charged when the auction opens and is not refunded, not
-even when nobody bids. A starting price at or above `broadcast-opened-above` is announced.
+- `/auction mine` (also `/auction selling`) lists what you are running against your limit.
+- The bidder's balance dropped by the bid when it was placed, and a bidder who is beaten gets the money back at once.
+- When it ends, the item is in the winner's inventory, and whatever did not fit waits in [`/collect`](/docs/exyliamarket/collect). The seller is paid the winning bid minus the 5% tax.
 
-## Bidding
+## Going further
 
-`/auction` lists every running auction, ending soonest first; the sort also cycles Newest, Cheapest and
-Most expensive, and the search matches the material, the item's name and the seller. Click one to open its
-bid screen: current bid, next bid, how many bids, the leader, the time left and your own ceiling, updated
-while it is open.
+### What opening costs
 
-| Button | What it does |
-|---|---|
-| **Bid** | Bids exactly the next bid the button shows. If the auction moved in the meantime the click is refused and nothing is charged. |
-| **Custom bid** | Type any amount from the next bid up. |
-| **Auto-bid** | Sets a ceiling: see below. |
-| **Buy it now** | Only when the auction has a buyout. Pays it and ends the auction at once. |
+A listing fee of 2% **of the starting price** is charged when the auction opens and is never refunded, not even when nobody bids. A starting price from 50 is announced to the server. A player runs 3 auctions at once by default, and a rank can have more with `exyliamarket.auctions.limit.<n>`.
 
-Bidding, auto-bids and buy-it-now need `exyliamarket.auctions.bid`.
-
-### Looking inside
-
-A shulker box or bundle up for auction can be opened before bidding: shift-click it on the board, or click the
-item at the top of its bid screen. A read-only view shows what it holds, boxes within boxes included, and
-the way out returns to wherever you came from.
-
-The bid screen's layout changed in 1.1.0 for this, so `bid.yml` carries a `menu-version`: an edited copy is
-replaced by the new one on update and yours is kept next to it.
+An auction may not be blocked, damaged (unless allowed) or heavier than the item limit. The starting price is at least 1 in the default currency, the buyout must be above the start, and the hours between 1 and 72.
 
 ### The next bid
 
-With no bids, the next bid is the starting price. After that it is the top bid plus the larger of
-`min-bid-increment-percent` of it and `min-bid-increment`. The absolute step is in the default currency;
-in any other currency the step is at least that currency's smallest amount. The seller cannot bid.
+With no bids the next bid is the starting price. After that it is the top bid plus 5% of it or 1, whichever is more. The step in a currency other than the default is at least that currency's smallest amount. The seller cannot bid. A bid at or above the buyout price is a buyout, at the buyout price.
 
-A bid or ceiling at or above the buyout price **is** a buyout, at the buyout price.
+Bidding, auto-bids and buy-it-now need `exyliamarket.auctions.bid`.
 
-### Auto-bids
+### Auto-bid
 
-An auto-bid is the most you are willing to pay. **The whole ceiling is taken from your balance at once**
-and held, and the auction answers for you:
+**Auto-bid** sets the most you are willing to pay. The whole ceiling is taken from your balance at once and held, and the auction answers for you:
 
-- On an auction with no bids, it stands at the starting price with you leading.
+- With no bids, it stands at the starting price with you leading.
 - Beating the leader's ceiling, it stands one step above the beaten ceiling, never above yours.
-- Not beating it, the leader's ceiling answers at once, one step above you, and your money comes straight
-  back. Equal ceilings go to whoever set theirs first.
+- Not beating it, the leader's ceiling answers at once, one step above you, and your money comes straight back. Equal ceilings go to whoever set theirs first.
 
-The leader may raise or lower their ceiling without moving the price, as long as it stays at or above the
-next bid. When the auction ends, everything held above the winning price is refunded.
+The leader can raise or lower their ceiling without moving the price, as long as it stays at or above the next bid. When the auction ends, everything held above the winning price is refunded.
+
+### Buy it now
+
+When the seller set a buyout, **Buy it now** pays it and ends the auction at once. The previous leader is refunded and told. A buyout far above the 7-day average asks once more.
 
 ### Being outbid
 
-Your held money comes back at once, and you are told on whichever server you are, or on your next join,
-with a **[BID AGAIN]** link that runs `/auction view <id>`. With `feedback.outbid-action-bar` on, an action
-bar says it too. The seller hears about each new bid.
+Your held money comes back at once. You are told on whichever server you are, or on your next join, with a **BID AGAIN** link that opens the auction. The seller hears about each new bid.
 
 ### Anti-snipe
 
-A bid that moves the price with less than `anti-snipe-seconds` left (30 by default) pushes the end back to
-that many seconds from now, so the last word is not whoever clicked last. A leader only raising their own
-ceiling does not extend it.
+A bid that moves the price with less than 30 seconds left pushes the end back to 30 seconds from now, so the last word is not whoever clicked last. A leader only raising their own ceiling does not extend it. Set `anti-snipe-seconds` to `0` to turn it off. For the last 60 seconds (`feedback.auction-countdown-seconds`) a boss bar counts down for the leader and everyone who bid on it since the server started.
 
-### The countdown
+### Cancelling and looking inside
 
-For the last `feedback.auction-countdown-seconds` (60 by default, `0` for none) a boss bar counts down for
-the leader and for everybody who bid on it on this server since the server started. The seller has none.
+Click your auction in `/auction mine` to cancel it, only while it has **no bids**: an auction with bids runs to the end. A shulker box or bundle can be opened before bidding with a shift-click on the board, or by clicking the item at the top of its bid screen.
 
-## How it ends
-
-The sweep runs every second, so an auction ends to the second.
+### How it ends
 
 | Ending | The item | The money |
 |---|---|---|
-| With bids | To the winner: inventory, the rest to [`/collect`](/docs/exyliamarket/collect). | The seller is paid the winning bid minus `sales-tax-percent`. What the winner held above it comes back. |
-| Bought now | To the buyer. | As above; the previous leader is refunded and told. |
+| With bids | To the winner, the rest to `/collect`. | The seller gets the winning bid minus the tax. What the winner held above it comes back. |
+| Bought now | To the buyer. | As above, the previous leader is refunded. |
 | No bids | Back to the seller. | The fee is not refunded. |
 
-The other bidders get a *lost* line in their history. A win at or above `broadcast-above` is announced.
+The sweep runs every second. Other bidders get a lost line in their history. A win from 50 is announced.
 
-## Your auctions and bids
+### More screens
 
-| Command | Screen |
-|---|---|
-| `/auction mine` (also `/auction selling`) | What you are running, against your limit. Click one to cancel it — only while it has **no bids**: an auction with bids runs to the end. |
-| My bids, from `/auction` | Running auctions you bid on, leading or outbid, with your ceiling. |
-| History, from `/auction` | Auctions you won, lost and sold. |
+From `/auction`: **My bids** (running auctions you bid on, leading or outbid, with your ceiling), **My auctions**, **History** (won, lost and sold), **Search** and **Sort** (Ending soonest, Newest first, Cheapest first, Most expensive first).
 
-## Staff
+### Staff
 
-`/auctionadmin` (also `/auctionsadmin`) lists every running auction, ending soonest first. Left-click
-removes one after a confirmation, even with bids: the item goes back to the seller and the top bidder's
-held money is refunded, and both are told. Right-click opens its line in the market log.
-
-| Command | What it does |
-|---|---|
-| `/auctionadmin remove <id>` | Removes one auction. |
-| `/auctionadmin clear <player>` | Removes every auction a player is running. |
-
-Both ask for a confirmation first, need `exyliamarket.auctions.admin` and must be run by a player in game.
+`/auctionadmin` (also `/auctionsadmin`, needs `exyliamarket.auctions.admin`) lists every running auction. Left-click removes one after a confirmation, even with bids: the item goes back to the seller and the top bid is refunded, and both are told. Right-click opens its line in the [market log](/docs/exyliamarket/administration#the-market-log). `/auctionadmin remove <id>` and `/auctionadmin clear <player>` do the same from chat.
 
 ## Settings
 
-Under `settings:` in `modules/auctions/config.yml`, editable in game from `/marketadmin`.
+<Details title="Settings: modules/auctions/config.yml">
+
+Under `settings:`, also editable in game from `/marketadmin`.
 
 | Key | Default | What it does |
 |---|---|---|
 | `max-auctions-per-player` | `3` | Auctions running at once. `exyliamarket.auctions.limit.<n>` replaces it. |
 | `min-start-price` | `1.0` | Least an auction may start at, in the default currency. |
-| `min-bid-increment-percent` | `5.0` | A new bid beats the top one by at least this share of it… |
-| `min-bid-increment` | `1.0` | …and by at least this much, whichever is more. |
+| `min-bid-increment-percent` | `5.0` | A new bid beats the top one by at least this share of it... |
+| `min-bid-increment` | `1.0` | ...and by at least this much, whichever is more. |
 | `min-hours` | `1` | Shortest an auction may run. |
 | `max-hours` | `72` | Longest an auction may run. |
 | `default-hours` | `24` | How long it runs when the seller does not say. |
 | `anti-snipe-seconds` | `30` | The window a late bid pushes the end back to. `0` turns it off. |
 | `listing-fee-percent` | `2.0` | Of the starting price, charged when it opens. Not refunded. `exyliamarket.auctions.fee.<n>` sets it per rank, the lowest winning. |
-| `sales-tax-percent` | `5.0` | Taken from the winning bid before the seller is paid. `exyliamarket.auctions.tax.<n>` sets it per rank, read from the seller when it ends (offline: this rate). |
+| `sales-tax-percent` | `5.0` | Taken from the winning bid before the seller is paid. `exyliamarket.auctions.tax.<n>` sets it per rank. |
 | `broadcast-above` | `50.0` | Announce a win from this price. `-1` never. |
-| `broadcast-opened-above` | `50.0` | Announce an auction opening from this starting price. `-1` never. |
+| `broadcast-opened-above` | `50.0` | Announce an auction from this starting price. `-1` never. |
 | `broadcast-opened-cooldown-seconds` | `60` | Seconds before one seller's next auction is announced again. |
 | `blocked-materials` | `BEDROCK`, `COMMAND_BLOCK`, `BARRIER`, `STRUCTURE_BLOCK` | Materials that may never be auctioned. |
 | `allow-damaged-items` | `true` | Whether a damaged item may be auctioned. |
@@ -155,5 +124,14 @@ Under `settings:` in `modules/auctions/config.yml`, editable in game from `/mark
 | `min-counted-value` | `10.0` | Smallest bid or win, in the default currency, that counts toward statistics and missions. |
 | `history-size` | `45` | Auctions the history screen shows. |
 
-And under `sounds:` — `listed`, `bid`, `outbid`, `won`, `sold`, `cancelled` — each `NAME|volume|pitch`.
-Announcements are muted per player in `/settings` under **Market** → **Auctions**.
+Under `sounds:` there are `listed`, `bid`, `outbid`, `won`, `sold` and `cancelled`, each `NAME|volume|pitch`. Players mute announcements in `/settings` under **Market**.
+
+The bid screen's layout changed in 1.1.0, so `bid.yml` carries a `menu-version`: an edited copy is replaced by the new one on update and yours is kept next to it.
+
+</Details>
+
+<Cards>
+  <Card title="Auction house" href="/docs/exyliamarket/auction-house">Fixed prices, no bidding.</Card>
+  <Card title="Buy orders" href="/docs/exyliamarket/orders">Let players ask for what they want to buy.</Card>
+  <Card title="Collect" href="/docs/exyliamarket/collect">Where items that did not fit wait.</Card>
+</Cards>
