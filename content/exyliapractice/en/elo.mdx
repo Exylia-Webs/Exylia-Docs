@@ -10,9 +10,9 @@ questions:
 updated: "1.4.0"
 ---
 
-Every ranked match moves two ratings for each player: their rating **on that kit** and their **global**
-rating. Both are ordinary Elo, both live in `practice_player_season_stats`, and the global one is
-stored under the kit id `global`.
+Every ranked match moves two ratings for each player: their rating **on that kit** and their **global** rating. Both are ordinary Elo and both live in `practice_player_season_stats`; the global one is stored under the kit id `global`. Ratings belong to a [season](/docs/exyliapractice/seasons), so a rotation starts everybody again.
+
+Only ranked kits move ratings. Which kits are ranked, and how players get paired, is set on the [queue](/docs/exyliapractice/queue) and in the kit's **Gameplay and ranked** screen.
 
 ## The nine ranks
 
@@ -26,20 +26,18 @@ stored under the kit id `global`.
 | **Solar** | 1200 | 35 | IV, III, II, I |
 | **Nova** | 1600 | 25 | IV, III, II, I |
 | **Prism** | 2000 | 25 | IV, III, II, I |
-| **Apex** | 2400 | 20 | — |
-| **Elite** | 2700 | 20 | — |
-| **Legend** | 3000 | 20 | — |
+| **Apex** | 2400 | 20 | none |
+| **Elite** | 2700 | 20 | none |
+| **Legend** | 3000 | 20 | none |
 
-Each division is 100 LP wide, so Copper spans 400–799 as Copper IV, III, II, I. The top three ranks
-have no divisions: their LP just counts up from the rank's floor.
+Each division is 100 LP wide, so Copper spans 400 to 799 as Copper IV, III, II, I. The top three ranks have no divisions: their LP just counts up from the rank's floor. New players start at `elo.starting-mmr`, 400 by default, which is Copper IV.
 
-New players start at `elo.starting-mmr` — 400, which is Copper IV.
+The Spanish language files name the ranks Ascua, Cobre, Titanio, Solar, Nova, Prisma, Ápice, Élite and Leyenda.
 
 <Callout type="note" title="ranks.yml is yours to rewrite">
-The file is read as plain YAML, not as a fixed schema. Rename the ranks, change how many there are,
-change the division count and LP width per rank, give each its own icon and gradient. A rank with no
-`divisions` key simply has none. `k-factor` defaults to 30 and `lp-per-division` to 100 for the short
-form.
+The file is read as plain YAML, not as a fixed schema. Rename the ranks, change how many there are, change the division count and LP width per rank, give each its own icon and gradient. A rank with no `divisions` key simply has none. `k-factor` defaults to 30 and `lp-per-division` to 100 for the short form.
+
+If the file is broken or missing, the plugin keeps running on the packaged ranks, warns in the console and leaves your file untouched. Fix it and reload with `/epc` → **Reload**; a reload with a broken file keeps the ranks in use.
 </Callout>
 
 ## The formula
@@ -51,50 +49,46 @@ expected = 1 / (1 + 10^((opponentMmr - playerMmr) / 400))
 delta    = round(K × (result − expected))
 ```
 
-`K` is the K-factor of the rank the player is currently in — high at the bottom so new players find
-their level quickly, low at the top so a Legend's rating is stable.
+`K` is the K-factor of the rank the player is currently in: high at the bottom so new players find their level quickly, low at the top so a Legend's rating is stable.
 
+<Details title="Settings that shape it">
 | Setting | Default | What it does |
 |---|---|---|
+| `elo.starting-mmr` | `400` | Where new players start |
 | `elo.lp-max-per-game` | `25` | Hard cap on the movement in either direction |
 | `elo.placement-game-count` | `10` | Ranked games before a player is out of placements |
 | `elo.placement-k-multiplier` | `2.0` | K is multiplied by this during placements |
+| `elo.asymmetric-threshold-mmr` | `200` | Gap above which a higher-rated loser is protected |
+| `elo.asymmetric-reduction-per-100-mmr` | `5` | LP taken off the loss per 100 MMR beyond the threshold |
+| `elo.asymmetric-min-loss` | `5` | The smallest loss the reduction can leave |
 | `elo.flat-elo-enabled` | `false` | Replaces the whole formula with two fixed numbers |
 | `elo.flat-elo-win` | `25` | The win, when flat is on |
 | `elo.flat-elo-loss` | `25` | The loss, when flat is on |
 
+The matchmaking keys (how far apart two ratings may be to pair, and how that range widens while waiting) are documented on the [queue](/docs/exyliapractice/queue) page.
+</Details>
+
 ### Placements
 
-The first `placement-game-count` ranked games on a kit — and separately on the global ladder — use a
-doubled K and **skip both the cap and the asymmetric reduction**. A player's placement games move
-their rating hard and fast, which is the point.
+The first `placement-game-count` ranked games on a kit, and separately on the global ladder, use a doubled K and **skip both the cap and the asymmetric reduction**. Placement games move the rating hard and fast, which is the point.
 
 ### The asymmetric reduction
 
-When a **higher-rated player loses** and the gap is more than
-`elo.asymmetric-threshold-mmr` (200), the loss is reduced by
-`elo.asymmetric-reduction-per-100-mmr` (5) for every 100 MMR of gap beyond the threshold, and the
-result is bounded so it can never cost more than `elo.asymmetric-min-loss` (5).
+When a **higher-rated player loses** and the gap is more than `elo.asymmetric-threshold-mmr` (200), the loss is reduced by `elo.asymmetric-reduction-per-100-mmr` (5) for every 100 MMR of gap beyond the threshold, and the result is bounded so it can never fall below `elo.asymmetric-min-loss` (5).
 
-In practice: with the defaults, a player more than 200 MMR above their opponent loses at most 5 LP,
-and by a gap of about 700 the loss reaches zero. It exists so that a high-rated player who keeps
-getting matched down is not punished for the matchmaker's choices.
-
-The winner's gain is unaffected — only the loss is reduced.
+In practice, with the defaults, the loss from a big upset shrinks as the gap grows and settles at a small minimum around a gap of 600 to 700. It exists so that a high-rated player who keeps getting matched down is not punished for the matchmaker's choices. The winner's gain is unaffected: only the loss is reduced.
 
 ### The demotion shield
 
-A loss can never drop a player **below the floor of the division they are currently in**. Losing at
-Copper II with 40 LP takes you to Copper II 0 LP, not into Copper III.
+A loss can never drop a player **below the floor of the division they are currently in**. Losing at Copper II with 40 LP takes you to Copper II 0 LP, not into Copper III.
 
-The shield only applies while you are above the floor. Once you are sitting exactly on it, the next
-loss demotes normally. It does not apply during placements.
-
-Ratings also never go below 0.
+The shield only applies while you are above the floor. Once you sit exactly on it, the next loss demotes normally. It does not apply during placements, and it only softens losses. Ratings never go below 0.
 
 ## Boosts
 
-An admin can multiply a player's LP gains for a while.
+An admin can multiply a player's LP gains for a while, from the menu or the commands.
+
+In `/epc`, open **ELO boosts**. **Global boost** applies to everybody; **Player boost** asks for a player and then offers add (left click) and remove (right click).
 
 | Command | What it does |
 |---|---|
@@ -105,15 +99,9 @@ An admin can multiply a player's LP gains for a while.
 | `/epc boost global remove` | Cancel it |
 | `/epc boost global info` | Multiplier and time left |
 
-Durations are written as `1d`, `12h`, `30m`, `90s`, or combined: `1d12h`. The multiplier must be
-greater than 1.
+Durations are written as `1d`, `12h`, `30m`, `90s`, or combined: `1d12h`. The multiplier must be greater than 1.
 
-A player's effective multiplier is the **higher** of their personal boost and the global one — they do
-not stack. It only ever applies to a **winner's positive delta**; a loss is never boosted, and the
-bonus LP is reported separately in chat.
-
-Personal boosts survive a restart. Both kinds are cancelled by a
-[season rotation](/docs/exyliapractice/seasons).
+A boost only ever applies to a **winner's positive delta**: a loss is never boosted, and the bonus LP is reported separately in chat. When a player has both a personal and a global boost, the plugin does not multiply them together; check `/epc boost info <player>` if you need to know which one counted. Personal boosts survive a restart. Both kinds are cancelled by a [season rotation](/docs/exyliapractice/seasons).
 
 ## Anti-boosting
 
@@ -127,14 +115,11 @@ Two checks, both consulted before the queue pairs anybody on a ranked kit. Unran
 | `elo-security.opponent-cooldown-seconds` | `300` | How long two players must wait before meeting again |
 
 <Callout type="warning" title="Duels are not filtered by these">
-Both checks run at matchmaking time only. `/duel` bypasses them entirely, so two accounts can still
-farm each other on a ranked kit through direct challenges. The duel does start the recent-opponent
-cooldown for the queue, but nothing blocks the next duel.
+Both checks run at matchmaking time only. `/duel` bypasses them entirely, so two accounts can still farm each other on a ranked kit through direct challenges. The duel does start the recent-opponent cooldown for the queue, but nothing blocks the next duel.
 </Callout>
 
 <Callout type="note" title="Same-IP protection makes solo testing awkward">
-Two clients on one machine will never be paired. Turn `same-ip-protection` off while you are setting
-the server up.
+Two clients on one machine will never be paired. Turn `same-ip-protection` off while you are setting the server up.
 </Callout>
 
 ## Adjusting ratings by hand
@@ -144,6 +129,10 @@ the server up.
 /epc stats add <player> <kit|global> elo <amount>
 ```
 
-See [stats](/docs/exyliapractice/stats#admin-commands) for the full field list. `/epc` → **Data
-Management** also offers **Reset kit ELO** and **Reset all ELO**, which put every row of the **current
-season** back to `elo.starting-mmr`. Previous seasons and the lifetime tier are untouched.
+See [stats](/docs/exyliapractice/stats#admin-commands) for the full field list. `/epc` → **Data management** also offers **Reset kit ELO** and **Reset all ELO**, which put every row of the **current season** back to `elo.starting-mmr`. Previous seasons and the lifetime tier are untouched.
+
+<Cards>
+  <Card title="Seasons" href="/docs/exyliapractice/seasons">What a rotation does to ratings.</Card>
+  <Card title="Queue" href="/docs/exyliapractice/queue">How ranked players get paired.</Card>
+  <Card title="Stats" href="/docs/exyliapractice/stats">The numbers kept next to ELO.</Card>
+</Cards>
