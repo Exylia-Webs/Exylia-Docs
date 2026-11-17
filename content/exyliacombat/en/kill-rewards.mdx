@@ -1,6 +1,6 @@
 ---
 title: "Reward kills and stop farming"
-description: "The kill-abuse checks that keep farmed kills out of stats and rewards, and what a PvP kill pays: money, experience, rewards, permission groups, streak milestones and bounties."
+description: "Pay money, experience and rewards for PvP kills, reward kill streaks and totals, and keep farmed kills from counting."
 questions:
   - "How do I pay money for a PvP kill?"
   - "How do I stop kill farming?"
@@ -10,24 +10,55 @@ questions:
 updated: "1.1.0"
 ---
 
-Every PvP kill is first judged by `kill-abuse`, then counted by `stats` and paid by `kill-rewards`, each only
-when the verdict lets it.
+A PvP kill can pay the killer money, experience, items or commands, reward streaks and totals, and farmed kills pay nothing. Every PvP kill is first judged by `kill-abuse`, then counted by `stats` and paid by `kill-rewards`, each only when the verdict lets it.
 
-## Kill abuse
+## Before you start
+
+- The `kill-rewards`, `stats` and `kill-abuse` modules are on by default. Streaks and totals come from `stats`, so keep it on.
+- Money needs an economy set up in ExyliaLib, see [economy setup](/docs/exylialib/economy-setup).
+- Reward lists use ExyliaLib's [reward format](/docs/exylialib/rewards#in-a-config-file).
+
+## Steps
+
+<Steps>
+  <Step title="Pay money for a kill">
+    Open `modules/kill-rewards/config.yml`. Set `money.enabled: true` and `money.killer-reward` (default `50`). Money is off by default. Run `/combatadmin reload`.
+  </Step>
+  <Step title="Add a total-kills reward in game">
+    Run `/combatadmin`, click **Kill rewards**, then **New milestone**. A milestone pays once per player, on the kill that reaches its number. **New repeating reward** pays every so many kills instead. Click an entry to change its **Kills**, **Rewards**, **Message** and **Broadcast**, or **Delete**.
+  </Step>
+  <Step title="Make sure payouts are on">
+    On the same screen, click **Payouts** to switch every milestone and repeating reward on or off (`total-kill-rewards`). It is off on servers that already had the file.
+  </Step>
+  <Step title="Stop farming">
+    Open **Settings**, then **Kill abuse**. Repeat kills and same-address kills are checked by default. Switch **Low playtime** on to ignore kills of brand-new accounts.
+  </Step>
+</Steps>
+
+## Check that it works
+
+Kill a test player with a normal account: the killer gets the `money-gained` message and the balance rises. Kill the same player twice within five minutes: the second kill is flagged, the killer is told why and nothing is paid or counted.
+
+## Going further
+
+### Kill abuse
 
 The `kill-abuse` module flags kill farming. Three checks run on every kill by a player, in this order:
 
+<Details title="Keys: Kill abuse">
 | Check | Flags a kill when |
 |---|---|
 | `repeat-kills` | The killer killed the same victim more than `max-kills` times within `window`. |
 | `same-address` | Killer and victim are online from the same address now, or, with `check-history`, both used one address within `history-window` (ExyliaLib's account history, network wide when every server shares the database). |
 | `low-playtime` | The victim has played less than `minimum` on this server. |
+</Details>
 
 Each check has its own `response`. A flagged kill can be kept out of the stats, out of the rewards, or
 both, and the plugin can tell the killer, the victim and staff, run commands and lock the pair out.
 
 `modules/kill-abuse/config.yml`:
 
+<Details title="Keys: Kill abuse">
 | Key | Default | What it does |
 |---|---|---|
 | `repeat-kills.enabled` | `true` | |
@@ -40,9 +71,11 @@ both, and the plugin can tell the killer, the victim and staff, run commands and
 | `low-playtime.minimum` | `15m` | A victim who has played less than this is flagged. |
 | `notify-permission` | `exyliacombat.notify.killabuse` | Who is told about detections with `notify-staff` on. The console is told too. |
 | `bypass-permission` | empty | Kills by or of a player with this permission are never checked. Empty: nobody skips the checks. |
+</Details>
 
 Every check's `response`:
 
+<Details title="Keys: Kill abuse">
 | Key | `repeat-kills` | `same-address` | `low-playtime` | What it does |
 |---|---|---|---|---|
 | `deny-stats` | `true` | `true` | `false` | The kill is not counted in the stats. |
@@ -52,11 +85,12 @@ Every check's `response`:
 | `notify-staff` | `false` | `true` | `false` | Tells every player with `notify-permission`. |
 | `lockout` | `0s` | `0s` | `0s` | After a detection, every kill between the two is treated the same way for this long, whichever check would have caught it. |
 | `commands` | `[]` | `[]` | `[]` | Commands run for the killer on a detection, not again during the lockout. `%player_name%`, `%victim%`, `%reason%`; prefixes `console:` (default), `player:`, `player-proxy:` or `console-proxy:`. Example: `console:kick %player_name% Kill farming`. |
+</Details>
 
 Text in `lang/<language>/modules/kill-abuse/messages.yml`: `warn-killer`, `warn-victim`, `staff-notice`, and
 the name of each check under `reasons` (`same victim too often`, `same address`, `victim is too new`).
 
-## Kill rewards
+### Kill rewards
 
 The `kill-rewards` module pays for PvP kills that `kill-abuse` lets through. Kills in `disabled-worlds` or in
 a region of `disabled-regions` (WorldGuard or ExyliaLib region ids) give and take nothing.
@@ -65,6 +99,7 @@ a region of `disabled-regions` (WorldGuard or ExyliaLib region ids) give and tak
 
 Moved through the economy chosen in ExyliaLib's `economy.yml`. Off by default.
 
+<Details title="Keys: Money">
 | Key | Default | What it does |
 |---|---|---|
 | `money.enabled` | `false` | |
@@ -73,22 +108,27 @@ Moved through the economy chosen in ExyliaLib's `economy.yml`. Off by default.
 | `money.steal-percent` | `0` | Percent of the victim's balance moved to the killer. `0`: nothing is stolen. |
 | `money.max-steal` | `0` | Most a single kill can steal. `0`: no limit. |
 | `money.victim-loss` | `0` | Taken from the victim on every kill and given to nobody, never more than they have left. |
+</Details>
 
 The killer is sent `money-gained` and the victim `money-lost`, with `%amount%` in the currency's format.
 
 ### Experience
 
+<Details title="Keys: Experience">
 | Key | Default | What it does |
 |---|---|---|
 | `experience.steal-percent` | `0` | Percent of the experience the victim drops that goes straight to the killer instead of falling as orbs. `0`: orbs drop as usual. On a flagged kill the orbs fall where the victim died. |
+</Details>
 
 ### Rewards and commands
 
+<Details title="Keys: Rewards and commands">
 | Key | Default | What it does |
 |---|---|---|
 | `killer-rewards` | `[]` | Rewards given to the killer on every kill. Money and experience in it scale with the group multiplier. |
 | `killer-commands` | `[]` | Commands run for the killer on every kill. |
 | `victim-commands` | `[]` | Commands run for the victim on every kill. |
+</Details>
 
 Reward lists use ExyliaLib's [reward format](/docs/exylialib/rewards#in-a-config-file): each entry is a bare
 command run by the console (`give %player_name% diamond 1`), or a block with `type` (`COMMAND`, `ITEM`,
@@ -127,6 +167,7 @@ counted by the `stats` module, which must be on, and a kill kept out of the stat
 
 ### Bounty for ending a streak
 
+<Details title="Keys: Bounty for ending a streak">
 | Key | Default | What it does |
 |---|---|---|
 | `shutdown.enabled` | `true` | |
@@ -134,6 +175,7 @@ counted by the `stats` module, which must be on, and a kill kept out of the stat
 | `shutdown.money-per-streak` | `0` | Money paid to the killer per kill of the ended streak, scaled by the multiplier. Needs `money.enabled`. |
 | `shutdown.broadcast` | `true` | Announces it to the whole server with `shutdown-broadcast`. |
 | `shutdown.rewards`, `shutdown.commands` | `[]` | Given to the killer. |
+</Details>
 
 Text in `lang/<language>/modules/kill-rewards/messages.yml`: `money-gained`, `money-lost`,
 `experience-gained`, `streak-broadcast` (`%player%`, `%streak%`), `shutdown-broadcast` (`%killer%`,
@@ -176,3 +218,9 @@ repeating-kill-rewards:
 
 These are separate from the streak milestones above, and streak milestones now pay only when the streak is crossed.
 Players' own money on a head is a different feature: see [Bounties](/docs/exyliacombat/bounties).
+
+<Cards>
+  <Card title="Let players place bounties" href="/docs/exyliacombat/bounties">Players put their own money on a head.</Card>
+  <Card title="Stats and leaderboards" href="/docs/exyliacombat/stats">What is counted and how it is shown.</Card>
+  <Card title="Economy" href="/docs/exylialib/economy-setup">Choose the currency kills pay in.</Card>
+</Cards>

@@ -1,6 +1,6 @@
 ---
 title: "Castiga la desconexión en combate"
-description: "Qué le pasa a un jugador que sale estando en combate: el castigo, a quién se perdona, los comandos, el anuncio, el webhook de Discord y el NPC de desconexión."
+description: "Elige qué le pasa a un jugador que sale en combate, a quién se perdona y si deja un NPC o te llega un aviso a Discord."
 questions:
   - "¿Qué pasa cuando un jugador se desconecta en combate?"
   - "¿Cómo dejo de castigar desconexiones en algunos mundos?"
@@ -10,10 +10,41 @@ questions:
 updated: "1.1.0"
 ---
 
-Desconectarse solo se castiga con el proveedor integrado. Con un proveedor externo, ese plugin gestiona sus
-propias desconexiones en combate; con `MANUAL`, no se castiga a nadie.
+ExyliaCombat castiga a los jugadores que salen del servidor en mitad de un combate: mueren, sueltan sus objetos o dejan un NPC que otros pueden matar. Tú eliges el castigo, a quién se perdona y a quién se avisa.
 
-## A quién se castiga
+Desconectarse solo se castiga con el proveedor integrado. Con un proveedor externo, ese plugin gestiona sus propias desconexiones; con `MANUAL`, no se castiga a nadie (consulta los [proveedores](/docs/exyliacombat/etiqueta-de-combate#proveedores)).
+
+## Antes de empezar
+
+Necesitas que la marca de combate funcione, consulta [Configura el combat tag](/docs/exyliacombat/etiqueta-de-combate). Las cuentas de staff operadoras ya tienen `exyliacombat.bypass.logout`, así que prueba con una cuenta normal.
+
+## Pasos
+
+<Steps>
+  <Step title="Abre los ajustes">
+    Ejecuta `/combatadmin`, pulsa **Ajustes** y luego **Marca de combate**.
+  </Step>
+  <Step title="Elige el castigo">
+    Pulsa **Penalización al salir** y elige `KILL` (por defecto), `DROP_INVENTORY` o `NOTHING`. Consulta [El castigo](#el-castigo).
+  </Step>
+  <Step title="Decide qué hacer con las expulsiones">
+    Pulsa **Castigar expulsiones** si también quieres castigar las expulsiones del staff o del anticheat. Viene desactivado, y un timeout se castiga siempre.
+  </Step>
+  <Step title="Perdona a quien quieras">
+    Da `exyliacombat.bypass.logout` a los grupos que nunca deban ser castigados (consulta [Permisos](/docs/exyliacombat/permisos)). Para perdonar un mundo entero, añádelo a `combat.logout.exempt-worlds` en `config.yml`.
+  </Step>
+  <Step title="Recarga">
+    Ejecuta `/combatadmin reload`.
+  </Step>
+</Steps>
+
+## Comprueba que funciona
+
+Con una cuenta normal, entra en combate (`/combatadmin settag 15 <jugador>`) y sal del servidor. Con los valores por defecto y el NPC de desconexión activo, un NPC con el equipo del jugador se queda donde estaba y los demás ven el anuncio. Con el módulo `logout-npc` desactivado, el jugador muere en el acto.
+
+## Ir más allá
+
+### A quién se castiga
 
 Un jugador en combate que sale del servidor se ha desconectado en combate, salvo en estos casos:
 
@@ -25,33 +56,18 @@ Un jugador en combate que sale del servidor se ha desconectado en combate, salvo
 | Lo han expulsado | Solo se castiga con `combat.punish-on-kick` (por defecto `false`): las expulsiones del staff y del anticheat se perdonan. Un timeout se castiga siempre. |
 | Ha cambiado de servidor con `cross-server` en `on-switch: CARRY` | El combate se va con él. Consulta [Redes](/docs/exyliacombat/multiservidor). |
 
-## Qué pasa, en orden
+### Qué pasa, en orden
 
-<Steps>
-  <Step title="CombatLogEvent">
-    Se lanza el `CombatLogEvent` cancelable de ExyliaLib mientras el jugador sigue conectado. Un plugin que
-    lo cancela le ahorra todo lo que sigue.
-  </Step>
-  <Step title="Comandos">
-    Se ejecutan los `combat.commands-on-logout`, con `%player%`.
-  </Step>
-  <Step title="Anuncio y webhook">
-    `combat.logout-broadcast` de `messages.yml` se envía a todos los demás conectados, y
-    `combat.logout.webhook` se publica en Discord.
-  </Step>
-  <Step title="Castigo">
-    Se aplica `combat.logout-punishment`.
-  </Step>
-  <Step title="CombatUntagEvent">
-    Se lanza `CombatUntagEvent` con `LOGOUT` (`KICKED` para una expulsión perdonada), se haya cancelado o
-    no la desconexión.
-  </Step>
-</Steps>
+1. **CombatLogEvent**: Se lanza el `CombatLogEvent` cancelable de ExyliaLib mientras el jugador sigue conectado. Un plugin que lo cancela le ahorra todo lo que sigue.
+2. **Comandos**: Se ejecutan los `combat.commands-on-logout`, con `%player%`.
+3. **Anuncio y webhook**: `combat.logout-broadcast` de `messages.yml` se envía a todos los demás conectados, y `combat.logout.webhook` se publica en Discord.
+4. **Castigo**: Se aplica `combat.logout-punishment`.
+5. **CombatUntagEvent**: Se lanza `CombatUntagEvent` con `LOGOUT` (`KICKED` para una expulsión perdonada), se haya cancelado o no la desconexión.
 
 El módulo `stats` cuenta cada desconexión castigada como una desconexión en combate
 (`%exyliacombat_combat_logs%`).
 
-## El castigo
+### El castigo
 
 | `combat.logout-punishment` | Qué pasa |
 |---|---|
@@ -62,13 +78,13 @@ El módulo `stats` cuenta cada desconexión castigada como una desconexión en c
 Con la [protección del botín](/docs/exyliacombat/proteccion#protección-del-botín) activa, los ítems que tira
 una desconexión con `DROP_INVENTORY` quedan reservados para el rival, como el botín de una muerte en PvP.
 
-## Comandos
+### Comandos
 
 `combat.commands-on-logout` y `combat.commands-on-player-death` aceptan `%player%` (o `%player_name%`). Una
 línea se ejecuta desde la consola salvo que empiece por `player:`; se puede escribir `console:` para que
 quede claro, y una `/` inicial se ignora. En el momento de salir, solo los comandos de consola son fiables.
 
-## Anuncio
+### Anuncio
 
 `combat.logout-broadcast` de `messages.yml`, que se envía a todos los demás jugadores conectados, con
 `%player%`, `%opponent%` y `%time%` (el combate que le quedaba). Vacío no envía nada.
@@ -77,16 +93,18 @@ quede claro, y una `/` inicial se ignora. En el momento de salir, solo los coman
 logout-broadcast: '%prefix% {highlight}%player% {error}se desconectó en combate{letters}.'
 ```
 
-## Webhook de Discord
+### Webhook de Discord
 
 `combat.logout.webhook` publica un mensaje por cada desconexión en combate, enviado fuera del hilo
 principal. Una `url` vacía no envía nada; una URL que no es un webhook de Discord se ignora con un aviso en
 consola.
 
+<Details title="Claves del webhook">
 | Clave | Por defecto | Qué hace |
 |---|---|---|
 | `combat.logout.webhook.url` | vacío | La URL del webhook, `https://discord.com/api/webhooks/...`. |
 | `combat.logout.webhook.message` | una tarjeta roja `COMBAT LOG` | El mensaje, en el formato de plantilla de webhooks de ExyliaLib. |
+</Details>
 
 La tarjeta por defecto lleva el título `COMBAT LOG`, la descripción `**%player%** logged out in combat.`, la
 cabeza del jugador como icono del autor y cuatro campos en línea: Opponent, Time left, World y Punishment.
@@ -95,7 +113,7 @@ Valores: `%player%`, `%opponent%` (`-` si no hay), `%time%`, `%world%`, `%punish
 pie, agrupación) se describen en los [webhooks de Discord](/docs/exylialib/webhooks-de-discord#la-plantilla)
 de ExyliaLib.
 
-## El NPC de desconexión
+### El NPC de desconexión
 
 Con `logout-punishment: KILL` y el módulo `logout-npc` activo (por defecto), quien se desconecta en combate
 no muere en el acto. Deja un NPC en su lugar: un maniquí con su skin en la 1.21.9 o superior, un zombi en
@@ -119,8 +137,9 @@ puede golpear en cualquier sitio donde el PvP esté permitido.
 Un reinicio con NPCs en pie los elimina y devuelve todo a sus dueños cuando vuelven. El núcleo restaura las
 desconexiones pendientes incluso con el módulo desactivado.
 
-`modules/logout-npc/config.yml`:
+Los ajustes están en `modules/logout-npc/config.yml`.
 
+<Details title="Claves del NPC de desconexión (modules/logout-npc/config.yml)">
 | Clave | Por defecto | Qué hace |
 |---|---|---|
 | `reset-combat-timer` | `true` | `true`: el NPC vive todo `combat.duration`. `false`: solo el combate que le quedaba al jugador. |
@@ -130,8 +149,15 @@ desconexiones pendientes incluso con el módulo desactivado.
 | `announce-radius` | `50` | A los jugadores a menos de esta distancia se les envía `combat.logout-npc-spawned`. `0`: a nadie. |
 | `commands-on-npc-death` | `[]` | Comandos que se ejecutan cuando el dueño vuelve tras morir su NPC. `%player%`; `console:` (por defecto) o `player:`. |
 | `blacklisted-worlds` | `[]` | Mundos donde no se deja NPC: el jugador muere en el acto. |
+</Details>
 
 <Callout type="note" title="El aviso del NPC viene vacío">
 `combat.logout-npc-spawned` de `messages.yml` viene vacío, así que no se avisa a nadie de que ha aparecido
 un NPC hasta que escribas una línea ahí (`%player%` es quien se desconectó).
 </Callout>
+
+<Cards>
+  <Card title="Restringe lo que pueden hacer en combate" href="/docs/exyliacombat/restricciones">Bloquea comandos de huida y teletransportes.</Card>
+  <Card title="Protege el botín" href="/docs/exyliacombat/proteccion#protección-del-botín">Reserva los objetos de la víctima para el asesino.</Card>
+  <Card title="Webhooks de Discord" href="/docs/exylialib/webhooks-de-discord">Cómo funciona la plantilla del webhook.</Card>
+</Cards>

@@ -1,6 +1,6 @@
 ---
 title: "Recompensa kills y evita el farmeo"
-description: "Las comprobaciones de kill-abuse que dejan las kills farmeadas fuera de las estadísticas y las recompensas, y lo que paga una kill de PvP: dinero, experiencia, recompensas, grupos por permiso, hitos de racha y recompensas por cabeza."
+description: "Paga dinero, experiencia y recompensas por kills de PvP, premia rachas y totales, y evita que cuenten las kills farmeadas."
 questions:
   - "¿Cómo pago dinero por una kill de PvP?"
   - "¿Cómo evito el farmeo de kills?"
@@ -10,19 +10,49 @@ questions:
 updated: "1.1.0"
 ---
 
-Cada kill de PvP la juzga primero `kill-abuse`, después la cuenta `stats` y la paga `kill-rewards`, cada uno
-solo si el veredicto lo permite.
+Una kill de PvP puede pagar al asesino dinero, experiencia, objetos o comandos, premiar rachas y totales, y las kills farmeadas no pagan nada. Cada kill de PvP la juzga primero `kill-abuse`, después la cuenta `stats` y la paga `kill-rewards`, cada uno solo si el veredicto lo permite.
 
-## Abuso de kills
+## Antes de empezar
+
+- Los módulos `kill-rewards`, `stats` y `kill-abuse` vienen activados. Las rachas y los totales salen de `stats`, así que déjalo activo.
+- El dinero necesita una economía configurada en ExyliaLib, consulta [configurar la economía](/docs/exylialib/configurar-economia).
+- Las listas de recompensas usan el [formato de recompensas](/docs/exylialib/recompensas#en-un-archivo-de-config) de ExyliaLib.
+
+## Pasos
+
+<Steps>
+  <Step title="Paga dinero por una kill">
+    Abre `modules/kill-rewards/config.yml`. Pon `money.enabled: true` y `money.killer-reward` (por defecto `50`). El dinero viene desactivado. Ejecuta `/combatadmin reload`.
+  </Step>
+  <Step title="Añade una recompensa por kills totales desde el juego">
+    Ejecuta `/combatadmin`, pulsa **Recompensas por kills** y luego **Nuevo hito**. Un hito paga una vez por jugador, en la kill que alcanza su número. **Nueva recompensa repetida** paga cada cierto número de kills. Pulsa una entrada para cambiar sus **Kills**, **Recompensas**, **Mensaje** y **Anuncio**, o **Borrar**.
+  </Step>
+  <Step title="Comprueba que los pagos están activos">
+    En la misma pantalla, pulsa **Pagos** para activar o desactivar todos los hitos y recompensas repetidas (`total-kill-rewards`). Viene desactivado en servidores que ya tenían el archivo.
+  </Step>
+  <Step title="Frena el farmeo">
+    Abre **Ajustes** y luego **Abuso de bajas**. Las kills repetidas y desde la misma dirección se comprueban por defecto. Activa **Poco tiempo de juego** para ignorar las kills de cuentas recién creadas.
+  </Step>
+</Steps>
+
+## Comprueba que funciona
+
+Mata a un jugador de prueba con una cuenta normal: el asesino recibe el mensaje `money-gained` y su saldo sube. Mata al mismo jugador dos veces en cinco minutos: la segunda kill se marca, se avisa al asesino del motivo y no se paga ni cuenta nada.
+
+## Ir más allá
+
+### Abuso de kills
 
 El módulo `kill-abuse` detecta el farmeo de kills. En cada kill de un jugador se hacen tres comprobaciones,
 en este orden:
 
+<Details title="Claves: Abuso de kills">
 | Comprobación | Marca una kill cuando |
 |---|---|
 | `repeat-kills` | El asesino ha matado a la misma víctima más de `max-kills` veces dentro de `window`. |
 | `same-address` | Asesino y víctima están conectados ahora desde la misma dirección o, con `check-history`, los dos usaron una misma dirección dentro de `history-window` (el historial de cuentas de ExyliaLib, en toda la red si todos los servidores comparten la base de datos). |
 | `low-playtime` | La víctima ha jugado menos de `minimum` en este servidor. |
+</Details>
 
 Cada comprobación tiene su propia `response`. Una kill marcada puede quedar fuera de las estadísticas, de
 las recompensas o de las dos, y el plugin puede avisar al asesino, a la víctima y al staff, ejecutar
@@ -30,6 +60,7 @@ comandos y bloquear a la pareja durante un tiempo.
 
 `modules/kill-abuse/config.yml`:
 
+<Details title="Claves: Abuso de kills">
 | Clave | Por defecto | Qué hace |
 |---|---|---|
 | `repeat-kills.enabled` | `true` | |
@@ -42,9 +73,11 @@ comandos y bloquear a la pareja durante un tiempo.
 | `low-playtime.minimum` | `15m` | Se marca a una víctima que ha jugado menos de esto. |
 | `notify-permission` | `exyliacombat.notify.killabuse` | A quién se avisa de las detecciones con `notify-staff` activo. También se avisa a la consola. |
 | `bypass-permission` | vacío | Las kills hechas por o sufridas por un jugador con este permiso nunca se comprueban. Vacío: nadie se salta las comprobaciones. |
+</Details>
 
 La `response` de cada comprobación:
 
+<Details title="Claves: Abuso de kills">
 | Clave | `repeat-kills` | `same-address` | `low-playtime` | Qué hace |
 |---|---|---|---|---|
 | `deny-stats` | `true` | `true` | `false` | La kill no cuenta en las estadísticas. |
@@ -54,12 +87,13 @@ La `response` de cada comprobación:
 | `notify-staff` | `false` | `true` | `false` | Avisa a todos los jugadores con `notify-permission`. |
 | `lockout` | `0s` | `0s` | `0s` | Tras una detección, toda kill entre los dos se trata igual durante este tiempo, la detecte la comprobación que la detecte. |
 | `commands` | `[]` | `[]` | `[]` | Comandos que se ejecutan para el asesino en una detección, no otra vez durante el bloqueo. `%player_name%`, `%victim%`, `%reason%`; prefijos `console:` (por defecto), `player:`, `player-proxy:` o `console-proxy:`. Ejemplo: `console:kick %player_name% Kill farming`. |
+</Details>
 
 Los textos están en `lang/<language>/modules/kill-abuse/messages.yml`: `warn-killer`, `warn-victim`,
 `staff-notice`, y el nombre de cada comprobación bajo `reasons` (`la misma víctima demasiadas veces`,
 `misma dirección IP`, `la víctima es demasiado nueva`).
 
-## Recompensas por kill
+### Recompensas por kill
 
 El módulo `kill-rewards` paga por las kills de PvP que `kill-abuse` deja pasar. Las kills en
 `disabled-worlds` o en una región de `disabled-regions` (ids de región de WorldGuard o de ExyliaLib) no dan
@@ -69,6 +103,7 @@ ni quitan nada.
 
 Se mueve con la economía elegida en `economy.yml` de ExyliaLib. Desactivado por defecto.
 
+<Details title="Claves: Dinero">
 | Clave | Por defecto | Qué hace |
 |---|---|---|
 | `money.enabled` | `false` | |
@@ -77,22 +112,27 @@ Se mueve con la economía elegida en `economy.yml` de ExyliaLib. Desactivado por
 | `money.steal-percent` | `0` | Porcentaje del saldo de la víctima que pasa al asesino. `0`: no se roba nada. |
 | `money.max-steal` | `0` | Lo máximo que puede robar una sola kill. `0`: sin límite. |
 | `money.victim-loss` | `0` | Se le quita a la víctima en cada kill y no se le da a nadie, nunca más de lo que le queda. |
+</Details>
 
 Al asesino se le envía `money-gained` y a la víctima `money-lost`, con `%amount%` en el formato de la moneda.
 
 ### Experiencia
 
+<Details title="Claves: Experiencia">
 | Clave | Por defecto | Qué hace |
 |---|---|---|
 | `experience.steal-percent` | `0` | Porcentaje de la experiencia que suelta la víctima que va directa al asesino en lugar de caer en orbes. `0`: los orbes caen como siempre. En una kill marcada, los orbes caen donde murió la víctima. |
+</Details>
 
 ### Recompensas y comandos
 
+<Details title="Claves: Recompensas y comandos">
 | Clave | Por defecto | Qué hace |
 |---|---|---|
 | `killer-rewards` | `[]` | Recompensas que recibe el asesino en cada kill. El dinero y la experiencia que contienen se multiplican con el multiplicador del grupo. |
 | `killer-commands` | `[]` | Comandos que se ejecutan para el asesino en cada kill. |
 | `victim-commands` | `[]` | Comandos que se ejecutan para la víctima en cada kill. |
+</Details>
 
 Las listas de recompensas usan el [formato de recompensas](/docs/exylialib/recompensas#en-un-archivo-de-config)
 de ExyliaLib: cada entrada es un comando suelto que ejecuta la consola (`give %player_name% diamond 1`), o un
@@ -133,6 +173,7 @@ la racha.
 
 ### Recompensa por acabar con una racha
 
+<Details title="Claves: Recompensa por acabar con una racha">
 | Clave | Por defecto | Qué hace |
 |---|---|---|
 | `shutdown.enabled` | `true` | |
@@ -140,6 +181,7 @@ la racha.
 | `shutdown.money-per-streak` | `0` | Dinero que se paga al asesino por cada kill de la racha terminada, multiplicado por el multiplicador. Necesita `money.enabled`. |
 | `shutdown.broadcast` | `true` | Lo anuncia a todo el servidor con `shutdown-broadcast`. |
 | `shutdown.rewards`, `shutdown.commands` | `[]` | Se dan al asesino. |
+</Details>
 
 Los textos están en `lang/<language>/modules/kill-rewards/messages.yml`: `money-gained`, `money-lost`,
 `experience-gained`, `streak-broadcast` (`%player%`, `%streak%`), `shutdown-broadcast` (`%killer%`,
@@ -183,3 +225,9 @@ repeating-kill-rewards:
 
 Son distintas de los hitos de racha de arriba, y los hitos de racha ahora pagan solo cuando se cruza la racha. El dinero
 que los jugadores ponen a una cabeza es otra función: mira [Recompensas por cabeza](/docs/exyliacombat/recompensas-por-cabeza).
+
+<Cards>
+  <Card title="Deja que los jugadores pongan recompensas por cabeza" href="/docs/exyliacombat/recompensas-por-cabeza">Los jugadores ponen su propio dinero por una cabeza.</Card>
+  <Card title="Estadísticas y clasificaciones" href="/docs/exyliacombat/estadisticas">Qué se cuenta y cómo se muestra.</Card>
+  <Card title="Economía" href="/docs/exylialib/configurar-economia">Elige la moneda en la que pagan las kills.</Card>
+</Cards>

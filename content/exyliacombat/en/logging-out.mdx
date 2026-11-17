@@ -1,6 +1,6 @@
 ---
 title: "Punish combat logging"
-description: "What happens to a player who leaves while tagged: the punishment, who is spared, commands, the broadcast, the Discord webhook and the logout NPC."
+description: "Choose what happens to a player who leaves while tagged, who is spared, and whether they leave an NPC behind or you get a Discord alert."
 questions:
   - "What happens when a player logs out in combat?"
   - "How do I stop punishing logouts in some worlds?"
@@ -10,10 +10,41 @@ questions:
 updated: "1.1.0"
 ---
 
-Logging out is punished with the built-in provider only. With an external provider, that plugin handles its
-own combat loggers; with `MANUAL`, nobody is punished.
+ExyliaCombat punishes players who leave the server in the middle of a fight: they die, drop their items, or leave an NPC behind that others can kill. You choose the punishment, who is spared and who gets told.
 
-## Who is punished
+Logging out is punished with the built-in provider only. With an external provider, that plugin handles its own combat loggers; with `MANUAL`, nobody is punished (see [providers](/docs/exyliacombat/combat-tag#providers)).
+
+## Before you start
+
+You need the combat tag working, see [Set up the combat tag](/docs/exyliacombat/combat-tag). Staff accounts that are operators already hold `exyliacombat.bypass.logout`, so test with a normal account.
+
+## Steps
+
+<Steps>
+  <Step title="Open the settings">
+    Run `/combatadmin`, click **Settings**, then **Combat tag**.
+  </Step>
+  <Step title="Pick the punishment">
+    Click **Logout penalty** and choose `KILL` (default), `DROP_INVENTORY` or `NOTHING`. See [The punishment](#the-punishment).
+  </Step>
+  <Step title="Decide about kicks">
+    Click **Punish kicks** if staff or anti-cheat kicks should be punished too. It is off by default, and a timeout is always punished.
+  </Step>
+  <Step title="Spare who you want">
+    Give `exyliacombat.bypass.logout` to groups that must never be punished (see [Permissions](/docs/exyliacombat/permissions)). To spare a whole world, add it to `combat.logout.exempt-worlds` in `config.yml`.
+  </Step>
+  <Step title="Reload">
+    Run `/combatadmin reload`.
+  </Step>
+</Steps>
+
+## Check that it works
+
+With a normal account, get tagged (`/combatadmin settag 15 <player>`) and leave. With the default settings and the logout NPC on, an NPC wearing the player's gear stays where they stood and everyone else sees the broadcast. With the `logout-npc` module off, the player dies on the spot instead.
+
+## Going further
+
+### Who is punished
 
 A tagged player who leaves the server is a combat logger, except:
 
@@ -25,32 +56,17 @@ A tagged player who leaves the server is a combat logger, except:
 | They were kicked | Punished only with `combat.punish-on-kick` (default `false`): staff kicks and anti-cheat kicks are spared. A timeout is always punished. |
 | They switched server under `cross-server` with `on-switch: CARRY` | The tag goes with them. See [Networks](/docs/exyliacombat/cross-server). |
 
-## What happens, in order
+### What happens, in order
 
-<Steps>
-  <Step title="CombatLogEvent">
-    ExyliaLib's cancellable `CombatLogEvent` is fired while the player is still online. A plugin that
-    cancels it spares them everything below.
-  </Step>
-  <Step title="Commands">
-    `combat.commands-on-logout` run, with `%player%`.
-  </Step>
-  <Step title="Broadcast and webhook">
-    `combat.logout-broadcast` in `messages.yml` is sent to everyone else online, and
-    `combat.logout.webhook` is posted to Discord.
-  </Step>
-  <Step title="Punishment">
-    `combat.logout-punishment` is applied.
-  </Step>
-  <Step title="CombatUntagEvent">
-    `CombatUntagEvent` fires with `LOGOUT` (`KICKED` for a spared kick), whether or not the log was
-    cancelled.
-  </Step>
-</Steps>
+1. **CombatLogEvent**: ExyliaLib's cancellable `CombatLogEvent` is fired while the player is still online. A plugin that cancels it spares them everything below.
+2. **Commands**: `combat.commands-on-logout` run, with `%player%`.
+3. **Broadcast and webhook**: `combat.logout-broadcast` in `messages.yml` is sent to everyone else online, and `combat.logout.webhook` is posted to Discord.
+4. **Punishment**: `combat.logout-punishment` is applied.
+5. **CombatUntagEvent**: `CombatUntagEvent` fires with `LOGOUT` (`KICKED` for a spared kick), whether or not the log was cancelled.
 
 The `stats` module counts every punished logout as a combat log (`%exyliacombat_combat_logs%`).
 
-## The punishment
+### The punishment
 
 | `combat.logout-punishment` | What happens |
 |---|---|
@@ -61,13 +77,13 @@ The `stats` module counts every punished logout as a combat log (`%exyliacombat_
 With [loot protection](/docs/exyliacombat/protection#loot-protection) on, the items a `DROP_INVENTORY`
 logout drops are reserved for the opponent, like the drops of a PvP death.
 
-## Commands
+### Commands
 
 `combat.commands-on-logout` and `combat.commands-on-player-death` take `%player%` (or `%player_name%`).
 A line runs from the console unless it starts with `player:`; `console:` can be written for clarity, and a
 leading `/` is dropped. At quit time only console commands are reliable.
 
-## Broadcast
+### Broadcast
 
 `combat.logout-broadcast` in `messages.yml`, sent to every other online player, with `%player%`,
 `%opponent%` and `%time%` (the tag that was left). Empty sends nothing.
@@ -76,15 +92,17 @@ leading `/` is dropped. At quit time only console commands are reliable.
 logout-broadcast: '%prefix% {highlight}%player% {error}logged out in combat{letters}.'
 ```
 
-## Discord webhook
+### Discord webhook
 
 `combat.logout.webhook` posts a message for every combat log, sent off the main thread. An empty `url`
 sends nothing; a URL that is not a Discord webhook is ignored with a warning in the console.
 
+<Details title="Webhook keys">
 | Key | Default | What it does |
 |---|---|---|
 | `combat.logout.webhook.url` | empty | The webhook URL, `https://discord.com/api/webhooks/...`. |
 | `combat.logout.webhook.message` | a red `COMBAT LOG` card | The message, in ExyliaLib's webhook template format. |
+</Details>
 
 The default card has the title `COMBAT LOG`, the description `**%player%** logged out in combat.`, the
 player's head as the author icon and four inline fields: Opponent, Time left, World and Punishment. Values:
@@ -92,7 +110,7 @@ player's head as the author icon and four inline fields: Opponent, Time left, Wo
 `nothing`) and `%player_head%`. Every key of the template (colour, fields, buttons, footer, coalescing) is
 described in ExyliaLib's [Discord webhooks](/docs/exylialib/discord-webhooks#the-template).
 
-## The logout NPC
+### The logout NPC
 
 With `logout-punishment: KILL` and the `logout-npc` module on (default), a combat logger does not die on the
 spot. They leave an NPC behind: a mannequin with their skin on 1.21.9 or newer, a zombie otherwise. It wears
@@ -116,8 +134,9 @@ WorldGuard, it can be hit wherever PvP is allowed.
 A restart while NPCs stand removes them and gives the loggers everything back when they return. Pending
 loggers are restored by the core even with the module switched off.
 
-`modules/logout-npc/config.yml`:
+The settings are in `modules/logout-npc/config.yml`.
 
+<Details title="Logout NPC keys (modules/logout-npc/config.yml)">
 | Key | Default | What it does |
 |---|---|---|
 | `reset-combat-timer` | `true` | `true`: the NPC lives for the full `combat.duration`. `false`: only for the tag the player had left. |
@@ -127,8 +146,15 @@ loggers are restored by the core even with the module switched off.
 | `announce-radius` | `50` | Players within this many blocks are sent `combat.logout-npc-spawned`. `0`: nobody. |
 | `commands-on-npc-death` | `[]` | Commands run when the owner reconnects after their NPC was killed. `%player%`; `console:` (default) or `player:`. |
 | `blacklisted-worlds` | `[]` | Worlds where no NPC is left: the logger is killed on the spot instead. |
+</Details>
 
 <Callout type="note" title="The NPC announcement is empty by default">
 `combat.logout-npc-spawned` in `messages.yml` ships empty, so nobody is told an NPC spawned until you write
 a line there (`%player%` is the logger).
 </Callout>
+
+<Cards>
+  <Card title="Restrict what tagged players can do" href="/docs/exyliacombat/restrictions">Stop escape commands and teleports.</Card>
+  <Card title="Protect loot" href="/docs/exyliacombat/protection#loot-protection">Reserve a victim's drops for the killer.</Card>
+  <Card title="Discord webhooks" href="/docs/exylialib/discord-webhooks">How the webhook template works.</Card>
+</Cards>
