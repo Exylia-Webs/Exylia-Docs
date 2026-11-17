@@ -5,120 +5,111 @@ questions:
   - "How do I restore a player's inventory after they died?"
   - "How long are inventory backups kept?"
   - "Can I restore an offline player?"
+  - "Can I give back only some of the items?"
+  - "How do I save a player's inventory right now?"
 updated: "1.8.0"
 ---
 
-Inventory restore keeps a copy of what a player was carrying, so a staff member reading a report
-three days later can look at what they actually had and give it back. Copies are rows in the
-database, not files, so the whole network reads the same history.
+ExyliaStaff keeps copies of what players carry, so a staff member reading a report three days later can look at what the player really had and give it back, whole or in parts. Copies are database rows, not files, so every server of the network reads the same history.
 
-Module id `restore`, switch `modules.inventory-restore`, files under `modules/restore/`.
+## Before you start
 
-## Commands
+- Staff need `exyliastaff.restore`. Two buttons need more: `exyliastaff.restore.log` (restore history) and `exyliastaff.restore.purge` (delete every backup of a player).
+- The module switch is `modules.inventory-restore` in `plugins/ExyliaStaff/config.yml`, on by default. Settings are in `plugins/ExyliaStaff/modules/restore/config.yml`.
+- Backups are taken automatically and stored in the plugin's [database](/docs/exylialib/database); there is nothing to set up.
 
-| Command | Permission | What it does |
+## Steps
+
+<Steps>
+  <Step title="Open the player's inventories">
+    Run `/invrestore <player>` (aliases `/inventoryrestore` and `/restoreinv`). Any name connected to the proxy is suggested, online or not. If the player's backups come from more than one server, the **SERVERS** screen opens first, current server first; pick one, or **Servers ▸ Every server**. With a single server it goes straight to **INVENTORIES**. Console cannot use the command.
+  </Step>
+  <Step title="Pick the backup">
+    **INVENTORIES** lists the backups newest first, each with the icon of its cause and a line saying what the event was. The tabs filter them: **Everything**, **Deaths**, **Joins and quits**, **World changes** and **Staff saves**. Click a backup to open it.
+  </Step>
+  <Step title="Check what they had">
+    **BACKUP** shows the inventory with its armour and off-hand zones. Empty slots are shown as air, so what you see is what they had. A death backup also shows the cause and **Killed by**. To give back a single item, click it in the preview.
+  </Step>
+  <Step title="Choose what to hand back">
+    Click **Backup ▸ Restore**. On **RESTORE**, click each part to tick it. The **Items** button switches between replacing what they carry and adding to it. Click **Restore ▸ Confirm** to hand it back.
+  </Step>
+</Steps>
+
+## Check that it works
+
+Run `/invrestore <a player online>` and click **Backups ▸ Save now**. A backup with the **Staff saves** cause appears in **INVENTORIES** right away. Open it, tick **Inventory** and confirm: the player is told that you restored it (`notify-target`).
+
+## Going further
+
+### What you can hand back
+
+Eleven parts, ticked one by one: Inventory, Armor, Off hand, Ender chest, Experience, Health, Hunger, Potion effects, Game mode, Flight and Location.
+
+`default-parts` is what is already ticked when the screen opens: inventory, armour, off hand, experience, health and hunger. A list that leaves nothing valid falls back to those six.
+
+The four parts made of items (inventory, armour, off hand, ender chest) can be written over what the player carries or added to it. `default-replace` (`true`) decides which one the screen opens on. Either way their current items are saved first as a **Before a restore** backup, so a wrong choice is one restore away from being undone. Location is never applied across servers.
+
+### Save a copy now
+
+In **INVENTORIES**, **Backups ▸ Save now** copies what the player carries at this moment. The player must be on this server; otherwise you are told there is nothing to copy.
+
+### Restore a player who is offline
+
+The hand-back is queued with its own copy of the items and the parts you ticked, and lands the moment they join (their arrival backup is written first). If they are online on another server, that server is notified so the delivery happens at once. **Backups ▸ Waiting [n]** drops what is still owed.
+
+### Delete backups and read the history
+
+**Backup ▸ Delete** on a backup removes it, after a confirm screen. **Backups ▸ Delete everything** (shift left click, needs `exyliastaff.restore.purge`) removes every backup of that player. **Backups ▸ Restore history** (needs `exyliastaff.restore.log`) shows who handed what to whom, readable from either end: what a staff member gave out and what a player received.
+
+### Watch what happened
+
+A death backup has **Backup ▸ Watch what happened** when the [replays](/docs/exyliastaff/replays) module is on: the minute before that death, to decide whether it was fair. If [item revocation](/docs/exyliastaff/item-revocation) is on, the restore screen of a death that dropped marked items also has the **Revoke** switch.
+
+### How long backups are kept
+
+| Setting | Default | Meaning |
 |---|---|---|
-| `/invrestore <player>` | `exyliastaff.restore` | Opens that player's saved inventories. `/inventoryrestore` and `/restoreinv` are aliases. |
+| `keep-per-player` | `20` | Backups kept per player (never more than 100). The oldest go as new ones arrive. |
+| `keep-days` | `14` | Days a backup is kept. `0` keeps them until the count drops them. |
+| `history-keep-days` | `90` | Days the restore history is kept. `0` keeps it forever. |
 
-That is the whole command surface. Everything else — saving a copy now, deleting one, purging a
-player, reading the history — is a button in the menus, so there is one thing to remember and one
-place to look.
+Deaths and manual saves are not pushed out by the count; they stay until `keep-days` takes them. The cleanup runs at start and every five minutes, from one server of the network at a time.
 
-The argument is a network name: everybody connected to the proxy is suggested, not only the players
-this server has seen. A name this server has never met is asked of the proxy through the staff
-member who typed it, which is why console cannot reach one. The bare command answers with its own
-usage lines rather than the server's parser error.
-
-Two more permissions gate buttons rather than commands:
-
-| Permission | What it opens |
-|---|---|
-| `exyliastaff.restore.log` | The restore history, from either end. |
-| `exyliastaff.restore.purge` | Dropping every backup of one player. |
-
-## When a copy is taken
-
+<Details title="When a copy is taken, and the config keys">
 | Cause | Icon | Switch |
 |---|---|---|
 | Death | `SKELETON_SKULL` | `causes.death` |
 | Quit | `IRON_DOOR` | `causes.quit` |
 | Join | `OAK_DOOR` | `causes.join` |
 | World change | `ENDER_PEARL` | `causes.world-change` |
-| Manual save | `WRITABLE_BOOK` | Always on |
-| Before a restore | `CLOCK` | Always on |
+| Manual save | `WRITABLE_BOOK` | always on |
+| Before a restore | `CLOCK` | always on |
 
-The last two have no switch on purpose. A manual save is a staff member asking for it, and the copy
-taken before a restore is what makes a restore undoable.
+All four switches are `true` by default. The last two have no switch on purpose: a manual save is a staff member asking, and the copy before a restore is what makes a restore undoable.
 
-A copy is only written when there is something to copy, the ender chest included: a player who
-empties their pockets into it before logging out still has something worth a row.
-`min-seconds-between` (60) is the gap between two ordinary backups of the same player, so somebody
-bouncing through a portal does not write a row a second. Deaths, quits and manual saves ignore it:
-deaths and manual saves are what staff come looking for, and a quit is the last moment this server
-can copy anything at all. Without that, logging in, taking something and logging out inside the
-minute would leave it in no row. Two backups minutes apart holding the same items are still two backups: the one a staff
-member wants is the one at the moment they are asking about.
+A copy is written only when there is something to copy, ender chest included. `min-seconds-between` (60) is the gap between two ordinary backups of the same player; deaths, quits and manual saves ignore it. The quit and join copies are skipped while the server is stopping, because Paper disconnects every player before it disables plugins.
 
-The quit copy is skipped while the server is stopping. Paper disconnects every player before it
-disables a plugin, so a quit backup there is one row per online player written in the same second,
-and the join copy says the same thing.
+```yaml title="plugins/ExyliaStaff/modules/restore/config.yml"
+keep-per-player: 20
+keep-days: 14
+history-keep-days: 90
+min-seconds-between: 60
+default-parts: [INVENTORY, ARMOR, OFF_HAND, EXPERIENCE, HEALTH, HUNGER]
+default-replace: true
+notify-target: true
+causes: { death: true, quit: true, join: true, world-change: true }
+```
 
-## How long they are kept
+The argument of `/invrestore` is a network name. A name this server has never seen is asked of the proxy through the staff member who typed it, which is why console cannot use it.
+</Details>
 
-| Key | Default | What it means |
-|---|---|---|
-| `keep-per-player` | `20` | Backups kept per player. The oldest are dropped as new ones arrive. |
-| `keep-days` | `14` | Days a backup is kept. `0` keeps them until the count drops them. |
-| `history-keep-days` | `90` | Days the restore history is kept. `0` keeps it forever. |
+## Commands and permissions
 
-Deaths and manual saves are not pushed out by the count. Those are what a report is about, so they
-stay until `keep-days` takes them rather than being shoved aside by ordinary joins. The purge runs
-when the module starts and every five minutes after that, by one server of the network at a time and
-in small pages.
+<Commands group="inventory restore" />
 
-## The screens
+<Permissions group="inventory restore" />
 
-**Servers** opens first: which server each backup was taken on, the current one first and glowing.
-**Inventories** lists that player's backups newest first, tabbed by event, each drawn with the icon
-of its cause and a line saying what the event was. **Backup** is one of them, laid out with its own
-armour and off-hand zones — the preview stacks are buttons, and their lore says so. Empty slots are
-drawn as air rather than filler panes, so what you see is what they had.
-
-**Restore** is where you tick the parts, and **Restore history** is the record of who handed what to
-whom, readable from either end: what a staff member gave out, and what a player received.
-
-A death backup has a **Watch what happened** button when the [replay](/docs/exyliastaff/replays)
-module is on: the minute before that death, with ping and server lag on the board, for deciding
-whether it was fair. With [item revocation](/docs/exyliastaff/item-revocation) on, the restore screen
-of a death that dropped marked items also has the switch that revokes the copies still in circulation.
-
-## What you can hand back
-
-Eleven parts, ticked one by one before you confirm:
-
-`INVENTORY`, `ARMOR`, `OFF_HAND`, `ENDER_CHEST`, `EXPERIENCE`, `HEALTH`, `HUNGER`,
-`POTION_EFFECTS`, `GAME_MODE`, `FLIGHT`, `LOCATION`.
-
-`default-parts` is what is already ticked when the screen opens; the default is inventory, armour,
-off hand, experience, health and hunger. A name this server does not know is skipped rather than
-throwing, and a list that leaves nothing at all falls back to those six: a typo must not open a
-screen where every box is empty.
-
-The four parts made of items — inventory, armour, off hand and ender chest — can be *added* to what
-the player is carrying instead of written over it. `default-replace` (`true`) decides which of the
-two the screen opens on. Replacing saves their current items first either way, so the wrong choice
-is one restore away from being undone.
-
-`LOCATION` is the one part this module puts back itself rather than the library, because the
-coordinates live on the backup row. It is never applied across servers: a location taken somewhere
-else is not a place on this one.
-
-`notify-target` (`true`) tells the player when a staff member hands their items back.
-
-## Players who are offline
-
-A hand-back for somebody who is not connected is queued with its own copy of the items and of the
-parts you ticked, and lands the moment they join — their arrival backup is written first, so the two
-never blend into one row. If they are online on another server, that server is nudged over Redis so
-the delivery happens at once instead of waiting for a relog. A staff member who queued one by
-mistake can drop what is still owed.
+<Cards>
+  <Card title="Next: Take back duplicated items" href="/docs/exyliastaff/item-revocation">Stop a restore from duplicating items a hacker handed out.</Card>
+  <Card title="Next: Replays" href="/docs/exyliastaff/replays">Watch the minute before a death before you decide.</Card>
+</Cards>

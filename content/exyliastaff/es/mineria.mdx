@@ -3,231 +3,125 @@ title: "Pilla a los mineros con x-ray"
 description: "Puntúa lo sospechosa que es la minería de un jugador y avisa al staff cuando supera un nivel."
 questions:
   - "¿Cómo detecto x-ray?"
-  - "¿Cómo activo las alertas de minería?"
+  - "¿Cómo activo o desactivo las alertas de minería?"
+  - "¿Cómo veo quién mina de forma sospechosa?"
   - "¿Cómo reinicio el registro de minería de un jugador?"
+  - "¿Cómo cambio los minerales que se vigilan?"
 updated: "1.8.0"
 ---
 
-El módulo de minería observa cómo encuentran mena los jugadores. No le importa cuánto diamante mina
-alguien; le importa si camina en línea recta hacia vetas enterradas en la oscuridad, con segundos de
-diferencia, a través de ocho bloques de piedra. Cada una de esas cosas es un factor, los factores se
-suman en una puntuación de 0 a 100, la puntuación decae, y se alerta al staff cuando cruza un nivel.
+ExyliaStaff vigila cómo encuentran mena los jugadores, no cuánta minan. Quien camina en línea recta hacia diamantes enterrados, a oscuras y con segundos de diferencia, recibe una puntuación de sospecha de 0 a 100, y el staff de todos los servidores recibe un aviso cuando supera un nivel.
 
-Id de módulo `mining`, interruptor `modules.mining`, archivos en `modules/mining/`.
+## Antes de empezar
 
-## Qué cuenta como evidencia
+- El staff que recibe alertas necesita `exyliastaff.mining.alerts`. Quien consulta registros necesita `exyliastaff.mining.view`, y `exyliastaff.mining.reset` para borrar uno.
+- El interruptor del módulo es `modules.mining` en `plugins/ExyliaStaff/config.yml`. Sus ajustes están en `plugins/ExyliaStaff/modules/mining/config.yml`.
+- Opcional: el módulo de [Discord](/docs/exyliastaff/configuracion#webhooks-de-discord) publica cada alerta de minería en el webhook de alertas.
 
-Solo las menas de una familia marcada como `valuable` alimentan los factores; el resto se cuentan como
-piedra. De esas, solo cuenta el **primer bloque de una veta**: la veta se rellena por inundación a
-través de los vecinos por cara hasta `vein.max-size` bloques y se recuerda durante
-`vein.remember-minutes`, así que minar el resto es gratis. Y solo cuenta una veta **enterrada**, una
-con como máximo `ore-exposure.partial-faces` caras abiertas al aire: una mena en la pared de una cueva
-es lo que encuentra una antorcha.
+## Pasos
 
-Un bloque que colocó un jugador se recuerda durante `placed-blocks.remember-minutes` y se ignora al
-romperlo. Las roturas en creativo se ignoran, igual que una rotura que otro plugin canceló.
+<Steps>
+  <Step title="Activa tus alertas">
+    Ejecuta `/mining`. Alterna tus alertas y te dice el nuevo estado; `/mining on` y `/mining off` lo fijan. En la hotbar del [modo staff](/docs/exyliastaff/staff-mode), clic derecho en el pico de diamante (slot 27, **MINERÍA**) hace lo mismo. `/notifications` y `/xraynotify` son alias de `/mining`.
+  </Step>
+  <Step title="Mira quién destaca">
+    Ejecuta `/mining top`, o clic izquierdo en el pico. El menú **MINEROS SOSPECHOSOS** lista las 45 puntuaciones más altas, ya con el decaimiento aplicado, una cabeza por jugador con su nivel y puntuación. Desde la consola el comando imprime el top diez como texto.
+  </Step>
+  <Step title="Abre el registro de un jugador">
+    Pulsa una cabeza, o ejecuta `/mining view <jugador>` (también con jugadores desconectados). El menú **MINERÍA** muestra un objeto por cada mineral que ha minado. **Teletransporte** te lleva a él (con shift pasas antes a servicio), **Reiniciar** borra el registro tras una pantalla de confirmación y **Mineros sospechosos** vuelve atrás.
+  </Step>
+  <Step title="Reinicia un registro">
+    Ejecuta `/mining reset <jugador>`. Solo muestra lo que se borraría; añade `confirm` para hacerlo: `/mining reset <jugador> confirm`. El staff con alertas activas ve quién lo reinició.
+  </Step>
+</Steps>
 
-## Los factores
+## Comprueba que funciona
 
-Todos leen los últimos `window-minutes` de roturas. Cada uno suma sus puntos cuando se dispara; la suma
-se limita a 100.
+En supervivencia, cava un túnel a oscuras hasta una veta de diamante enterrada, y luego otra, con pocos segundos de diferencia. Ejecuta `/mining view <tu nombre>`: verás tus minerales, y `/mining top` te listará con un nivel. Cuando la puntuación llega a un nivel superior al último anunciado, el staff con alertas activas recibe `<jugador> nivel <nivel> » <puntuación>/100 (<servidor>)` con un sonido más urgente en cada nivel.
 
-| Factor | Se dispara cuando | Puntos |
+## Para ir más lejos
+
+### Qué cuenta como prueba
+
+Solo los minerales de una familia marcada `valuable` alimentan la puntuación; el resto cuenta como piedra. De ellos, solo cuenta el primer bloque de una veta (una veta son hasta `vein.max-size` bloques conectados, 32 por defecto, recordada 30 minutos), y solo si está enterrada: como mucho `ore-exposure.partial-faces` caras al aire, 1 por defecto. Un mineral en la pared de una cueva es lo que encuentra una antorcha.
+
+Un bloque colocado por un jugador se ignora al romperlo durante `placed-blocks.remember-minutes` (30). Las roturas en creativo y las que otro plugin canceló también se ignoran.
+
+### Niveles y cuándo salen las alertas
+
+La puntuación nunca baja cuando una lectura nueva es menor; se reduce a la mitad cada `decay-half-life-minutes` (15), así que quien deja de dar motivos vuelve a la normalidad.
+
+| Nivel | Puntuación desde |
+|---|---|
+| Advertencia | 16 |
+| Sospechoso | 26 |
+| Muy sospechoso | 51 |
+| Crítico | 76 |
+
+Sale una alerta cuando un jugador sube a un nivel superior al último anunciado, y otra cada `alerts.interval-seconds` (120) mientras siga en sospechoso o más. Una advertencia nunca se repite por el temporizador. Al salir del modo staff se desactivan tus alertas.
+
+### Cambia los minerales vigilados
+
+Cada mineral de `ores` tiene `materials` y `valuable`. Por defecto diamante, esmeralda, restos antiguos y oro son valiosos; lapislázuli, redstone, hierro, cobre y carbón se registran pero no son valiosos. Añade un bloque con los materiales del mineral nuevo y recarga. Un material que el servidor no conoce se omite con un aviso en la consola.
+
+### Hazlo más estricto o más laxo
+
+Cada factor tiene `enabled` y sus propios umbrales y puntos, y `levels` guarda los cuatro límites. `factors.min-veins` (3) es cuántas vetas enterradas necesitan los factores de proporción antes de opinar, para que un diamante con suerte no sea un patrón. Al recargar se releen minerales y umbrales; la memoria de vetas y de bloques colocados conserva sus minutos hasta reiniciar.
+
+<Details title="Los nueve factores">
+Todos leen las roturas de los últimos `window-minutes` (10). Se suman los puntos de cada factor que se activa y el total se limita a 100.
+
+| Factor | Se activa cuando | Puntos |
 |---|---|---|
 | Frecuencia | 4, 8 o 13 vetas enterradas en la ventana | 15, 30, 50 |
-| Proporción de valiosas | Más del 80 %, o del 90 %, de los bloques rotos eran mena valiosa enterrada | 20, 35 |
-| Línea recta | Las últimas 5 vetas enterradas están a menos de 2 bloques de una misma línea | 25 |
-| Luz ambiental | El 80 % de las vetas enterradas se rompieron en oscuridad, o con poca luz | 25, 12 |
-| Minería profunda | Por debajo de Y 16 y más del 60 % de las últimas 20 roturas eran mena valiosa enterrada | 15 |
-| Ritmo de descubrimiento | El 70 % de los intervalos entre vetas fueron de menos de 5 segundos; la mitad de eso para moderado | 25, 10 |
-| Exposición de la mena | El 70 % de las vetas nuevas estaban totalmente ocultas, o parcialmente | 25, 12 |
-| Coste de aproximación | El 70 % de los intervalos entre vetas fueron de 8 bloques o menos; la mitad de eso para moderado | 22, 10 |
-| Trayectoria directa | Se caminó directamente hacia el 60 % de las vetas, en los últimos 20 segundos y desde 8 bloques o más | 25 |
+| Proporción de valiosos | Más del 80 %, o del 90 %, de los bloques rotos eran mineral valioso enterrado | 20, 35 |
+| Línea recta | Las últimas 5 vetas enterradas están a menos de 2 bloques de una línea | 25 |
+| Luz ambiente | El 80 % de las vetas enterradas se rompieron a oscuras (luz 0) o con poca luz (hasta 7) | 25, 12 |
+| Minería profunda | Por debajo de Y 16 y más del 60 % de las últimas 20 roturas fueron mineral valioso enterrado | 15 |
+| Ritmo de hallazgos | El 70 % de los intervalos entre vetas duró menos de 5 segundos | 25, 10 si es moderado |
+| Exposición del mineral | El 70 % de las vetas nuevas totalmente ocultas, o parcialmente | 25, 12 |
+| Coste de aproximación | El 70 % de los intervalos entre vetas fue de 8 bloques o menos | 22, 10 si es moderado |
+| Línea directa | El 60 % de las vetas se alcanzaron en directo durante los últimos 20 segundos, desde 8 bloques o más | 25 |
 
-`factors.min-veins` es cuántas vetas enterradas necesitan los factores de proporción antes de decir
-nada: un diamante con suerte en la oscuridad no es un patrón. Cada factor tiene `enabled` y sus propios
-umbrales.
-
-## Puntuación y niveles
-
-La puntuación nunca baja cuando una nueva evaluación es menor; en su lugar se reduce a la mitad cada
-`decay-half-life-minutes`, así que un jugador que deja de dar motivos vuelve poco a poco a la
-normalidad. Los niveles son umbrales sobre ella:
-
-| Nivel | Puntuación |
-|---|---|
-| `warning` | 16 |
-| `suspicious` | 26 |
-| `very-suspicious` | 51 |
-| `critical` | 76 |
-
-## Alertas
-
-Sale una alerta cuando un jugador sube a un nivel más alto que el último anunciado, y de nuevo cada
-`alerts.interval-seconds` mientras se mantenga en suspicious o por encima. Una puntuación que oscila
-sobre un umbral no alerta con cada bloque, y un warning nunca se repite por el temporizador.
-
-Las alertas se publican en el canal `mining` y se entregan en cada servidor a cada miembro del staff
-que tenga `exyliastaff.mining.alerts` **y** tenga las alertas activadas, con el efecto de ese nivel.
-`/mining` las alterna, `/mining on` y `/mining off` las fijan; el clic derecho con el pico de la hotbar
-hace lo mismo. Salir del modo staff desactiva las alertas.
-
-## Ver a un jugador
-
-| Comando | Permiso | Qué hace |
-|---|---|---|
-| `/mining top` | `exyliastaff.mining.view` | Las 45 puntuaciones más altas, decaídas hasta ahora, con nivel y menas principales. Desde la consola, las diez primeras como texto. |
-| `/mining view <player>` | `exyliastaff.mining.view` | El registro de ese jugador, conectado o no: nivel, puntuación, un ítem por mena minada. Botones de teletransporte, volver y reiniciar. |
-| `/mining reset <player>` | `exyliastaff.mining.reset` | Borra el registro. También desde la consola. |
-
-`/notifications` y `/xraynotify` son alias de `/mining`. El clic izquierdo con el pico abre la lista.
-
-## Configuración
+Claves por defecto de `modules/mining/config.yml`, abreviadas:
 
 ```yaml title="plugins/ExyliaStaff/modules/mining/config.yml"
-ores:
-  diamond:
-    materials: [DIAMOND_ORE, DEEPSLATE_DIAMOND_ORE]
-    valuable: true
-  emerald:
-    materials: [EMERALD_ORE, DEEPSLATE_EMERALD_ORE]
-    valuable: true
-  ancient_debris:
-    materials: [ANCIENT_DEBRIS]
-    valuable: true
-  gold:
-    materials: [GOLD_ORE, DEEPSLATE_GOLD_ORE, NETHER_GOLD_ORE]
-    valuable: true
-  lapis:
-    materials: [LAPIS_ORE, DEEPSLATE_LAPIS_ORE]
-    valuable: false
-  redstone:
-    materials: [REDSTONE_ORE, DEEPSLATE_REDSTONE_ORE]
-    valuable: false
-  iron:
-    materials: [IRON_ORE, DEEPSLATE_IRON_ORE]
-    valuable: false
-  copper:
-    materials: [COPPER_ORE, DEEPSLATE_COPPER_ORE]
-    valuable: false
-  coal:
-    materials: [COAL_ORE, DEEPSLATE_COAL_ORE]
-    valuable: false
 window-minutes: 10
 decay-half-life-minutes: 15.0
 factors:
   min-veins: 3
-  frequency:
-    enabled: true
-    suspicious: 4
-    very-suspicious: 8
-    critical: 13
-    points-suspicious: 15
-    points-very-suspicious: 30
-    points-critical: 50
-  valuable-ratio:
-    enabled: true
-    high: 80
-    very-high: 90
-    points-high: 20
-    points-very-high: 35
-  straight-line:
-    enabled: true
-    block-count: 5
-    tolerance: 2.0
-    points: 25
-  ambient-light:
-    enabled: true
-    darkness: 0
-    dim: 7
-    ratio-percent: 80
-    points-dim: 12
-    points-dark: 25
-  deep-mining:
-    enabled: true
-    y-level: 16
-    ratio-percent: 60
-    points: 15
-  discovery-timing:
-    enabled: true
-    min-streak: 3
-    max-interval-seconds: 5.0
-    consistency: 0.7
-    points-moderate: 10
-    points-high: 25
-  ore-exposure:
-    enabled: true
-    hidden-faces: 0
-    partial-faces: 1
-    ratio-percent: 70
-    points-partial: 12
-    points-hidden: 25
-  approach-cost:
-    enabled: true
-    max-blocks: 8
-    min-streak: 3
-    consistency: 0.7
-    points-moderate: 10
-    points-high: 22
-  beeline:
-    enabled: true
-    approach-seconds: 20.0
-    min-distance: 8.0
-    directness: 0.75
-    min-veins: 3
-    ratio-percent: 60
-    points: 25
-levels:
-  warning: 16
-  suspicious: 26
-  very-suspicious: 51
-  critical: 76
+  frequency: { enabled: true, suspicious: 4, very-suspicious: 8, critical: 13 }
+  straight-line: { enabled: true, block-count: 5, tolerance: 2.0, points: 25 }
+  deep-mining: { enabled: true, y-level: 16, ratio-percent: 60, points: 15 }
+levels: { warning: 16, suspicious: 26, very-suspicious: 51, critical: 76 }
 alerts:
   interval-seconds: 120
-  warning:
-    sound: { name: BLOCK_NOTE_BLOCK_PLING, volume: 0.7, pitch: 1.0 }
-  suspicious:
-    sound: { name: BLOCK_NOTE_BLOCK_PLING, volume: 0.7, pitch: 1.4 }
-  very-suspicious:
-    sound: { name: BLOCK_NOTE_BLOCK_BIT, volume: 0.7, pitch: 1.6 }
   critical:
     sound: { name: BLOCK_NOTE_BLOCK_BELL, volume: 0.7, pitch: 0.8 }
-vein:
-  max-size: 32
-  remember-minutes: 30
-placed-blocks:
-  remember-minutes: 30
+vein: { max-size: 32, remember-minutes: 30 }
+placed-blocks: { remember-minutes: 30 }
 ```
 
-Un material de mena que el servidor no conoce se omite con un único aviso en consola. Recargar vuelve
-a leer las menas y los umbrales; las memorias de vetas y de bloques colocados conservan los minutos con
-los que empezaron hasta un reinicio.
+Hasta la 1.8.0 la alerta crítica sonaba como el rugido del dragón. Un sonido crítico exactamente como se entregaba (`ENTITY_ENDER_DRAGON_GROWL`, tono `1.8`) pasa a la campana de bloque musical en el primer arranque; uno que elegiste tú se queda.
 
-Hasta la 1.8.0 la alerta crítica sonaba con el gruñido del ender dragon. El archivo está ahora en la
-versión 2: un sonido crítico que sigue exactamente como venía (`ENTITY_ENDER_DRAGON_GROWL` con pitch `1.8`)
-pasa a la campana de bloque musical en el primer arranque; uno que elegiste tú se queda.
+Los mensajes están en `lang/<idioma>/modules/mining/messages.yml`: `alerts-on`, `alerts-off`, `alert`, `reset`, `reset-preview`, `confirm-reset`, `top-header`, `top-line`, `ore-line` y los cinco nombres de nivel bajo `levels`. Sus colores y placeholders siguen [colores](/docs/exylialib/colours) y [mensajes](/docs/exylialib/messages-and-languages).
 
-## Mensajes
+La tabla `staff_mining` guarda una fila por jugador: recuento de minerales, la puntuación bruta con su marca de tiempo, el nivel y la última alerta. Las filas modificadas se escriben cada treinta segundos, al salir y antes de mostrar el top. La ventana, el rastro y el último nivel anunciado viven solo en memoria.
+</Details>
 
-`lang/<language>/modules/mining/messages.yml`: `alerts-on`, `alerts-off`; `alert` con `%player%`, `%level%`, `%score%`
-y `%server%`; `reset` con `%target%`; `top-header`, `top-line`, `top-empty`; `not-online`,
-`teleported`; `ore-line` con `%ore%` y `%count%`, `ores-none`; `status-on`, `status-off`; y los
-cinco nombres de nivel bajo `levels`, de `normal` a `critical`.
+## Comandos y permisos
+
+<Commands group="mining" />
+
+<Permissions group="mining" />
 
 ## Placeholders
 
-Estos leen el registro de quien lo ve, que es lo que quiere un sidebar de staff.
+Leen el registro de quien los ve, que es lo que quiere un sidebar de staff. Necesitan PlaceholderAPI.
 
-| Placeholder | Valor |
-|---|---|
-| `%staff_mining_level%` | El nombre del nivel de quien lo ve. |
-| `%staff_mining_score%` | La puntuación de quien lo ve, decaída hasta ahora. |
-| `%staff_mining_alerts%` | `status-on` o `status-off`. |
-| `%staff_mining_alerts_active%` | `true` mientras quien lo ve recibe alertas de minería, sin el color que lleva `alerts`. |
+<Placeholders group="mining" />
 
-## Almacenamiento
-
-`staff_mining` guarda una fila por jugador: recuentos de menas, la puntuación bruta con su marca de
-tiempo, el nivel y la última alerta. Las filas modificadas se escriben cada treinta segundos, al
-desconectarse y antes de la lista top. La ventana, el rastro y el último nivel anunciado viven solo en
-memoria.
+<Cards>
+  <Card title="Siguiente: Visión X-Ray" href="/docs/exyliastaff/xray-vision">Mira los minerales a través del suelo mientras investigas.</Card>
+  <Card title="Siguiente: Sanciones" href="/docs/exyliastaff/punishments">Actúa contra un tramposo confirmado con una escalera de sanciones.</Card>
+</Cards>

@@ -5,80 +5,76 @@ questions:
   - "How do I remove duped items after a restore?"
   - "Is item revocation on by default?"
   - "How do I see revoked items?"
+  - "What happens to a revoked item a player still holds?"
+  - "How do I give a quarantined item back?"
 updated: "1.8.0"
 ---
 
-When a hacker kills somebody and hands the drops to friends, restoring the victim puts a second copy
-of every item into the world. Item revocation closes that hole. What a death drops is marked; when a
-staff member hands that death back, the restore screen offers to revoke the marks. The victim gets
-clean copies, and the marked ones still out there are taken away wherever they turn up.
-
-Module id `revoke`, switch `modules.item-revocation`, files under `modules/revoke/`. Needs the
-[inventory restore](/docs/exyliastaff/inventory-restore) module, which is where deaths are copied and
-handed back.
+When a hacker kills somebody and hands the drops to friends, restoring the victim puts a second copy of every item into the world. Item revocation closes that hole: the victim gets clean copies, and the marked ones still out there are taken away wherever they turn up.
 
 <Callout type="warning" title="Off by default">
-It changes items on death and takes items from players, so it ships off. Read the configuration below,
-and consider running `mode: AUDIT` for a few days to see what it would catch before it acts.
+It changes items on death and takes items from players, so `modules.item-revocation` ships `false`. Turn it on only after reading this page, and consider running `mode: AUDIT` for a few days to see what it would catch before it acts.
 </Callout>
 
-## Marks
+## Before you start
 
-An item gets an id of its own the first time it drops on a death, before the death backup is taken.
-An id already there is kept: an item that died twice is the same item both times. Only items that
-cannot stack are marked — swords, armour, tools, shulker boxes, totems — because an id on a diamond
-would stop it stacking with every other diamond and break shops, hoppers and inventories.
-`excluded-materials` leaves more out.
+- [Inventory restore](/docs/exyliastaff/inventory-restore) must be on: deaths are copied and handed back there.
+- Turn on `modules.item-revocation` in `plugins/ExyliaStaff/config.yml`. Settings are in `plugins/ExyliaStaff/modules/revoke/config.yml`.
+- Staff who handle the quarantine need `exyliastaff.revoke`. Staff who get alerts need `exyliastaff.revoke.alerts`.
 
-A shulker box or a bundle is walked: what is inside is marked too, so emptying the box does not keep
-the contents clean.
+## Steps
 
-### What is made from a marked item
+<Steps>
+  <Step title="Let deaths be marked">
+    With the module on, an item that drops on a death gets an id of its own before the death backup is taken. Nothing else to do.
+  </Step>
+  <Step title="Restore the victim">
+    Run `/invrestore <victim>`, open the death backup and click **Backup ▸ Restore**. On a death that dropped marked items, the restore screen shows the switch **Revoke ▸ Revoke circulating copies** (or **Leave circulating copies**). It starts ticked when `default-revoke` is `true`, the default.
+  </Step>
+  <Step title="Confirm">
+    Click **Restore ▸ Confirm**. The victim receives copies with no mark, every marked copy still in circulation is revoked, and you are told how many.
+  </Step>
+  <Step title="Handle what turns up">
+    When somebody holds a revoked item, staff with `exyliastaff.revoke.alerts` are told on every server: who, from whose death, on which server and what was done; a click teleports to the holder. Run `/revokeditems` (alias `/revoked`) to open the **REVOKED ITEMS** screen.
+  </Step>
+</Steps>
 
-What comes out of a crafting grid, an anvil, a smithing table, a grindstone, a crafter or a villager
-trade inherits every id that went in. Revoking a sword also reaches the netherite one it was upgraded
-into. Only a result that could carry an id of its own inherits: a stack of emeralds bought with a
-marked sword is out of reach.
+## Check that it works
 
-With `villager-trades` on, a marked item also pays a villager trade that asks for the same item without
-the mark. Vanilla villagers and Shopkeepers already accept most of them; this covers the rest.
+Set `mode: AUDIT` first. Kill a test account holding a sword, restore it with the **Revoke** switch ticked, then pick up the dropped sword with a second account. Staff with alerts get the message, and `/revokeditems` lists it as **Seen, left with them**. Switch to `QUARANTINE` when you trust it.
 
-## Revoking
+## Going further
 
-Revocation has no command. It is a switch on the restore screen, shown for a death backup that holds
-marked items, because the only moment it makes sense is the moment a death is handed back.
-`default-revoke` decides whether it starts ticked; clicking a single item in the backup hands it back
-with the same choice. The victim receives copies with no mark, and every marked copy still in
-circulation is revoked. The staff member is told how many.
+### What happens when a revoked item is found
 
-## When a revoked item turns up
-
-A revoked item is noticed whenever it is picked up, moved, held, worn, swung, used or dropped, whenever
-the container it hides in is opened, and when its holder logs in, ender chest included.
+A revoked item is noticed when it is picked up, moved, held, worn, swung, used or dropped, when the container it hides in is opened, and when its holder logs in (ender chest included).
 
 | `mode` | What happens |
 |---|---|
-| `QUARANTINE` | The item is taken into quarantine. With `notify-holder` on, the holder is told why and to open a ticket if they got it fairly. |
+| `QUARANTINE` (default) | The item is taken into quarantine. With `notify-holder` on, the holder is told why and to open a ticket if they got it fairly. |
 | `AUDIT` | The item stays where it is. Staff are told and it is written down. |
 
-Staff with `exyliastaff.revoke.alerts` are told on every server: who held it, from whose death, on
-which server, and what was done; a click teleports to the holder. The same player holding the same item
-alerts again only after `alert-cooldown-seconds`.
+The same player holding the same item alerts again only after `alert-cooldown-seconds` (300).
 
-## The quarantine screen
+### The quarantine screen
 
-`/revokeditems`, or `/revoked`, with `exyliastaff.revoke`.
+`/revokeditems` needs `exyliastaff.revoke`. Rows and clicks:
 
 | Row | Clicks |
 |---|---|
-| Waiting in quarantine | Left: hand it back to whoever had it, who must be on this server. Right: take it yourself. Q: throw it away for good. |
+| In quarantine | Left: hand it back to whoever had it (they must be on this server). Right: take it yourself. Q (drop key): throw it away for good. |
 | Seen in `AUDIT` mode | Left: go to the player still holding it, on their server if needed. |
 | Already handled | Nothing: who handled it and how. |
 
-The switch at the bottom shows only what is waiting, or everything.
+The **Showing** button at the bottom switches between **In quarantine** and **Everything**.
 
-## Configuration
+### Which items are marked
 
+Only items that cannot stack: swords, armour, tools, shulker boxes, totems. An id on a diamond would stop it stacking with every other diamond and break shops, hoppers and inventories. `excluded-materials` leaves more out. A shulker box or a bundle is walked, so what is inside is marked too. An item that dies twice keeps its first id.
+
+What comes out of a crafting grid, anvil, smithing table, grindstone, crafter or villager trade inherits every id that went in, so revoking a sword also reaches the netherite one it was upgraded into. With `villager-trades` on, a marked item also pays a trade that asks for the same item without the mark.
+
+<Details title="Configuration and storage">
 ```yaml title="plugins/ExyliaStaff/modules/revoke/config.yml"
 mode: QUARANTINE
 default-revoke: true
@@ -99,19 +95,18 @@ history-keep-days: 90
 | `villager-trades` | `true` | Let a marked item pay a trade that asks for it without the mark. |
 | `history-keep-days` | `90` | Days alerts and handled quarantine entries are kept. `0` keeps everything. |
 
-Items still waiting in quarantine and the list of revoked ids are never purged: a sword hidden in a
-chest for a year is still the same duplicate.
+Items waiting in quarantine and the list of revoked ids are never purged: a sword hidden in a chest for a year is still the same duplicate. Tables: `staff_revoked_items` for the revoked ids, `staff_revoked_hits` for every time one turned up.
 
-## Messages
+Messages are in `lang/<language>/modules/revoke/messages.yml`: `revoked`, `holder-taken`, `alert` (with `%player%`, `%item%`, `%owner%`, `%server%`, `%action%`), `action-quarantined`, `action-seen`, the quarantine button lines (`returned`, `taken`, `discarded`, `follow-started`, and others), `scope-held`, `scope-all`, and the restore switch (`toggle-on`, `toggle-off`, `toggle-note-on`, `toggle-note-off`). See [messages and languages](/docs/exylialib/messages-and-languages).
+</Details>
 
-`lang/<language>/modules/revoke/messages.yml`: `revoked` with `%amount%` and `%target%`; `holder-taken`
-with `%item%`, and `several` for more than one item at once; `alert` with `%player%`, `%item%`,
-`%owner%`, `%server%` and `%action%`, and the two words `action-quarantined` and `action-seen`; the
-quarantine button lines `returned`, `returned-holder`, `holder-away`, `taken`, `discarded`,
-`already-handled`, `follow-started`, `follow-remote` and `follow-offline`; the lore
-blocks `held-lore`, `seen-lore` and `handled-lore`; `scope-held` and `scope-all`; and the restore
-screen's switch, `toggle-on`, `toggle-off`, `toggle-note-on` and `toggle-note-off`.
+## Commands and permissions
 
-## Storage
+<Commands group="item revocation" />
 
-`staff_revoked_items` for the revoked ids, `staff_revoked_hits` for every time one turned up.
+<Permissions group="item revocation" />
+
+<Cards>
+  <Card title="Next: Restore a player's inventory" href="/docs/exyliastaff/inventory-restore">Where deaths are copied and handed back.</Card>
+  <Card title="Next: Punishments" href="/docs/exyliastaff/punishments">Sanction the player who handed out the items.</Card>
+</Cards>
