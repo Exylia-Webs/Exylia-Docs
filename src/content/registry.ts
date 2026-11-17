@@ -605,7 +605,7 @@ const ARMORSKIN_NAV: NavGroup[] = [
     ],
   },
   {
-    label: { en: "Configuring", es: "Configurar" },
+    label: { en: "Guides", es: "Guías" },
     pages: [
       page("skins", "skins", "skins"),
       page("wardrobe", "wardrobe", "vestidor"),
@@ -623,6 +623,12 @@ const ARMORSKIN_NAV: NavGroup[] = [
       page("configuration", "configuration", "configuracion"),
       page("placeholders", "placeholders", "placeholders"),
       page("api", "api", "api"),
+    ],
+  },
+  {
+    label: { en: "Help", es: "Ayuda" },
+    pages: [
+      page("troubleshooting", "troubleshooting", "problemas-comunes"),
       page("faq", "faq", "faq"),
     ],
   },
