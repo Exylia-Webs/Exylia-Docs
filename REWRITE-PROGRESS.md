@@ -46,6 +46,6 @@ Follow WRITING.md. ExyliaFFA is the model. One row per plugin; mark done after r
 | `exyliaspawners` | `ExyliaSpawners` | done (faq/api not rechecked) |
 | `exyliawarzone` | `ExyliaWarzone` | done (config/api/faq pending) |
 | `exyliastaff` | `ExyliaStaff` | started (guide bodies pending) |
-| `exyliasurvivalcore` | `ExyliaSurvivalCore` | started (guide bodies pending) |
+| `exyliasurvivalcore` | `ExyliaSurvivalCore` | done (notes) |
 | `exyliatabletop` | `ExyliaTabletop` | started (guide bodies pending) |
 | `exyliatotemtrainer` | `ExyliaTotemTrainer` | done (11 guide bodies kept, spot-checked) |
