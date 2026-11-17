@@ -41,7 +41,7 @@ Follow WRITING.md. ExyliaFFA is the model. One row per plugin; mark done after r
 | `exyliarewards` | `ExyliaRewards` | done (faq lacks battle pass) |
 | `exyliasandbox` | `ExyliaSandBox` | started (guide bodies pending) |
 | `exyliascreens` | `ExyliaScreens` | done (config/faq pending, importer unverified) |
-| `exyliashields` | `ExyliaShields` | done (pages left on old text: see .rewrite-notes) |
+| `exyliashields` | `ExyliaShields` | done |
 | `exyliaspecials` | `ExyliaSpecials` | done (config/api/faq pending) |
 | `exyliaspawners` | `ExyliaSpawners` | done (faq/api not rechecked) |
 | `exyliawarzone` | `ExyliaWarzone` | done (config/api/faq pending) |
