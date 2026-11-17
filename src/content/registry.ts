@@ -172,21 +172,21 @@ const EVENTS_NAV: NavGroup[] = [
     ],
   },
   {
-    label: { en: "Configuring", es: "Configurar" },
+    label: { en: "Guides", es: "Guías" },
     pages: [
       page("arenas", "arenas", "arenas"),
       page("event-types", "event-types", "tipos-de-evento"),
       page("teams-and-kits", "teams-and-kits", "equipos-y-kits"),
       page("rewards", "rewards", "recompensas"),
+      page("inscriptions", "inscriptions", "inscripciones"),
+      page("gauntlets", "gauntlets", "gauntlets"),
+      page("network", "network", "red"),
     ],
   },
   {
-    label: { en: "Systems", es: "Sistemas" },
+    label: { en: "How it works", es: "Cómo funciona" },
     pages: [
       page("game-flow", "game-flow", "flujo-de-juego"),
-      page("gauntlets", "gauntlets", "gauntlets"),
-      page("inscriptions", "inscriptions", "inscripciones"),
-      page("network", "network", "red"),
       page("stats", "stats", "estadisticas"),
       page("visuals", "visuals", "visuales"),
     ],
@@ -195,9 +195,16 @@ const EVENTS_NAV: NavGroup[] = [
     label: { en: "Reference", es: "Referencia" },
     pages: [
       page("commands", "commands", "comandos"),
+      page("permissions", "permissions", "permisos"),
       page("placeholders", "placeholders", "placeholders"),
       page("configuration", "configuration", "configuracion"),
       page("api", "api", "api"),
+    ],
+  },
+  {
+    label: { en: "Help", es: "Ayuda" },
+    pages: [
+      page("troubleshooting", "troubleshooting", "problemas-comunes"),
       page("faq", "faq", "faq"),
     ],
   },
