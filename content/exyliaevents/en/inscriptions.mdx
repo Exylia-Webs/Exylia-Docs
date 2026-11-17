@@ -1,92 +1,97 @@
 ---
-title: "Sign-ups"
-description: "Sign-up lists, private events, blacklists and blocked ranks: who may join an event."
+title: "Limit who can join an event"
+description: "Sign-up lists, private events, blacklists and blocked ranks: choose who may join an ExyliaEvents event."
+questions:
+  - "How do I make an event private?"
+  - "How do I let only signed-up players join a tournament?"
+  - "How do I ban a player or a rank from events?"
+  - "Can I sign players up while they are offline?"
+  - "Why does a player get 'This event is private'?"
+updated: "1.11.0"
 ---
 
-Sign-ups — *inscriptions* in the commands — restrict one configuration to a named list of players.
-It is how a scheduled tournament stays limited to the people who signed up.
+By the end of this page one event only admits the players you list, and you know how to keep a player or a whole rank out of every event. Sign-ups are called *inscriptions* in the commands.
 
-## The commands
+## Before you start
 
-All of them need `exyliaevents.admin.inscriptions`, which is separate from plain
-`exyliaevents.admin`.
+- The event configuration exists. Create it as in [Your first event](/docs/exyliaevents/first-steps).
+- You have `exyliaevents.admin.inscriptions`. It is separate from `exyliaevents.admin` and defaults to op.
 
-| Command | What it does |
-|---|---|
-| `/eventsadmin inscriptions open <configId>` | Opens the list for that configuration. |
-| `/eventsadmin inscriptions close <configId>` | Closes it. |
-| `/eventsadmin inscriptions add <configId> <player>` | Adds a player, online or not. |
-| `/eventsadmin inscriptions remove <configId> <player>` | Removes one. |
-| `/eventsadmin inscriptions clear <configId>` | Empties the list. |
-| `/eventsadmin inscriptions startevent <configId>` | Starts the event with the list in force. |
-
-The same is done from **Inscriptions** on the configuration's setup screen, behind the same node: open
-or close the list, browse, add and remove players, clear it after a confirmation, and start the event.
-
-## What "open" changes
-
-While a configuration's list is **open**, only players on it may join that event. Anyone else is
-refused with the `not-inscribed` message from `messages.yml`, whether they used `/events join` or the
-menu.
-
-Closing the list lifts the restriction: the configuration goes back to being open to everyone. The
-list itself is not deleted by closing, so it can be reopened for a second round.
-
-## A typical flow
+## Steps
 
 <Steps>
-  <Step title="Open the list">
-    `/eventsadmin inscriptions open tournament1`
+  <Step title="Open the access screen">
+    Run `/eventsadmin`, click **Configurations**, open your event, then click **Access**. The screen shows **Access mode**, **Whitelist**, **Blacklist**, **Blocked ranks** and **Start event**.
   </Step>
-  <Step title="Collect names">
-    Staff run `add` for each player. Offline players work — the list stores UUIDs, so somebody can be
-    signed up days before.
+  <Step title="Make it private">
+    Click **Access mode** to switch between public (anyone can join) and private (only the whitelist). From a command: `/eventsadmin access <configId> private`.
   </Step>
-  <Step title="Start it">
-    `/eventsadmin inscriptions startevent tournament1` starts the event with the list applied.
+  <Step title="Add the players">
+    Click **Whitelist**, then **Add online player** or **Add by name**. Offline players work: the list stores UUIDs, so somebody can be signed up days before. From a command: `/eventsadmin inscriptions add <configId> <player>`.
+  </Step>
+  <Step title="Start the event">
+    Click **Start event**, or run `/eventsadmin inscriptions startevent <configId>`. The list stays in force while the event is private.
   </Step>
   <Step title="Afterwards">
-    `clear` before the next round, or `close` to open the configuration to everyone again.
+    Open **Whitelist** and click **Clear whitelist** before the next round, or click **Access mode** to make the event public again.
   </Step>
 </Steps>
 
+## Check that it works
+
+Join with an account that is not on the list, with `/events join` or from the menu. It must be refused with "This event is private" (the `refused-private` line of your `messages.yml`). Then add that player and join again.
+
+## Going further
+
+### Sign-up commands
+
+`/eventsadmin inscriptions open <configId>` is the same as making the event private, and `close` makes it public. Closing does not delete the list, so you can reopen it for a second round. `add` and `remove` edit one player. `clear` empties the list.
+
+`remove` and `clear` ask for confirmation. Add `confirm` at the end to skip it, for example `/eventsadmin inscriptions clear tournament1 confirm`. A console sender must type `confirm`.
+
 <Callout type="tip" title="It pairs with scheduled events">
-Open the list during the week, schedule the event for Friday in
-[`scheduled-events.yml`](/docs/exyliaevents/game-flow#scheduled-events), and the event starts on its
-own with only the signed-up players able to enter.
+Make the event private during the week, schedule it for Friday in [`scheduled-events.yml`](/docs/exyliaevents/game-flow#scheduled-events), and it starts on its own with only the signed-up players able to enter.
 </Callout>
 
-## Where it is stored
+### Keep a player or a rank out
 
-One row per configuration in `event_inscriptions`: whether the list is open, and the players on it.
-Sign-ups survive restarts, and on a shared database they are visible to every server reading it.
+Click **Blacklist** to keep named players out of this event, public or private. Click **Blocked ranks** to keep a permission group out, for example your staff. Ranks are read from your permissions plugin through ExyliaLib's group lookup.
 
-## Access rules
+### One list for every event
 
-Sign-ups are one half of a wider set of rules about who may join. Each configuration also keeps a
-**blacklist** (players kept out), a list of **blocked ranks** (permission groups kept out) and a
-**private** switch. The sign-up list is its **whitelist**: a private event admits only whitelisted
-players. Opening a list with `inscriptions open` is the same as making the event private.
+Each list exists once per configuration and once globally. The global one applies to every event. Open it with `/eventsadmin access`, or click **Global access** on the `/eventsadmin` panel. The global scope has a blacklist and blocked ranks only: it has no private mode and no whitelist. In commands, write `global` as the scope.
 
-Every join path obeys the same order: a blacklisted player is always refused; a whitelisted player is
-let in, even from a blocked rank; then blocked ranks are refused; then a private event refuses anyone
-not whitelisted. Adding a player to one list takes them off the other. Ranks are read from your
-permissions plugin through ExyliaLib's group lookup.
+<Details title="Rules, commands and storage">
 
-Each list exists per configuration and once globally, applied to every event. Use `global` as the
-scope for the global one.
+Every way of joining obeys the same order:
+
+1. A blacklisted player (in the event or global list) is always refused.
+2. A whitelisted player is let in, even from a blocked rank.
+3. A player in a blocked rank (event or global) is refused.
+4. If the event is private, anyone not whitelisted is refused.
+
+Adding a player to one of the two player lists takes them off the other. Each refused player is told which rule stopped them (`refused-blocked`, `refused-rank`, `refused-private` in `messages.yml`).
 
 | Command | What it does |
 |---|---|
-| `/eventsadmin access` | Opens the global access screen. |
-| `/eventsadmin access <configId\|global>` | Opens that configuration's access screen. |
-| `/eventsadmin access <scope> public` / `private` | Turns the private mode off or on. |
-| `/eventsadmin access <scope> whitelist add\|remove <player>` | Edits the whitelist. |
-| `/eventsadmin access <scope> blacklist add\|remove <player>` | Edits the blacklist. |
-| `/eventsadmin access <scope> rank add\|remove <rank>` | Edits the blocked ranks. |
+| `/eventsadmin inscriptions open\|close <configId>` | Private mode on or off. |
+| `/eventsadmin inscriptions add\|remove <configId> <player>` | Edit the whitelist. `remove` asks first. |
+| `/eventsadmin inscriptions clear <configId>` | Empty the whitelist. Asks first. |
+| `/eventsadmin inscriptions startevent <configId>` | Start the event. |
+| `/eventsadmin access` | Open the global access screen. |
+| `/eventsadmin access <configId\|global>` | Open that scope's access screen. |
+| `/eventsadmin access <scope> public\|private` | Turn private mode off or on. |
+| `/eventsadmin access <scope> whitelist add\|remove <player>` | Edit the whitelist. |
+| `/eventsadmin access <scope> blacklist add\|remove <player>` | Edit the blacklist. |
+| `/eventsadmin access <scope> rank add\|remove <rank>` | Edit the blocked ranks. |
 
-They need `exyliaevents.admin.inscriptions`. Removals run at once; emptying a whole list is left to the
-access screens, which ask first. The same screens open from **Access** on the configuration's setup
-screen, and from **Global access** on the admin panel. A refused player is told which rule stopped them.
+All of them need `exyliaevents.admin.inscriptions`. The `access` commands remove at once; the screens' **Clear** buttons ask first.
 
-Plugins can ask the same question with `EventsAPI.canAccess(player, configId)`.
+The lists live in the database, one row per scope, so they survive restarts and are shared by every server on the same database. Other plugins can ask the same question with `EventsAPI.canAccess(player, configId)`.
+
+</Details>
+
+<Cards>
+  <Card title="Game flow" href="/docs/exyliaevents/game-flow">Schedule the event and set the limits that apply to every player.</Card>
+  <Card title="Permissions" href="/docs/exyliaevents/permissions">Every node, including exyliaevents.admin.inscriptions.</Card>
+</Cards>

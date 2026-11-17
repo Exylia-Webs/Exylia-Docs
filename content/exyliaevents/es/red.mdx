@@ -1,52 +1,62 @@
 ---
-title: "Red"
-description: "Anunciar los eventos de un servidor a toda la red y llevar a los jugadores hasta ellos."
+title: "Conecta varios servidores"
+description: "Anuncia los eventos de un servidor a toda la red y lleva a los jugadores hasta ellos con un clic."
+questions:
+  - "¿Cómo hago que los eventos funcionen en una red BungeeCord o Velocity?"
+  - "¿Qué necesito para activar los eventos en red?"
+  - "¿Por qué /eventsadmin network no muestra servidores que respondan?"
+  - "¿Qué servidor es dueño de una arena?"
+  - "¿Cómo renombro un servidor sin perder sus arenas?"
+  - "¿Redis es obligatorio en ExyliaEvents?"
+updated: "1.11.0"
 ---
 
-Un servidor solo no necesita nada de esta página. Apagado —que es como viene— no se abre ningún
-canal, no se publica nada y cada entrada toma el mismo camino local de siempre.
+Al terminar esta página los servidores de tu red se anuncian sus eventos entre sí, y un jugador en el lobby pulsa la línea de un evento del servidor de arenas y se le conecta y se le mete en él. Un servidor solo no necesita nada de esta página: apagado, que es como viene, no se abre ningún canal y cada entrada toma el camino local de siempre.
 
-Encendido, un servidor anuncia sus eventos al resto de la red. Un jugador que está en el lobby lee que
-hay un evento esperando en el servidor de arenas, hace clic en la misma línea que imprime cualquier
-servidor, y se le conecta y se le mete en él. Lo que viaja es el anuncio y la intención de entrar,
-nunca una ubicación: en cuanto el jugador está en el servidor dueño del evento, se encarga el
-teletransporte local de siempre al lobby de ese evento.
+## Antes de empezar
 
-## Qué necesita
+- Redis activado en `database.yml` en todos los servidores.
+- Un `server-id` distinto en cada servidor (el bloque Redis de `database.yml`). El proxy y los anuncios identifican a un backend por él.
+- `ExyliaProxyUtils` en el proxy: es lo que mueve al jugador entre servidores.
+- La misma base de datos en todos los servidores, para que las arenas y las estadísticas se lean de un único sitio.
 
-| Requisito | Para qué |
-|---|---|
-| Redis, encendido en `database.yml` en cada servidor | El canal por el que viajan los anuncios. |
-| Un `server-id` distinto en cada servidor | Cómo el proxy y los anuncios se dirigen a un backend. |
-| `ExyliaProxyUtils` en el proxy | Lo que realmente mueve al jugador entre servidores. |
-| La misma base de datos en cada servidor | Las arenas y las estadísticas se leen de un solo sitio. |
+Si falta cualquiera de ellos, el plugin se queda en silencio, lo dice una vez en la consola y sigue funcionando como servidor único.
 
-Si falta cualquiera de ellos el plugin se queda callado, lo dice una vez en la consola y sigue
-funcionando como un servidor solo.
-
-<Callout type="warning" title="Redis por sí solo no es consentimiento">
-`database.redis` y `network.enabled` son dos interruptores separados a propósito. Un servidor puede
-perfectamente compartir la caché con la red y aun así querer sus eventos para él.
+<Callout type="warning" title="Redis solo no es consentimiento">
+`database.redis` y `network.enabled` son interruptores distintos a propósito. Un servidor puede compartir caché con la red y querer sus eventos solo para él.
 </Callout>
 
-## Encenderlo
+## Pasos
 
-```yaml title="config.yml"
-network:
-  enabled: true
-  return-on-end: true
-```
+<Steps>
+  <Step title="Actívalo en cada servidor">
+    Pon `network.enabled: true` en `config.yml` y reinicia.
+    ```yaml title="config.yml"
+    network:
+      enabled: true
+      return-on-end: true
+    ```
+  </Step>
+  <Step title="Comprueba el enlace">
+    Ejecuta `/eventsadmin network` en cada servidor. Espera dos segundos a que respondan los demás y muestra las líneas descritas en [Comprobar la red](#comprobar-la-red).
+  </Step>
+  <Step title="Inicia un evento">
+    En el servidor dueño de una arena, inicia un evento. En los demás, ejecuta `/events start <id>` sobre una arena que vive en otro sitio: el inicio se entrega al dueño.
+  </Step>
+</Steps>
 
-<Field name="enabled" type="booleano" defaultValue="false">
-Si este servidor anuncia sus eventos al resto de la red y acepta a los jugadores que otros servidores
-le envían.
+## Comprueba que funciona
+
+`/eventsadmin network` debe mostrar el `server-id` de este servidor, los eventos en red encendidos y los demás backends en "servidores que responden". Después inicia un evento en el servidor de arenas y, desde el del lobby, pulsa la línea del anuncio: el jugador se conecta, entra al evento y se teletransporta a su spawn de lobby. Lo que viaja es el anuncio y la intención de entrar, nunca una ubicación.
+
+## Ir más lejos
+
+<Field name="enabled" type="boolean" defaultValue="false">
+Si este servidor anuncia sus eventos al resto de la red y acepta a los jugadores que otros servidores le envían.
 </Field>
 
-<Field name="return-on-end" type="booleano" defaultValue="true">
-Si a un jugador que la red trajo hasta aquí se le devuelve al servidor del que vino cuando su evento
-lo suelta —terminó, se salió, o llegó y lo encontró lleno—. Solo deshace un movimiento que hizo este
-plugin: a un jugador que entró a este servidor por su cuenta no se le mueve nunca. Apágalo en un
-servidor en el que los jugadores deban quedarse.
+<Field name="return-on-end" type="boolean" defaultValue="true">
+Si a un jugador que la red trajo hasta aquí se le devuelve al servidor de donde venía cuando su evento lo suelta: terminó, salió o llegó y ya estaba lleno. Solo deshace un movimiento que hizo este plugin; a quien llegó a este servidor por su cuenta nunca se le mueve. Desactívalo en un servidor donde los jugadores deban quedarse.
 </Field>
 
 ## Las arenas pertenecen a un backend
@@ -109,7 +119,9 @@ datos existente no se altera y no hay nada que migrar.
 
 Funciona también desde la consola.
 
-## Un lobby por backend
+<Details title="Lobbies, ids de evento y mensajes">
+
+### Un lobby por backend
 
 El lobby principal se guarda por `server-id` en `events_server_settings`. Los backends que compartían
 una base de datos compartían también una sola fila de lobby, así que el último admin en configurar el
@@ -120,13 +132,20 @@ La fila única que escribió una versión anterior se adopta una sola vez, por e
 realmente tiene ese mundo. En un servidor solo eso siempre se cumple y el lobby se conserva sin que
 nadie haga nada.
 
-## Ids de evento en toda la red
+### Ids de evento en toda la red
 
 Un evento que viaja se direcciona como `servidor:evento`. Los ids sin servidor son locales, que son
 todos los ids que escribe un admin: un id de configuración solo puede llevar `a-z`, `0-9`, `_` y `-`,
 así que nunca se pueden confundir.
 
-## Los mensajes siguen siendo locales
+### Los mensajes siguen siendo locales
 
 Solo viajan los datos: el evento, su tipo, su estado, cuántos jugadores tiene y quién lo inició. Cada
 servidor los muestra con su propio `messages.yml`, así que una red con dos idiomas conserva los dos.
+
+</Details>
+
+<Cards>
+  <Card title="Instalación" href="/docs/exyliaevents/instalacion">Base de datos y Redis para el primer arranque.</Card>
+  <Card title="Crea una arena" href="/docs/exyliaevents/arenas">Las arenas guardan el servidor en el que se configuraron.</Card>
+</Cards>

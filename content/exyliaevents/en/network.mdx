@@ -1,52 +1,62 @@
 ---
-title: "Network"
-description: "Announcing a server's events to the whole network, and walking players to them."
+title: "Connect several servers"
+description: "Announce a server's events to the whole network and send players to them with a click."
+questions:
+  - "How do I make events work across a BungeeCord or Velocity network?"
+  - "What do I need to enable network events?"
+  - "Why does /eventsadmin network show no servers answering?"
+  - "Which server owns an arena?"
+  - "How do I rename a server without losing its arenas?"
+  - "Is Redis required for ExyliaEvents?"
+updated: "1.11.0"
 ---
 
-A single server needs nothing on this page. Left off — which is how it ships — no channel is opened,
-nothing is published, and every join takes the same local path it always took.
+By the end of this page the servers of your network announce their events to each other, and a player in the lobby clicks the line of an event on the arena server and is connected and put into it. A single server needs nothing on this page: switched off, which is how it ships, no channel is opened and every join takes the local path it always took.
 
-Turned on, a server announces its events to the rest of the network. A player standing in the lobby
-reads that an event is waiting on the arena server, clicks the same line every server prints, and is
-connected and put into it. What travels is the announcement and the intent to join, never a location:
-once the player is on the server that owns the event, the ordinary local teleport to that event's
-lobby spawn takes over.
+## Before you start
 
-## What it needs
+- Redis on in `database.yml` on every server.
+- A different `server-id` on every server (the Redis block of `database.yml`). The proxy and the announcements address a backend by it.
+- `ExyliaProxyUtils` on the proxy: it moves the player between servers.
+- The same database on every server, so arenas and statistics are read from one place.
 
-| Requirement | Why |
-|---|---|
-| Redis, on in `database.yml` on every server | The channel the announcements travel on. |
-| A different `server-id` on every server | How the proxy and the announcements address a backend. |
-| `ExyliaProxyUtils` on the proxy | What actually moves the player between servers. |
-| The same database on every server | Arenas and statistics are read from one place. |
-
-With any of those missing the plugin stays quiet, says so once in the console, and keeps working as a
-single server.
+If any of those is missing the plugin stays quiet, says so once in the console and keeps working as a single server.
 
 <Callout type="warning" title="Redis alone is not consent">
-`database.redis` and `network.enabled` are separate switches on purpose. A server may well share a
-cache with the network and still want its events to itself.
+`database.redis` and `network.enabled` are separate switches on purpose. A server may share a cache with the network and still want its events to itself.
 </Callout>
 
-## Turning it on
+## Steps
 
-```yaml title="config.yml"
-network:
-  enabled: true
-  return-on-end: true
-```
+<Steps>
+  <Step title="Turn it on in each server">
+    Set `network.enabled: true` in `config.yml` and restart.
+    ```yaml title="config.yml"
+    network:
+      enabled: true
+      return-on-end: true
+    ```
+  </Step>
+  <Step title="Check the link">
+    Run `/eventsadmin network` on each server. It waits two seconds for the others to answer, then prints the lines described in [Checking the network](#checking-the-network).
+  </Step>
+  <Step title="Start an event">
+    On the server that owns an arena, start an event. On the others, run `/events start <id>` for an arena that lives elsewhere: the start is handed to the owner.
+  </Step>
+</Steps>
+
+## Check that it works
+
+`/eventsadmin network` must show this server's `server-id`, network events on, and the other backends under "servers answering". Then start an event on the arena server and, from the lobby server, click the announcement line: the player is connected, placed in the event and teleported to its lobby spawn. What travels is the announcement and the intent to join, never a location.
+
+## Going further
 
 <Field name="enabled" type="boolean" defaultValue="false">
-Whether this server announces its events to the rest of the network, and accepts the players other
-servers send to them.
+Whether this server announces its events to the rest of the network, and accepts the players other servers send to them.
 </Field>
 
 <Field name="return-on-end" type="boolean" defaultValue="true">
-Whether a player the network brought here is sent back to the server they came from once their event
-lets go of them — it ended, they left, or they arrived to find it already full. Only ever undoes a
-move this plugin made: a player who walked onto this server by themselves is never moved. Turn it off
-on a server players are meant to stay on.
+Whether a player the network brought here is sent back to the server they came from once their event lets go of them: it ended, they left, or they arrived to find it already full. It only undoes a move this plugin made; a player who walked onto this server by themselves is never moved. Turn it off on a server players are meant to stay on.
 </Field>
 
 ## Arenas belong to a backend
@@ -107,7 +117,9 @@ altered and nothing has to be migrated.
 
 It runs from the console as well.
 
-## One lobby per backend
+<Details title="Lobbies, event ids and messages">
+
+### One lobby per backend
 
 The main lobby is stored per `server-id` in `events_server_settings`. Backends sharing one database
 used to share one lobby row, so the last admin to set theirs moved everybody else's — to a world only
@@ -116,14 +128,21 @@ their server has. Each server now answers for its own and reads nobody else's.
 The single row an older version wrote is adopted once, by the one server whose world it is actually
 in. On a lone server that is always true and the lobby is kept without anyone doing anything.
 
-## Network-wide event ids
+### Network-wide event ids
 
 An event that travels is addressed as `server:event`. Ids without a server in them are local, which
 is every id an admin ever types — a configuration id can only contain `a-z`, `0-9`, `_` and `-`, so
 the two can never be confused.
 
-## Messages stay local
+### Messages stay local
 
 Only the facts travel: the event, its type, its state, how many players it holds and who started it.
 Every server renders them through its own `messages.yml`, so a network running two languages keeps
 both.
+
+</Details>
+
+<Cards>
+  <Card title="Installation" href="/docs/exyliaevents/installation">Database and Redis setup for the first start.</Card>
+  <Card title="Create an arena" href="/docs/exyliaevents/arenas">Arenas record the server they were configured on.</Card>
+</Cards>
