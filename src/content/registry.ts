@@ -1719,23 +1719,23 @@ const PROTECTIONS_NAV: NavGroup[] = [
     ],
   },
   {
-    label: { en: "Protecting land", es: "Proteger terreno" },
+    label: { en: "Guides", es: "Guías" },
     pages: [
       page("creating-protections", "creating-protections", "crear-protecciones"),
-      page("backends", "backends", "backends"),
       page("people-and-access", "people-and-access", "personas-y-acceso"),
       page("menus", "menus", "menus"),
+      page("land-tools", "land-tools", "herramientas"),
+      page("warps", "warps", "warps"),
+      page("raids", "raids", "asaltos"),
+      page("economy", "economy", "economia"),
+      page("administration", "administration", "administracion"),
+      page("migration", "migration", "migracion"),
     ],
   },
   {
-    label: { en: "Systems", es: "Sistemas" },
+    label: { en: "How it works", es: "Cómo funciona" },
     pages: [
-      page("raids", "raids", "asaltos"),
-      page("economy", "economy", "economia"),
-      page("land-tools", "land-tools", "herramientas"),
-      page("warps", "warps", "warps"),
-      page("administration", "administration", "administracion"),
-      page("migration", "migration", "migracion"),
+      page("backends", "backends", "backends"),
     ],
   },
   {
@@ -1746,6 +1746,12 @@ const PROTECTIONS_NAV: NavGroup[] = [
       page("placeholders", "placeholders", "placeholders"),
       page("configuration", "configuration", "configuracion"),
       page("api", "api", "api"),
+    ],
+  },
+  {
+    label: { en: "Help", es: "Ayuda" },
+    pages: [
+      page("troubleshooting", "troubleshooting", "problemas-comunes"),
       page("faq", "faq", "faq"),
     ],
   },
