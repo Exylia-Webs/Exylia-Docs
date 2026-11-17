@@ -23,7 +23,7 @@ Follow WRITING.md. ExyliaFFA is the model. One row per plugin; mark done after r
 | `exyliaevents` | `ExyliaEvents` | started (guide bodies pending) |
 | `exyliaffa` | `ExyliaFFA` | done |
 | `exyliagraves` | `ExyliaGraves` | done (staff, network, configuration, faq, installation on old text) |
-| `exyliahiteffect` | `ExyliaHitEffect` | started (guide bodies pending) |
+| `exyliahiteffect` | `ExyliaHitEffect` | done (configuration, api, faq leftovers) |
 | `exyliajobs` | `ExyliaJobs` | done |
 | `exyliajourney` | `ExyliaJourney` | todo |
 | `exyliakillcam` | `ExyliaKillCam` | done (pages left on old text: see .rewrite-notes) |
