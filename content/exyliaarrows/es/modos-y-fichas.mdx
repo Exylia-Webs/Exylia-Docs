@@ -10,20 +10,70 @@ questions:
 updated: "1.7.1"
 ---
 
+Al terminar esta página habrás elegido de dónde salen los efectos en tu servidor (el jugador, el arco o ambos) y podrás dar a un jugador una ficha que ate un efecto a su arco y un removedor que se lo quite.
+
+## Antes de empezar
+
+Instala el plugin, mira [Instala ExyliaArrows](/docs/exyliaarrows/instalacion). Las fichas solo funcionan mientras `behaviour.mode` es `bow` o `both`. En un servidor `player` no hacen nada.
+
+## Pasos
+
+<Steps>
+  <Step title="Elige el modo">
+    En `config.yml` pon `behaviour.mode` en `player`, `bow` o `both` (el de por defecto) y ejecuta `/arrowsadmin reload`. Los tres modos se explican más abajo.
+  </Step>
+  <Step title="Da una ficha">
+    Ejecuta `/arrowsadmin item give <jugador> <efecto> 1`, por ejemplo `/arrowsadmin item give Steve ember_trail 1`. El jugador recibe un ítem con el nombre del efecto (**ESTELA DE FLECHA » efecto** en español, **ARROW EFFECT » effect** en inglés).
+  </Step>
+  <Step title="El jugador la ata">
+    En su propio inventario el jugador coge la ficha con el cursor y hace clic con ella sobre un arco, una ballesta o un tridente. El efecto viaja desde ese momento con ese arco.
+  </Step>
+  <Step title="Quítalo de nuevo">
+    Ejecuta `/arrowsadmin item remover <jugador>`. El jugador suelta el removedor sobre el arco atado de la misma forma. El efecto se quita y vuelve como una ficha a su inventario.
+  </Step>
+</Steps>
+
+Sin ficha, puedes atar el arco que llevas en la mano: `/arrowsadmin bow bind <efecto> [jugador]` ata el efecto sin comprobar si el jugador lo tiene, y `/arrowsadmin bow unbind [jugador]` lo quita.
+
+## Comprueba que funciona
+
+Ata un efecto a un arco, dispara con él y mira la estela. El arco muestra una línea con el nombre del efecto bajo su descripción. Dispara con otro arco: no suena nada, o suena la elección del menú del jugador si el modo es `both`.
+
 ## Los tres modos
 
-`behaviour.mode` decide de dónde sale el efecto:
-
-| Modo | De dónde sale | Qué implica |
+| Modo | De dónde sale el efecto | Qué implica |
 |---|---|---|
-| `player` | Solo de lo que el jugador eligió en `/arrows`. | Sigue al jugador y suena con lo que dispare. Las fichas no hacen nada. |
-| `bow` | Solo de lo que está atado al arco. | Se comercia, se cae y se pierde con el arco. El menú se niega a abrir y lo dice. |
-| `both` | El efecto propio del arco y, para un arco sin ninguno, la elección del jugador. | El valor por defecto. |
+| `player` | Solo de lo que el jugador eligió en `/arrows`. | Sigue al jugador y suena en todo con lo que dispare. Las fichas no hacen nada. |
+| `bow` | Solo de lo que está atado al arco. | Se intercambia, se tira y se pierde con el arco. El menú se niega a abrirse y lo dice. |
+| `both` | El efecto propio del arco y la elección del jugador para un arco sin ninguno. | El de por defecto. Un arco atado gana a la elección del jugador. |
 
-En `both` **gana el arco**: un arco atada lanza lo suyo, y la elección del menú solo cubre los arcos
-que no llevan nada.
+## Ir más lejos
 
-```yaml title="config.yml"
+### Efectos por rango cuando nadie eligió
+
+`behaviour.defaults` en `config.yml` fija el efecto que suena mientras el jugador no ha elegido ninguno, según su rango. Gana la primera línea para la que el jugador cumple; un permiso vacío significa todos (déjalo en la última línea), `random` reproduce un efecto aleatorio de los que tiene y `none` no da nada a ese grupo. No se desbloquea ni se guarda nada. Se ignora si el modo es `bow`.
+
+```yaml
+behaviour:
+  defaults:
+    - permission: group.vip
+      cosmetic: random
+    - permission: ''
+      cosmetic: ember_trail
+```
+
+### Qué pasa cuando caduca un permiso
+
+Una elección que el jugador ya no puede justificar se quita, no se salta en silencio: se descarta en el siguiente disparo, al abrir el menú, al entrar y con `/arrowsadmin player validate <jugador>`. Un efecto marcado con estrella nunca se descarta, así que la lista de favoritos se conserva. `behaviour.hide-without-permission: true` oculta los efectos bloqueados en el menú en vez de mostrarlos bloqueados.
+
+### La línea bajo un arco atado
+
+`bow-lore.enabled` en `config.yml` activa o desactiva la línea. Viaja solo en paquetes y nunca se escribe en el ítem, así que una tienda, una caja o cualquier plugin que lea el arco encuentra exactamente la descripción que tenía, y renombrar un efecto actualiza todos los arcos del servidor a la vez. El texto es `bow-lore` en `lang/<código>/messages.yml`.
+
+<Details title="Reglas de fichas y removedores">
+`config.yml`:
+
+```yaml
 behaviour:
   mode: both
   consume-token: true
@@ -31,63 +81,25 @@ behaviour:
   hide-without-permission: false
 ```
 
-## La ficha
-
-Un objeto que lleva un efecto dentro. Se usa **arrastrándola sobre un arco en tu propio inventario**:
-se coge con el cursor y se hace clic sobre el arco.
-
-| Regla | Detalle |
+| Regla de la ficha | Detalle |
 |---|---|
-| Solo arcos | Espadas, hachas, tridentes, mazas, arcos y ballestas. Lo demás se ignora y el clic sigue su curso normal. |
-| Una a la vez | Un arco que ya lleva efecto se rechaza: primero hay que quitárselo con un removedor. |
-| Compatibilidad | Un efecto con `bows` declarado se rechaza en un arco que no lista. |
-| Sin permiso | Tener la ficha es la prueba. Se compra, se intercambia y se pierde como cualquier otro objeto, así que atarla no pide ningún nodo. |
-| Consumo | `consume-token` decide si se gasta. Apagado, la ficha es reutilizable. |
+| Qué ítems | Arcos, ballestas y tridentes, en el propio inventario del jugador. Cualquier otra cosa se ignora y el clic sigue con normalidad. |
+| Uno cada vez | Un arco que ya lleva un efecto se rechaza. Quita el primero con un removedor. |
+| Encaje | Un efecto que declara `bows` se rechaza en un arco que no lista. |
+| Sin permiso | Tener la ficha es la prueba. Se compra, se intercambia y se pierde como cualquier ítem, así que atarla no pide permiso. |
+| Consumida | `consume-token` decide si se gasta. Desactivado, la ficha se puede volver a usar. |
 
-Lo que se escribe en el arco es **un valor**: `exyliarrows:effect`, el id del efecto. Nada más
-del objeto cambia.
-
-<Callout type="note" title="Una ficha no es el objeto que aparenta">
-Las fichas y los removedores son inertes: dibujados como una perla del end no se pueden lanzar,
-dibujados como comida no se pueden comer. Tengan la pinta que tengan, solo sirven para soltarse sobre
-un arco.
-</Callout>
-
-## El removedor
-
-Se arrastra igual, sobre un arco atada. El efecto sale y **vuelve como ficha** al inventario de quien
-lo quita.
-
-| Regla | Detalle |
+| Regla del removedor | Detalle |
 |---|---|
-| Primero un hueco | Con el inventario lleno no pasa nada: el arco solo se escribe cuando la ficha ya tiene sitio. |
+| Primero un hueco libre | Con el inventario lleno no pasa nada: el arco solo cambia cuando se sabe que la ficha cabe. |
 | Efectos desconocidos | Un arco con un id que el archivo ya no declara se rechaza en vez de convertirse en nada. |
-| Nunca se pierde | Si aun así la ficha no cabe, espera a la siguiente entrada del jugador en vez de tirarse al suelo. |
-| Consumo | `consume-remover` decide si se gasta el removedor. |
+| Nunca se pierde | Si la ficha sigue sin caber, espera a la siguiente entrada del jugador en vez de tirarse. |
+| Consumido | `consume-remover` decide si se gasta el removedor. |
 
-## Las líneas bajo un arco atada
+Lo que se escribe en el arco es un solo valor, el id del efecto (`exyliarrows:effect`). Nada más del ítem cambia. Las fichas y los removedores son inertes: dibujados como una perla de ender no se pueden lanzar, dibujados como comida no se pueden comer. Los materiales son `token-item` y `remover-item` en `config.yml`.
+</Details>
 
-```yaml title="lang/<código>/messages.yml"
-bow-lore:
-  - "{secondary}Arrow Effect:"
-  - " {letters_black}▎ {highlight}%effect%"
-```
-
-`bow-lore.enabled` en `config.yml` las enciende y las apaga.
-
-Viajan **solo en paquetes** y nunca se escriben en el objeto. Consecuencias que conviene saber:
-
-- Una tienda, una caja o cualquier plugin que lea esa arco encuentra exactamente el lore que tenía.
-- Renombrar un efecto actualiza todas los arcos del servidor a la vez.
-- Apagar `bow-lore.enabled` esconde las líneas sin tocar un solo objeto.
-
-## El permiso, y qué pasa cuando caduca
-
-| Interruptor | Qué hace |
-|---|---|
-| `hide-without-permission` | Si un efecto que el jugador no puede usar se esconde en el menú en vez de mostrarse bloqueado. |
-
-Una elección que el jugador ya no puede justificar **se quita**, no se ignora en silencio: se retira en
-el siguiente disparo, al abrir el menú, al entrar y con `/arrowsadmin player validate`. Un efecto marcado
-como favorito nunca se quita — una lista de deseos es tanto lo que alguien está ahorrando como lo que
-ya tiene.
+<Cards>
+  <Card title="Personaliza el menú" href="/docs/exyliaarrows/menu">Lo que eligen los jugadores cuando el modo lee al jugador.</Card>
+  <Card title="Configura la caja y la tienda" href="/docs/exyliaarrows/caja">Haz que una caja reparta fichas.</Card>
+</Cards>

@@ -10,20 +10,70 @@ questions:
 updated: "1.7.1"
 ---
 
+By the end of this page you have chosen where effects come from on your server (the player, the bow or both), and you can hand a player a token that binds an effect to their bow and a remover that takes it off again.
+
+## Before you start
+
+Install the plugin, see [Install ExyliaArrows](/docs/exyliaarrows/installation). Tokens only work while `behaviour.mode` is `bow` or `both`. On a `player` server they do nothing.
+
+## Steps
+
+<Steps>
+  <Step title="Choose the mode">
+    In `config.yml` set `behaviour.mode` to `player`, `bow` or `both` (the default), then run `/arrowsadmin reload`. The three modes are explained below.
+  </Step>
+  <Step title="Give a token">
+    Run `/arrowsadmin item give <player> <effect> 1`, for example `/arrowsadmin item give Steve ember_trail 1`. The player gets an item named after the effect (**ARROW EFFECT » effect** in English, **ESTELA DE FLECHA » efecto** in Spanish).
+  </Step>
+  <Step title="The player binds it">
+    In their own inventory the player picks the token up with the cursor and clicks it onto a bow, crossbow or trident. The effect now travels with that bow.
+  </Step>
+  <Step title="Take it off again">
+    Run `/arrowsadmin item remover <player>`. The player drops the remover onto the bound bow the same way. The effect comes off and comes back as a token in their inventory.
+  </Step>
+</Steps>
+
+Without a token, you can bind the bow in your own hand: `/arrowsadmin bow bind <effect> [player]` binds the effect without asking whether the player owns it, and `/arrowsadmin bow unbind [player]` takes it off.
+
+## Check that it works
+
+Bind an effect to a bow, shoot with it and watch the trail. The bow shows a line with the effect's name under its own lore. Shoot with another bow: it plays nothing, or the player's menu choice if the mode is `both`.
+
 ## The three modes
 
-`behaviour.mode` decides where the effect comes from:
-
-| Mode | Where it comes from | What it implies |
+| Mode | Where the effect comes from | What it means |
 |---|---|---|
 | `player` | Only what the player picked in `/arrows`. | It follows the player and plays on whatever they shoot with. Tokens do nothing. |
 | `bow` | Only what is bound to the bow. | It is traded, dropped and lost with the bow. The menu refuses to open and says so. |
-| `both` | The bow's own effect, and the player's choice for a bow carrying none. | The default. |
+| `both` | The bow's own effect, and the player's choice for a bow with none. | The default. A bound bow wins over the player's choice. |
 
-In `both` the **bow wins**: a bound bow plays its own effect, and the menu choice only covers
-bows carrying none.
+## Going further
 
-```yaml title="config.yml"
+### Effects by rank when nobody picked one
+
+`behaviour.defaults` in `config.yml` sets the effect a player plays while they have not picked one, by rank. The first line the player qualifies for wins, an empty permission means everyone (keep that line last), `random` plays a random effect they own and `none` gives that group nothing. Nothing is unlocked or saved. Ignored when the mode is `bow`.
+
+```yaml
+behaviour:
+  defaults:
+    - permission: group.vip
+      cosmetic: random
+    - permission: ''
+      cosmetic: ember_trail
+```
+
+### What happens when a permission lapses
+
+A choice the player can no longer justify is taken off, not quietly skipped: it is dropped on the next shot, on the next menu open, on join and on `/arrowsadmin player validate <player>`. A starred effect is never dropped, so a shortlist survives. `behaviour.hide-without-permission: true` hides locked effects in the menu instead of showing them locked.
+
+### The line under a bound bow
+
+`bow-lore.enabled` in `config.yml` turns the line on and off. It travels on packets only and is never written to the item, so a shop, a crate or any plugin reading the bow finds exactly the lore it had, and renaming an effect updates every bow on the server at once. The wording is `bow-lore` in `lang/<code>/messages.yml`.
+
+<Details title="Rules for tokens and removers">
+`config.yml`:
+
+```yaml
 behaviour:
   mode: both
   consume-token: true
@@ -31,61 +81,25 @@ behaviour:
   hide-without-permission: false
 ```
 
-## The token
-
-An item that carries one effect. It is used by **dragging it onto a bow in your own inventory**:
-pick the token up with the cursor and click it onto the bow.
-
-| Rule | Detail |
+| Token rule | Detail |
 |---|---|
-| Bows only | Swords, axes, tridents, maces, bows and crossbows. Anything else is ignored and the click carries on normally. |
-| One at a time | A bow that already carries an effect is refused — take the first one off with a remover. |
+| Which items | Bows, crossbows and tridents, in the player's own inventory. Anything else is ignored and the click carries on normally. |
+| One at a time | A bow that already carries an effect is refused. Take the first one off with a remover. |
 | Fitting | An effect declaring `bows` is refused on a bow it does not list. |
-| No permission | Holding the token is the proof. It is bought, traded and lost like any other item, so binding it asks for no node. |
-| Consumed | `consume-token` decides whether it is spent. Off, the token is reusable. |
+| No permission | Holding the token is the proof. It is bought, traded and lost like any item, so binding it asks for no permission. |
+| Consumed | `consume-token` decides whether it is spent. Off, the token can be used again. |
 
-What is written onto the bow is **one value**: `exyliarrows:effect`, the effect id. Nothing
-else on the item changes.
-
-<Callout type="note" title="A token is not the item it is drawn as">
-Tokens and removers are inert: drawn as an ender pearl one cannot be thrown, drawn as food it cannot
-be eaten. Whatever it looks like, it can only be dropped onto a bow.
-</Callout>
-
-## The remover
-
-Dragged the same way onto a bound bow. The effect comes off and **comes back as a token** in the
-inventory of whoever removed it.
-
-| Rule | Detail |
+| Remover rule | Detail |
 |---|---|
-| A free slot first | With a full inventory nothing happens at all: the bow is only written once the token is known to fit. |
+| A free slot first | With a full inventory nothing happens: the bow is only changed once the token is known to fit. |
 | Unknown effects | A bow carrying an id the file no longer declares is refused rather than turned into nothing. |
 | Never lost | Should the token still not fit, it waits for the player's next join instead of being dropped. |
 | Consumed | `consume-remover` decides whether the remover is spent. |
 
-## The lines under a bound bow
+What is written onto the bow is one value, the effect id (`exyliarrows:effect`). Nothing else on the item changes. Tokens and removers are inert: drawn as an ender pearl one cannot be thrown, drawn as food it cannot be eaten. The materials are `token-item` and `remover-item` in `config.yml`.
+</Details>
 
-```yaml title="lang/<code>/messages.yml"
-bow-lore:
-  - "{secondary}Arrow Effect:"
-  - " {letters_black}▎ {highlight}%effect%"
-```
-
-`bow-lore.enabled` in `config.yml` turns them on and off.
-
-They travel **on packets only** and are never written to the item. Consequences worth knowing:
-
-- A shop, a crate or any plugin reading that bow finds exactly the lore it had.
-- Renaming an effect updates every bow on the server at once.
-- Turning `bow-lore.enabled` off hides the lines without touching a single item.
-
-## Permission, and what happens when it lapses
-
-| Switch | What it does |
-|---|---|
-| `hide-without-permission` | Whether an effect the player may not use is hidden in the menu instead of shown locked. |
-
-A choice the player can no longer justify is **taken off**, not quietly skipped: it is dropped on the
-next shot, on the next menu open, on join, and on `/arrowsadmin player validate`. A starred effect is
-never dropped — a shortlist is what somebody is saving up for as much as what they already have.
+<Cards>
+  <Card title="Customise the menu" href="/docs/exyliaarrows/menu">What players pick from when the mode reads the player.</Card>
+  <Card title="Set up the crate and the shop" href="/docs/exyliaarrows/crate">Let a crate hand out tokens.</Card>
+</Cards>

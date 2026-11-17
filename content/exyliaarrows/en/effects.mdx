@@ -1,6 +1,6 @@
 ---
 title: "Add and edit effects"
-description: "Change the 120 shipped effects, add your own, and sort them into categories and rarities in effects.yml."
+description: "Write your own arrow effect, change the 120 shipped ones and sort them into categories and rarities in effects.yml."
 questions:
   - "How do I add an arrow effect?"
   - "Where are the effects stored?"
@@ -10,11 +10,72 @@ questions:
 updated: "1.7.1"
 ---
 
-## The file
+By the end of this page you have a new arrow effect of your own in `effects.yml`, you have seen it play, and a rank can use it. The same steps edit any of the 120 effects that ship with the plugin.
 
-Two sections: the categories, and the effects that belong to them. An effect's `effects` block is a
-map of **triggers**, not a list.
+## Before you start
 
+Install the plugin and set the preview stage, see [Your first effect](/docs/exyliaarrows/first-steps). Previews are how you check an effect without shooting. If you would rather have an AI write the effect, see [Create an effect with AI](/docs/exyliaarrows/create-with-ai).
+
+## Steps
+
+<Steps>
+  <Step title="Open the file">
+    Open `plugins/ExyliaArrows/lang/<code>/effects.yml`, where `<code>` is your `language` in `config.yml` (see [Install ExyliaArrows](/docs/exyliaarrows/installation)). Or edit it without opening a file, see "Edit it in game" below.
+  </Step>
+  <Step title="Add the entry">
+    Add a new key under `arrow_effects`, with a `category` that exists and an `effects` block naming at least one trigger. The shape is in the technical details below; copy a shipped effect and change it.
+  </Step>
+  <Step title="Spend where it shows">
+    Keep the trail to a display or two and put the work in `hit`. The step language is in [How sequences work](/docs/exyliaarrows/sequences).
+  </Step>
+  <Step title="Reload">
+    Run `/arrowsadmin reload`.
+  </Step>
+  <Step title="Look at it">
+    Run `/arrows preview <effect>`. It plays against an empty sky on the preview stage, then puts you back.
+  </Step>
+  <Step title="Grant it">
+    Give a rank the permission `exyliarrows.effect.<id in lowercase>`, or the whole category with `exyliarrows.category.<category>`. See [Permissions](/docs/exyliaarrows/permissions).
+  </Step>
+</Steps>
+
+## Check that it works
+
+Run `/arrowsadmin list`: the new effect is in the list. Run `/arrows preview <effect>` and watch launch, trail and impact. If a line of the effect could not be read, the console prints it with the line that caused it, and the rest of the effect still plays.
+
+<Callout type="note" title="The effect id is the permission">
+`EMBER_TRAIL` is `exyliarrows.effect.ember_trail`. Renaming the key renames the permission, and a bow bound to the old key stops playing. Case does not matter: ids are lowercased on the way in.
+</Callout>
+
+## Going further
+
+### Restrict an effect to some bows
+
+Add `bows` to the effect. It is only read while `behaviour.mode` reads bows (see [Bind effects to bows](/docs/exyliaarrows/modes-and-tokens)).
+
+```yaml
+bows: [ CROSSBOW, TRIDENT ]
+```
+
+None of the shipped effects declares `bows`, so out of the box every one of them fits every bow.
+
+### Set a price
+
+Add `price` to sell one effect in the menu: a number in the default currency, or `{amount: 50, currency: gems}`. It wins over the price of its rarity. See [Set up the crate and the shop](/docs/exyliaarrows/crate#buying-with-currency).
+
+### Make it play on other projectiles
+
+Add `projectiles` with the entity types, for example `[ SNOWBALL ]`. Without it, `config.yml` decides which projectiles carry effects.
+
+### Edit it in game
+
+`effects.yml` is also editable in game from `/exylialib config`, and in the browser through [ExyliaLib's web editor](/docs/exylialib/web-editor), both with `exyliarrows.admin`. Before anything is written, the change is read by the same loader a reload uses. If an entry or a section would be lost (a missing `categories` or `arrow_effects`, an entry that is not a section) the whole change is refused and nothing is written. Once applied, the catalogue, the crate, the showcases and any open 3D selector pick it up without a reload.
+
+<Callout type="warning" title="The trail is the one with a budget">
+An arrow lives about forty ticks, and four archers are four arrows in the air. Whatever `trail` writes is drawn on every one of those ticks, per shot: one or two small displays plus a particle line, and no sound. The impact is the payoff and may be bigger: under a second, a dozen displays at the very most.
+</Callout>
+
+<Details title="The shape of an effect">
 ```yaml title="effects.yml"
 categories:
   ember:
@@ -41,134 +102,85 @@ arrow_effects:
         - '[PARTICLE] FLAME;count:14;offset:0.4,0.2,0.4;speed:0.05'
 ```
 
+An effect's `effects` block is a map of triggers, not a list.
+
 | Key | What it does |
 |---|---|
 | `category` | Which tab it appears under. Must be a key declared under `categories`. |
 | `tier` | How rare it is. Must be a key declared under `config.yml`'s `tiers`; without it the effect is common. It decides the colour it is named in, the odds of a crate landing on it, and what `exyliarrows.tier.<id>` grants. |
 | `name` | What menus and placeholders call it. |
-| `material` | The item the row is drawn with. |
-| `description` | A list is one line per entry; a single string breaks on `<nl>`. |
+| `material` | The item the row is drawn with. `icon` is read when `material` is missing. |
+| `description` | A list is one line per entry; a single string breaks on `<nl>`. `lore` is accepted as another spelling. |
 | `priority` | Where it sits in its tab; lower comes first. |
 | `trail-interval` | Ticks between trail steps. `1` is every tick, `2` every other. Defaults to `trail.default-interval`. |
+| `trail-max-duration` | Optional. How long this effect's trail may live. Without it `trail.max-duration` applies. |
 | `effects` | The triggers, below. |
 | `bows` | Optional. What it may be bound to. |
-| `projectiles` | Optional. Which projectiles it plays on; without it `config.yml` decides. |
-| `price` | Optional. What it sells for in the menu, winning over its rarity's `shop.tier-prices`: a number in the default currency, or `{amount: 50, currency: gems}`. See [Configuration](/docs/exyliaarrows/configuration#shop). |
-
-## The triggers
+| `projectiles` | Optional. Which projectiles it plays on; `projectile-types` is accepted as another spelling. Without it `config.yml` decides. |
+| `price` | Optional. What it sells for in the menu, winning over its rarity's `shop.tier-prices`. See [Configuration](/docs/exyliaarrows/configuration#shop). |
 
 | Trigger | When |
 |---|---|
 | `launch` | The shot leaving the bow. |
 | `trail` | Along the flight, every `trail-interval` ticks. |
 | `hit` | Wherever it lands, whatever it hit. |
-| `hit-entity` | Only on something alive — falls back to `hit`. |
-| `hit-block` | Only on a block — falls back to `hit`. |
+| `hit-entity` | Only on something alive. Falls back to `hit`. |
+| `hit-block` | Only on a block. Falls back to `hit`. |
 
-`hit-entity` and `hit-block` are the same moment told apart: declare them when landing on a player and
-landing on the ground deserve different pictures. Written either way — `hit-entity` or `hit_entity` —
-because a hyphen is what every other Exylia file writes.
+`hit-entity` and `hit-block` are the same moment told apart: declare them when landing on a player and on the ground deserve different pictures. `hit_entity` is read the same way, because a hyphen is what every other Exylia file writes.
 
-<Callout type="warning" title="The trail is the one with a budget">
-An arrow lives about forty ticks, and four archers are four arrows in the air. Whatever `trail` writes
-is drawn on **every one of those ticks, per shot**: one or two small displays plus a particle line for
-the glow, and no sound. The impact is the payoff and is allowed to be one — under a second, a dozen
-displays at the very most.
-</Callout>
-
-## `bows`
-
-Only read while `behaviour.mode` reads bows. It accepts item names and families:
-
-```yaml
-bows: [ CROSSBOW, TRIDENT ]
-```
+`bows` accepts item names and families:
 
 | Family | Matches |
 |---|---|
 | `ANY` | Anything at all. |
 | `BOW`, `CROSSBOW`, `TRIDENT` | Just that item. |
 | `RANGED` | Bows, crossbows and tridents. |
+</Details>
 
-None of the shipped effects declares `bows`, so out of the box every one of them fits everything.
-
-<Callout type="note" title="The effect id is the permission">
-`EMBER_TRAIL` is `exyliarrows.effect.ember_trail`. Renaming the key renames the node. Case is not part
-of it: ids are lowercased on the way in.
-</Callout>
-
-## The catalogue
-
-Twenty effects per category, 120 in total.
-
-### Ember — `BLAZE_POWDER`
+<Details title="All 120 effects">
+#### Ember — `BLAZE_POWDER`
 
 `EMBER_TRAIL` `INFERNO` `CINDERFALL` `MAGMA_CORE` `FIREBRAND` `SCORCH` `PYRE` `ASHFALL` `FORGE_STRIKE`
 `METEOR` `MOLTEN_RAIN` `EMBER_WINGS` `COALFALL` `FLINT_SPARK` `SUNFIRE` `CRIMSON_BLOOM` `TORCHLIGHT`
 `FURNACE_BLAST` `WILDFIRE` `PHOENIX`
 
-### Frost — `BLUE_ICE`
+#### Frost — `BLUE_ICE`
 
 `FROSTBITE` `SNOWFALL` `ICE_SHARD` `BLIZZARD` `GLACIER` `HAILSTORM` `PERMAFROST` `FROZEN_CORE` `SLEET`
 `ICICLE` `FROST_NOVA` `DEEP_FREEZE` `AURORA` `DIAMOND_DUST` `COLD_SNAP` `FROSTED_GLASS` `CRYO_SHOT`
 `AVALANCHE` `WINTER_BLOOM` `ABSOLUTE_ZERO`
 
-### Storm — `LIGHTNING_ROD`
+#### Storm — `LIGHTNING_ROD`
 
 `THUNDERBOLT` `STATIC_CHARGE` `WIND_GUST` `SQUALL` `TEMPEST` `CHAIN_LIGHTNING` `SKYFALL` `CLOUDBURST`
 `DOWNPOUR` `CYCLONE` `THUNDERHEAD` `WIND_SHEAR` `STORM_SURGE` `IONISE` `GALE` `BREEZE_SHOT` `MONSOON`
 `STATIC_WEB` `UPDRAFT` `SKYBREAKER`
 
-### Void — `ECHO_SHARD`
+#### Void — `ECHO_SHARD`
 
 `SOULBOUND` `VOID_TEAR` `SCULK_BLOOM` `WITHERING` `ENDER_RIFT` `SHADOW_STEP` `NECROTIC` `SHRIEKER`
 `ABYSS` `GRAVE_DUST` `WRAITH` `OBSIDIAN_TEAR` `DARK_MATTER` `SOUL_FIRE` `CATACOMB` `NULL` `REAPER`
 `PHANTASM` `DECAY` `EVENT_HORIZON`
 
-### Prism — `AMETHYST_SHARD`
+#### Prism — `AMETHYST_SHARD`
 
 `STARLIGHT` `AMETHYST` `ARCANE_BOLT` `SPECTRUM` `BEACON` `GILDED` `REFRACTION` `NOVA` `SANCTUM`
 `GLIMMER` `ECHO_CRYSTAL` `STARFALL` `LUMEN` `KALEIDOSCOPE` `SOLAR_FLARE` `CRYSTALLINE` `PRISM_ARROW`
 `HALO` `MIRROR` `CELESTIAL`
 
-### Goofy — `SLIME_BALL`
+#### Goofy — `SLIME_BALL`
 
 `BONK` `RUBBER_CHICKEN` `PIE` `CONFETTI` `BUBBLE` `SLIME_TIME` `CAKE_DROP` `DUCK` `ANGRY_BEE` `BOING`
 `SQUEAK` `TOAST` `BANANA` `TNT_PRANK` `SNOWBALL_FIGHT` `ANVIL_DROP` `OOF` `SAD_TRUMPET` `DISCO`
 `ROLL_CREDITS`
 
-<Callout type="tip" title="NULL is an effect, not a mistake">
-The void category has one called `NULL`. YAML reads that key as nothing at all unless it is quoted, so
-leave it exactly as the file writes it if you are editing around it.
-</Callout>
 
-## Writing your own
+The void category has one called `NULL`. YAML reads that key as nothing at all unless it is quoted, so leave it exactly as the file writes it if you edit around it.
+</Details>
 
-<Steps>
-  <Step title="Add the entry">
-    A new key under `arrow_effects`, with a `category` that exists and an `effects` block naming at
-    least one trigger.
-  </Step>
-  <Step title="Spend where it shows">
-    Keep the trail to a display or two; put the work in `hit`. The full step syntax is in
-    [Sequences](/docs/exyliaarrows/sequences).
-  </Step>
-  <Step title="Reload">
-    `/arrowsadmin reload`.
-  </Step>
-  <Step title="Look at it">
-    `/arrows preview <id>` plays it against an empty sky, then puts you back.
-  </Step>
-  <Step title="Grant it">
-    `exyliarrows.effect.<id in lowercase>`, or the whole category.
-  </Step>
-</Steps>
-
-## Editing it without the file
-
-`effects.yml` is also editable in game, from `/exylialib config`, and in the browser through
-[ExyliaLib's web editor](/docs/exylialib/web-editor), both with `exyliarrows.admin`. Before anything is
-written, the change is read by the same loader a reload uses: if an entry or a section would be lost
-(a missing `categories` or `arrow_effects`, an entry that is not a section) the whole change is refused
-and nothing is written. Once applied, the catalogue, the crate, the showcases and any open 3D selector
-pick it up without a reload.
+<Cards>
+  <Card title="How sequences work" href="/docs/exyliaarrows/sequences">The lines an effect is made of.</Card>
+  <Card title="Create an effect with AI" href="/docs/exyliaarrows/create-with-ai">Describe the idea, paste the result.</Card>
+  <Card title="Bind effects to bows" href="/docs/exyliaarrows/modes-and-tokens">Sell effects as tokens.</Card>
+</Cards>
