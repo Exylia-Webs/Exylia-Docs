@@ -8,7 +8,7 @@ Follow WRITING.md. ExyliaFFA is the model. One row per plugin; mark done after r
 | `exyliaanalytics` | `ExyliaAnalytics` | done (notes) |
 | `exyliaarmorskin` | `ExyliaArmorSkin` | done (api not reviewed) |
 | `exyliaarmortrims` | `ExyliaArmorTrims` | done |
-| `exyliaarrows` | `ExyliaArrows` | done (faq move, configuration and api check pending) |
+| `exyliaarrows` | `ExyliaArrows` | done |
 | `exyliacapture` | `ExyliaCapture` | done (notes) |
 | `exyliacasino` | `ExyliaCasino` | done (playing idle-clock table unverified) |
 | `exyliachatcosmetics` | `ExyliaChatCosmetics` | done (configuration, api pending) |
