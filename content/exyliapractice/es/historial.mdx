@@ -1,31 +1,20 @@
 ---
 title: "Historial de partidas"
-description: "Cada partida, los dos inventarios, su replay, y la ventana en la que vive cada uno."
+description: "Cómo mira un jugador atrás una partida terminada: resultado, los dos inventarios y un replay, y cuánto tiempo se guarda cada cosa."
 questions:
   - "¿Cómo ven los jugadores sus partidas pasadas?"
   - "¿Cómo veo el replay de una partida?"
   - "¿Cuánto tiempo se guardan los replays y los inventarios?"
   - "¿Quién puede abrir el historial de partidas?"
+  - "¿Cómo desactivo los replays o grabo solo las clasificatorias?"
 updated: "1.4.0"
 ---
 
-Cada partida terminada escribe una fila **por jugador** en `practice_match_history`. Las dos filas
-comparten un `matchId`, que es lo que permite a un jugador ver el lado de su rival de la misma pelea.
+Cada partida terminada se guarda para que los jugadores puedan mirarla después: quién ganó, cómo se movió el rating, qué llevaba cada lado y, si los replays están activos, la pelea entera reproducida otra vez. Esta página explica qué se guarda, cómo lo abre un jugador, cuánto vive y cómo ajustar los replays. No hay nada que configurar: el historial y los replays funcionan desde la primera partida.
 
-## Qué guarda una fila
+## Cómo lo abren los jugadores
 
-| Grupo | Campos |
-|---|---|
-| Identidad | `matchId`, `season`, `playerUuid`, `opponentName`, `kitId`, `arenaId`, `matchMode` |
-| Resultado | `result` (WIN / LOSS / DRAW), `ranked`, `playedAt`, `durationMs` |
-| Rating | `eloBefore`, `eloChange`, `eloAfter`, y los mismos tres para el ladder global |
-| Tu lado | `kills`, `deaths`, `damageDealt`, `hitsDealt`, `hitsReceived`, `totalSwings`, `bestCombo` |
-| Su lado | Los mismos siete, con el prefijo `opponent` |
-| Inventario | `inventoryData`: el inventario del jugador tal como estaba al terminar |
-
-Se escribe una fila por cada partida no cancelada, sea clasificatoria o no.
-
-## Verlo
+El jugador escribe `/history` (alias `/mh`, `/match-history`). Necesita `exyliapractice.history`, que todos tienen por defecto.
 
 | Comando | Qué hace |
 |---|---|
@@ -34,103 +23,112 @@ Se escribe una fila por cada partida no cancelada, sea clasificatoria o no.
 | `/history inv <matchId>` | El inventario con el que terminaste esa partida |
 | `/history invop <matchId>` | El de tu rival |
 
-`inv` e `invop` solo se abren para quien jugó esa partida. Las tres consultas que leen la base de datos
-responden como mucho una vez cada dos segundos por jugador.
+El menú (**HISTORIAL DE PARTIDAS**) abre por la lista de categorías, luego los kits y luego las partidas. Cada partida muestra el resultado (**VICTORIA vs**, **DERROTA vs** o **EMPATE vs** con el nombre del rival), el kit, la arena, el modo (ranked o no), el cambio de Elo, la duración, la fecha y las kills, el daño, los golpes y el mejor combo de esa partida.
 
-El menú abre por la lista de categorías, luego los kits, luego las partidas, y cada fila muestra el
-resultado, el cambio de LP, el rival, el kit y cuánto duró. Clic izquierdo en una abre las dos vistas
-de inventario; clic derecho reproduce su [replay](#replays).
+- **Clic izquierdo** en una partida abre las dos vistas de inventario. El botón **Ver inventario de (jugador)** cambia entre tu lado y el de tu rival.
+- **Clic derecho** en una partida reproduce su [replay](#replays).
+- Los botones de la fila inferior filtran la lista: **Todas**, **Victorias**, **Derrotas**, **Ranked**, **Unranked**.
 
-Cinco filtros: **todas**, **victorias**, **derrotas**, **clasificatorias**, **no clasificatorias**.
+Al terminar una partida, una línea de chat `Inventarios: <tú> │ <rival>` deja los dos nombres clicables; ejecutan `/mh inv` y `/mh invop` de esa partida.
+
+`inv` e `invop` solo se abren para quien jugó esa partida. Las tres consultas que leen la base de datos (`/history player`, `inv`, `invop`) responden como mucho una vez cada dos segundos por jugador.
 
 <Callout type="note" title="Las últimas 300 partidas">
-Una consulta de historial lee las 300 partidas más recientes del jugador, ordenadas por la base de
-datos, y filtra esa ventana en memoria. Por eso un kit que hace mucho que no juegas puede parecer más
-vacío de lo que está: la partida sigue en la tabla, solo que fuera de la ventana que lee el menú.
+Una consulta de historial lee las 300 partidas más recientes del jugador, ordenadas por la base de datos, y filtra esa ventana en memoria. Por eso un kit que hace mucho que no juegas puede parecer más vacío de lo que está: la partida sigue en la tabla, solo que fuera de la ventana que lee el menú.
 </Callout>
 
 Los resultados se cachean dos minutos por jugador, kit y filtro.
 
+<Details title="Qué guarda una fila">
+Cada partida terminada escribe una fila **por jugador** en `practice_match_history`. Las dos filas comparten un `matchId`, que es lo que permite a un jugador ver el lado de su rival en la misma pelea. Se escribe una fila por cada partida no cancelada, sea clasificatoria o no.
+
+| Grupo | Campos |
+|---|---|
+| Identidad | `matchId`, `season`, `playerUuid`, `opponentName`, `kitId`, `arenaId`, `matchMode` |
+| Resultado | `result` (WIN / LOSS / DRAW), `ranked`, `playedAt`, `durationMs` |
+| Rating | `eloBefore`, `eloChange`, `eloAfter`, y los mismos tres para el ladder global |
+| Tu lado | `kills`, `deaths`, `damageDealt`, `hitsDealt`, `hitsReceived`, `totalSwings`, `bestCombo` |
+| Su lado | Los mismos siete, con prefijo `opponent` |
+| Inventario | `inventoryData`: el inventario del jugador tal como estaba al terminar la partida |
+
+Los menús son `menus/player/match_history.yml`, `match_history_category.yml`, `match_history_kit.yml` y `match_inventory.yml`; los textos y los nombres de filtro están en la sección `match-history` del `messages.yml` del idioma. Mira [Editar menús](/docs/exylialib/editar-menus) y [Mensajes e idiomas](/docs/exylialib/mensajes-e-idiomas).
+</Details>
+
 ## Retención
 
-Las filas de partida se borran a los **60 días**. El barrido empieza cinco minutos después del arranque
-y corre cada hora, borrando primero las más antiguas, por lotes, enteramente dentro de la base de datos
-y con una pausa entre lotes para no retener las inserciones de las partidas en curso.
+Las filas de partida se borran a los **60 días**. El barrido empieza cinco minutos después del arranque y corre cada hora, borrando primero las más antiguas, por lotes, enteramente dentro de la base de datos y con una pausa entre lotes para no frenar los inserts de una partida en curso. La ventana de retención no es una clave de configuración.
 
-<Callout type="note" title="Borrar una partida no cuesta nada estadísticamente">
-Todos los contadores derivados de una partida —victorias, daño, precisión, combos, tiempo jugado— ya se
-guardaron en las filas de temporada e histórico cuando terminó. La fila de historial es el registro,
-no la fuente de verdad.
+<Callout type="note" title="Borrar una partida no cuesta nada a efectos estadísticos">
+Cada contador derivado de una partida (victorias, daño, precisión, combos, tiempo jugado) ya se guardó en las filas de temporada e históricas cuando terminó la partida, mira [Estadísticas](/docs/exyliapractice/estadisticas). La fila del historial es el registro, no la fuente de verdad.
 </Callout>
-
-La ventana de retención no es una clave de configuración.
 
 ## Purgar
 
-Ya no hay botón de purga. Para borrar todo el historial de una vez, usa
-`/exylialib wipe ExyliaPracticeCore practice_match_history` de ExyliaLib (o `@history` para el historial,
-el registro de partidas y los replays a la vez); el historial de un jugador se borra con
-`/exylialib resetplayer <jugador> ExyliaPracticeCore @history`. Ver [Base de datos](/docs/exyliapractice/base-de-datos).
+No hay botón de purga. Para borrar de golpe todo el historial usa `/exylialib wipe ExyliaPracticeCore practice_match_history` de ExyliaLib (o `@history` para el historial, el registro de partidas y los replays juntos). El historial de un solo jugador se borra con `/exylialib resetplayer <jugador> ExyliaPracticeCore @history`. Mira [Base de datos](/docs/exyliapractice/base-de-datos).
 
 ## La foto del inventario
 
-El inventario se captura al terminar la partida: 36 huecos de almacenamiento, 4 de armadura y la mano
-secundaria, serializados en la fila. Eso es lo que dibuja `/history inv`: los objetos reales, con
-durabilidad y encantamientos, en un menú no clicable.
+El inventario se captura al terminar la partida: 36 huecos de almacenamiento, 4 de armadura y la mano secundaria, serializados en la fila. Es lo que muestra `/history inv`: los objetos reales, con durabilidad y encantamientos, en un menú del que nadie puede sacar objetos.
 
-Como se captura al final, un jugador que murió sin nada no muestra nada. La foto es lo que llevaba, no
-lo que le dio el kit.
+Como se captura al final, un jugador que murió sin llevar nada no muestra nada. La foto es lo que tenía, no lo que le dio el kit.
 
-Las fotos se guardan comprimidas y duran `replay.inventory-retention-days` (14 por defecto), no los 60
-días completos: el mismo barrido horario las borra después y deja el resto de la fila consultable.
+Las fotos se guardan comprimidas y se conservan `replay.inventory-retention-days` (14 por defecto), no los 60 días completos. El mismo barrido horario las limpia después y deja el resto de la fila consultable; la vista de inventario muestra entonces **Sin datos de inventario**.
 
 ## Replays
 
-Cada partida grabada se puede volver a ver desde el menú de historial. Una grabación es el registro del
-propio servidor de dónde estaba cada uno en cada tick, no una copia de lo que dibujó un cliente, así
-que verla zanja si un golpe entró o no. Incluye los cambios de la arena: bloques puestos y rotos,
-bloques que caducan, puertas, regeneraciones entre puntos, tótems, manzanas doradas y pociones
-arrojadizas. La grabación sigue tres segundos después del final de la partida.
+Toda partida grabada se puede volver a ver desde el menú del historial. Una grabación es el registro del propio servidor de dónde estaba cada uno en cada tick, no una copia de lo que dibujó ningún cliente, así que verla zanja si un golpe entró. Incluye los cambios de la arena: bloques puestos y rotos, bloques que caducan, puertas, regeneraciones entre puntos, tótems, manzanas doradas y pociones arrojadizas. La grabación sigue tres segundos tras el final de la partida.
 
-| Ajuste | Defecto | Qué hace |
-|---|---|---|
-| `replay.enabled` | `true` | Grabar partidas |
-| `replay.ranked-only` | `false` | Grabar solo partidas ranked |
-| `replay.retention-days` | `14` | Días que una grabación se puede ver. Pasado eso se borra; la fila de historial se queda. |
-| `replay.max-concurrent-viewers` | `5` | Replays que se pueden ver a la vez, en todo el servidor |
-| `replay.inventory-retention-days` | `14` | Días que una partida conserva sus fotos de inventario. Pasado eso se borran; la fila de historial se queda. |
+Verlos necesita `exyliapractice.replay` (todos lo tienen por defecto).
 
-Las partidas contra bots nunca se graban. Las grabaciones viven en su propia tabla,
-`practice_match_replays`, una fila por partida.
+<Steps>
+  <Step title="Abre una partida">
+    Ejecuta `/history`, elige una categoría, un kit y busca la partida.
+  </Step>
+  <Step title="Clic derecho en ella">
+    El plugin te da una copia libre de la arena de esa partida y te pone dentro como una cámara voladora, en modo aventura, a la que nada puede dañar. Empiezas detrás del primer luchador.
+  </Step>
+  <Step title="Manéjalo desde la hotbar">
+    Usa los objetos de la tabla de abajo o los comandos `/replay`. **SALIR** (hueco 9) o `/replay leave` te devuelve al lobby.
+  </Step>
+</Steps>
 
-### Verlo
-
-Quien mira recibe una copia libre de la arena de la partida, igual que la consigue la cola, y se
-convierte en una cámara que vuela en modo aventura, a la que nada puede herir, empezando detrás del
-primer luchador. Un borde dibujado solo para él lo mantiene en la arena, y los cuerpos y bloques que ve
-se le envían solo a él, así que dos personas pueden ver dos partidas en dos copias de la misma arena
-sin verse.
-
-Un replay se rechaza, con un mensaje, cuando quien lo pide está en una partida, en cola o ya viendo
-otro, cuando todas las copias de la arena están en uso, o cuando se alcanza `max-concurrent-viewers`.
-
-La hotbar lo maneja, desde `overlays/replay.yml` en la carpeta del idioma:
-
-| Slot | Botón |
+| Hueco | Botón |
 |---|---|
-| 1 | Atrás 10 segundos |
-| 2 | Reproducir / pausar |
-| 3 | Adelante 10 segundos |
-| 5 | Velocidad: clic izquierdo más lento, clic derecho más rápido, de `x0.125` a `x4` |
-| 7 | Desde el principio |
-| 9 | Salir |
+| 1 | **« 10 SEGUNDOS**: retrocede 10 segundos |
+| 2 | **REPRODUCIR / PAUSA** |
+| 3 | **10 SEGUNDOS »**: avanza 10 segundos |
+| 5 | **VELOCIDAD**: clic izquierdo más lento, clic derecho más rápido, de `x0.125` a `x4` |
+| 7 | **DESDE EL INICIO** |
+| 9 | **SALIR** |
 
 Los mismos controles existen como comandos, que además aceptan una velocidad o un momento exactos:
 
-| Comando | Qué hace |
-|---|---|
-| `/replay pause` | Pausar o reanudar |
-| `/replay speed <multiplicador>` | Cualquier velocidad de `0.0625` a `8` |
-| `/replay seek <minutos> [segundos]` | Saltar a ese momento |
-| `/replay sounds` | Sonidos sí o no |
-| `/replay leave` | Volver al lobby |
+<Commands group="replay" />
+
+### Desactiva los replays o graba menos
+
+Los ajustes de replay están bajo `replay` en `config.yml`; mira [Configuración](/docs/exyliapractice/configuracion).
+
+| Ajuste | Defecto | Qué hace |
+|---|---|---|
+| `replay.enabled` | `true` | Grabar partidas en absoluto |
+| `replay.ranked-only` | `false` | Grabar solo las partidas clasificatorias |
+| `replay.retention-days` | `14` | Días que una grabación se puede ver. Pasado ese plazo se borra; la fila del historial queda. |
+| `replay.max-concurrent-viewers` | `5` | Replays que se pueden ver a la vez, en todo el servidor |
+| `replay.inventory-retention-days` | `14` | Días que una partida conserva sus fotos de inventario. Pasado ese plazo se limpian; la fila del historial queda. |
+
+Las partidas contra bots nunca se graban. Las grabaciones viven en su propia tabla, `practice_match_replays`, una fila por partida.
+
+<Details title="Cómo se muestra un replay">
+Quien mira recibe una copia libre de la arena de la partida, igual que la cola. Un borde dibujado solo para esa persona la mantiene dentro de la arena, y los cuerpos y bloques que ve se le envían solo a ella, así que dos personas pueden ver dos partidas en dos copias de la misma arena sin verse.
+
+Un replay se rechaza, con un mensaje, cuando quien lo pide está en una partida, en cola o ya viendo uno, cuando todas las copias de la arena están en uso, o cuando se alcanza `max-concurrent-viewers`.
+
+La hotbar es `overlays/replay.yml` en la carpeta del idioma. `/replay speed` acepta cualquier velocidad de `0.0625` a `8`, y `/replay seek <minutos> [segundos]` salta a ese momento.
+</Details>
+
+<Cards>
+  <Card title="Estadísticas" href="/docs/exyliapractice/estadisticas">Los contadores que guarda una partida al terminar.</Card>
+  <Card title="Espectadores" href="/docs/exyliapractice/espectadores">Mira una partida mientras se juega.</Card>
+  <Card title="Configuración" href="/docs/exyliapractice/configuracion">Todos los ajustes `replay.*`.</Card>
+</Cards>

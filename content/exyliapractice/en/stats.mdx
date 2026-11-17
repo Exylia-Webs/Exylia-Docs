@@ -1,13 +1,16 @@
 ---
 title: "Statistics"
-description: "The three tiers of counters, what a match commits, the leaderboards and the admin commands that edit them."
+description: "What ExyliaPracticeCore counts, when a match writes its numbers, how the leaderboards are built and how to correct a player's stats."
 questions:
   - "What stats does ExyliaPracticeCore track?"
   - "How do I edit a player's stats?"
   - "Why did /epc stats set not change the leaderboard?"
   - "How long are leaderboards cached?"
+  - "How do I reset everyone's stats or ELO?"
 updated: "1.4.0"
 ---
+
+ExyliaPracticeCore keeps a set of counters for every player on every kit (wins, kills, damage, streaks, rating and more), plus an overall "global" ladder. This page explains where those numbers live, when a match writes them, how `/stats` ranks players and how an admin corrects them. You do not need to set anything up: stats are counted from the first match.
 
 ## Three tiers
 
@@ -17,13 +20,11 @@ updated: "1.4.0"
 | **Lifetime** | `practice_player_lifetime_stats` | One row per player, per kit, across every season |
 | **Match** | `practice_match_history` | One row per player, per match |
 
-Every ladder, sidebar, placeholder and menu reads the **season** tier. The lifetime tier is the
-permanent record and survives every rotation.
+Every ladder, sidebar, placeholder and menu reads the **season** tier. The lifetime tier is the permanent record and survives every season rotation, see [Seasons](/docs/exyliapractice/seasons). The match tier is the [match history](/docs/exyliapractice/match-history).
 
-The **global** ladder is not a separate table — it is one more row in the same tables, stored under
-the kit id `global`. That is what lets a single query answer both "top on Sumo" and "top overall".
+The **global** ladder is not a separate table: it is one more row in the same tables, stored under the kit id `global`. That is what lets one query answer both "top on Sumo" and "top overall".
 
-## What a row holds
+<Details title="What a row holds">
 
 | Group | Fields |
 |---|---|
@@ -35,65 +36,56 @@ the kit id `global`. That is what lets a single query answer both "top on Sumo" 
 | Rating | `elo`, `peakElo`, `lowElo`, `rankedGamesPlayed` |
 | Time | `timePlayed`, `firstMatchAt`, `lastMatchAt` |
 
-`winRate` and `kdr` are stored, not computed on read, so a leaderboard can order by them in the
-database.
+`winRate` and `kdr` are stored, not computed on read, so a leaderboard can order by them in the database.
+</Details>
 
-## When they are written
+## When a match writes its numbers
 
-Kills and deaths are recorded **as they happen**, so a live sidebar and a kill streak stay accurate
-mid-match. Everything else — the result, damage dealt and taken, hits, swings, best combo and time
-played — is committed **once**, when the match ends, as a single delta per player.
+Kills and deaths are recorded **as they happen**, so a live sidebar and a kill streak stay accurate mid-match. Everything else (the result, damage dealt and taken, hits, swings, best combo and time played) is committed **once**, when the match ends, as a single delta per player.
 
 A match that is `CANCELLED`, or that never left the countdown, writes nothing at all.
 
 <Callout type="note" title="Damage taken is derived from what the others dealt">
-There is no separate damage-taken accumulator. Your damage taken is the sum of everybody else's damage
-dealt in that match, which in a 1v1 is exactly your opponent's output.
+There is no separate damage-taken accumulator. Your damage taken is the sum of everybody else's damage dealt in that match, which in a 1v1 is exactly your opponent's output.
 </Callout>
 
 ## Leaderboards
 
-`/stats`, `/lb` or `/leaderboard` opens the category list, then the kits, then a per-kit leaderboard
-that can be sorted by eleven different counters:
+A player runs `/stats`, `/lb` or `/leaderboard`. The menu opens on the category list, then the kits (the global card is **Global stats**), then a per-kit leaderboard. Each kit card shows the reader's own rank, LP, position and counters. The leaderboard can be sorted by eleven counters, picked with the buttons along the bottom:
 
-`rank`, `kills`, `deaths`, `kdr`, `wins`, `losses`, `win rate`, `best streak`, `current streak`,
-`damage dealt`, `time played`.
+`rank`, `kills`, `deaths`, `kdr`, `wins`, `losses`, `win rate`, `best streak`, `current streak`, `damage dealt`, `time played`.
+
+`/stats <player>` opens somebody else's stats; if they are offline, their UUID is looked up by name. Both commands need `exyliapractice.stats`, which everyone has by default. See [Commands](/docs/exyliapractice/commands) and [Permissions](/docs/exyliapractice/permissions).
+
+Leaderboards are cached for **5 minutes** and ordered by the database against a season-scoped index. A board that has gone stale is served from the last copy while a fresh one loads in the background, so a menu never blocks on a query. A match result and an admin edit (`/epc stats set`, `add`, `remove`) both clear the cache, so the next time a player opens the board it already shows the change. If a correction seems to have no effect, check that you edited the right kit id (or `global`) and that you are looking at the current season: lifetime numbers are not touched.
+
+<Details title="Leaderboard settings and rank text">
 
 | Setting | Default | What it does |
 |---|---|---|
 | `leaderboard.max-entries` | `50` | How many rows a leaderboard holds |
 
-On the `rank` board, each row's value comes from `messages.yml`, so every part can be coloured:
+On the `rank` board, each row's value comes from the language's `messages.yml`, so every part can be coloured (see [Colours](/docs/exylialib/colours) and [Messages and languages](/docs/exylialib/messages-and-languages)):
 
 | Key | Default | Used for |
 |---|---|---|
 | `leaderboard.rank.value` | `%rank% %lp%/%lp_max%` | A rank with divisions. `%rank%` is the name and division, `%lp%` the LP, `%lp_max%` the division's width, `%elo%` the ELO. |
 | `leaderboard.rank.value-top` | `%rank% %elo%` | A rank without LP (the top tier). Same placeholders. |
 
-Leaderboards are cached for **5 minutes** and ordered by the database against a season-scoped index. A
-board that has gone stale is served from the last copy while a fresh one loads in the background, so a
-menu never blocks on a query.
-
-`/stats <player>` opens somebody else's stats. If they are offline, their UUID is looked up by name.
+The menus themselves are `menus/player/leaderboard.yml`, `stats_category.yml` and `stats_kit.yml` in the language folder; see [Edit menus](/docs/exylialib/edit-menus).
+</Details>
 
 ## Placeholders
 
-Every counter is available as a placeholder — see [the placeholder
-reference](/docs/exyliapractice/placeholders), including `%exyliapracticecore_stats_top_<stat>_<position>%` for a
-leaderboard row.
+Every counter is available as a placeholder, including `%exyliapracticecore_stats_top_<stat>_<position>%` for a leaderboard row. See [Placeholders](/docs/exyliapractice/placeholders) and use them in a [scoreboard](/docs/exyliapractice/scoreboards) or a hologram.
+
+<Placeholders group="stats" />
 
 ## Admin commands
 
-All of these need `exyliapractice.admin` and take `global` in place of a kit id to reach the overall
-ladder.
+All of these need `exyliapractice.admin` and take `global` in place of a kit id to reach the overall ladder.
 
-| Command | What it does |
-|---|---|
-| `/epc stats get <player> <kit> <field>` | Read one counter |
-| `/epc stats set <player> <kit> <field> <value>` | Set it |
-| `/epc stats add <player> <kit> <field> <amount>` | Add to it |
-| `/epc stats remove <player> <kit> <field> <amount>` | Subtract from it |
-| `/epc stats summary <player> <kit>` | A formatted overview |
+<Commands group="data" />
 
 The editable fields are:
 
@@ -102,26 +94,32 @@ kills  deaths  wins  losses  elo
 best-streak  current-streak  damage  time
 ```
 
-`best-streak` and `current-streak` also accept `beststreak` and `currentstreak`. Every field is
-clamped at zero — `add` and `remove` cannot take a counter negative. `time` is in milliseconds.
+`best-streak` and `current-streak` also accept `beststreak` and `currentstreak`. Every field is clamped at zero: `add` and `remove` cannot take a counter negative. `time` is in milliseconds.
 
 <Callout type="note" title="These edit the current season only">
-The lifetime tier is not touched by `stats set` or `stats add`, so a correction to a season row does
-not rewrite the permanent record.
+The lifetime tier is not touched by `stats set` or `stats add`, so a correction to a season row does not rewrite the permanent record.
 </Callout>
 
 ## Bulk operations
 
-`/epc` → **Data Management**, all confirmed first and all irreversible:
+Run `/epc`, click **Data management**. Every action asks for confirmation first and none can be undone:
 
-| Action | What it does |
+| Button | What it does |
 |---|---|
 | **Clear kit stats** | Deletes every current-season row for one kit |
 | **Clear all stats** | Deletes every current-season row |
 | **Reset kit ELO** | Sets every current-season rating on one kit back to `elo.starting-mmr` |
 | **Reset all ELO** | The same for every kit |
 | **Clear kit loadouts** | Deletes every player's saved loadouts for one kit |
-| **Export / Import** | A full database dump, through ExyliaLib's transfer module |
+| **Export database** / **Import database** | A full database dump, through ExyliaLib's transfer module |
+| **Player data** | One player's data, see ExyliaLib's `/exylialib resetplayer` below |
 
-Wiping every loadout or the whole match history, and resetting one player, are ExyliaLib's
-`/exylialib wipe` and `/exylialib resetplayer`; see [Database](/docs/exyliapractice/database).
+To start a fresh competitive period without losing the lifetime record, use **New season** in the same screen; see [Seasons](/docs/exyliapractice/seasons).
+
+Wiping every loadout or the whole match history, and resetting one player, are ExyliaLib's `/exylialib wipe` and `/exylialib resetplayer`; see [Database](/docs/exyliapractice/database).
+
+<Cards>
+  <Card title="Match history" href="/docs/exyliapractice/match-history">The per-match rows, inventories and replays.</Card>
+  <Card title="ELO and ranks" href="/docs/exyliapractice/elo">How the rating, LP and ranks move.</Card>
+  <Card title="Seasons" href="/docs/exyliapractice/seasons">What a rotation resets and what it keeps.</Card>
+</Cards>

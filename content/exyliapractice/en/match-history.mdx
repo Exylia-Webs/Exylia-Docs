@@ -1,31 +1,20 @@
 ---
 title: "Match history"
-description: "Every match, both inventories, its replay, and the window each of them lives in."
+description: "How players look back at a finished match: result, both inventories and a replay, and how long each of them is kept."
 questions:
   - "How do players see their past matches?"
   - "How do I watch a match replay?"
   - "How long are replays and inventories kept?"
   - "Who can open the match history?"
+  - "How do I turn replays off or record only ranked matches?"
 updated: "1.4.0"
 ---
 
-Every finished match writes one row **per player** to `practice_match_history`. The two rows share a
-`matchId`, which is what lets a player look at their opponent's side of the same fight.
+Every finished match is saved so players can look back at it: who won, how the rating moved, what each side was carrying and, if replays are on, the whole fight played again. This page explains what is saved, how a player opens it, how long it lives and how to tune replays. Nothing needs setting up: history and replays work from the first match.
 
-## What a row holds
+## How players open it
 
-| Group | Fields |
-|---|---|
-| Identity | `matchId`, `season`, `playerUuid`, `opponentName`, `kitId`, `arenaId`, `matchMode` |
-| Outcome | `result` (WIN / LOSS / DRAW), `ranked`, `playedAt`, `durationMs` |
-| Rating | `eloBefore`, `eloChange`, `eloAfter`, and the same three for the global ladder |
-| Your side | `kills`, `deaths`, `damageDealt`, `hitsDealt`, `hitsReceived`, `totalSwings`, `bestCombo` |
-| Their side | The same seven, prefixed `opponent` |
-| Inventory | `inventoryData` — the player's inventory as it was when the match ended |
-
-A row is written for every non-cancelled match, ranked or not.
-
-## Viewing it
+A player runs `/history` (aliases `/mh`, `/match-history`). They need `exyliapractice.history`, which everyone has by default.
 
 | Command | What it does |
 |---|---|
@@ -34,63 +23,91 @@ A row is written for every non-cancelled match, ranked or not.
 | `/history inv <matchId>` | The inventory you finished that match with |
 | `/history invop <matchId>` | Your opponent's |
 
-`inv` and `invop` open only for a player who fought in that match. The three lookups that read the
-database answer at most once every two seconds per player.
+The menu (**MATCH HISTORY**) opens on the category list, then the kits, then the matches. Each match shows the result (a green win, red loss or grey draw), the opponent, the kit, the arena, ranked or unranked, the rating change, the duration, the date and the kill, damage, hit and combo numbers for that match.
 
-The menu opens on the category list, then the kits, then the matches — each row showing the result,
-the LP change, the opponent, the kit and how long it took. Left-clicking one opens the two inventory
-views; right-clicking it plays its [replay](#replays).
+- **Left-click** a match to open the two inventory views. The **View (player)'s inventory** button switches between your side and your opponent's.
+- **Right-click** a match to watch its [replay](#replays).
+- The buttons along the bottom filter the list: **All**, **Wins**, **Losses**, **Ranked**, **Unranked**.
 
-Five filters: **all**, **wins**, **losses**, **ranked**, **unranked**.
+After a match, a chat line `Inventories: <you> │ <opponent>` has both names clickable; they run `/mh inv` and `/mh invop` for that match.
+
+`inv` and `invop` open only for a player who fought in that match. The three lookups that read the database (`/history player`, `inv`, `invop`) answer at most once every two seconds per player.
 
 <Callout type="note" title="The last 300 matches">
-A history query reads a player's 300 most recent matches, ordered by the database, and filters that
-window in memory. A kit you have not played in a long time can therefore look emptier than it is — the
-match is still in the table, it is just outside the window the menu reads.
+A history query reads a player's 300 most recent matches, ordered by the database, and filters that window in memory. A kit you have not played in a long time can therefore look emptier than it is: the match is still in the table, it is just outside the window the menu reads.
 </Callout>
 
 Results are cached for two minutes per player, kit and filter.
 
+<Details title="What a row holds">
+Every finished match writes one row **per player** to `practice_match_history`. The two rows share a `matchId`, which is what lets a player look at their opponent's side of the same fight. A row is written for every non-cancelled match, ranked or not.
+
+| Group | Fields |
+|---|---|
+| Identity | `matchId`, `season`, `playerUuid`, `opponentName`, `kitId`, `arenaId`, `matchMode` |
+| Outcome | `result` (WIN / LOSS / DRAW), `ranked`, `playedAt`, `durationMs` |
+| Rating | `eloBefore`, `eloChange`, `eloAfter`, and the same three for the global ladder |
+| Your side | `kills`, `deaths`, `damageDealt`, `hitsDealt`, `hitsReceived`, `totalSwings`, `bestCombo` |
+| Their side | The same seven, prefixed `opponent` |
+| Inventory | `inventoryData`: the player's inventory as it was when the match ended |
+
+The menus are `menus/player/match_history.yml`, `match_history_category.yml`, `match_history_kit.yml` and `match_inventory.yml`; the labels and the filter names are in the `match-history` section of the language's `messages.yml`. See [Edit menus](/docs/exylialib/edit-menus) and [Messages and languages](/docs/exylialib/messages-and-languages).
+</Details>
+
 ## Retention
 
-Match rows are deleted after **60 days**. The sweep starts five minutes after boot and runs hourly,
-deleting the oldest first, in batches, entirely inside the database with a pause between batches so a
-live match's inserts are not held up.
+Match rows are deleted after **60 days**. The sweep starts five minutes after boot and runs hourly, deleting the oldest first, in batches, entirely inside the database with a pause between batches so a live match's inserts are not held up. The retention window is not a config key.
 
 <Callout type="note" title="Deleting a match costs nothing statistically">
-Every counter derived from a match — wins, damage, accuracy, combos, time played — was already
-committed to the season and lifetime rows when the match ended. The history row is the record, not the
-source of truth.
+Every counter derived from a match (wins, damage, accuracy, combos, time played) was already committed to the season and lifetime rows when the match ended, see [Statistics](/docs/exyliapractice/stats). The history row is the record, not the source of truth.
 </Callout>
-
-The retention window is not a config key.
 
 ## Purging
 
-There is no purge button any more. To delete the whole match history at once, use ExyliaLib's
-`/exylialib wipe ExyliaPracticeCore practice_match_history` (or `@history` for the history, the game
-log and the replays together); one player's history goes with `/exylialib resetplayer <player>
-ExyliaPracticeCore @history`. See [Database](/docs/exyliapractice/database).
+There is no purge button. To delete the whole match history at once, use ExyliaLib's `/exylialib wipe ExyliaPracticeCore practice_match_history` (or `@history` for the history, the game log and the replays together). One player's history goes with `/exylialib resetplayer <player> ExyliaPracticeCore @history`. See [Database](/docs/exyliapractice/database).
 
 ## The inventory snapshot
 
-The inventory is captured when the match ends: 36 storage slots, 4 armour slots and the offhand,
-serialised into the row. That is what `/history inv` renders — the actual items, durability and
-enchantments included, as an unclickable menu.
+The inventory is captured when the match ends: 36 storage slots, 4 armour slots and the offhand, serialised into the row. That is what `/history inv` renders: the actual items, durability and enchantments included, as a menu nobody can take items from.
 
-Because it is captured at the end, a player who died holding nothing shows nothing. The snapshot is
-what they had, not what the kit gave them.
+Because it is captured at the end, a player who died holding nothing shows nothing. The snapshot is what they had, not what the kit gave them.
 
-Snapshots are stored compressed and kept for `replay.inventory-retention-days` (14 by default), not the
-full 60 days: the same hourly sweep clears them afterwards and leaves the rest of the row browsable.
+Snapshots are stored compressed and kept for `replay.inventory-retention-days` (14 by default), not the full 60 days. The same hourly sweep clears them afterwards and leaves the rest of the row browsable; the inventory view then shows **No inventory data**.
 
 ## Replays
 
-Every recorded match can be watched again from the history menu. A recording is the server's own
-record of where everybody was on every tick, not a copy of what any client drew, so watching one
-settles whether a hit landed. It includes the arena changing: blocks placed and broken, blocks that
-expire, doors, regenerations between points, totems, golden apples and splash potions. Recording runs
-for three seconds past the end of the match.
+Every recorded match can be watched again from the history menu. A recording is the server's own record of where everybody was on every tick, not a copy of what any client drew, so watching one settles whether a hit landed. It includes the arena changing: blocks placed and broken, blocks that expire, doors, regenerations between points, totems, golden apples and splash potions. Recording runs for three seconds past the end of the match.
+
+Watching needs `exyliapractice.replay` (everyone by default).
+
+<Steps>
+  <Step title="Open a match">
+    Run `/history`, pick a category, a kit, and find the match.
+  </Step>
+  <Step title="Right-click it">
+    The plugin gives you a free copy of the match's arena and puts you in it as a flying camera, in adventure mode, that nothing can hurt. You start behind the first fighter.
+  </Step>
+  <Step title="Drive it from the hotbar">
+    Use the items in the table below, or the `/replay` commands. **LEAVE** (slot 9) or `/replay leave` sends you back to the lobby.
+  </Step>
+</Steps>
+
+| Slot | Button |
+|---|---|
+| 1 | **« 10 SECONDS**: back 10 seconds |
+| 2 | **PLAY / PAUSE** |
+| 3 | **10 SECONDS »**: forward 10 seconds |
+| 5 | **SPEED**: left-click slower, right-click faster, through `x0.125` to `x4` |
+| 7 | **FROM THE START** |
+| 9 | **LEAVE** |
+
+The same controls exist as commands, which also take an exact speed or moment:
+
+<Commands group="replay" />
+
+### Turn replays off, or record less
+
+Replay settings live under `replay` in `config.yml`; see [Configuration](/docs/exyliapractice/configuration).
 
 | Setting | Default | What it does |
 |---|---|---|
@@ -100,36 +117,18 @@ for three seconds past the end of the match.
 | `replay.max-concurrent-viewers` | `5` | Replays that may be watched at once, server-wide |
 | `replay.inventory-retention-days` | `14` | Days a match keeps its inventory snapshots. Past this they are cleared; the history row stays. |
 
-Matches against bots are never recorded. Recordings live in their own table, `practice_match_replays`,
-one row per match.
+Matches against bots are never recorded. Recordings live in their own table, `practice_match_replays`, one row per match.
 
-### Watching one
+<Details title="How a replay is shown">
+The viewer is given a free copy of the match's arena, the same way the queue gets one. A border drawn only for them keeps them in the arena, and the bodies and blocks they see are sent to them alone, so two people can watch two matches in two copies of one arena without seeing each other.
 
-The viewer is given a free copy of the match's arena, the same way the queue gets one, and becomes a
-flying camera in adventure mode that nothing can hurt, starting behind the first fighter. A border
-drawn only for them keeps them in the arena, and the bodies and blocks they see are sent to them
-alone, so two people can watch two matches in two copies of one arena without seeing each other.
+A replay is refused, with a message, when the viewer is in a match, queued or already watching one, when every copy of the arena is in use, or when `max-concurrent-viewers` is reached.
 
-A replay is refused, with a message, when the viewer is in a match, queued or already watching one,
-when every copy of the arena is in use, or when `max-concurrent-viewers` is reached.
+The hotbar is `overlays/replay.yml` in the language folder. `/replay speed` takes any speed from `0.0625` to `8`, and `/replay seek <minutes> [seconds]` jumps to that moment.
+</Details>
 
-The hotbar drives it, from `overlays/replay.yml` in the language folder:
-
-| Slot | Button |
-|---|---|
-| 1 | Back 10 seconds |
-| 2 | Play / pause |
-| 3 | Forward 10 seconds |
-| 5 | Speed: left-click slower, right-click faster, through `x0.125` to `x4` |
-| 7 | From the start |
-| 9 | Leave |
-
-The same controls exist as commands, which also take an exact speed or moment:
-
-| Command | What it does |
-|---|---|
-| `/replay pause` | Pause or resume |
-| `/replay speed <multiplier>` | Any speed from `0.0625` to `8` |
-| `/replay seek <minutes> [seconds]` | Jump to that moment |
-| `/replay sounds` | Sounds on or off |
-| `/replay leave` | Back to the lobby |
+<Cards>
+  <Card title="Statistics" href="/docs/exyliapractice/stats">The counters a match commits when it ends.</Card>
+  <Card title="Spectating" href="/docs/exyliapractice/spectating">Watch a match while it is still being played.</Card>
+  <Card title="Configuration" href="/docs/exyliapractice/configuration">Every `replay.*` setting.</Card>
+</Cards>

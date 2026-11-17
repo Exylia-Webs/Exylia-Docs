@@ -1,13 +1,16 @@
 ---
 title: "Estadísticas"
-description: "Los tres niveles de contadores, qué guarda una partida, las clasificaciones y los comandos que las editan."
+description: "Qué cuenta ExyliaPracticeCore, cuándo escribe sus números una partida, cómo se construyen las clasificaciones y cómo corregir las estadísticas de un jugador."
 questions:
   - "¿Qué estadísticas registra ExyliaPracticeCore?"
   - "¿Cómo edito las estadísticas de un jugador?"
   - "¿Por qué /epc stats set no cambió el ranking?"
   - "¿Cuánto tiempo se cachean los rankings?"
+  - "¿Cómo reinicio las estadísticas o el ELO de todos?"
 updated: "1.4.0"
 ---
+
+ExyliaPracticeCore guarda un conjunto de contadores por jugador y por kit (victorias, kills, daño, rachas, rating y más), además de un ladder «global» general. Esta página explica dónde viven esos números, cuándo los escribe una partida, cómo ordena `/stats` a los jugadores y cómo los corrige un admin. No hay nada que configurar: las estadísticas se cuentan desde la primera partida.
 
 ## Tres niveles
 
@@ -17,14 +20,11 @@ updated: "1.4.0"
 | **Histórico** | `practice_player_lifetime_stats` | Una fila por jugador y por kit, de todas las temporadas |
 | **Partida** | `practice_match_history` | Una fila por jugador y por partida |
 
-Todos los ladders, sidebars, placeholders y menús leen el nivel de **temporada**. El histórico es el
-registro permanente y sobrevive a todas las rotaciones.
+Todos los ladders, sidebars, placeholders y menús leen el nivel de **temporada**. El histórico es el registro permanente y sobrevive a todas las rotaciones, mira [Temporadas](/docs/exyliapractice/temporadas). El nivel de partida es el [historial de partidas](/docs/exyliapractice/historial).
 
-El ladder **global** no es una tabla aparte: es una fila más en las mismas tablas, guardada bajo el id
-de kit `global`. Eso es lo que permite que una sola consulta responda tanto «top en Sumo» como «top
-general».
+El ladder **global** no es una tabla aparte: es una fila más en las mismas tablas, guardada bajo el id de kit `global`. Eso es lo que permite que una sola consulta responda tanto «top en Sumo» como «top general».
 
-## Qué guarda una fila
+<Details title="Qué guarda una fila">
 
 | Grupo | Campos |
 |---|---|
@@ -36,67 +36,56 @@ general».
 | Rating | `elo`, `peakElo`, `lowElo`, `rankedGamesPlayed` |
 | Tiempo | `timePlayed`, `firstMatchAt`, `lastMatchAt` |
 
-`winRate` y `kdr` se guardan, no se calculan al leer, para que una clasificación pueda ordenarse por
-ellos en la base de datos.
+`winRate` y `kdr` se guardan, no se calculan al leer, para que una clasificación pueda ordenarse por ellos en la base de datos.
+</Details>
 
-## Cuándo se escriben
+## Cuándo escribe sus números una partida
 
-Las bajas y muertes se registran **según ocurren**, para que un sidebar en vivo y una racha se
-mantengan exactos a mitad de partida. Todo lo demás —el resultado, el daño hecho y recibido, los
-golpes, los swings, el mejor combo y el tiempo jugado— se guarda **una sola vez**, al terminar la
-partida, como un único delta por jugador.
+Las kills y las muertes se registran **según ocurren**, para que un sidebar en vivo y una racha se mantengan exactos a mitad de partida. Todo lo demás (el resultado, el daño hecho y recibido, los golpes, los swings, el mejor combo y el tiempo jugado) se guarda **una sola vez**, al terminar la partida, como un único delta por jugador.
 
 Una partida `CANCELLED`, o que nunca salió de la cuenta atrás, no escribe nada.
 
 <Callout type="note" title="El daño recibido se deduce del que hicieron los demás">
-No hay un acumulador aparte de daño recibido. Tu daño recibido es la suma del daño hecho por todos los
-demás en esa partida, que en un 1v1 es exactamente la producción de tu rival.
+No hay un acumulador aparte de daño recibido. Tu daño recibido es la suma del daño hecho por todos los demás en esa partida, que en un 1v1 es exactamente la producción de tu rival.
 </Callout>
 
 ## Clasificaciones
 
-`/stats`, `/lb` o `/leaderboard` abren la lista de categorías, luego los kits, y luego una clasificación
-por kit que puede ordenarse por once contadores distintos:
+El jugador escribe `/stats`, `/lb` o `/leaderboard`. El menú abre la lista de categorías, luego los kits (la tarjeta general es **Estadísticas globales**) y luego la clasificación de cada kit. Cada tarjeta de kit muestra el rango, los LP, la posición y los contadores del propio lector. La clasificación se puede ordenar por once contadores, que se eligen con los botones de la fila inferior:
 
-`rango`, `kills`, `deaths`, `kdr`, `wins`, `losses`, `win rate`, `mejor racha`, `racha actual`,
-`daño hecho`, `tiempo jugado`.
+`Rango`, `Kills`, `Muertes`, `KDR`, `Victorias`, `Derrotas`, `Ratio de victorias`, `Mejor racha`, `Racha actual`, `Daño infligido`, `Tiempo jugado`.
+
+`/stats <jugador>` abre las estadísticas de otra persona; si está desconectada, su UUID se busca por nombre. Los dos comandos necesitan `exyliapractice.stats`, que todos tienen por defecto. Mira [Comandos](/docs/exyliapractice/comandos) y [Permisos](/docs/exyliapractice/permisos).
+
+Las clasificaciones se cachean **5 minutos** y las ordena la base de datos contra un índice acotado por temporada. Una tabla caducada se sirve desde la última copia mientras se carga otra por detrás, así que un menú nunca se bloquea esperando una consulta. El resultado de una partida y una edición de admin (`/epc stats set`, `add`, `remove`) vacían la caché, de modo que la próxima vez que un jugador abra la tabla ya muestra el cambio. Si una corrección parece no tener efecto, comprueba que editaste el id de kit correcto (o `global`) y que miras la temporada actual: los números históricos no se tocan.
+
+<Details title="Ajustes de la clasificación y texto del rango">
 
 | Ajuste | Defecto | Qué hace |
 |---|---|---|
 | `leaderboard.max-entries` | `50` | Cuántas filas guarda una clasificación |
 
-En la tabla `rank`, el valor de cada fila sale de `messages.yml`, así que cada parte se puede colorear:
+En la tabla `rank`, el valor de cada fila sale del `messages.yml` del idioma, así que cada parte se puede colorear (mira [Colores](/docs/exylialib/colores) y [Mensajes e idiomas](/docs/exylialib/mensajes-e-idiomas)):
 
 | Clave | Defecto | Se usa para |
 |---|---|---|
 | `leaderboard.rank.value` | `%rank% %lp%/%lp_max%` | Un rango con divisiones. `%rank%` es el nombre y la división, `%lp%` los LP, `%lp_max%` el ancho de la división, `%elo%` el ELO. |
 | `leaderboard.rank.value-top` | `%rank% %elo%` | Un rango sin LP (el nivel más alto). Los mismos placeholders. |
 
-Las clasificaciones se cachean **5 minutos** y las ordena la base de datos contra un índice acotado por
-temporada. Una tabla caducada se sirve desde la última copia mientras se carga otra por detrás, así que
-un menú nunca se bloquea esperando una consulta.
-
-`/stats <jugador>` abre las estadísticas de otra persona. Si está desconectada, su UUID se busca por
-nombre.
+Los menús son `menus/player/leaderboard.yml`, `stats_category.yml` y `stats_kit.yml` en la carpeta del idioma; mira [Editar menús](/docs/exylialib/editar-menus).
+</Details>
 
 ## Placeholders
 
-Todos los contadores están disponibles como placeholder: mira la [referencia de
-placeholders](/docs/exyliapractice/placeholders), incluido `%exyliapracticecore_stats_top_<stat>_<posición>%` para una
-fila de clasificación.
+Todos los contadores están disponibles como placeholder, incluido `%exyliapracticecore_stats_top_<stat>_<posición>%` para una fila de clasificación. Mira [Placeholders](/docs/exyliapractice/placeholders) y úsalos en un [scoreboard](/docs/exyliapractice/scoreboards) o un holograma.
+
+<Placeholders group="stats" />
 
 ## Comandos de administración
 
-Todos necesitan `exyliapractice.admin` y aceptan `global` en lugar de un id de kit para llegar al
-ladder general.
+Todos necesitan `exyliapractice.admin` y aceptan `global` en lugar de un id de kit para llegar al ladder general.
 
-| Comando | Qué hace |
-|---|---|
-| `/epc stats get <jugador> <kit> <campo>` | Leer un contador |
-| `/epc stats set <jugador> <kit> <campo> <valor>` | Fijarlo |
-| `/epc stats add <jugador> <kit> <campo> <cantidad>` | Sumarle |
-| `/epc stats remove <jugador> <kit> <campo> <cantidad>` | Restarle |
-| `/epc stats summary <jugador> <kit>` | Un resumen con formato |
+<Commands group="data" />
 
 Los campos editables son:
 
@@ -105,26 +94,32 @@ kills  deaths  wins  losses  elo
 best-streak  current-streak  damage  time
 ```
 
-`best-streak` y `current-streak` aceptan también `beststreak` y `currentstreak`. Todos los campos se
-acotan en cero: `add` y `remove` no pueden dejar un contador en negativo. `time` va en milisegundos.
+`best-streak` y `current-streak` aceptan también `beststreak` y `currentstreak`. Todos los campos se acotan en cero: `add` y `remove` no pueden dejar un contador en negativo. `time` va en milisegundos.
 
 <Callout type="note" title="Esto edita solo la temporada actual">
-`stats set` y `stats add` no tocan el nivel histórico, así que corregir una fila de temporada no
-reescribe el registro permanente.
+`stats set` y `stats add` no tocan el nivel histórico, así que corregir una fila de temporada no reescribe el registro permanente.
 </Callout>
 
 ## Operaciones masivas
 
-`/epc` → **Data Management**, todas con confirmación previa y todas irreversibles:
+Ejecuta `/epc` y pulsa **Gestión de datos**. Cada acción pide confirmación antes y ninguna se puede deshacer:
 
-| Acción | Qué hace |
+| Botón | Qué hace |
 |---|---|
-| **Clear kit stats** | Borra todas las filas de la temporada actual de un kit |
-| **Clear all stats** | Borra todas las filas de la temporada actual |
-| **Reset kit ELO** | Devuelve cada rating de la temporada actual de un kit a `elo.starting-mmr` |
-| **Reset all ELO** | Lo mismo para todos los kits |
-| **Clear kit loadouts** | Borra los loadouts guardados de todos los jugadores para un kit |
-| **Export / Import** | Un volcado completo de la base de datos, por el módulo de transferencia de ExyliaLib |
+| **Borrar estadísticas de kit** | Borra todas las filas de la temporada actual de un kit |
+| **Borrar todas las estadísticas** | Borra todas las filas de la temporada actual |
+| **Reiniciar ELO de kit** | Devuelve cada rating de la temporada actual de un kit a `elo.starting-mmr` |
+| **Reiniciar todo el ELO** | Lo mismo para todos los kits |
+| **Borrar equipamientos de kit** | Borra los loadouts guardados de todos los jugadores para un kit |
+| **Exportar base de datos** / **Importar base de datos** | Un volcado completo de la base de datos, por el módulo de transferencia de ExyliaLib |
+| **Datos de jugador** | Los datos de un jugador; mira `/exylialib resetplayer` más abajo |
 
-Borrar todos los loadouts o el historial entero, y reiniciar a un jugador, se hace con
-`/exylialib wipe` y `/exylialib resetplayer` de ExyliaLib; ver [Base de datos](/docs/exyliapractice/base-de-datos).
+Para empezar un periodo competitivo nuevo sin perder el registro histórico, usa **Nueva temporada** en la misma pantalla; mira [Temporadas](/docs/exyliapractice/temporadas).
+
+Borrar todos los loadouts o el historial entero, y reiniciar a un jugador, se hace con `/exylialib wipe` y `/exylialib resetplayer` de ExyliaLib; mira [Base de datos](/docs/exyliapractice/base-de-datos).
+
+<Cards>
+  <Card title="Historial de partidas" href="/docs/exyliapractice/historial">Las filas por partida, los inventarios y los replays.</Card>
+  <Card title="ELO y rangos" href="/docs/exyliapractice/elo">Cómo se mueven el rating, los LP y los rangos.</Card>
+  <Card title="Temporadas" href="/docs/exyliapractice/temporadas">Qué reinicia una rotación y qué conserva.</Card>
+</Cards>
