@@ -1190,7 +1190,7 @@ const MINES_NAV: NavGroup[] = [
     ],
   },
   {
-    label: { en: "Configuring", es: "Configurar" },
+    label: { en: "Guides", es: "Guías" },
     pages: [
       page("mines", "mines", "minas"),
       page("area", "area", "area"),
@@ -1200,16 +1200,16 @@ const MINES_NAV: NavGroup[] = [
       page("fortune", "fortune", "fortuna"),
       page("lucky-rewards", "lucky-rewards", "premios-de-suerte"),
       page("boosts", "boosts", "potenciadores"),
-    ],
-  },
-  {
-    label: { en: "Systems", es: "Sistemas" },
-    pages: [
       page("holograms", "holograms", "hologramas"),
       page("players-menu", "players-menu", "menu-de-jugadores"),
       page("stats", "stats", "estadisticas"),
-      page("integrations", "integrations", "integraciones"),
       page("migration", "migration", "migracion"),
+    ],
+  },
+  {
+    label: { en: "How it works", es: "Cómo funciona" },
+    pages: [
+      page("integrations", "integrations", "integraciones"),
     ],
   },
   {
@@ -1220,6 +1220,12 @@ const MINES_NAV: NavGroup[] = [
       page("placeholders", "placeholders", "placeholders"),
       page("configuration", "configuration", "configuracion"),
       page("api", "api", "api"),
+    ],
+  },
+  {
+    label: { en: "Help", es: "Ayuda" },
+    pages: [
+      page("troubleshooting", "troubleshooting", "problemas-comunes"),
       page("faq", "faq", "faq"),
     ],
   },
