@@ -28,9 +28,11 @@ test("docs pages compile, link to real pages and find their data", async () => {
     } catch (e) {
       problems.push(`${where}: ${(e as Error).message.split("\n")[0]}`);
     }
-    for (const m of doc.body.matchAll(/\]\(\/docs\/([^/#)\s]+)\/([^/#)\s]+)\/?(?:#[^)]*)?\)|href="\/docs\/([^/#"]+)\/([^/#"]+)\/?(?:#[^"]*)?"/g)) {
-      const [p, s] = [m[1] ?? m[3], m[2] ?? m[4]];
+    for (const m of doc.body.matchAll(/\]\(\/docs\/([^/#)\s]+)\/([^/#)\s]+)\/?(?:#([^)]*))?\)|href="\/docs\/([^/#"]+)\/([^/#"]+)\/?(?:#([^"]*))?"/g)) {
+      const [p, s, anchor] = [m[1] ?? m[4], m[2] ?? m[5], m[3] ?? m[6]];
       if (!exists.has(`${p}/${s}`)) problems.push(`${where}: broken link /docs/${p}/${s}`);
+      else if (anchor && !anchor.startsWith("row-") && !readDoc(p, lang, s)?.headings.some((h) => h.id === decodeURIComponent(anchor)))
+        problems.push(`${where}: no heading #${anchor} in /docs/${p}/${s}`);
     }
     for (const m of doc.body.matchAll(/<(Commands|Permissions|Placeholders)\b([^>]*)\/>/g)) {
       const from = /from="([^"]+)"/.exec(m[2])?.[1] ?? plugin;

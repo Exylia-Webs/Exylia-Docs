@@ -1,100 +1,83 @@
 ---
-title: "Statistics"
-description: "The nine counters, how they are shown, how they are ranked, and how they are reset."
+title: "Statistics and leaderboards"
+description: "See what ExyliaFFA counts, open the leaderboard, show rankings on a scoreboard and reset stats."
+questions:
+  - "How do I see my stats?"
+  - "How do I open the leaderboard?"
+  - "How do I reset a player's stats?"
+  - "How do I reset everyone's stats?"
+  - "What is counted as an assist?"
+  - "Are stats per arena or global?"
+updated: "1.5.0"
 ---
 
-Statistics are per player **and per arena**. The same player has a separate row in every arena they
-have played, and leaderboards can be queried per arena or globally.
+ExyliaFFA counts nine numbers per player and per arena. Players see them in a menu, you can show them on holograms and scoreboards, and you can reset them when a season ends.
 
-## The counters
+## See stats and the leaderboard
 
-| Counter | Identifier | Format |
-|---|---|---|
-| Kills | `kills` | Integer |
-| Deaths | `deaths` | Integer |
-| KDR | `kdr` | Two decimals |
-| Best streak | `best_streak` | Integer |
-| Assists | `assists` | Integer |
-| Damage dealt | `damage_dealt` | One decimal |
-| Play time | `play_time` | `1h 5m 3s` |
-| Alive time | `alive_time` | `1h 5m 3s` |
-| Kills per minute | `kills_per_minute` | Two decimals |
+<Steps>
+  <Step title="Open the menu">
+    Run `/ffa stats`. There is one card per arena with your numbers in it. `/ffa stats <player>` shows someone else's.
+  </Step>
+  <Step title="Open a leaderboard">
+    Click an arena card. The leaderboard opens, and the **Sort** buttons re-rank it by any of the nine counters.
+  </Step>
+</Steps>
 
-The identifiers are what leaderboard placeholders take, and also the column names the database
-indexes for sorting.
+Stats are kept per arena, so a player has a separate row in each arena they played. Leaderboard placeholders can read one arena or all of them together.
 
-<Callout type="note" title="Decimals always use a point">
-The format is pinned to the US locale on purpose. A server hosted in Spain would write `1,50` with
-the system format, and that value would break any scoreboard or comparison reading it afterwards.
-</Callout>
+## What is counted
 
-## Viewing statistics
-
-| Action | Command |
+| Counter | Meaning |
 |---|---|
-| Your own | `/ffa stats` |
-| Another player's | `/ffa stats <player>` |
+| Kills, deaths | Totals. |
+| KDR | Kills divided by deaths. A player with no deaths shows their kills, so it still sorts. |
+| Best streak | The longest kill streak, see [Reward kill streaks](/docs/exyliaffa/killstreaks). |
+| Assists | Damage to a victim in the last 10 seconds before they died, without landing the final blow. Several players can get one for the same death. |
+| Damage dealt | All damage in the session, including hits that did not kill. It separates fighters from kill collectors. |
+| Play time | Time spent in the arena. |
+| Alive time | Time spent alive. |
+| Kills per minute | Kills divided by alive minutes, so being dead or spectating does not lower it. |
 
-The stats menu lets you switch arena and jump to the leaderboard filtered by any of the nine
-counters.
+Kills refused by [anti-farmkill](/docs/exyliaffa/combat) are not counted.
 
-## Leaderboards
+## Show rankings on a hologram or scoreboard
 
-Queried from the menu or from placeholders. The maximum size is set in `config.yml`:
-
-```yaml title="config.yml"
-leaderboard:
-  max-entries: 50
-```
-
-That number is also the highest position a leaderboard placeholder can answer: with `50`, asking for
-position 51 returns nothing.
+Rankings are PlaceholderAPI placeholders. The size is set by **Leaderboard size** (default 50): in `/ffaadmin`, click **Settings**, then **Arena**. A placeholder beyond that position shows nothing.
 
 ```text
-%exyliaffa_stats_top_kills_1%              first by kills, across every arena
-%exyliaffa_stats_top_kills_1_nodebuff%     the same, only in the "nodebuff" arena
+%exyliaffa_stats_top_kills_1%              first by kills, in every arena together
+%exyliaffa_stats_top_kills_1_nodebuff%     first by kills in the arena "nodebuff"
 %exyliaffa_stats_top_value_kills_1%        their kill count instead of their name
 ```
 
-The full syntax is in [Placeholders](/docs/exyliaffa/placeholders).
+The full list is in [Placeholders](/docs/exyliaffa/placeholders).
 
-## Resetting
+## Reset stats
 
-| Action | Command |
-|---|---|
-| One player's stats in one arena | `/ffaadmin resetstats <player> <arenaId>`, or their screen under **Data management** → **Player** |
-| Everything of one player, every arena | `/exylialib resetplayer <player> ExyliaFFA` |
-| Every player's stats, every arena | `/exylialib wipe ExyliaFFA ffa_player_stats` |
+<Steps>
+  <Step title="One player, one arena">
+    Run `/ffaadmin`, click **Data management**, then **Player**, pick the player, click **Reset stats** and choose the arena. You are asked to confirm. The command form is `/ffaadmin resetstats <player> <arena>`.
+  </Step>
+  <Step title="One player, everywhere">
+    Run `/exylialib resetplayer <player> ExyliaFFA`. It also clears their kit layouts.
+  </Step>
+  <Step title="Everyone (new season)">
+    Run `/exylialib wipe ExyliaFFA ffa_player_stats`.
+  </Step>
+</Steps>
 
-The two ExyliaLib commands ask for a typed code and write a dump before deleting; a reset player
-also leaves every leaderboard at once. See [ExyliaLib · Commands](/docs/exylialib/commands#moving-and-wiping-data).
+The two ExyliaLib commands ask for a typed code and save a dump before deleting. See [ExyliaLib commands](/docs/exylialib/commands#moving-and-wiping-data).
 
 <Callout type="warning" title="There is no undo">
-A wipe deletes the rows of every player. ExyliaLib writes a dump first, but back the database up
-anyway before doing this in production, and restart afterwards.
+A wipe deletes every player's stats. Back up the database before doing it on a live server.
 </Callout>
 
-## Assists and damage
+<Details title="Technical details">
+Identifiers (used by placeholders and as sort columns): `kills`, `deaths`, `kdr`, `best_streak`, `assists`, `damage_dealt`, `play_time`, `alive_time`, `kills_per_minute`. Formats: integers, KDR and kills per minute with two decimals, damage with one, times as `1h 5m 3s`. Decimals always use a point, whatever the server locale, so scoreboards and comparisons that read them do not break. Formulas: `kdr = deaths == 0 ? kills : kills / deaths`; `kills_per_minute = alive_minutes <= 0 ? 0 : kills / alive_minutes`. Both are stored, not computed on read, because the database sorts the leaderboards. Config: `leaderboard.max-entries` (50) in `config.yml`.
+</Details>
 
-An assist is credited to anyone who damaged the victim in the **10 seconds** before their death,
-excluding whoever landed the final blow. Several players can be credited for the same death.
-
-Damage dealt accumulates across the whole session, including damage that did not end in a kill: it is
-the counter that best separates who fights from who collects other people's kills.
-
-### How KDR and kills per minute are derived
-
-```text
-kdr              = deaths == 0 ? kills : kills / deaths
-kills_per_minute = alive_minutes <= 0 ? 0 : kills / alive_minutes
-```
-
-Two practical consequences:
-
-- A player who has never died reports their kill count as KDR, not infinity. That is what lets a
-  leaderboard sort it and a scoreboard print it.
-- The rate is measured over **alive time**, not total time in the arena. Being dead or spectating
-  does not drag your kills per minute down.
-
-Both are stored in the database rather than computed on read, because it is the database that sorts
-leaderboards.
+<Cards>
+  <Card title="Placeholders" href="/docs/exyliaffa/placeholders">All the ranking and stat placeholders.</Card>
+  <Card title="Customise the scoreboard" href="/docs/exyliaffa/scoreboard">Show stats in the arena sidebar.</Card>
+</Cards>

@@ -1,153 +1,91 @@
 ---
-title: "Combat and anti-abuse"
-description: "Combat tag, blocked commands, anti-farmkill, and the 1v1 link against free-hitting."
+title: "Stop combat logging and kill farming"
+description: "Block escape commands in combat, refuse farmed kills and protect 1v1 duels from third parties."
+questions:
+  - "How do I stop players from using /spawn in combat?"
+  - "What happens when a player logs out in combat?"
+  - "How do I stop kill farming with friends?"
+  - "How do I stop a third player from stealing the kill in a duel?"
+  - "How do I allow only some commands in the arena?"
+  - "How long does the combat tag last?"
+updated: "1.5.0"
 ---
 
-Three independent systems, all configured in `config.yml`, that exist so kills mean something.
+Four systems keep kills meaningful: the combat tag, the command whitelist, anti-farmkill and the anti free-hit link. All work out of the box. The first three are in **Settings**; anti free-hit is a rule per arena.
 
-## Combat tag
+## Block escape commands in combat
 
-On taking a hit, the player is tagged for a number of seconds. While it lasts, they cannot run the
-escape commands.
+A player who takes a hit is tagged for 20 seconds. While tagged they cannot run commands such as `/spawn`, `/hub`, `/home`, `/tpa` or `/rtp`.
 
-```yaml title="config.yml"
-combat:
-  tag-duration: 20.0
-  blocked-commands:
-    - spawn
-    - hub
-    - lobby
-    - warp
-    - home
-    - tpa
-    - tpaccept
-    - tpyes
-    - rtp
-    - back
-```
+<Steps>
+  <Step title="Open the combat settings">
+    Run `/ffaadmin`, click **Settings**, then **Combat**.
+  </Step>
+  <Step title="Set the time and the list">
+    Click **Combat tag** and type the seconds. Click **Blocked commands** to edit the list, one command name per entry, without the slash.
+  </Step>
+</Steps>
 
-<Field name="tag-duration" type="seconds" defaultValue="20.0">
-How long the tag lasts from the last hit taken. Decimals accepted.
-</Field>
+Shift + right-click a card puts it back to its default.
 
-<Field name="blocked-commands" type="list">
-Command names **without the slash**. They are refused while the player is tagged.
-</Field>
+A tagged player sees a countdown above the hotbar. Anyone can hide it from `/ffa settings`, see [Player settings](/docs/exyliaffa/player-settings).
 
-The countdown above the hotbar is text a player reads, so it lives in `messages.yml`, translated with
-the rest:
-
-```yaml title="lang/<code>/messages.yml"
-combat:
-  combat-actionbar:
-    action-bar:
-      text: "{primary}⚔ {error}Combat {muted}%time_precise% ⌚"
-      duration: 0.0
-      time-style: tenths
-```
-
-`%time_precise%` is the time left with its unit; `%time%` is the bare number, formatted by
-`time-style`. Write any other token and it shows verbatim.
-
-<Callout type="note" title="The player can hide it">
-The combat bar and its messages are per-player settings: anyone who does not want to see them turns
-them off from `/ffa settings`. See [Player settings](/docs/exyliaffa/player-settings).
+<Callout type="note" title="Logging out in combat">
+Leaving the server while tagged counts as a death. It is recorded and announced, the player loses their streak, and the last player who hit them gets the kill if still fighting in the arena. Their items drop if the arena drops items on death. There is no setting to turn this off.
 </Callout>
 
-### Logging out in combat
+## Allow only some commands in the arena
 
-Quitting the server with an active combat tag is a full **death**, handled exactly like one in the
-arena: the death is recorded and broadcast, they lose their streak, their inventory drops where
-they stood when the arena has `dropItemsOnDeath` on, and the kill goes to whoever hit them last if
-that player is still fighting in the arena (otherwise there is no killer), with the kill rewards and
-the streak that come with it. There is no setting to disable this.
+The whitelist works whether or not the player is tagged. In **Settings**, **Combat**, switch on **Command filter** and edit **Allowed commands**. Any other command is refused inside an arena. The default list is `msg`, `message`, `tell`, `w`, `whisper`, `reply`, `r`, `respond`, `ffa` and `ffaadmin`. Allowing `msg` also allows `essentials:msg`. Staff with `exyliaffa.bypass.blocked-commands` skip the filter.
 
-## Command whitelist
+## Stop kill farming
 
-Independent of the combat tag: it filters which commands exist **inside** an arena, tagged or not.
+Anti-farmkill refuses to count a kill that was clearly handed over: the same victim over and over, or two players on the same IP address.
 
-```yaml title="config.yml"
-command-whitelist:
-  enabled: true
-  commands: [msg, message, tell, w, whisper, reply, r, respond, ffa, ffaadmin]
-```
+In **Settings**, click **Fair play**, then **Farm protection** for the master switch, **Repeat victim** and **Same IP**. By default more than 3 kills on the same victim within 120 seconds stop counting.
 
-With `enabled: true`, any command not on the list is refused while the player is in the arena. The
-comparison also accepts the namespaced form, so allowing `msg` equally allows `essentials:msg`. The
-`exyliaffa.bypass.blocked-commands` permission skips this filter.
-
-## Anti-farmkill
-
-Refuses to count a kill that was obviously handed over.
-
-```yaml title="config.yml"
-anti-farmkill:
-  enabled: true
-  same-player-enabled: true
-  same-player-max-kills: 3
-  same-player-window-seconds: 120
-  same-ip-enabled: true
-```
-
-| Key | Default | What it does |
-|---|---|---|
-| `enabled` | `true` | Master switch for the system. |
-| `same-player-enabled` | `true` | Caps how often killing the same victim counts. |
-| `same-player-max-kills` | `3` | How many kills on the same victim count inside the window. |
-| `same-player-window-seconds` | `120` | The length of that window, in seconds. |
-| `same-ip-enabled` | `true` | Refuses a kill between two players sharing an IP address. |
-
-<Callout type="warning" title="What is actually refused">
-Only the **killer's kill counter**, and with it their KDR and kills per minute. Everything else
-happens as normal:
-
-- The victim's death **is** recorded.
-- The killer's streak **does** advance.
-- The commands in `kill-commands.on-kill` **do** run.
-
-If you use money rewards per kill, keep that in mind: anti-farmkill does not block them.
+<Callout type="warning" title="What is refused">
+Only the killer's kill counter, and with it their KDR and kills per minute. The victim's death is still recorded, the killer's streak still advances, and kill commands still run. If you pay money per kill, anti-farmkill does not block it.
 </Callout>
 
-## Anti free-hit
+## Protect 1v1 duels (anti free-hit)
 
-Free-hitting is the third player who arrives at the end of a 1v1 and takes the kill. The system links
-two players who have traded several hits and protects that duel.
+Free-hitting is a third player arriving at the end of a duel to take the kill. This links two players who have traded hits and protects the duel. It is off by default and set per arena.
 
-```yaml title="config.yml"
-anti-freehit:
-  hit-reset-window-seconds: 8
-```
+<Steps>
+  <Step title="Open the combat rules">
+    Run `/ffaadmin`, click **Arenas**, left-click your arena, click **Rules**, then **Combat**.
+  </Step>
+  <Step title="Turn it on">
+    Click **Anti free-hit**. Set **Hits to link** (default 3), the hits two players trade before they are linked.
+  </Step>
+  <Step title="Choose how strict">
+    Click **Isolate linked players** to stop third parties from damaging linked players. On, the arena becomes a run of clean duels. Off, the link only informs and the chaos stays.
+  </Step>
+</Steps>
 
-Activation is **per arena**, in the rules:
+The link ends when 8 seconds pass with neither player hitting the other. While it lasts the action bar shows the opponent's name, hearts, ping and time left, and the opponent glows if the player keeps **Glow on linked player** on.
 
-| Arena rule | Default | What it does |
-|---|---|---|
-| `antiFreeHit` | `false` | Enables the link in that arena. |
-| `antiFreeHitHitsToLink` | `3` | Hits traded that create the link. |
-| `antiFreeHitIsolateLinkedPlayers` | `false` | Linked players stop taking damage from third parties. |
+<Details title="Technical details">
+`config.yml`:
 
-And `hit-reset-window-seconds` decides when it expires: if those seconds pass with neither hitting
-the other, the link dissolves.
+| Key | Default |
+|---|---|
+| `combat.tag-duration` | `20.0` seconds, decimals accepted |
+| `combat.blocked-commands` | `spawn, hub, lobby, warp, home, tpa, tpaccept, tpyes, rtp, back` |
+| `command-whitelist.enabled` | `true` |
+| `command-whitelist.commands` | `msg, message, tell, w, whisper, reply, r, respond, ffa, ffaadmin` |
+| `anti-farmkill.enabled` | `true` |
+| `anti-farmkill.same-player-enabled` | `true` |
+| `anti-farmkill.same-player-max-kills` | `3` |
+| `anti-farmkill.same-player-window-seconds` | `120` |
+| `anti-farmkill.same-ip-enabled` | `true` |
+| `anti-freehit.hit-reset-window-seconds` | `8` (file only, no menu card) |
 
-### What a linked player sees
+Arena rules: `antiFreeHit` (false), `antiFreeHitHitsToLink` (3), `antiFreeHitIsolateLinkedPlayers` (false). Texts in `lang/<code>/messages.yml`: `combat.combat-actionbar` (tokens `%time_precise%`, `%time%`) and `anti-freehit.linked-actionbar` (`%linked_name%`, `%linked_hearts%`, `%linked_ping%`, `%time_precise%`). The glow is sent by packets (packetevents), uses no teams and only the linked player sees it.
+</Details>
 
-The action bar shows the opponent's name, their hearts, their ping and the time left on the link. Its
-text is in `messages.yml`:
-
-```yaml title="lang/<code>/messages.yml"
-anti-freehit:
-  linked-actionbar:
-    action-bar:
-      text: "{primary}⚔ {highlight}%linked_name% {error}%linked_hearts%❤ {primary}%linked_ping%ms {muted}| {warning}%time_precise% ⌚"
-      duration: 0.0
-      time-style: tenths
-```
-
-On
-top of that, if the player has the glow setting on, the opponent is outlined by a packet-sent glow
-that uses no teams and touches nobody's scoreboard.
-
-<Callout type="tip" title="To isolate or not">
-`antiFreeHitIsolateLinkedPlayers` changes the character of the arena entirely: on, an FFA becomes a
-run of clean duels; off, the link only informs and the chaos stays part of the game.
-</Callout>
+<Cards>
+  <Card title="Set the rules of an arena" href="/docs/exyliaffa/rules">The other arena rules.</Card>
+  <Card title="Statistics" href="/docs/exyliaffa/stats">What counts as a kill.</Card>
+</Cards>
