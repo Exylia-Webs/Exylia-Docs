@@ -1,95 +1,115 @@
 ---
 title: "Seasons"
-description: "Rotating the ladder in two database writes, what survives it, and the restart that follows."
+description: "What a new season resets and keeps, how to start one from the admin menu, and the server restart that follows."
 questions:
   - "How do I start a new season?"
   - "Does a season rotation delete player stats?"
   - "What survives a season change?"
   - "Do I need to restart after rotating a season?"
+  - "How do I stop the server restarting after a new season?"
 updated: "1.4.0"
 ---
 
-A season is a numbered period every stat row is stamped with. Rotating one closes the current season
-and opens the next; nothing is copied, uploaded or deleted, so it finishes in milliseconds no matter
-how many players the server has.
+A season is a numbered period that every stat is stamped with. Starting a new one gives everybody a clean ladder at the starting rating, while lifetime stats and match history stay. It takes a moment, however many players you have, and nothing is deleted.
 
-## The three tiers of stats
+## What a new season changes
 
-| Tier | Table | Reset by a rotation |
-|---|---|---|
-| **Season** | `practice_player_season_stats` | Effectively yes — the new season starts with no rows, and every rating starts again at `elo.starting-mmr` |
-| **Lifetime** | `practice_player_lifetime_stats` | No, ever |
-| **Match history** | `practice_match_history` | No; rows carry the season they were played in |
+| Kind of data | After a new season |
+|---|---|
+| **Season stats** (kills, wins, ratings, ladders, sidebars, placeholders) | Start empty. Every rating starts again at `elo.starting-mmr` |
+| **Lifetime stats** | Never reset |
+| **Match history** | Kept; each match remembers the season it was played in |
+| **ELO boosts** | All personal and server-wide [boosts](/docs/exyliapractice/elo#boosts) are cancelled, because a boost belongs to the season that granted it |
+| Kit loadouts, arenas, kits, settings | Untouched |
 
-Nothing is destroyed by a rotation. The previous season's rows stay in the table under their season
-number, which is what lets a season selector show old standings.
+The previous season's rows stay in the database under their season number, so old standings are still there for the web and for season selectors.
 
-## Rotating
+## Start a new season
 
-`/epc` → **Data Management** → **New Season**, then confirm. There is no command form.
+Only players with `exyliapractice.admin` can do this, and there is no command for it.
 
-<Steps>
-  <Step title="Lock the queue">
-    Matchmaking is held for the length of the two writes.
-  </Step>
-  <Step title="Close and open">
-    The active season row is marked closed with an end timestamp; the next number is written as the
-    new active season; the settings row's mirror of the number is updated.
-  </Step>
-  <Step title="Switch everybody over">
-    Online players start writing into the new season immediately, without reconnecting.
-  </Step>
-  <Step title="Cancel boosts">
-    Every personal and global [ELO boost](/docs/exyliapractice/elo#boosts) is cancelled — a boost
-    belongs to the season that granted it.
-  </Step>
-  <Step title="Tell the web">
-    Best-effort. Seasons are identified by number, so a late or retried notification converges to the
-    same result.
-  </Step>
-</Steps>
+1. Run `/epc`, click **Data management**, then **New season**. The button shows the current season and the next number.
+2. A confirmation screen opens. Click **Confirm** (or **Cancel**).
 
-## The restart
+The menu closes and you get a message that the new season is starting. During the next moments the queue is locked: players who try to queue are told matchmaking is temporarily blocked. A second rotation started while one is running is refused.
+
+What happens, in order:
+
+1. The queue is locked.
+2. The active season is closed with an end time and the next number is opened as the active one.
+3. Online players switch to the new season straight away, without reconnecting.
+4. Boosts are cancelled.
+5. The web is told about the rotation. This is best effort: if the web is down, the notice is kept and sent later, and seasons are identified by number so a late or repeated notice has the same result.
+
+<Callout type="note" title="The confirmation text can be misleading">
+The confirmation screen of the language files that ship with 1.4.0 still says stats and history are archived to the web and the local database is emptied, and the "season complete" message says local match history was reset. That describes the old reset. The 1.4.0 rotation does not copy or delete anything, as described above. You can reword those texts in `messages.yml` of your language (see [Messages and languages](/docs/exylialib/messages-and-languages)).
+</Callout>
+
+If the rotation fails, the queue is unlocked again and you are told the error. Nothing was changed except what had already been written, so you can retry.
+
+## The restart after a rotation
+
+By default the server restarts itself once the new season is open, so every player reconnects onto the new season with a clean in-memory state.
 
 | Setting | Default | What it does |
 |---|---|---|
-| `season.restart-after-rotation` | `true` | Restart the server once the rotation finishes |
-| `season.restart-delay-seconds` | `15` | The countdown players are warned with |
+| `season.restart-after-rotation` | `true` | Restart the server after a rotation |
+| `season.restart-delay-seconds` | `15` | Countdown players are warned with (0 to 300) |
 
-With it on, the plugin drains the [web outbox](/docs/exyliapractice/web-api) up to three times, warns
-everybody, waits out the countdown, and calls `Bukkit.spigot().restart()` — falling back to a plain
-shutdown if that is unavailable.
+Change both in `/epc` → **Settings** → **Seasons & replays** (the entries **Seasons ▸ Restart** and **Seasons ▸ Restart warning**), or in `config.yml`.
 
-The queue **stays locked** through the countdown on purpose: reopening it would let somebody start a
-match the restart is about to interrupt.
+With the restart on:
 
-<Callout type="note" title="Whether the server comes back is your supervisor's job">
-`restart()` only relaunches the process when `restart-script` in `spigot.yml` points at a working
-script. Otherwise it stops cleanly, and something outside Minecraft has to bring it back — which is the
-right arrangement for a containerised server anyway.
+1. The plugin delivers the [web outbox](/docs/exyliapractice/web-api), trying up to three times. If rows are still waiting, you get a message with the count; they are stored and sent after the restart.
+2. You get the "season complete" message and everybody online is warned, with the countdown.
+3. The queue **stays locked** during the countdown so nobody starts a match the restart would cut off.
+4. When the countdown ends, the plugin asks Spigot to restart, or stops the server if that is not available.
+
+With the restart off, the queue opens again as soon as the new season is written and play continues on the new season, without any restart.
+
+<Callout type="note" title="Bringing the server back is up to your host">
+`restart` only relaunches the server when `restart-script` in `spigot.yml` points at a working start script. Otherwise the server stops cleanly, and something outside Minecraft (your panel, systemd, a container supervisor) has to start it again.
 </Callout>
 
-With `restart-after-rotation` off, the queue reopens as soon as the two writes land and play continues
-on the new season.
+## Check that it works
 
-## The progress bar
+1. Look at the current season in **Data management** → **New season**, then run the rotation.
+2. After the restart, join and open your stats: counts are zero and the rating is the starting one. The lifetime stats and [match history](/docs/exyliapractice/match-history) still show your old matches.
+3. The next time you open **New season**, it offers the season after.
 
-`effects.season-progress-bossbar` in the language's `messages.yml` is the bar shown while a rotation runs, with `%phase%` and
-`%percent%`.
+## Going further
 
-## Repair on boot
+- To wipe only the current season's numbers without opening a new season, use **Clear all stats** (or **Clear kit stats**) in **Data management**. That deletes rows and cannot be undone: see [Stats](/docs/exyliapractice/stats#admin-commands).
+- To only reset ratings, use **Reset all ELO** or **Reset kit ELO** in the same menu: see [ELO and ranks](/docs/exyliapractice/elo).
 
-The plugin resolves the active season on every start and quietly repairs the two states that should
-not happen:
+<Details title="Technical details">
 
-- **No season at all** — a fresh install gets season 1.
-- **Several marked active** — a rotation interrupted mid-write. The highest number wins and the rest
-  are closed, with a warning naming each.
-- **Every season closed** — a rotation that died between closing and opening. The newest is reopened
-  rather than a new number invented.
+Stat tables:
 
-## What a rotation does not do
+| Tier | Table | After a rotation |
+|---|---|---|
+| Season | `practice_player_season_stats` | New season starts with no rows |
+| Lifetime | `practice_player_lifetime_stats` | Kept |
+| Match history | `practice_match_history` | Kept, with the season number |
 
-It does not clear match history, it does not touch kit loadouts, it does not reset arenas, and it does
-not upload anything synchronously. If you want the previous season's stats *gone* rather than archived,
-that is **Data Management** → **Clear all stats**, which is a different and irreversible action.
+A rotation writes three things, in this order: the closed season row, the new season row, and the mirror of the current season number in the shared settings row. A crash between them is repaired on the next boot.
+
+Repair on boot. The plugin resolves the active season on every start:
+
+- **No season at all** (fresh install): season 1 is created.
+- **Several marked active** (a rotation cut off half way): the highest number wins and the others are closed, with a warning in the console naming each.
+- **Every season closed** (a rotation that stopped between closing and opening): the newest is reopened instead of inventing a number.
+
+Stats are not written until the season is known, so nothing is stamped with a guess. Data from before seasons existed is moved into season 1 once, on first boot.
+
+The web notice goes to `/api/ingest/season/rotate` through the outbox. A pre-restart delivery that cannot finish is not fatal: the outbox is durable and retries after the restart.
+
+`effects.season-progress-bossbar` exists in the language's `messages.yml` with `%phase%` and `%percent%`, but the 1.4.0 rotation does not show it, because nothing runs long enough to need a progress bar.
+
+</Details>
+
+<Cards>
+  <Card title="ELO and ranks" href="/docs/exyliapractice/elo">What happens to ratings and boosts.</Card>
+  <Card title="Stats" href="/docs/exyliapractice/stats">Season, lifetime and clearing data.</Card>
+  <Card title="Web API" href="/docs/exyliapractice/web-api">How the rotation reaches the web.</Card>
+</Cards>

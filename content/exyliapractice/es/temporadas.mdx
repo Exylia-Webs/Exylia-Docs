@@ -1,96 +1,115 @@
 ---
 title: "Temporadas"
-description: "Rotar el ladder en dos escrituras, qué sobrevive, y el reinicio que viene después."
+description: "Qué reinicia y qué conserva una temporada nueva, cómo empezarla desde el menú de admin y el reinicio del servidor que le sigue."
 questions:
   - "¿Cómo empiezo una temporada nueva?"
   - "¿Rotar la temporada borra las estadísticas de los jugadores?"
   - "¿Qué sobrevive a un cambio de temporada?"
   - "¿Tengo que reiniciar tras rotar una temporada?"
+  - "¿Cómo evito que el servidor se reinicie tras una temporada nueva?"
 updated: "1.4.0"
 ---
 
-Una temporada es un periodo numerado con el que se sella cada fila de estadísticas. Rotar una cierra la
-actual y abre la siguiente; no se copia, sube ni borra nada, así que termina en milisegundos por muchos
-jugadores que tenga el servidor.
+Una temporada es un periodo numerado con el que se sella cada estadística. Empezar una nueva deja a todo el mundo con un ladder limpio y el rating inicial, mientras que las estadísticas históricas y el historial de partidas se conservan. Tarda un instante por muchos jugadores que tengas y no se borra nada.
 
-## Los tres niveles de estadísticas
+## Qué cambia una temporada nueva
 
-| Nivel | Tabla | Lo reinicia una rotación |
-|---|---|---|
-| **Temporada** | `practice_player_season_stats` | En la práctica sí: la nueva temporada empieza sin filas, y cada rating vuelve a `elo.starting-mmr` |
-| **Histórico** | `practice_player_lifetime_stats` | Nunca |
-| **Historial de partidas** | `practice_match_history` | No; las filas llevan la temporada en que se jugaron |
+| Tipo de datos | Tras una temporada nueva |
+|---|---|
+| **Estadísticas de temporada** (kills, victorias, ratings, ladders, sidebars, placeholders) | Empiezan vacías. Cada rating vuelve a `elo.starting-mmr` |
+| **Estadísticas históricas** | Nunca se reinician |
+| **Historial de partidas** | Se conserva; cada partida recuerda la temporada en que se jugó |
+| **Boosts de ELO** | Todos los [boosts](/docs/exyliapractice/elo#boosts) personales y globales se cancelan, porque un boost pertenece a la temporada que lo concedió |
+| Equipamientos de kit, arenas, kits, ajustes | No se tocan |
 
-Una rotación no destruye nada. Las filas de la temporada anterior siguen en la tabla bajo su número, que
-es lo que permite que un selector de temporada muestre clasificaciones antiguas.
+Las filas de la temporada anterior siguen en la base de datos bajo su número, así que las clasificaciones antiguas siguen disponibles para la web y para los selectores de temporada.
 
-## Rotar
+## Empezar una temporada nueva
 
-`/epc` → **Data Management** → **New Season**, y confirmar. No hay forma por comando.
+Solo pueden hacerlo quienes tengan `exyliapractice.admin`, y no hay comando para ello.
 
-<Steps>
-  <Step title="Bloquear la cola">
-    El matchmaking se retiene durante las dos escrituras.
-  </Step>
-  <Step title="Cerrar y abrir">
-    La fila de la temporada activa se marca cerrada con una marca de tiempo de fin; el número siguiente
-    se escribe como nueva temporada activa; se actualiza el espejo del número en la fila de ajustes.
-  </Step>
-  <Step title="Pasar a todos">
-    Los jugadores conectados empiezan a escribir en la nueva temporada de inmediato, sin reconectarse.
-  </Step>
-  <Step title="Cancelar boosts">
-    Todos los [boosts de ELO](/docs/exyliapractice/elo#boosts) personales y globales se cancelan: un
-    boost pertenece a la temporada que lo concedió.
-  </Step>
-  <Step title="Avisar a la web">
-    En la medida de lo posible. Las temporadas se identifican por número, así que una notificación
-    tardía o reintentada converge al mismo resultado.
-  </Step>
-</Steps>
+1. Ejecuta `/epc`, pulsa **Gestión de datos** y luego **Nueva temporada**. El botón muestra la temporada actual y el número siguiente.
+2. Se abre una pantalla de confirmación. Pulsa **Confirmar** (o **Cancelar**).
 
-## El reinicio
+El menú se cierra y recibes un mensaje de que la nueva temporada está empezando. Durante esos instantes la cola está bloqueada: a quien intente entrar en cola se le avisa de que el emparejamiento está bloqueado temporalmente. Si lanzas otra rotación mientras hay una en marcha, se rechaza.
+
+Qué ocurre, por orden:
+
+1. Se bloquea la cola.
+2. La temporada activa se cierra con una hora de fin y se abre el número siguiente como activo.
+3. Los jugadores conectados pasan a la nueva temporada de inmediato, sin reconectarse.
+4. Se cancelan los boosts.
+5. Se avisa a la web. Es en la medida de lo posible: si la web está caída, el aviso se guarda y se envía después, y como las temporadas se identifican por número, un aviso tardío o repetido da el mismo resultado.
+
+<Callout type="note" title="El texto de confirmación puede inducir a error">
+La pantalla de confirmación de los archivos de idioma que vienen con 1.4.0 todavía dice que las estadísticas y el historial se archivan en la web y que la base de datos local se vacía, y el mensaje de "temporada completada" dice que el historial local se reinició. Eso describe el reinicio antiguo. La rotación de 1.4.0 no copia ni borra nada, como se explica arriba. Puedes cambiar esos textos en el `messages.yml` de tu idioma (consulta [Mensajes e idiomas](/docs/exylialib/mensajes-e-idiomas)).
+</Callout>
+
+Si la rotación falla, la cola se desbloquea y se te muestra el error. Solo cambió lo que ya se había escrito, así que puedes reintentarlo.
+
+## El reinicio tras una rotación
+
+Por defecto el servidor se reinicia solo cuando la nueva temporada está abierta, para que todos los jugadores vuelvan a conectarse sobre la nueva temporada con un estado en memoria limpio.
 
 | Ajuste | Defecto | Qué hace |
 |---|---|---|
-| `season.restart-after-rotation` | `true` | Reinicia el servidor al terminar la rotación |
-| `season.restart-delay-seconds` | `15` | La cuenta atrás con la que se avisa a los jugadores |
+| `season.restart-after-rotation` | `true` | Reinicia el servidor tras una rotación |
+| `season.restart-delay-seconds` | `15` | Cuenta atrás con la que se avisa a los jugadores (de 0 a 300) |
 
-Con esto activo, el plugin vacía la [bandeja de salida web](/docs/exyliapractice/web-api) hasta tres
-veces, avisa a todo el mundo, espera la cuenta atrás y llama a `Bukkit.spigot().restart()`, cayendo a un
-apagado normal si no está disponible.
+Cambia ambos en `/epc` → **Ajustes** → **Temporadas y repeticiones** (las entradas **Temporadas ▸ Reinicio** y **Temporadas ▸ Aviso de reinicio**), o en `config.yml`.
 
-La cola **sigue bloqueada** durante la cuenta atrás a propósito: reabrirla dejaría que alguien empezara
-una partida que el reinicio va a interrumpir.
+Con el reinicio activado:
 
-<Callout type="note" title="Que el servidor vuelva es cosa de tu supervisor">
-`restart()` solo relanza el proceso si `restart-script` en `spigot.yml` apunta a un script que
-funcione. Si no, se apaga limpiamente y algo de fuera de Minecraft tiene que levantarlo, que además es
-el montaje correcto en un servidor en contenedor.
+1. El plugin entrega la [bandeja de salida web](/docs/exyliapractice/web-api), con hasta tres intentos. Si quedan filas pendientes, recibes un mensaje con la cantidad; están guardadas y se envían tras el reinicio.
+2. Recibes el mensaje de "temporada completada" y se avisa a todos los conectados, con la cuenta atrás.
+3. La cola **sigue bloqueada** durante la cuenta atrás, para que nadie empiece una partida que el reinicio cortaría.
+4. Al acabar la cuenta atrás, el plugin pide a Spigot que reinicie, o detiene el servidor si no está disponible.
+
+Con el reinicio desactivado, la cola se reabre en cuanto se escribe la nueva temporada y se sigue jugando en ella sin reiniciar.
+
+<Callout type="note" title="Que el servidor vuelva depende de tu hosting">
+`restart` solo relanza el servidor si `restart-script` en `spigot.yml` apunta a un script de arranque que funcione. Si no, el servidor se detiene limpiamente y algo de fuera de Minecraft (tu panel, systemd, un supervisor de contenedores) tiene que volver a levantarlo.
 </Callout>
 
-Con `restart-after-rotation` apagado, la cola se reabre en cuanto aterrizan las dos escrituras y se
-sigue jugando en la nueva temporada.
+## Comprueba que funciona
 
-## La barra de progreso
+1. Mira la temporada actual en **Gestión de datos** → **Nueva temporada** y lanza la rotación.
+2. Tras el reinicio, entra y abre tus estadísticas: los contadores están a cero y el rating es el inicial. Las estadísticas históricas y el [historial](/docs/exyliapractice/historial) siguen mostrando tus partidas antiguas.
+3. La próxima vez que abras **Nueva temporada**, ofrece la siguiente.
 
-`effects.season-progress-bossbar` en el `messages.yml` del idioma es la barra que se muestra mientras corre una rotación, con
-`%phase%` y `%percent%`.
+## Ir más allá
 
-## Reparación al arrancar
+- Para borrar solo los números de la temporada actual sin abrir otra, usa **Borrar todas las estadísticas** (o **Borrar estadísticas de kit**) en **Gestión de datos**. Eso elimina filas y no se puede deshacer: consulta [Estadísticas](/docs/exyliapractice/estadisticas#comandos-de-administración).
+- Para reiniciar solo los ratings, usa **Reiniciar todo el ELO** o **Reiniciar ELO de kit** en el mismo menú: consulta [ELO y rangos](/docs/exyliapractice/elo).
 
-El plugin resuelve la temporada activa en cada arranque y repara en silencio los dos estados que no
-deberían darse:
+<Details title="Detalles técnicos">
 
-- **Ninguna temporada**: una instalación nueva recibe la temporada 1.
-- **Varias marcadas como activas**: una rotación interrumpida a mitad de escritura. Gana el número más
-  alto y el resto se cierran, con un aviso nombrando cada una.
-- **Todas cerradas**: una rotación que murió entre cerrar y abrir. Se reabre la más nueva en vez de
-  inventar un número nuevo.
+Tablas de estadísticas:
 
-## Qué no hace una rotación
+| Nivel | Tabla | Tras una rotación |
+|---|---|---|
+| Temporada | `practice_player_season_stats` | La nueva temporada empieza sin filas |
+| Histórico | `practice_player_lifetime_stats` | Se conserva |
+| Historial de partidas | `practice_match_history` | Se conserva, con el número de temporada |
 
-No limpia el historial de partidas, no toca los loadouts de kit, no reinicia arenas y no sube nada de
-forma síncrona. Si quieres que las estadísticas de la temporada anterior *desaparezcan* en vez de
-archivarse, eso es **Data Management** → **Clear all stats**, que es una acción distinta e
-irreversible.
+Una rotación escribe tres cosas, por este orden: la fila de la temporada cerrada, la fila de la temporada nueva y el espejo del número de temporada actual en la fila de ajustes compartida. Un fallo entre ellas se repara en el siguiente arranque.
+
+Reparación al arrancar. El plugin resuelve la temporada activa en cada arranque:
+
+- **Ninguna temporada** (instalación nueva): se crea la temporada 1.
+- **Varias marcadas como activas** (una rotación cortada a medias): gana el número más alto y las demás se cierran, con un aviso en la consola que nombra cada una.
+- **Todas cerradas** (una rotación que se detuvo entre cerrar y abrir): se reabre la más nueva en vez de inventar un número.
+
+No se escribe ninguna estadística hasta que se conoce la temporada, así que nada se sella con un valor supuesto. Los datos anteriores a las temporadas se pasan a la temporada 1 una sola vez, en el primer arranque.
+
+El aviso a la web va a `/api/ingest/season/rotate` a través de la bandeja de salida. Si una entrega previa al reinicio no termina, no es grave: la bandeja es duradera y reintenta tras el reinicio.
+
+`effects.season-progress-bossbar` existe en el `messages.yml` del idioma con `%phase%` y `%percent%`, pero la rotación de 1.4.0 no la muestra, porque nada dura lo bastante como para necesitar una barra de progreso.
+
+</Details>
+
+<Cards>
+  <Card title="ELO y rangos" href="/docs/exyliapractice/elo">Qué pasa con ratings y boosts.</Card>
+  <Card title="Estadísticas" href="/docs/exyliapractice/estadisticas">Temporada, histórico y borrado de datos.</Card>
+  <Card title="API web" href="/docs/exyliapractice/web-api">Cómo llega la rotación a la web.</Card>
+</Cards>
