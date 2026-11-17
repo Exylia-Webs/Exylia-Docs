@@ -1,67 +1,66 @@
 ---
-title: "Teleports"
-description: "`/tpa` between players inside a sandbox, `/back` to where you last were, and `/rekit`."
+title: "Teleport requests, /back and /rekit"
+description: "How players visit each other with /tpa, return with /back and put their kit back on with /rekit, and how to give a rank a shorter /rekit wait."
+questions:
+  - "How do players teleport to each other in the sandbox?"
+  - "How do I accept or deny a /tpa request?"
+  - "What does /back do in ExyliaSandBox?"
+  - "How do I change the /rekit cooldown?"
+  - "How do I give VIPs a shorter /rekit cooldown?"
+  - "Why can't I teleport to a player?"
+badge: "guide"
+updated: "1.2.0"
 ---
 
-Three commands move a player around once the sandbox worlds exist. Only `/rekit` has a cooldown, and
-none of them works while the player is combat-tagged: they are told `general.in-combat`.
+Three commands move a player around once the sandbox worlds exist: `/tpa` to visit somebody, `/back` to return to where they were, and `/rekit` to put their kit back on. None of them works while the player is combat-tagged. Only `/rekit` has a cooldown.
 
-## `/tpa`
+## Before you start
 
-`/tpa <player>` asks to be teleported to somebody. The **target** must already be inside a sandbox
-world; asking somebody in the lobby is refused with `tpa.target-outside-world`.
+Players need a kit and at least one world must be ready. See [Your first sandbox](/docs/exyliasandbox/first-steps). The commands and permissions are listed in [Commands](/docs/exyliasandbox/commands) and [Permissions](/docs/exyliasandbox/permissions).
 
-If the requester is already inside a sandbox, the request carries the kit they are wearing. Otherwise
-the usual kit branch applies: none refuses, one goes straight through, two or more opens the kit list
-first.
+## Steps
 
-| Command | What it does |
-|---|---|
-| `/tpa <player>` | Sends a request. A second request to the same player is refused with `tpa.already-sent` |
-| `/tpaccept [player]` | Accepts. With no name it takes the **newest** request still alive |
-| `/tpdeny [player]` | Denies. With no name, same selection |
+<Steps>
+  <Step title="Ask to teleport with /tpa">
+    A player runs `/tpa <player>`. The **target** must already be inside a sandbox world; asking somebody in the lobby is refused. If the requester is already in a sandbox, the request carries the kit they wear. Otherwise the usual kit rule applies: none refuses, one goes straight through, two or more opens the kit list.
+  </Step>
+  <Step title="The target answers">
+    The target gets a centred message with clickable **ACCEPT** and **DECLINE** buttons that run `/tpaccept` and `/tpdeny`. With no name, those commands take the newest request still alive. A request expires after 60 seconds, and both sides are told.
+  </Step>
+  <Step title="Return with /back">
+    `/back` takes a player to the last place they were inside a sandbox world. Run it again and it returns them to where they stood, so it works as a return trip.
+  </Step>
+  <Step title="Put the kit back with /rekit">
+    Inside a sandbox world `/rekit` re-applies the kit the player is **wearing** (not their favourite) and refills health, food and saturation. Between two uses they wait 30 seconds by default.
+  </Step>
+</Steps>
 
-Requests expire after `tpa.request-timeout-seconds`, sixty by default, and both sides are told. A
-disconnect drops every request to and from that player.
+## Check that it works
 
-The target receives the request as a centred block with clickable **ACCEPT** and **DECLINE** buttons
-that run `/tpaccept` and `/tpdeny` for them.
+With two players inside a sandbox, one runs `/tpa <other>`, the other clicks **ACCEPT**, and the first lands next to them. Then `/back` sends them to where they were before. After a death, `/back` brings the player to the spot they died, wearing a kit they pick if they have several.
 
-`/tpaccept` requires the accepter to be inside a sandbox world; `/tpdeny` has no such check. A player
-who is building a kit, waiting in a queue, held by another activity or combat-tagged can neither send a
-request nor accept one, and accepting is refused with `tpa.player-unavailable` when the requester has
-since become one of those.
+## Going further
 
-Accepting claims the requester, snapshots and clears their inventory if they were outside, dresses them
-in the chosen kit, and moves them.
+### Give a rank a shorter /rekit wait
 
-## `/back`
+Give the rank `exyliasandbox.rekit.cooldown.<seconds>`, for example `exyliasandbox.rekit.cooldown.10`. If a player holds several, the lowest wins. For everyone else change `rekit.cooldown-seconds` in `config.yml`. See [Configuration](/docs/exyliasandbox/configuration).
 
-`/back` returns a player to the last place they were inside a sandbox world. Only one point is kept per
-player, and only ever a location inside a sandbox world.
+### Change how long a request lives
 
-It is written when:
+`tpa.request-timeout-seconds` in `config.yml` (60 by default; the settings menu allows 5 to 3600).
 
-- a player already inside a sandbox re-rolls with `/rtp`;
-- a `/tpa` is accepted and the requester was already inside;
-- a teleport pad picks up a player who was already inside;
-- **a player dies** — the death location becomes the point.
+### When /back has nowhere to go
 
-`/back` from the lobby runs the kit branch. `/back` from inside a sandbox keeps the kit, and the spot
-they were standing on becomes the new point, so `/back` twice is a return trip.
+The player is told there is no saved location, or that it is not in one of the plugin's worlds. Nothing is saved after a restart.
 
-It refuses with `back.no-location` when there is no point, or when the world it names is no longer a
-sandbox world.
+<Details title="Technical details">
+- `/tpa`: a second request to the same player is refused (`tpa.already-sent`); a disconnect drops every request to and from that player. `/tpaccept` requires the accepter to be inside a sandbox world (`tpa.accept-outside-world`); `/tpdeny` has no such check. A player building a kit, waiting in a queue, held by another activity or combat-tagged can neither send nor accept; accepting is refused with `tpa.player-unavailable` if the requester became one of those since. Accepting claims the requester, saves and clears their inventory if they were outside, applies the chosen kit and moves them. `/tpa` needs `exyliasandbox.command.tpa`; `/tpdeny` never needs a permission.
+- `/back`: one point per player, and only a location inside a sandbox world. It is written when a player already inside re-rolls with `/rtp`, when a `/tpa` they sent goes through, when a teleport pad picks them up from inside, and **when they die** (the death location becomes the point). `/back` from the lobby runs the kit rule (none refuses with `queue.no-kit`, one goes through, several open the kit list). From inside a sandbox the kit is kept. The point is used once and cleared on disconnect.
+- `/rekit`: refused when not in a sandbox world (`rekit.not-in-world`) or with no active kit (`rekit.no-kit`); the cooldown message `rekit.cooldown` shows the time left (`%time%`).
+- The `/back` point, pending requests and the worn kit live in memory. A restart clears all three.
+</Details>
 
-## `/rekit`
-
-`/rekit` puts the active kit back on and sets health, food and saturation to full. It only works while
-standing in a sandbox world, and it re-applies the kit the player is **wearing** — not their favourite.
-A player who arrived without a kit is told `rekit.no-kit`. Between two uses the player waits
-`rekit.cooldown-seconds` from `config.yml`, thirty by default, and is told `rekit.cooldown` with the
-time left.
-
-## What is not persisted
-
-The `/back` point, the pending TPA requests and the kit a player is wearing all live in memory. A
-restart clears all three.
+<Cards>
+  <Card title="RTP and the queue" href="/docs/exyliasandbox/rtp-and-queue">The ways into a sandbox world.</Card>
+  <Card title="Permissions" href="/docs/exyliasandbox/permissions">Rank cooldowns and kit slots.</Card>
+</Cards>

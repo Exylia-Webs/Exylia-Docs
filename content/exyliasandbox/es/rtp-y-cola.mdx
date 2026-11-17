@@ -1,115 +1,100 @@
 ---
-title: "RTP y la cola"
-description: "Cómo entra un jugador a un mundo sandbox: la búsqueda de sitio seguro, el emparejador 1v1, la cola rápida y las barras de acción."
+title: "Deja entrar a los jugadores: RTP y la cola"
+description: "Las tres formas de entrar a un mundo sandbox (/rtp, /rtpqueue, /rtpqueuefast), cómo empareja el 1v1 y cómo ajustar la búsqueda de sitio seguro."
+questions:
+  - "¿Cómo entran los jugadores a un mundo sandbox?"
+  - "¿Qué diferencia hay entre /rtp, /rtpqueue y /rtpqueuefast?"
+  - "¿Cómo empareja la cola del sandbox a los jugadores?"
+  - "¿Cómo hago que los jugadores de la cola aparezcan más cerca?"
+  - "¿Cómo salgo de la cola o de un mundo sandbox?"
+  - "¿Por qué /rtp dice que no hay una ubicación segura?"
+badge: "guía"
+updated: "1.2.0"
 ---
 
-Hay tres formas de entrar a un mundo sandbox, y las tres acaban igual: se reserva al jugador, se guarda
-y se vacía su inventario, se le pone un kit y se busca un sitio seguro dentro del borde.
+Hay tres comandos para entrar a un mundo sandbox y todos acaban igual: el jugador se reserva, su inventario se guarda y se vacía, se pone un kit y se busca un sitio seguro dentro del borde. Esta página te dice a cuál apuntar a los jugadores y cómo ajustarlo.
 
-## `/rtp` — directo
+## Antes de empezar
 
-`/rtp` abre la lista de mundos. El tamaño de la pila de cada fila es la cantidad de jugadores en ese
-mundo, y solo brilla un mundo `READY`; pulsar uno que no lo esté no hace nada.
+Al menos un mundo debe estar listo (mira [Mundos](/docs/exyliasandbox/mundos)) y los jugadores necesitan un kit (mira [Kits](/docs/exyliasandbox/kits)). Para entrar sin comandos usa una [plataforma de teletransporte](/docs/exyliasandbox/regiones-tp).
 
-`/rtp <mundo>` se salta la lista. Rechaza si ese mundo no está `READY`. A un jugador en combate se le
-rechaza con `general.in-combat`, y lo mismo a un nuevo sorteo desde dentro de un mundo sandbox.
+## Pasos
 
-A partir de ahí:
+<Steps>
+  <Step title="Directo con /rtp">
+    `/rtp` abre la lista de mundos. El tamaño de la pila de cada mundo es el número de jugadores dentro, y solo un mundo listo brilla; pulsar uno que no lo está no hace nada. `/rtp <mundo>` salta la lista y rechaza un mundo que no esté listo. A un jugador en combate se le rechaza.
 
-| Kits usables | Qué pasa |
-|---|---|
-| Ninguno | Rechazado con `queue.no-kit` |
-| Uno | Entra directo, con él puesto |
-| Dos o más | Se abre la lista de kits |
+    | Kits utilizables | Qué pasa |
+    |---|---|
+    | Ninguno | Rechazado: se le dice que cree un kit |
+    | Uno | Entra directo con él puesto |
+    | Dos o más | Se abre la lista de kits |
+  </Step>
+  <Step title="Espera a un rival con /rtpqueue">
+    `/rtpqueue` abre la misma lista, pero al elegir un mundo el jugador entra en su cola en vez de teletransportarse. Todos los conectados ven un mensaje de que se unió.
+  </Step>
+  <Step title="Deja que el plugin elija con /rtpqueuefast">
+    `/rtpqueuefast` entra en una cola sin preguntar el mundo. Elige el mundo donde está el jugador que más lleva esperando de todos, así alguien se empareja al instante; si no hay, un mundo listo al azar.
+  </Step>
+  <Step title="Salir">
+    `/leavertpqueue` sale de la cola. `/leavesandbox` sale de una cola o de un mundo sandbox (mira abajo).
+  </Step>
+</Steps>
 
-Un jugador que **ya está dentro de un mundo sandbox** se relanza a un sitio nuevo del mundo que elija,
-conservando el kit que lleva y sin volver a reservarse. Su sitio anterior pasa a ser el punto de
-`/back`.
+## Comprueba que funciona
 
-### La búsqueda de sitio seguro
+Ejecuta `/rtp`, elige un mundo y un kit. Aterrizas dentro del borde, aparece el marcador del sandbox y se pone el kit. Después prueba con dos jugadores con `/rtpqueue` en el mismo mundo: en un segundo ambos se teletransportan, mirándose.
 
-Se elige una `x, z` aleatoria dentro del borde, se carga el chunk de forma asíncrona y se comprueba la
-columna: suelo sólido que no sea lava ni agua, con dos bloques de aire encima. Hasta
-`rtp.search-attempts` intentos — cincuenta por defecto — y la búsqueda se mantiene a
-`rtp.border-margin` bloques del borde. Quedarse sin intentos rechaza con `queue.no-safe-location`.
+## Ir más lejos
 
-## `/rtpqueue` — esperar rival
+### Cómo empareja la cola
 
-`/rtpqueue` abre la misma lista de mundos, pero entrar mete al jugador en la cola de ese mundo en vez de
-teletransportarlo. La entrada se anuncia a todos los jugadores conectados.
+El emparejador corre una vez por segundo. Por cada mundo listo con dos o más jugadores esperando, toma a los **dos que más llevan esperando** y los manda juntos: se busca un sitio seguro de la forma normal, un segundo a exactamente `rtp.queue-pair-distance` bloques del primero (10 por defecto), y ambos se giran para mirarse. Se procesa una pareja por mundo cada vez, así que una cola de seis se vacía en tres pasos.
 
-El emparejador corre una vez por segundo. Por cada mundo `READY` con dos o más jugadores esperando, coge
-a los **dos que llevan más tiempo** y los manda juntos:
+Una pareja que no consigue dos sitios seguros sale de la cola y se le avisa; tiene que volver a entrar.
 
-- se busca un sitio seguro de la forma habitual;
-- se busca un segundo a exactamente `rtp.queue-pair-distance` bloques del primero — diez por defecto;
-- se gira a los dos para que se miren, y se teletransportan los dos.
+### Repetir ubicación desde dentro
 
-Si algo falla en ese punto, los dos vuelven a como estaban.
+Un jugador que ya está en un mundo sandbox y ejecuta `/rtp` pasa a un sitio nuevo del mundo que elija. Conserva el kit que lleva y no se reserva otra vez. Su sitio anterior pasa a ser el punto de `/back`.
 
-Solo se procesa un par por mundo a la vez, así que una cola de seis se vacía en tres pasadas del
-emparejador en vez de toda de golpe.
+### Volver con /back
 
-## `/rtpqueuefast` — que elija él el mundo
+`/back` devuelve al jugador a su último sitio guardado del sandbox. Ese sitio se guarda cuando muere, repite ubicación, se teletransporta a alguien con `/tpa`, o lo manda una plataforma desde dentro de un sandbox. Funciona una vez, se borra al desconectarse y, desde el lobby, pide un kit antes. A un jugador en combate se le rechaza.
 
-`/rtpqueuefast` entra en cola sin preguntar en qué mundo. Elige, en este orden:
+### Salir
 
-1. el mundo donde está el jugador que lleva más tiempo esperando en cualquier cola — así alguien empareja
-   de inmediato;
-2. si no, un mundo `READY` cargado al azar.
-
-Desde dentro de un mundo sandbox entra en cola con el kit que lleva puesto.
-
-`/leavertpqueue` sale de la cola en la que esté.
-
-## Las dos barras de acción
-
-Las dos están en `messages.yml` → `queue`, y las dos son bloques de efecto normales, así que se les puede
-añadir un sonido o una partícula.
-
-| Clave | Quién la ve |
-|---|---|
-| `in-queue-actionbar` | El jugador en cola, redibujada cada segundo con `%world%` y `%time%` — lo que lleva esperando |
-| `rotative-queue-actionbar` | Todo el que **no** esté en cola y esté en un mundo sandbox o en el mundo del lobby, anunciando a un jugador que espera cada vez |
-
-`config.yml` → `rtp.rotative-queue-actionbar-time` son los segundos que se anuncia a cada jugador antes de que la barra
-pase al siguiente. Son segundos y admite decimales.
-
-## Al llegar
-
-Dos ticks después de que aterrice el teletransporte, y solo si el jugador está de verdad en un mundo
-sandbox:
-
-- modo supervivencia, invulnerabilidad apagada, vuelo apagado;
-- todos los efectos de poción quitados;
-- vida, comida y saturación al máximo, distancia de caída a cero;
-- empieza la sesión de tiempo jugado, aparece el marcador y se aplica el kit.
-
-## Al salir
-
-`/leavesandbox` cubre cinco casos:
+`/leavesandbox` cubre estos casos:
 
 | Estado | Qué pasa |
 |---|---|
 | En el creador de kits | Rechazado |
-| En combate | Rechazado con `general.in-combat` |
+| En combate | Rechazado |
 | En una cola | Sale de la cola |
-| En un mundo sandbox | Al lobby, inventario restaurado, marcador oculto, sesión terminada, reserva liberada |
-| Con reserva pero ninguna de las anteriores | Se libera la reserva y se avisa en consola: es una fuga que se está limpiando |
+| En un mundo sandbox | Vuelve al lobby, se restaura el inventario y se oculta el marcador |
 
-Morir y desconectarse hacen el mismo trabajo que la tercera fila. Morir además guarda el punto de
-`/back`, cuenta la baja y la muerte, y refresca el marcador de todos los que quedan en el mundo.
+La muerte y la desconexión hacen lo mismo que la última fila. La muerte se cancela antes de que la vea vanilla: no cae nada, no se pierde experiencia, no hay pantalla de reaparición. Además guarda el punto de `/back`, cuenta la muerte y la kill, y refresca el marcador de todos los que quedan en el mundo.
 
-<Callout type="note" title="La muerte se cancela del todo">
-Dentro de un mundo sandbox el evento de muerte se cancela antes de que vanilla lo vea. No cae nada, no
-se pierde experiencia, no hay pantalla de reaparición y no hay mensaje de muerte salvo que el
-interruptor `show_death_messages` del mundo esté encendido. Al jugador simplemente se le mueve al lobby
-dos ticks después.
-</Callout>
+### Ajústalo
 
-## La reserva
+Edita `config.yml` bajo `rtp` (o usa `/sandboxadmin` → **Ajustes**) y pulsa **Recargar**. Mira [Configuración](/docs/exyliasandbox/configuracion).
 
-Todo jugador dentro de un sandbox o en cola tiene una reserva de sesión de ExyliaLib llamada `Sandbox`.
-Es lo que impide que ExyliaFFA, ExyliaEvents, ExyliaPracticeCore y el resto de la suite se lo lleven a
-otra cosa al mismo tiempo, y es de donde responde `isInSandbox` — no del mundo en el que esté parado.
-Durante un teletransporte sin terminar los dos no coinciden, y gana la reserva.
+| Clave | Por defecto | Qué hace |
+|---|---|---|
+| `rtp.queue-pair-distance` | `10` | Bloques entre los dos jugadores de una pareja |
+| `rtp.search-attempts` | `50` | Sitios aleatorios probados antes de rendirse |
+| `rtp.border-margin` | `20` | Bloques que se dejan libres junto al borde del mundo |
+| `rtp.rotative-queue-actionbar-time` | `2.0` | Segundos que se anuncia a cada jugador en espera |
+
+<Details title="Detalles técnicos">
+- Búsqueda de sitio seguro: se elige un `x, z` aleatorio dentro del borde (menos el margen), se carga el chunk de forma asíncrona y la columna debe ser suelo sólido que no sea lava ni agua con aire encima. Sin intentos: se le dice al jugador que no hay ubicación segura, se libera su reserva y se restaura su inventario. Una pareja de cola tiene el doble de intentos para el primer sitio y el triple para el segundo.
+- Llegada: dos ticks después de aterrizar, y solo si el jugador está de verdad en un mundo sandbox, pasa a supervivencia sin invulnerabilidad ni vuelo, se quitan todos los efectos de poción, vida, comida y saturación quedan al máximo, se borra la distancia de caída, aparece el marcador y se aplica el kit. Un teletransporte fallido libera la reserva y restaura el inventario.
+- Action bars (`messages.yml` → `queue`): `in-queue-actionbar` se muestra al jugador en cola cada segundo (`%world%`, `%time%` esperado); `rotative-queue-actionbar` se muestra a todos los que no están en cola y están en un mundo sandbox o en el lobby, un jugador en espera cada vez. Ambos son bloques de efecto, así que admiten un sonido o una partícula.
+- La reserva: todo jugador dentro de un sandbox o de la cola tiene una reserva de sesión de ExyliaLib llamada `Sandbox`. Evita que ExyliaFFA, ExyliaEvents y ExyliaPracticeCore lo metan en otra cosa, y es de donde responde `isInSandbox`, no del mundo donde esté.
+- Una reserva sin nada detrás (sin mundo, cola ni creador) la libera `/leavesandbox` y se registra un aviso.
+- Eventos: `SandboxJoinEvent` (cancelable, para `/rtp` y para la cola), `SandboxArriveEvent`, `SandboxLeaveEvent`. Mira [API](/docs/exyliasandbox/api).
+</Details>
+
+<Cards>
+  <Card title="Peticiones de teletransporte" href="/docs/exyliasandbox/teletransportes">Deja que los jugadores se visiten con /tpa.</Card>
+  <Card title="Plataformas de teletransporte" href="/docs/exyliasandbox/regiones-tp">Entra sin escribir un comando.</Card>
+</Cards>

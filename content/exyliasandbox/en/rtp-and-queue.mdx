@@ -1,113 +1,100 @@
 ---
-title: "RTP and the queue"
-description: "How a player enters a sandbox world: the safe-location search, the 1v1 matcher, the fast queue and the action bars."
+title: "Let players enter: RTP and the queue"
+description: "The three ways into a sandbox world (/rtp, /rtpqueue, /rtpqueuefast), how the 1v1 matcher pairs players, and how to tune the safe-spot search."
+questions:
+  - "How do players enter a sandbox world?"
+  - "What is the difference between /rtp, /rtpqueue and /rtpqueuefast?"
+  - "How does the sandbox queue match players?"
+  - "How do I make players land closer together in the queue?"
+  - "How do I leave the queue or a sandbox world?"
+  - "Why does /rtp say no safe location?"
+badge: "guide"
+updated: "1.2.0"
 ---
 
-There are three ways into a sandbox world, and they all end the same way: the player is claimed, their
-inventory is snapshotted and cleared, a kit goes on, and a safe location is found inside the border.
+There are three commands into a sandbox world and they all end the same way: the player is claimed, their inventory is saved and cleared, a kit goes on, and a safe spot inside the border is found. This page shows which one to point players at and how to tune it.
 
-## `/rtp` — straight in
+## Before you start
 
-`/rtp` opens the world list. Each row's stack size is the number of players in that world, and only a
-`READY` world glows; clicking one that is not ready does nothing.
+At least one world must be ready (see [Worlds](/docs/exyliasandbox/worlds)) and players need a kit (see [Kits](/docs/exyliasandbox/kits)). For entering without a command, use a [teleport pad](/docs/exyliasandbox/tp-regions).
 
-`/rtp <world>` skips the list. It refuses if that world is not `READY`. A combat-tagged player is
-refused with `general.in-combat`, and so is a re-roll from inside a sandbox world.
+## Steps
 
-From there:
+<Steps>
+  <Step title="Straight in with /rtp">
+    `/rtp` opens the world list. Each world's stack size is the number of players inside, and only a ready world glows; clicking one that is not ready does nothing. `/rtp <world>` skips the list and refuses a world that is not ready. A player in combat is refused.
 
-| Usable kits | What happens |
-|---|---|
-| None | Refused with `queue.no-kit` |
-| One | Straight in, wearing it |
-| Two or more | The kit list opens |
+    | Usable kits | What happens |
+    |---|---|
+    | None | Refused: they are told to make a kit |
+    | One | Straight in, wearing it |
+    | Two or more | The kit list opens |
+  </Step>
+  <Step title="Wait for an opponent with /rtpqueue">
+    `/rtpqueue` opens the same list, but joining puts the player in that world's queue instead of teleporting them. Everybody online sees a message that they joined.
+  </Step>
+  <Step title="Let the plugin choose with /rtpqueuefast">
+    `/rtpqueuefast` joins a queue without asking which world. It picks the world holding the player who has waited longest anywhere, so someone is matched at once; failing that, a random ready world.
+  </Step>
+  <Step title="Leave">
+    `/leavertpqueue` leaves the queue. `/leavesandbox` leaves a queue or a sandbox world (see below).
+  </Step>
+</Steps>
 
-A player who is **already inside a sandbox world** is re-rolled to a new location in the world they
-picked, keeping the kit they are wearing and without being claimed again. Their old spot becomes the
-`/back` point.
+## Check that it works
 
-### The safe-location search
+Run `/rtp`, pick a world and a kit. You land inside the border, the sandbox sidebar appears and the kit goes on. Then try two players with `/rtpqueue` in the same world: within a second both are teleported, facing each other.
 
-A random `x, z` inside the border is picked, the chunk is loaded asynchronously, and the column is
-checked: solid ground that is not lava or water, with two air blocks above it. Up to
-`rtp.search-attempts` tries — fifty by default — and the search stays `rtp.border-margin` blocks clear
-of the border. Running out of attempts refuses with `queue.no-safe-location`.
+## Going further
 
-## `/rtpqueue` — wait for an opponent
+### How the queue matches players
 
-`/rtpqueue` opens the same world list, but joining puts the player in that world's queue instead of
-teleporting them. Joining is broadcast to every player online.
+The matcher runs once a second. For each ready world with two or more players waiting, it takes the **two who have waited longest** and sends them in together: one safe spot is found the ordinary way, a second at exactly `rtp.queue-pair-distance` blocks from it (10 by default), and both players are turned to face each other. One pair per world is handled at a time, so a queue of six empties in three steps.
 
-The matcher runs once a second. For each world that is `READY` and has two or more players waiting, it
-takes the **two who have waited longest** and sends them in together:
+A pair that cannot get two safe spots is dropped from the queue and told so; they have to rejoin.
 
-- one safe location is found the ordinary way;
-- a second is found at exactly `rtp.queue-pair-distance` blocks from the first — ten by default;
-- both players are turned to face each other, and then both are teleported.
+### Re-rolling from inside a world
 
-If anything fails at that point, both players are put back as they were.
+A player already inside a sandbox world who runs `/rtp` is moved to a new spot in the world they pick. They keep the kit they wear and are not claimed again. Their old spot becomes the `/back` point.
 
-Only one pair per world is processed at a time, so a queue of six drains in three ticks of the matcher
-rather than all at once.
+### Coming back with /back
 
-## `/rtpqueuefast` — let it pick the world
+`/back` returns a player to their last saved sandbox spot. That spot is saved when they die, re-roll, teleport to somebody with `/tpa`, or are sent by a pad from inside a sandbox world. It works once, it is cleared on disconnect, and from the lobby it asks for a kit first. A player in combat is refused.
 
-`/rtpqueuefast` joins a queue without asking which world. It picks, in order:
+### Leaving
 
-1. the world holding the player who has been waiting longest anywhere — so somebody is matched
-   immediately;
-2. failing that, a random loaded `READY` world.
-
-From inside a sandbox world it queues with the kit the player is wearing.
-
-`/leavertpqueue` leaves whichever queue they are in.
-
-## The two action bars
-
-Both are `messages.yml` → `queue`, and both are ordinary effect blocks, so a sound or a particle can be
-added to either.
-
-| Key | Who sees it |
-|---|---|
-| `in-queue-actionbar` | The queued player, redrawn every second with `%world%` and `%time%` — how long they have waited |
-| `rotative-queue-actionbar` | Everybody **not** queued who is in a sandbox world or in the lobby world, advertising one waiting player at a time |
-
-`config.yml` → `rtp.rotative-queue-actionbar-time` is how many seconds each waiting player is
-advertised for before the bar moves to the next one. It is a number of seconds and it takes decimals.
-
-## Arriving
-
-Two ticks after the teleport lands, and only if the player really is in a sandbox world:
-
-- game mode set to survival, invulnerability off, flight off;
-- every potion effect removed;
-- health, food and saturation set to full, fall distance cleared;
-- the playtime session starts, the sidebar appears, the kit is applied.
-
-## Leaving
-
-`/leavesandbox` covers five cases:
+`/leavesandbox` covers these cases:
 
 | State | What happens |
 |---|---|
 | In the kit creator | Refused |
-| Combat-tagged | Refused with `general.in-combat` |
+| Combat-tagged | Refused |
 | In a queue | Leaves the queue |
-| In a sandbox world | Teleported to the lobby, inventory restored, sidebar hidden, session ended, claim released |
-| Holding a claim but neither of the above | The claim is released and a warning is logged — this is a leak being cleaned up |
+| In a sandbox world | Back to the lobby, inventory restored, sidebar hidden |
 
-Death and a disconnect do the same work as the third row. Death additionally saves the `/back` point,
-counts the kill and the death, and refreshes the sidebar of everybody left in the world.
+Death and disconnect do the same as the last row. Death is cancelled before vanilla sees it: nothing drops, no experience is lost, there is no respawn screen. Death also saves the `/back` point, counts the kill and the death, and refreshes the sidebar of everyone left in the world.
 
-<Callout type="note" title="Death is cancelled outright">
-Inside a sandbox world the death event is cancelled before vanilla sees it. Nothing drops, no
-experience is lost, there is no respawn screen and no death message unless the world's
-`show_death_messages` toggle is on. The player is simply moved to the lobby two ticks later.
-</Callout>
+### Tune it
 
-## The claim
+Edit `config.yml` under `rtp` (or use `/sandboxadmin` → **Settings**), then **Reload**. See [Configuration](/docs/exyliasandbox/configuration).
 
-Every player inside a sandbox or in a queue holds an ExyliaLib session claim named `Sandbox`. That is
-what stops ExyliaFFA, ExyliaEvents, ExyliaPracticeCore and the rest of the suite from pulling them into
-something else at the same time, and it is what `isInSandbox` answers from — not the world they happen
-to be standing in. For the length of an unfinished teleport the two disagree, and the claim wins.
+| Key | Default | What it does |
+|---|---|---|
+| `rtp.queue-pair-distance` | `10` | Blocks between the two players of a queue pair |
+| `rtp.search-attempts` | `50` | Random spots tried before giving up |
+| `rtp.border-margin` | `20` | Blocks kept clear of the world border |
+| `rtp.rotative-queue-actionbar-time` | `2.0` | Seconds each waiting player is advertised for |
+
+<Details title="Technical details">
+- Safe-spot search: a random `x, z` inside the border (minus the margin) is picked, the chunk is loaded asynchronously, and the column must be solid ground that is not lava or water with air above. Out of attempts: the player is told there is no safe location, the claim is released and their inventory restored. A queue pair gets double the attempts for the first spot and triple for the second.
+- Arrival: two ticks after the teleport lands, and only if the player is really in a sandbox world, they are set to survival with no invulnerability or flight, all potion effects are removed, health, food and saturation are full, fall distance is cleared, the sidebar appears and the kit is applied. A teleport that fails releases the claim and restores the inventory.
+- Action bars (`messages.yml` → `queue`): `in-queue-actionbar` is shown to the queued player each second (`%world%`, `%time%` waited); `rotative-queue-actionbar` is shown to everybody not queued who is in a sandbox world or the lobby, one waiting player at a time. Both are effect blocks, so a sound or particle can be added.
+- The claim: every player inside a sandbox or queue holds an ExyliaLib session claim named `Sandbox`. It stops ExyliaFFA, ExyliaEvents and ExyliaPracticeCore pulling them into something else, and it is what `isInSandbox` answers from, not the world they stand in.
+- A claim with nothing behind it (not in a world, queue or creator) is released by `/leavesandbox` and a warning is logged.
+- Events: `SandboxJoinEvent` (cancellable, for both `/rtp` and queue joins), `SandboxArriveEvent`, `SandboxLeaveEvent`. See [API](/docs/exyliasandbox/api).
+</Details>
+
+<Cards>
+  <Card title="Teleport requests" href="/docs/exyliasandbox/teleports">Let players visit each other with /tpa.</Card>
+  <Card title="Teleport pads" href="/docs/exyliasandbox/tp-regions">Enter without typing a command.</Card>
+</Cards>
