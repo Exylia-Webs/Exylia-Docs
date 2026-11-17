@@ -1,11 +1,16 @@
 ---
 title: "Database"
-description: "The eighteen tables, what each one holds, and how the two stat tiers relate."
+description: "The eighteen tables, what each one holds, how the two stat tiers relate, and how to export, import and wipe data."
+updated: "1.4.0"
+questions:
+  - "Which database does ExyliaPracticeCore use?"
+  - "How do I back up or move the ExyliaPracticeCore data to MySQL?"
+  - "How do I reset one player's stats?"
+  - "How do I wipe the practice data?"
+  - "How do I migrate from ExyliaCommons?"
 ---
 
-The plugin stores everything through ExyliaLib's database module, so which engine backs it — MySQL,
-SQLite, H2, MongoDB — is configured once in ExyliaLib and not here. Tables are created and migrated
-automatically.
+The plugin stores everything through ExyliaLib's database module, so which engine backs it (MySQL, SQLite, H2, MongoDB) is configured once in ExyliaLib and not here: see [database](/docs/exylialib/database). Tables are created and migrated automatically.
 
 ## The eighteen tables
 
@@ -20,7 +25,7 @@ automatically.
 | `practice_player_stats` | The pre-season table. Read once by the migration, never written again. | `PROGRESS` | yes |
 | `practice_match_history` | One player's side of one finished match, with its inventories for `replay.inventory-retention-days` | `HISTORY` | yes |
 | `practice_game_log` | One row per match played: kit, arena, mode, player count, whether it was cancelled | `HISTORY` | — |
-| `practice_seasons` | One season: number, name, start, end, whether it is active | `WORLD` | — |
+| `practice_seasons` | One season: number, name, start, end, whether it is active | `HISTORY` | — |
 | `practice_settings` | A single row: lobby spawn, kit editor spawn, global boost, current season | `SETUP` | — |
 | `practice_player_settings` | One player's `/settings` | `ACCOUNT` | yes |
 | `practice_elo_boosts` | One player's active LP boost | `PROGRESS` | yes |
@@ -70,12 +75,12 @@ an index. Editing `wins` by hand through `/epc stats set` recalculates them.
 
 | Table | Indexed on |
 |---|---|
-| `practice_player_season_stats` | `season`, `playerUuid`, `playerName` |
-| `practice_player_lifetime_stats` | `playerUuid`, `playerName` |
-| `practice_match_history` | `matchId`, `season` |
-| `practice_game_log` | `kitId`, `arenaId`, `cancelled` |
+| `practice_player_season_stats` | `season`, `playerUuid`, `playerName`, plus `seasonKit` with each leaderboard column (elo, kills, deaths, kdr, wins, losses, winRate, bestStreak, currentStreak, damageDealt, timePlayed) |
+| `practice_player_lifetime_stats` | `playerUuid`, `playerName`, `kitId` |
+| `practice_match_history` | `matchId`, `season`, `playedAt`, plus `playerUuid` + `playedAt` and `inventoryDay` + `playedAt` |
+| `practice_game_log` | `kitId`, `arenaId`, `endedAt`, `cancelled` |
 | `practice_player_kits` | `playerUuid`, `kitId` |
-| `practice_web_outbox` | `kind`, `nextAttemptAt` |
+| `practice_web_outbox` | `kind`, `createdAt`, `nextAttemptAt` |
 | `practice_seasons` | `active` |
 
 Leaderboards order and limit **inside the database** against the season index; match history does the
@@ -91,7 +96,7 @@ startup, is resumable if the server dies part-way through, and only ever reads t
 it can be re-run safely.
 
 **Manual, on a dump.** `/epc migrate <file> [--skip-stats]` converts an exported ExyliaCommons v2
-database dump into this plugin's schema. `--skip-stats` converts arenas, kits and settings without
+database dump into this plugin's schema. Put the dump in `plugins/ExyliaPracticeCore/database/exports/`: the command writes a converted `migrated_<file>.json` next to it, imports it, then reloads arenas and kits and re-saves every arena's schematic. `--skip-stats` converts arenas, kits and settings without
 touching player statistics.
 
 ## Export and import
@@ -109,3 +114,8 @@ already holding in memory — arenas, kits, categories, loaded player stats. Tak
 the import with nobody online, and restart the server before letting anybody back in. Otherwise the
 old in-memory copies are written back over the imported rows.
 </Callout>
+
+<Cards>
+  <Card title="Configuration" href="/docs/exyliapractice/configuration">Where the database settings live.</Card>
+  <Card title="ExyliaLib database" href="/docs/exylialib/database">Pick SQLite, MySQL or PostgreSQL for every Exylia plugin.</Card>
+</Cards>
