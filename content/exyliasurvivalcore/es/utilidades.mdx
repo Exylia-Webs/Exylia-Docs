@@ -1,89 +1,134 @@
 ---
-title: "Configura comandos de utilidad y ajustes de jugador"
-description: "Los comandos de utilidad, /repair y sus grupos, mensajes de entrada y salida, comandos programados y la pantalla de preferencias."
+title: "Configura comandos de utilidad, reparación y ajustes de jugador"
+description: "Activa /heal, /feed, /fly y compañía, pon precio a /repair por rango, escribe mensajes de entrada y salida, ejecuta comandos con un temporizador y deja que los jugadores silencien avisos en /settings."
 questions:
-  - "¿Cómo fijo los precios de reparación?"
+  - "¿Cómo doy /fly, /heal o /feed a los jugadores?"
+  - "¿Cómo fijo los precios y esperas de reparación por rango?"
   - "¿Cómo cambio los mensajes de entrada y salida?"
   - "¿Cómo programo un comando?"
   - "¿Qué puede apagar un jugador en /settings?"
+  - "¿Por qué no salen mis mensajes de entrada?"
 updated: "1.2.2"
 ---
 
+Tendrás los comandos cotidianos de jugador funcionando con permisos, un `/repair` que cuesta lo que tú
+decidas, mensajes de entrada y salida a tu gusto, comandos que se ejecutan con un temporizador y una pantalla
+`/settings` donde cada jugador silencia los avisos que no quiere. Cada parte es un módulo de `config.yml`
+([Enciende y apaga módulos](/docs/exyliasurvivalcore/modulos)): `player-utils`, `repair`, `join-leave`,
+`scheduled-commands` y `player-settings`.
+
 ## Utilidades de jugador
 
-Nueve comandos, un nodo cada uno, todos bajo `exyliasurvivalcore.playerutils.`:
+Nueve comandos, un permiso cada uno, todos bajo `exyliasurvivalcore.playerutils.`: `/heal`, `/feed`, `/fly`,
+`/hat`, `/craft` (alias `/workbench`, `/wb`), `/anvil`, `/ec` (alias `/enderchest`), `/nightvision`
+(alias `/nv`) y `/ping`. Da el nodo a los rangos que deban tener cada uno; la tabla del final de la página
+los lista todos.
 
-| Comando | Alias | Nodo |
-|---|---|---|
-| `/heal` | — | `.heal` |
-| `/feed` | — | `.feed` |
-| `/fly` | — | `.fly` |
-| `/hat` | — | `.hat` |
-| `/craft` | `/workbench`, `/wb` | `.craft` |
-| `/anvil` | — | `.anvil` |
-| `/ec` | `/enderchest` | `.ec` |
-| `/nightvision` | `/nv` | `.nightvision` |
-| `/ping` | — | `.ping` |
-
-| Ajuste | Por defecto |
-|---|---|
-| `night-vision-amplifier` | 0 |
-| `heal-cooldown-seconds` | 0 |
-| `feed-cooldown-seconds` | 0 |
-
-Los cooldowns de `/heal` y `/feed` también van por rango: concede
+Las esperas de `/heal` y `/feed` también pueden ser por rango: da
 `exyliasurvivalcore.playerutils.heal.cooldown.<segundos>` o `.feed.cooldown.<segundos>` y gana el número
-**más bajo** que tenga el jugador sobre el ajuste de arriba. Los cooldowns sobreviven a un relog y a un
-cambio de servidor.
+**más bajo** que tenga el jugador frente al ajuste. Las esperas sobreviven a una reconexión y a un cambio de
+servidor.
 
-`/fly` se quita en combate y dentro de una protección bajo asedio, y se devuelve después. `/heal` se
-rechaza en combate. `/hat` respeta la lista de objetos bloqueados.
+`/fly` se quita en combate y dentro de una protección bajo asedio, y se devuelve después. `/heal` se rechaza
+en combate. `/hat` respeta la lista de objetos bloqueados. El vuelo y la visión nocturna se recuerdan entre
+sesiones.
 
-El vuelo y la visión nocturna se recuerdan entre sesiones.
+<Details title="Ajustes de utilidades (modules/player-utils/config.yml, bajo settings:)">
+
+| Ajuste | Por defecto | Qué hace |
+|---|---|---|
+| `night-vision-amplifier` | `0` | Fuerza del efecto de `/nightvision` |
+| `heal-cooldown-seconds` | `0` | Espera de `/heal` |
+| `feed-cooldown-seconds` | `0` | Espera de `/feed` |
+</Details>
 
 ## Reparar
 
-`/repair hand` repara lo que el jugador tenga en la mano; `/repair all` repara todo lo que lleve. `/fix`
-y `/reparar` son alias.
+`/repair hand` repara lo que el jugador sostiene; `/repair all` repara todo lo que lleva. `/fix` es un alias.
+Por defecto reparar la mano cuesta 75 con 120 segundos de espera, y repararlo todo cuesta 200 con 120
+segundos de espera, en la moneda por defecto.
+
+### Pon precio a las reparaciones por rango
+
+<Steps>
+  <Step title="Abre el archivo de grupos">
+    Edita `modules/repair/groups.yml`. Viene **vacío**, con un ejemplo `vip` comentado.
+  </Step>
+  <Step title="Añade un grupo">
+    ```yaml
+    groups:
+      vip:
+        hand: { price: 2500.0, cooldown-seconds: 60 }
+        all:  { price: 5000.0, cooldown-seconds: 60 }
+    ```
+  </Step>
+  <Step title="Da el permiso">
+    Un jugador de ese grupo necesita `exyliasurvivalcore.repair.group.vip`.
+  </Step>
+  <Step title="Recarga">
+    Ejecuta `/survivalcoreadmin reload`.
+  </Step>
+</Steps>
+
+<Callout type="note" title="Gana el grupo más barato">
+Un jugador con varios grupos recibe, para cada tipo de reparación, el **más barato**; la espera más corta
+desempata. El precio de un grupo sustituye al valor por defecto, no compite con él, así que un grupo con
+precio superior al de por defecto hace que sus jugadores paguen más que los demás.
+</Callout>
+
+`/repair hand <jugador>` y `/repair all <jugador>` reparan a otra persona, con
+`exyliasurvivalcore.repair.hand.others` y `.all.others`; quien ejecuta el comando paga y espera.
+`/repair lock` y `/repair unlock` protegen un objeto para que no se repare.
+`exyliasurvivalcore.repair.bypass.price` y `.bypass.cooldown` se saltan los dos costes. `/repair` a secas
+muestra el uso; no tiene forma raíz.
+
+<Details title="Ajustes de reparación (modules/repair/config.yml, bajo settings:)">
 
 | Ajuste | Por defecto |
 |---|---|
-| `default-hand-price` | 75.0 |
-| `default-hand-cooldown` | 120 |
-| `default-all-price` | 200.0 |
-| `default-all-cooldown` | 120 |
-| `currency` | vacío (la moneda por defecto) |
+| `default-hand-price` | `75.0` |
+| `default-hand-cooldown` | `120` (segundos) |
+| `default-all-price` | `200.0` |
+| `default-all-cooldown` | `120` (segundos) |
+| `currency` | vacío, que significa la moneda por defecto |
 
-`currency` es cualquier id del `economy.yml` de ExyliaLib, objetos y experiencia incluidos.
-
-`modules/repair/groups.yml` los sobrescribe por grupo de permisos. Viene **vacío**, con un ejemplo `vip`
-comentado:
-
-```yaml
-groups:
-  vip:
-    hand: { price: 2500.0, cooldown-seconds: 60 }
-    all:  { price: 5000.0, cooldown-seconds: 60 }
-```
-
-Un jugador de ese grupo necesita `exyliasurvivalcore.repair.group.vip`.
-
-<Callout type="note" title="Gana el grupo más barato">
-Un jugador con varios grupos recibe, para cada tipo de reparación, el **más barato**; el cooldown más corto
-desempata. El precio de un grupo sustituye al del defecto en vez de competir con él, así que un grupo con
-precio superior al de los defectos hace pagar más a sus jugadores.
-</Callout>
-
-`/repair hand <jugador>` y `/repair all <jugador>` reparan a otro, con `.repair.hand.others` y
-`.repair.all.others`. `/repair lock` y `/repair unlock` protegen un objeto de ser reparado.
-`exyliasurvivalcore.repair.bypass.price` y `.bypass.cooldown` se saltan los dos costes.
-
-Un `/repair` a secas imprime la línea de uso del framework de comandos: no hay forma raíz. Quien ejecuta el comando paga y espera, también al reparar a otro.
+`currency` es cualquier id del `economy.yml` de ExyliaLib, incluidos objetos y experiencia. Mira
+[Economía de ExyliaLib](/docs/exylialib/economia).
+</Details>
 
 ## Entrada y salida
 
-`modules/join-leave/config.yml` lleva los mensajes por defecto y el de primer login; `groups.yml` lleva
-las versiones por rango.
+Las líneas de chat, títulos y action bars viven en `modules/join-leave/messages.yml`: `default-join`,
+`default-quit` y `first-join`. Los sonidos, comandos y el interruptor de cada uno están en
+`modules/join-leave/config.yml`. `%player%` y `%count%` (el contador de entradas) funcionan en el texto.
+
+<Steps>
+  <Step title="Edita las líneas por defecto">
+    Cambia `default-join.chat`, `default-quit.chat` y `first-join.chat` en `messages.yml`. Las líneas se
+    colorean con los [colores de ExyliaLib](/docs/exylialib/colores).
+  </Step>
+  <Step title="Añade una versión por rango">
+    En `modules/join-leave/groups.yml`, dale a un grupo un `permission` y una `priority`, además de su
+    propio texto `join` y `quit`. El grupo `vip` que viene de serie solo trae el texto: añade `permission:`
+    (por ejemplo `survivalcore.joinleave.vip`) y `priority: 10`, o nunca coincide.
+  </Step>
+  <Step title="Recarga">
+    Ejecuta `/survivalcoreadmin reload`.
+  </Step>
+</Steps>
+
+Gana el grupo de **mayor prioridad** cuyo permiso tenga el jugador.
+
+<Callout type="warning" title="ExyliaLobby toma el relevo">
+Con ExyliaLobby instalado y activo, este módulo se queda apagado y ExyliaLobby gestiona los mensajes de
+entrada y salida, junto a las plataformas de salto y los portales. Pon `defer-to-exylia-lobby: false` en el
+`config.yml` del plugin para mantener las versiones de este plugin, y reinicia. El spawn no se ve afectado.
+</Callout>
+
+Los mensajes de entrada y salida son uno de los avisos que un jugador puede apagar en
+[`/settings`](#preferencias-del-jugador).
+
+<Details title="Ajustes de entrada y salida (modules/join-leave/config.yml)">
 
 ```yaml
 settings:
@@ -91,44 +136,27 @@ settings:
   hide-vanilla-messages: true
 default-join:
   enabled: true
-  chat: ""
+  sound: "BLOCK_NOTE_BLOCK_PLING|0.6|1.4"
+  commands: []
+default-quit:
+  enabled: true
   sound: ""
   commands: []
-  actionbar: ""
-  title: ""
-default-quit: { … }
-first-join:   { … }
+first-join:
+  enabled: true
+  sound: "BLOCK_NOTE_BLOCK_CHIME|0.7|1.2"
+  commands: []
 ```
 
-`%player%` y `%count%` — el contador de entradas — están disponibles. Los comandos aceptan un prefijo
-`console:` o `player:`.
-
-```yaml title="modules/join-leave/groups.yml"
-groups:
-  vip:
-    permission: survivalcore.joinleave.vip
-    priority: 10
-    join: { enabled: true, chat: "", sound: "", actionbar: "", title: "", … }
-    quit: { … }
-```
-
-Gana el grupo de **mayor prioridad** cuyo permiso tenga el jugador. Ojo: el ejemplo que viene nombra
-`survivalcore.joinleave.vip` — con el prefijo corto — así que dalo exactamente así o cambia la cadena.
-
-<Callout type="note" title="ExyliaLobby toma el relevo">
-Con ExyliaLobby instalado y activado, este módulo se queda apagado y ExyliaLobby gestiona los mensajes de
-entrada y salida, junto a los jumpads y los portales. Pon `defer-to-exylia-lobby: false` en el `config.yml`
-del plugin para conservar las versiones de este plugin y reinicia. El módulo spawn no se ve afectado.
-</Callout>
-
-Los mensajes de entrada y salida son uno de los anuncios que un jugador puede apagar en
-[`/settings`](#preferencias-del-jugador).
+Los comandos llevan el prefijo `console:` o `player:`. `counter-enabled` muestra el número de entrada del
+jugador la primera vez, y `hide-vanilla-messages` sustituye las líneas vanilla por estas.
+</Details>
 
 ## Comandos programados
 
-Comandos de consola y anuncios en un temporizador.
+Comandos de consola y avisos con un temporizador, desde `modules/scheduled-commands/config.yml`.
 
-```yaml title="modules/scheduled-commands/config.yml"
+```yaml
 sections:
   resource_drop:
     enabled: true
@@ -136,7 +164,7 @@ sections:
     network: false
     per-player: false
     commands: []
-    broadcast: "{highlight}[Event] {letters}A resource drop is happening now!"
+    broadcast: "{highlight}[Evento] {letters}¡Está cayendo un alijo de recursos!"
   daily_bonus:
     enabled: false
     interval: 86400
@@ -144,55 +172,69 @@ sections:
     per-player: true
     commands:
       - "eco give %player_name% 50"
-    broadcast: "{success}Pay day! {letters}Everyone online gets {highlight}50{letters}."
+    broadcast: "{success}¡Día de paga! {letters}Todos los conectados reciben {highlight}50{letters}."
 ```
+
+<Details title="Claves de sección">
 
 | Clave | Qué hace |
 |---|---|
-| `interval` | Segundos entre ejecuciones. La última se recuerda entre reinicios, y una sección nueva se ejecuta por primera vez tras un intervalo completo |
-| `broadcast` | Se envía a quien tenga activados los anuncios de eventos del servidor; déjalo vacío para no anunciar nada |
-| `network` | `true` ejecuta la sección una vez para toda la red, y su anuncio llega a los jugadores de todos los servidores. `false` hace que cada servidor la ejecute por su cuenta |
-| `per-player` | `true` ejecuta los comandos una vez por cada jugador conectado, rellenando `%player_name%` (o `%player%`). Se activa solo cuando una línea usa `%player_name%`. Con `network: true` son los jugadores del servidor que la ejecutó |
+| `interval` | Segundos entre ejecuciones. La última ejecución se recuerda entre reinicios, y una sección nueva se ejecuta por primera vez tras un intervalo completo |
+| `broadcast` | Se envía a quien tenga activados los avisos de eventos del servidor; déjalo vacío para no anunciar nada |
+| `network` | `true` ejecuta la sección una vez para toda la red, y su aviso llega a los jugadores de todos los servidores. `false` hace que cada servidor la ejecute por su cuenta |
+| `per-player` | `true` ejecuta los comandos una vez por cada jugador conectado, rellenando `%player_name%` (o `%player%`). Se activa solo cuando una línea usa `%player_name%`. Con `network: true` son todos los jugadores del servidor que la ejecutó |
 
-Un comando que falle no detiene el resto de la sección. El archivo se escribe una vez, cuando falta: nada de
-lo que añadas se poda, nada de lo que borres vuelve. Los ejemplos sin tocar de versiones antiguas se
-actualizan.
+Un comando que falle no detiene el resto de la sección. El archivo se escribe una sola vez, cuando falta:
+nada de lo que añadas se borra, nada de lo que quites vuelve. Los ejemplos sin tocar de versiones antiguas
+se actualizan.
+</Details>
 
 ## Preferencias del jugador
 
-`/settings` — alias `/preferences` y `/options` — es una pantalla que tiene cada jugador, construida sobre el
-módulo de ajustes de ExyliaLib. Trece interruptores deciden qué le llega.
+`/settings` (alias `/preferences`, `/options`, permiso `exyliasurvivalcore.settings`) es una pantalla que
+cada jugador gestiona para sí, construida sobre el módulo de ajustes de ExyliaLib. Catorce interruptores
+deciden qué le llega. Todos vienen activados y el jugador apaga lo que no quiere.
 
-| Ajuste | Id | Qué apaga |
-|---|---|---|
-| Mensajes de muerte | `death-messages` | El anuncio de muerte del plugin |
-| Mensajes de entrada y salida | `join-leave-messages` | Los dos sentidos |
-| Anuncios de rankup | `rankup-announcements` | Que otro suba de rango |
-| Anuncios de compra | `purchase-announcements` | Los anuncios de reclaim |
-| Anuncios de misiones | `mission-announcements` | Que alguien termine una [misión](/docs/exyliasurvivalcore/misiones-y-temporadas) semanal |
-| Anuncios de potenciadores | `booster-announcements` | Que empiece o acabe un potenciador global |
-| Anuncios de proyectos | `project-announcements` | Que se complete un proyecto comunitario y empiece el siguiente |
-| Anuncios de temporadas | `season-announcements` | Que cierre una [temporada](/docs/exyliasurvivalcore/misiones-y-temporadas) y quién la ganó |
-| Anuncios de eventos del servidor | `scheduled-announcements` | Lo que anuncia una sección de [comandos programados](#comandos-programados) |
-| Mensajes de protecciones | `protection-messages` | Los títulos y saludos al entrar y salir de protecciones |
-| Anuncios de asaltos | `raid-announcements` | Que una protección sea asaltada, y que se abran y cierren las ventanas de asedio |
-| Peticiones de TPA | `tpa-requests` | Si recibe peticiones |
-| Auto-aceptar TPA | `tpa-auto-accept` | Aceptar sin preguntar |
-| Confirmar TPA | `tpa-confirm` | La confirmación antes de enviar una |
-
-<Callout type="note" title="Interruptores que se han ido">
-Los interruptores de bajas, recompensas, cajas, duelos, mercado, subastas, votos, intercambio y autoventa se
-fueron con sus funciones. Esas filas ya no se ofrecen aquí.
-</Callout>
+| Ajuste | Qué apaga |
+|---|---|
+| Mensajes de muerte | El aviso de muerte del plugin |
+| Entradas y salidas | Los mensajes de entrada y salida, en ambos sentidos |
+| Ascensos | Que otra persona suba de rango |
+| Compras | Los avisos de reclamación |
+| Misiones | Que alguien complete una [misión](/docs/exyliasurvivalcore/misiones-y-temporadas) semanal |
+| Potenciadores | Que empiece o termine un potenciador global |
+| Proyectos | Que se complete un proyecto comunitario y empiece el siguiente |
+| Temporadas | Que se cierre una [temporada](/docs/exyliasurvivalcore/misiones-y-temporadas) y quién la ganó |
+| Eventos del servidor | Lo que anuncia una sección de [comandos programados](#comandos-programados) |
+| Mensajes de protección | Títulos y saludos al entrar y salir de protecciones |
+| Avisos de asaltos | Una protección asaltada, y las ventanas de asedio al abrirse y cerrarse |
+| Solicitudes de tp | Si reciben solicitudes siquiera |
+| Aceptar automático | Aceptar solicitudes de teletransporte sin preguntar |
+| Confirmar antes de enviar | La confirmación antes de enviar una solicitud |
 
 Los interruptores cuyas funciones viven en otro plugin (las protecciones, por ejemplo) siguen apareciendo
-aquí mientras su módulo esté cargado. Un interruptor encendido brilla. No hay botón de cerrar.
+cuando ese módulo está cargado. Un ajuste cuyo módulo está apagado figura como no disponible y no hace nada.
+Las tres filas de teletransporte son del módulo `tpa`, así que no se guardan dos veces.
 
-<Callout type="note" title="Todo viene encendido, y solo se guardan las excepciones">
-La fila guarda los ajustes que el jugador ha **apagado**, así que una preferencia añadida en una
-versión posterior está encendida para todos sin ninguna migración que ejecutar. Las tres filas de TPA
-son del propio módulo tpa: no se guardan dos veces.
+<Callout type="note" title="Interruptores que se mudaron">
+Los interruptores de muertes, recompensas, cajas, duelos, mercado, subastas, votos, intercambios y venta
+automática se fueron con sus funciones.
 </Callout>
 
-Un ajuste cuyo módulo está apagado se lee como no disponible y no hace nada. El nodo del comando es
-`exyliasurvivalcore.settings`.
+### Comprueba que funciona
+
+Ejecuta `/settings`, apaga Entradas y salidas y haz que otro jugador entre: no deberías ver su línea de
+entrada, y él seguirá viendo la tuya. Ejecuta `/heal` tras dar `exyliasurvivalcore.playerutils.heal`.
+
+## Comandos y permisos
+
+<Commands group="utility" />
+
+<Permissions group="utility" />
+
+<Placeholders group="player-settings" />
+
+<Cards>
+  <Card title="Siguiente: Optimización" href="/docs/exyliasurvivalcore/optimizacion">Reduce el lag de mobs, objetos y chunks.</Card>
+  <Card title="Solicitudes de teletransporte" href="/docs/exyliasurvivalcore/movimiento">Los tres interruptores de tp son del módulo tpa.</Card>
+</Cards>
