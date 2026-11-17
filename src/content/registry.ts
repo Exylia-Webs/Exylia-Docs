@@ -1520,7 +1520,7 @@ const CRATES_NAV: NavGroup[] = [
     ],
   },
   {
-    label: { en: "Crates", es: "Cajas" },
+    label: { en: "Guides", es: "Guías" },
     pages: [
       page("crates", "crates", "cajas"),
       page("keys", "keys", "llaves"),
@@ -1537,6 +1537,12 @@ const CRATES_NAV: NavGroup[] = [
       page("placeholders", "placeholders", "placeholders"),
       page("configuration", "configuration", "configuracion"),
       page("api", "api", "api"),
+    ],
+  },
+  {
+    label: { en: "Help", es: "Ayuda" },
+    pages: [
+      page("troubleshooting", "troubleshooting", "problemas-comunes"),
       page("faq", "faq", "faq"),
     ],
   },
