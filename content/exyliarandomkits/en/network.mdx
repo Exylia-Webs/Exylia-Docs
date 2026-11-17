@@ -5,56 +5,58 @@ questions:
   - "What is shared between the servers of a group?"
   - "What happens when a server is full?"
   - "How do I add a Random kit option to ExyliaDuels?"
+badge: "guide"
 updated: "1.0.0"
-description: "Several servers sharing arenas, profiles, leaderboards, events and seasons, players sent to another server when one fills up, and the Random kit in ExyliaDuels."
+description: "Put several servers in one network group to share arenas, profiles, leaderboards, events and seasons, send players on when a server fills up, and offer the Random kit in ExyliaDuels."
 ---
 
-## A network group
+RandomKits has one arena per server. A **network group** lets several of those servers behave as one game: the same profiles, leaderboards, events and seasons everywhere, and new players sent to a server with room. At the end of this page your servers share a group and balance their players.
 
-Servers of one network share arenas, profiles, leaderboards, events and seasons when they write the
-same `network-group`. One event runs at a time on the whole group, one server closes each season, and every
-reward is paid once wherever the player is.
+## Before you start
+
+- A MySQL, MariaDB, PostgreSQL or MongoDB database every server can reach, and a Redis. Setting them up is covered in [ExyliaLib's database page](/docs/exylialib/database).
+- For balancing: [ExyliaProxyUtils](/docs/exyliaproxyutils/introduction) on the proxy.
+- You need console or file access on every server. `/rkadmin reload` does not change the group: restart each server after step 1.
+
+## Steps
 
 <Steps>
-  <Step title="One group">
-    The same `network-group` in `config.yml` on every server: lower case letters, digits and underscores, at
-    most 24. Blank, the default, keeps the plain tables.
+  <Step title="Pick one group name">
+    In `config.yml` on **every** server, set the same `network-group`: lower case letters, digits and underscores, at most 24. Blank, the default, keeps the plain tables and a single server.
   </Step>
-  <Step title="One database">
-    `database.yml` on every server points at **one** MySQL, MariaDB, PostgreSQL or MongoDB database. The
-    group prefixes the tables (`<group>_exyliarandomkits_arenas`), so several groups can share one database.
+  <Step title="Point every server at one database">
+    In `database.yml`, use the same MySQL, MariaDB, PostgreSQL or MongoDB database on all servers. The group prefixes the tables (`<group>_exyliarandomkits_arenas`), so several groups can share one database.
   </Step>
-  <Step title="Redis">
-    Redis enabled in that same `database.yml` on every server, with the same Redis and `key-prefix`, and a
-    **different `server-id` on each server**, so an edit on one server reaches the others at once. See
-    [ExyliaLib's database](/docs/exylialib/database).
+  <Step title="Turn on Redis">
+    In the same `database.yml`, enable Redis with the same host and `key-prefix` everywhere, and a **different `server-id` on each server**. An edit made on one server then reaches the others at once.
+  </Step>
+  <Step title="Match the proxy names">
+    In ExyliaProxyUtils, name each server on the proxy exactly like its `server-id`. Balancing sends players by that name.
+  </Step>
+  <Step title="Choose how players are spread">
+    In `config.yml`, set `balancing.mode` and `balancing.capacity` (see the table below), then restart.
   </Step>
 </Steps>
 
-Arenas are built on each server that runs them: their schematics are local. `items.yml` and `rarities.yml` are files on each server, so keep them the same where lives should roll alike. A player's arena stay never
-travels either: what they carried is given back on the server they left it on.
-
 <Callout type="warning" title="Rows written before the group">
-Setting a group on a server that already has arenas and profiles in the plain tables starts the group from
-empty tables. The old rows stay where they are.
+Setting a group on a server that already has arenas and profiles in the plain tables starts the group from empty tables. The old rows stay where they are.
 </Callout>
+
+## Check that it works
+
+- Edit something on server A, for example a [kit](/docs/exyliarandomkits/kits) in the web editor, and see it on server B without a restart.
+- Ask for the group on both servers with `%exyliarandomkits_network_players%` (see [Placeholders](/docs/exyliarandomkits/placeholders#the-network-group)): both read the same number.
+- Fill server A to its `capacity` and join again: the player lands on another server of the group and is told which.
+
+## What is shared and what is not
+
+Shared across the group: the arena's settings, profiles, leaderboards, the running [event](/docs/exyliarandomkits/events-and-seasons) and the season. One event runs at a time on the whole group, one server closes each season, and every reward is paid once wherever the player is.
+
+Local to each server: the arena's schematic (it is built on the server that runs it), and the files `items.yml` and `rarities.yml`. Keep the last two the same on every server where lives should roll alike. A player's stay in the arena never travels either: what they carried is given back on the server they left it on.
 
 ## Balancing players
 
-RandomKits servers are dedicated and automatic. Arenas and player data are shared across the network group,
-so a second RandomKits server only needs the same `network-group`. When a server already holds `capacity`
-players in its arena, a player who joins it is sent to the least full or best server of the group instead
-(overflow). Each server publishes its players on a heartbeat.
-
-<Steps>
-  <Step title="ExyliaProxyUtils">
-    [ExyliaProxyUtils](/docs/exyliaproxyutils/introduction) on the proxy, with the proxy's server names
-    **equal to the backends' `server-id`s**.
-  </Step>
-  <Step title="balancing in config.yml">
-    `balancing.enabled` (on by default), a `mode` and a `capacity`.
-  </Step>
-</Steps>
+When a server already holds `capacity` players in its arena, a player who **joins** it is sent to the best server of the group instead. Each server publishes its players on a heartbeat; that is what `%exyliarandomkits_instances%` and the other group placeholders read.
 
 | Key | Default | What it does |
 |---|---|---|
@@ -62,24 +64,30 @@ players in its arena, a player who joins it is sent to the least full or best se
 | `balancing.mode` | `FILL_FIRST` | `FILL_FIRST` puts a player on the fullest server still below its capacity, so fights stay dense; `LEAST_PLAYERS` on the emptiest. |
 | `balancing.capacity` | `60` | Players this server takes in its arena before the next ones are sent elsewhere. `0` or lower never sends anyone. |
 
-- Capacity is a preference, not a wall: when no server has room, the player joins here.
-- A player already in the arena, or combat tagged, is not sent.
+<Details title="Edge cases of the balancing">
+
+- The check runs when a player joins. It never moves someone who is already playing.
+- Capacity is a preference, not a wall: when no server has room, or the best one is this server, the player joins here.
+- A player just sent here by another server stays, so nobody bounces between servers.
+- The player is held out of the game while the move runs. If the transfer fails, they play here after all.
 - The profile is saved before the move, so the server they land on reads it current.
-- `%exyliarandomkits_network_players%`, `%exyliarandomkits_network_players_<arena>%` and
-  `%exyliarandomkits_instances%` read the group from the last heartbeats. See
-  [Placeholders](/docs/exyliarandomkits/placeholders#the-network-group).
+- `%exyliarandomkits_network_players%`, `%exyliarandomkits_network_players_<arena>%` and `%exyliarandomkits_instances%` read the group from the last heartbeats, so they can lag a moment.
+
+</Details>
 
 ## ExyliaDuels
 
-With [ExyliaDuels](/docs/exyliaduels/introduction) on the same server, its challenge screen offers a
-**Random kit**: both players get the same set of items, rolled once from the duel's seed and `items.yml`, each in their own saved
-layout, **without upgrades, perks or luck**. In ExyliaDuels its node is `exyliaduels.kit.randomkits:random`
-(it follows `exyliaduels.kit.*` while unset), and its arena flags and rules are set in `/duelsadmin` → **Kits**.
+With [ExyliaDuels](/docs/exyliaduels/introduction) on the same server, its challenge screen offers a **Random kit**: both players get the same set of items, rolled once from the duel's seed and `items.yml`, each in their own saved layout, **without upgrades, perks or luck**.
 
-| Key | Default | What it does |
-|---|---|---|
-| `duels.enabled` | `true` | Offers the Random kit in the challenge screen. |
+Turn it off with `duels.enabled: false` in `config.yml` (default `true`). The option is not shown when `items.yml` has no categories. For network duels RandomKits must also run on the duel arena server, in the same group; where it does not, the option is not shown.
 
-The roll is the same piece-by-piece roll as a life (see [Items and rarities](/docs/exyliarandomkits/kits)), with no luck,
-bad luck protection or perks. The option is not shown when `items.yml` has no categories. For network duels RandomKits must also run on the duel
-arena server, in the same group; where it does not, the option is not shown.
+<Details title="Permission and rules">
+
+In ExyliaDuels its node is `exyliaduels.kit.randomkits:random`, which follows `exyliaduels.kit.*` while unset. Its arena flags and rules are set in `/duelsadmin` under **Kits**. The roll is the same piece-by-piece roll as a life (see [Items and rarities](/docs/exyliarandomkits/kits)), with no luck, bad luck protection or perks.
+
+</Details>
+
+<Cards>
+  <Card title="Run events across the group" href="/docs/exyliarandomkits/events-and-seasons">One event and one season for every server.</Card>
+  <Card title="Edit from the browser" href="/docs/exyliarandomkits/web-editor-and-import">Changes reach every server of the group.</Card>
+</Cards>

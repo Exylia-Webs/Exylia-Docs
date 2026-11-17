@@ -5,57 +5,58 @@ questions:
   - "¿Qué se comparte entre los servidores de un grupo?"
   - "¿Qué pasa cuando un servidor está lleno?"
   - "¿Cómo añado la opción de kit aleatorio a ExyliaDuels?"
+badge: "guide"
 updated: "1.0.0"
-description: "Varios servidores compartiendo arenas, perfiles, clasificaciones, eventos y temporadas, jugadores enviados a otro servidor cuando uno se llena, y el kit aleatorio en ExyliaDuels."
+description: "Pon varios servidores en un grupo de red para compartir arenas, perfiles, clasificaciones, eventos y temporadas, enviar jugadores cuando uno se llena y ofrecer el kit aleatorio en ExyliaDuels."
 ---
 
-## Un grupo de red
+RandomKits tiene una arena por servidor. Un **grupo de red** hace que varios de esos servidores funcionen como un solo juego: los mismos perfiles, clasificaciones, eventos y temporadas en todos, y los jugadores nuevos enviados a un servidor con sitio. Al final de esta página tus servidores comparten un grupo y reparten a sus jugadores.
 
-Los servidores de una red comparten arenas, perfiles, clasificaciones, eventos y temporadas cuando
-escriben el mismo `network-group`. Hay un solo evento a la vez en todo el grupo, un servidor cierra cada
-temporada, y cada premio se paga una vez esté donde esté el jugador.
+## Antes de empezar
+
+- Una base de datos MySQL, MariaDB, PostgreSQL o MongoDB que todos los servidores alcancen, y un Redis. Cómo configurarlos está en [la base de datos de ExyliaLib](/docs/exylialib/base-de-datos).
+- Para repartir jugadores: [ExyliaProxyUtils](/docs/exyliaproxyutils/introduccion) en el proxy.
+- Necesitas acceso a consola o archivos en cada servidor. `/rkadmin reload` no cambia el grupo: reinicia cada servidor después del paso 1.
+
+## Pasos
 
 <Steps>
-  <Step title="Un grupo">
-    El mismo `network-group` en `config.yml` en todos los servidores: minúsculas, dígitos y guiones bajos,
-    como mucho 24. Vacío, por defecto, mantiene las tablas normales.
+  <Step title="Elige un nombre de grupo">
+    En `config.yml` de **todos** los servidores, pon el mismo `network-group`: minúsculas, dígitos y guiones bajos, como mucho 24. Vacío, por defecto, mantiene las tablas normales y un solo servidor.
   </Step>
-  <Step title="Una base de datos">
-    `database.yml` apunta en todos los servidores a **una** base de datos MySQL, MariaDB, PostgreSQL o
-    MongoDB. El grupo va delante del nombre de las tablas (`<grupo>_exyliarandomkits_arenas`), así que varios
-    grupos pueden compartir una base de datos.
+  <Step title="Apunta todos a una base de datos">
+    En `database.yml`, usa la misma base de datos MySQL, MariaDB, PostgreSQL o MongoDB en todos. El grupo va delante del nombre de las tablas (`<grupo>_exyliarandomkits_arenas`), así que varios grupos pueden compartir una base de datos.
   </Step>
-  <Step title="Redis">
-    Redis activado en ese mismo `database.yml` en todos los servidores, con el mismo Redis y `key-prefix`, y
-    un **`server-id` distinto en cada servidor**, para que un cambio en un servidor llegue a los demás al
-    momento. Consulta [la base de datos de ExyliaLib](/docs/exylialib/base-de-datos).
+  <Step title="Activa Redis">
+    En el mismo `database.yml`, activa Redis con el mismo host y `key-prefix` en todos, y un **`server-id` distinto en cada servidor**. Un cambio hecho en un servidor llega entonces a los demás al momento.
+  </Step>
+  <Step title="Iguala los nombres del proxy">
+    En ExyliaProxyUtils, llama a cada servidor del proxy exactamente como su `server-id`. El reparto envía a los jugadores por ese nombre.
+  </Step>
+  <Step title="Elige cómo se reparten los jugadores">
+    En `config.yml`, ajusta `balancing.mode` y `balancing.capacity` (consulta la tabla de abajo) y reinicia.
   </Step>
 </Steps>
 
-Las arenas se construyen en cada servidor que las tiene: sus schematics son locales, y `items.yml` y `rarities.yml` son archivos de cada servidor: mantenlos iguales donde las vidas deban tirar igual. La estancia de un
-jugador en una arena tampoco viaja: lo que llevaba se le devuelve en el servidor donde lo dejó.
-
 <Callout type="warning" title="Filas escritas antes del grupo">
-Poner un grupo en un servidor que ya tiene arenas y perfiles en las tablas normales empieza el grupo con tablas
-vacías. Las filas antiguas se quedan donde están.
+Poner un grupo en un servidor que ya tiene arenas y perfiles en las tablas normales empieza el grupo con tablas vacías. Las filas antiguas se quedan donde están.
 </Callout>
+
+## Comprueba que funciona
+
+- Cambia algo en el servidor A, por ejemplo un [kit](/docs/exyliarandomkits/kits) en el editor web, y míralo en el servidor B sin reiniciar.
+- Pide el grupo en ambos servidores con `%exyliarandomkits_network_players%` (consulta [Placeholders](/docs/exyliarandomkits/placeholders#el-grupo-de-red)): los dos leen el mismo número.
+- Llena el servidor A hasta su `capacity` y entra otra vez: el jugador acaba en otro servidor del grupo y se le dice cuál.
+
+## Qué se comparte y qué no
+
+Se comparte en el grupo: los ajustes de la arena, los perfiles, las clasificaciones, el [evento](/docs/exyliarandomkits/eventos-y-temporadas) en marcha y la temporada. Hay un solo evento a la vez en todo el grupo, un servidor cierra cada temporada, y cada premio se paga una vez esté donde esté el jugador.
+
+Es local de cada servidor: el schematic de la arena (se construye en el servidor que la tiene) y los archivos `items.yml` y `rarities.yml`. Mantén estos dos iguales en los servidores donde las vidas deban tirar igual. La estancia de un jugador en la arena tampoco viaja: lo que llevaba se le devuelve en el servidor donde lo dejó.
 
 ## Repartir jugadores
 
-Los servidores de RandomKits son dedicados y automáticos. Las arenas y los datos de los jugadores se comparten
-en el grupo de red, así que un segundo servidor solo necesita el mismo `network-group`. Cuando un servidor ya
-tiene `capacity` jugadores en su arena, el jugador que entra pasa al servidor menos lleno o mejor del grupo
-(desbordamiento). Cada servidor publica sus jugadores con un latido.
-
-<Steps>
-  <Step title="ExyliaProxyUtils">
-    [ExyliaProxyUtils](/docs/exyliaproxyutils/introduccion) en el proxy, con los nombres de servidor del proxy
-    **iguales a los `server-id` de los backends**.
-  </Step>
-  <Step title="balancing en config.yml">
-    `balancing.enabled` (activado por defecto), un `mode` y una `capacity`.
-  </Step>
-</Steps>
+Cuando un servidor ya tiene `capacity` jugadores en su arena, el jugador que **entra** pasa al mejor servidor del grupo. Cada servidor publica sus jugadores con un latido; eso es lo que leen `%exyliarandomkits_instances%` y los demás placeholders del grupo.
 
 | Clave | Por defecto | Qué hace |
 |---|---|---|
@@ -63,25 +64,30 @@ tiene `capacity` jugadores en su arena, el jugador que entra pasa al servidor me
 | `balancing.mode` | `FILL_FIRST` | `FILL_FIRST` pone al jugador en el servidor más lleno que siga por debajo de su capacidad, para que las peleas sigan densas; `LEAST_PLAYERS` en el más vacío. |
 | `balancing.capacity` | `60` | Jugadores que acepta este servidor en su arena antes de enviar a los siguientes a otro. `0` o menos no envía a nadie. |
 
-- La capacidad es una preferencia, no un muro: si ningún servidor tiene sitio, el jugador entra aquí.
-- No se envía a un jugador que ya está en la arena, o en combate.
+<Details title="Casos límite del reparto">
+
+- La comprobación ocurre cuando un jugador entra. Nunca mueve a quien ya está jugando.
+- La capacidad es una preferencia, no un muro: si ningún servidor tiene sitio, o el mejor es este, el jugador entra aquí.
+- Un jugador que otro servidor acaba de enviar aquí se queda, así que nadie rebota entre servidores.
+- El jugador queda fuera de la partida mientras dura el traslado. Si falla, juega aquí.
 - El perfil se guarda antes del cambio, así que el servidor al que llega lo lee al día.
-- `%exyliarandomkits_network_players%`, `%exyliarandomkits_network_players_<arena>%` y
-  `%exyliarandomkits_instances%` leen el grupo de los últimos latidos. Consulta
-  [Placeholders](/docs/exyliarandomkits/placeholders#el-grupo-de-red).
+- `%exyliarandomkits_network_players%`, `%exyliarandomkits_network_players_<arena>%` y `%exyliarandomkits_instances%` leen el grupo de los últimos latidos, así que pueden ir un momento por detrás.
+
+</Details>
 
 ## ExyliaDuels
 
-Con [ExyliaDuels](/docs/exyliaduels/introduccion) en el mismo servidor, su pantalla de reto ofrece un **kit
-aleatorio**: los dos jugadores reciben el mismo conjunto de objetos, tirado una vez a partir de la semilla del duelo y de `items.yml`, cada uno
-en su propia distribución guardada, **sin mejoras, perks ni suerte**. En ExyliaDuels su permiso es
-`exyliaduels.kit.randomkits:random` (sigue a `exyliaduels.kit.*` mientras no se fije), y sus flags de arena y
-reglas se ajustan en `/duelsadmin` → **Kits**.
+Con [ExyliaDuels](/docs/exyliaduels/introduccion) en el mismo servidor, su pantalla de reto ofrece un **kit aleatorio**: los dos jugadores reciben el mismo conjunto de objetos, tirado una vez a partir de la semilla del duelo y de `items.yml`, cada uno en su propia distribución guardada, **sin mejoras, perks ni suerte**.
 
-| Clave | Por defecto | Qué hace |
-|---|---|---|
-| `duels.enabled` | `true` | Ofrece el kit aleatorio en la pantalla de reto. |
+Desactívalo con `duels.enabled: false` en `config.yml` (por defecto `true`). La opción no aparece cuando `items.yml` no tiene categorías. Para duelos en red, RandomKits tiene que estar también en el servidor de arenas de duelos, en el mismo grupo; donde no está, la opción no aparece.
 
-La tirada es la misma que la de una vida, objeto a objeto (consulta [Objetos y rarezas](/docs/exyliarandomkits/kits)), sin suerte,
-protección contra la mala suerte ni perks. La opción no aparece cuando `items.yml` no tiene categorías. Para duelos en red, RandomKits tiene que
-estar también en el servidor de arenas de duelos, en el mismo grupo; donde no está, la opción no aparece.
+<Details title="Permiso y reglas">
+
+En ExyliaDuels su permiso es `exyliaduels.kit.randomkits:random`, que sigue a `exyliaduels.kit.*` mientras no se fije. Sus flags de arena y reglas se ajustan en `/duelsadmin` en **Kits**. La tirada es la misma que la de una vida, objeto a objeto (consulta [Objetos y rarezas](/docs/exyliarandomkits/kits)), sin suerte, protección contra la mala suerte ni perks.
+
+</Details>
+
+<Cards>
+  <Card title="Lanza eventos en todo el grupo" href="/docs/exyliarandomkits/eventos-y-temporadas">Un evento y una temporada para todos los servidores.</Card>
+  <Card title="Edita desde el navegador" href="/docs/exyliarandomkits/editor-web-e-importacion">Los cambios llegan a todos los servidores del grupo.</Card>
+</Cards>

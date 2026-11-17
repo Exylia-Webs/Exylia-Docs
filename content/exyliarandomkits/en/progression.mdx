@@ -6,25 +6,33 @@ questions:
   - "How does prestige work?"
   - "How do I add or change missions?"
   - "How do I give a rank more perk slots?"
+badge: "how-it-works"
 updated: "1.0.0"
-description: "Levels, XP and prestige, account upgrades, perks and missions, with every key of progression.yml, perks.yml and missions.yml."
+description: "How levels, XP, prestige, account upgrades, perks and missions fit together, with every key of progression.yml, perks.yml and missions.yml."
 ---
 
-Players keep everything here across lives, arenas and the servers of a group. It is all bought and read
-from `/rk progress` (needs `exyliarandomkits.progress`): **Level**, **Upgrades**,
-**Perks**, **Missions** and **Prestige**.
+Progression is what a player keeps between lives. Every life starts from scratch, but kills earn XP, XP earns levels, levels unlock upgrades and perks, and money buys them. It all follows the player across arenas and the servers of a [network group](/docs/exyliarandomkits/network).
 
-Formulas in `progression.yml` and `perks.yml` understand `+ - * / % ^`, parentheses, `min`, `max`,
-`floor`, `ceil`, `round` and `sqrt`, with `%level%` filled in. Costs are paid in an ExyliaLib currency:
-`currency` is its id, blank for the server's default.
+Players open it with `/rk progress` (needs `exyliarandomkits.progress`): **Level**, **Upgrades**, **Perks**, **Missions** and **Prestige**. Costs are paid in an ExyliaLib currency: `currency` is its id, blank for the server's default. Formulas in `progression.yml` and `perks.yml` understand `+ - * / % ^`, parentheses, `min`, `max`, `floor`, `ceil`, `round` and `sqrt`, with `%level%` filled in.
 
 <Callout type="note" title="Pure arenas">
-In an arena with **Upgrades** off, account upgrades and the rewards bonus count for
-nothing; with **Perks** off, perks do not fire. XP and levels are earned everywhere. See
-[Arenas](/docs/exyliarandomkits/arenas#pure-arenas).
+In an arena with **Upgrades** off, account upgrades and the rewards bonus count for nothing; with **Perks** off, perks do not fire. XP and levels are earned everywhere. See [Arenas](/docs/exyliarandomkits/arenas#pure-arenas).
 </Callout>
 
+## The loop
+
+1. A kill, an assist or a streak earns XP (25, 10 and a bonus by default), and missions pay XP too.
+2. Enough XP is a level. Every level-up runs `on-level-up` and `on-level-<n>` in [`triggers.yml`](/docs/exyliarandomkits/configuration#rewards-triggersyml).
+3. Levels unlock the things in the **Upgrades** and **Perks** screens, bought with the server's currency.
+4. At the top level (50 by default) a player can **prestige**: back to level 1, but with permanent bonuses.
+
+You change the pace in three places: the XP curve and prestige in `progression.yml`, the upgrades there too, and the perks in `perks.yml`. Edit them on disk and run `/rkadmin reload`, or use the [web editor](/docs/exyliarandomkits/web-editor-and-import).
+
 ## Levels and XP
+
+The XP needed for the next level is `levels.curve`, with `%level%` the current level. By default that is `100 + 40 * %level% + 2 * %level% ^ 2`: 142 XP from level 1, a few thousand near the top.
+
+<Details title="Keys of levels">
 
 | Key | Default | What it does |
 |---|---|---|
@@ -34,13 +42,13 @@ nothing; with **Perks** off, perks do not fire. XP and levels are earned everywh
 | `levels.xp.assist` | `10` | XP for an assist. |
 | `levels.xp.streaks` | `{5: 50, 10: 120, 15: 200, 25: 400}` | Extra XP for reaching a kill streak, by streak. |
 
-Missions pay XP too. Every level-up runs `on-level-up` and `on-level-<n>` (`%level%`).
+</Details>
 
 ## Prestige
 
-At the top level, `/rk prestige` (or **Prestige**) asks to confirm, then resets level to 1 and XP to 0 and
-adds one prestige.
-Everything bought is kept. It is announced to the server and runs `on-prestige` (`%prestige%`).
+At the top level, `/rk prestige` (or the **Prestige** button) asks to confirm, then resets level to 1 and XP to 0 and adds one prestige. Everything bought is kept. It is announced to the server and runs `on-prestige` (`%prestige%`). Each prestige also adds a permanent perk slot and a small payout and XP bonus (+2%), up to a cap.
+
+<Details title="Keys of prestige">
 
 | Key | Default | What it does |
 |---|---|---|
@@ -50,31 +58,45 @@ Everything bought is kept. It is announced to the server and runs `on-prestige` 
 | `prestige.reward-bonus` | `0.02` | Permanent payout and XP multiplier each prestige adds (+2%). |
 | `prestige.max-reward-bonus` | `0.2` | Its cap. |
 
-How a prestige is written (`%exyliarandomkits_prestige_display%`) is `progression.prestige-display` in
-`messages.yml`, one line per prestige from 0, the last one repeating.
+How a prestige is written (`%exyliarandomkits_prestige_display%`) is `progression.prestige-display` in `messages.yml`, one line per prestige from 0, the last one repeating. See [Messages and languages](/docs/exylialib/messages-and-languages).
+
+</Details>
 
 ## Account upgrades
 
-Bought once for the whole account from `/rk upgrades`, one level at a time. Five ids are understood by the
-game; `effect` is the value at the level owned:
+Bought once for the whole account from `/rk upgrades`, one level at a time. Five exist, and each needs a minimum level to start:
 
-| Id | Max | Cost | Effect | Requires |
-|---|---|---|---|---|
-| `luck` | 10 | `400 * %level% ^ 1.4` | `0.03 * %level%`: extra rarity weight per rank (+3% per rank per level), and the share bad luck thresholds shrink by. | level 1 |
-| `rerolls` | 3 | `1500 * %level% ^ 1.6` | `%level%` rerolls per life. | level 5 |
-| `perk-slots` | 2 | `5000 * %level% ^ 2` | `%level%` extra perk slots. | level 10 |
-| `rewards` | 10 | `500 * %level% ^ 1.5` | `0.03 * %level%`: extra payout and XP multiplier (+3% per level). | level 3 |
-| `spawn-protection` | 4 | `800 * %level% ^ 1.5` | `0.5 * %level%` extra seconds of spawn protection. | level 2 |
-
-Each entry of `upgrades` has `id`, `name`, `icon`, `description`, `max-level`, `cost` (the price of reaching
-`%level%`), `currency`, `effect`, `requires` (minimum `level`, `prestige` or `kills` to buy the next level),
-`display` (how the effect is shown, `%value%` being the effect times `scale`) and `scale`.
+| Upgrade | Max | What it gives | Needs |
+|---|---|---|---|
+| Luck (`luck`) | 10 | Rarer pieces and enchantments roll more often (+3% weight per rank per level), and bad luck protection kicks in sooner. | level 1 |
+| Rerolls (`rerolls`) | 3 | One more reroll per life for each level. | level 5 |
+| Perk slots (`perk-slots`) | 2 | One more equipped perk per level. | level 10 |
+| Rewards (`rewards`) | 10 | +3% money and XP per level. | level 3 |
+| Spawn protection (`spawn-protection`) | 4 | Half a second more of protection per level. | level 2 |
 
 The rewards multiplier applies to this plugin's payouts and XP only, through ExyliaLib's modifier pipeline.
 
+<Details title="Costs and keys of an upgrade">
+
+Prices, with `%level%` the level being bought:
+
+| Id | Cost | Effect |
+|---|---|---|
+| `luck` | `400 * %level% ^ 1.4` | `0.03 * %level%` |
+| `rerolls` | `1500 * %level% ^ 1.6` | `%level%` |
+| `perk-slots` | `5000 * %level% ^ 2` | `%level%` |
+| `rewards` | `500 * %level% ^ 1.5` | `0.03 * %level%` |
+| `spawn-protection` | `800 * %level% ^ 1.5` | `0.5 * %level%` |
+
+Each entry of `upgrades` has `id`, `name`, `icon`, `description`, `max-level`, `cost`, `currency`, `effect` (the value at the level owned), `requires` (minimum `level`, `prestige` or `kills` to buy the next level), `display` (how the effect is shown, `%value%` being the effect times `scale`) and `scale`. Only these five ids are understood by the game.
+
+</Details>
+
 ### The ceiling
 
-`ceiling` is the most any combination of upgrades and prestige can give:
+`ceiling` is the most any combination of upgrades and prestige can give, so a generous config cannot break the game.
+
+<Details title="Keys of ceiling">
 
 | Key | Default | Caps |
 |---|---|---|
@@ -85,36 +107,43 @@ The rewards multiplier applies to this plugin's payouts and XP only, through Exy
 | `ceiling.rerolls` | `3` | Rerolls per life. |
 | `ceiling.perk-slots` | `5` | Perk slots in total. |
 
+</Details>
 
+### Give a rank a different ceiling
+
+Two permissions replace a ceiling for the players that hold them. Put a number at the end; the highest one a player holds wins. Nothing is granted on its own: they lift the limit, and the player still has to buy or earn the rerolls and slots.
+
+| Permission | Replaces |
+|---|---|
+| `exyliarandomkits.rerolls.<n>` | The most rerolls per life (`ceiling.rerolls`). |
+| `exyliarandomkits.perkslots.<n>` | The most perk slots (`ceiling.perk-slots`). |
+
+For example, give a donor rank `exyliarandomkits.perkslots.7` in your permissions plugin and its players can reach seven slots. See [Permissions](/docs/exyliarandomkits/permissions).
 
 ## Rerolls
 
-| Key | Default | What it does |
-|---|---|---|
-| `rerolls.window` | `10s` | How long after spawning a reroll can still be used. Dealing damage ends it too. |
+A reroll throws away a life's items and rolls them again. `rerolls.window` (default `10s`) is how long after spawning one can still be used; dealing damage ends it too. Rerolls per life come from the upgrade, perks like Second Opinion, and the ceiling.
 
 ## Perks
 
-Perks are unlocked and levelled from `/rk perks`, equipped into perk slots, and fired by what happens in a
-fight. In the screen, right-click unlocks or levels up a perk, left-click equips or unequips it.
+Perks are unlocked and levelled from `/rk perks`, equipped into perk slots, and fired by what happens in a fight. In the screen, right-click unlocks or levels up a perk, left-click equips or unequips it.
 
-**Slots**: `base-slots` in `perks.yml` (1), plus the `perk-slots` upgrade, plus prestige, under
-`ceiling.perk-slots`.
+Slots: `base-slots` in `perks.yml` (1), plus the `perk-slots` upgrade, plus prestige, under `ceiling.perk-slots`.
 
-| Perk | Trigger | Effect | Max | Requires |
+| Perk | Trigger | Effect | Max | Needs |
 |---|---|---|---|---|
-| Vampire | `KILL` | Heals 3, 4, 6 half hearts. | 3 | level 2 |
-| Last Stand | `LOW_HEALTH` at 6 | 4, 6, 8 half hearts of absorption, once per life. | 3 | level 5 |
-| Quiver | `KILL` | Refills 35%, 60%, 100% of the rolled arrows. | 3 | level 3 |
-| Second Opinion | `SPAWN` | One extra reroll every life. | 1 | level 8 |
-| Adrenaline | `KILL` | Speed I for 4s, 6s, then Speed II for 6s. | 3 | level 4 |
-| Scavenger | `KILL`, 35%, 50%, 65% | A golden apple into the food slot. | 3 | level 6 |
-| Bulwark | `SPAWN` | Resistance I for 5s, 8s, then II for 8s. | 3 | level 7 |
-| Executioner | `DAMAGE_DEALT`, target below 6 | Hits ×1.1, ×1.15, ×1.2. | 3 | level 10 |
-| Momentum | `STREAK` at 5 | Strength I for 8s, 12s, 16s. | 3 | level 12 |
-| Thick Skin | `SPAWN` | Takes ×0.85, ×0.8, ×0.75 damage for 5s, 6s, 7s. | 3 | level 1 |
+| Vampire | kill | Heals 3, 4, 6 half hearts. | 3 | level 2 |
+| Last Stand | health at 6 or below | 4, 6, 8 half hearts of absorption, once per life. | 3 | level 5 |
+| Quiver | kill | Refills 35%, 60%, 100% of the rolled arrows. | 3 | level 3 |
+| Second Opinion | spawn | One extra reroll every life. | 1 | level 8 |
+| Adrenaline | kill | Speed I for 4s, 6s, then Speed II for 6s. | 3 | level 4 |
+| Scavenger | kill, 35%, 50%, 65% | A golden apple into the food slot. | 3 | level 6 |
+| Bulwark | spawn | Resistance I for 5s, 8s, then II for 8s. | 3 | level 7 |
+| Executioner | hit on a target below 6 | Hits x1.1, x1.15, x1.2. | 3 | level 10 |
+| Momentum | streak of 5 | Strength I for 8s, 12s, 16s. | 3 | level 12 |
+| Thick Skin | spawn | Takes x0.85, x0.8, x0.75 damage for 5s, 6s, 7s. | 3 | level 1 |
 
-### A perk in `perks.yml`
+<Details title="A perk in perks.yml">
 
 | Key | What it does |
 |---|---|
@@ -141,10 +170,15 @@ fight. In the screen, right-click unlocks or levels up a perk, left-click equips
 | `SPEED` | `levels`, `seconds`. |
 | `COMMAND` | `command`, run by the console; `%player%` and `%level%` are filled in. |
 
+</Details>
+
 ## Missions
 
-Each player gets their own random set of missions every day and every week, the same on every server of the
-network, drawn from the missions of that pool. `/rk missions` shows them with their progress.
+Each player gets their own random set of missions every day and every week, the same on every server of the network, drawn from the missions of that pool. `/rk missions` shows them with their progress. A completed mission pays its XP and rewards, and runs `on-mission-complete` (`%mission%`, `%pool%`).
+
+The defaults: Hunter (15 kills), Wingman (8 assists), Rare Hunter (5 kills in a rare life or rarer), On a Roll (a 5 streak), Lucky Draw (roll an epic), Regular (30 minutes) daily; Warlord (150 kills), Unstoppable (a 15 streak), Golden Touch (roll a legendary), Epic Slayer (25 kills in an epic life or rarer), Climber (5 levels) and Veteran (240 minutes) weekly. Each pays XP and money.
+
+<Details title="Keys of missions.yml">
 
 | Key | Default | What it does |
 |---|---|---|
@@ -155,9 +189,7 @@ network, drawn from the missions of that pool. `/rk missions` shows them with th
 | `weekly` | `3` | Missions each player gets per week. |
 | `missions` | twelve missions | The pools. |
 
-A mission has `id`, `pool` (`DAILY` or `WEEKLY`), `type`, `name`, `icon`, `amount`, `rarity`,
-`arena`, `xp` (paid on completion) and `rewards` (the same rewards as `triggers.yml`, any currency).
-`on-mission-complete` runs for every mission completed (`%mission%`, `%pool%`).
+A mission has `id`, `pool` (`DAILY` or `WEEKLY`), `type`, `name`, `icon`, `amount`, `rarity`, `arena`, `xp` (paid on completion) and `rewards` (the same rewards as `triggers.yml`, any currency).
 
 | Type | Counts |
 |---|---|
@@ -170,7 +202,9 @@ A mission has `id`, `pool` (`DAILY` or `WEEKLY`), `type`, `name`, `icon`, `amoun
 | `LEVEL_UP` | Levels gained. |
 | `PRESTIGE` | Prestiges. |
 
-The defaults: Hunter (15 kills), Wingman (8 assists), Rare Hunter (5 kills in a rare life or rarer), On a
-Roll (a 5 streak), Lucky Draw (roll an epic), Regular (30 minutes) daily; Warlord (150 kills), Unstoppable (a
-15 streak), Golden Touch (roll a legendary), Epic Slayer (25 kills in an epic life or rarer), Climber (5 levels)
-and Veteran (240 minutes) weekly. Each pays XP and money.
+</Details>
+
+<Cards>
+  <Card title="Rewards for level-ups and missions" href="/docs/exyliarandomkits/configuration#rewards-triggersyml">Pay money or run commands when a level, prestige or mission completes.</Card>
+  <Card title="Events and seasons" href="/docs/exyliarandomkits/events-and-seasons">Time-limited rankings built on top of progression.</Card>
+</Cards>

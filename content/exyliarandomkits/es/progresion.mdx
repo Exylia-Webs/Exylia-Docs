@@ -6,25 +6,33 @@ questions:
   - "¿Cómo funciona el prestigio?"
   - "¿Cómo añado o cambio misiones?"
   - "¿Cómo doy más huecos de ventajas a un rango?"
+badge: "how-it-works"
 updated: "1.0.0"
-description: "Niveles, XP y prestigio, mejoras de cuenta, perks y misiones, con cada clave de progression.yml, perks.yml y missions.yml."
+description: "Cómo encajan niveles, XP, prestigio, mejoras de cuenta, perks y misiones, con cada clave de progression.yml, perks.yml y missions.yml."
 ---
 
-Los jugadores conservan todo esto entre vidas, arenas y servidores de un grupo. Se compra y se consulta desde
-`/rk progress` (necesita `exyliarandomkits.progress`): **Nivel**, **Mejoras**,
-**Ventajas** (los perks), **Misiones** y **Prestigio**.
+La progresión es lo que un jugador conserva entre vidas. Cada vida empieza de cero, pero las kills dan XP, la XP da niveles, los niveles desbloquean mejoras y perks, y el dinero los compra. Todo sigue al jugador entre arenas y servidores de un [grupo de red](/docs/exyliarandomkits/red).
 
-Las fórmulas de `progression.yml` y `perks.yml` entienden `+ - * / % ^`, paréntesis, `min`, `max`, `floor`,
-`ceil`, `round` y `sqrt`, con `%level%` sustituido. Los costes se pagan en una moneda de ExyliaLib: `currency`
-es su id, vacío para la moneda por defecto del servidor.
+Los jugadores la abren con `/rk progress` (necesita `exyliarandomkits.progress`): **Nivel**, **Mejoras**, **Ventajas**, **Misiones** y **Prestigio**. Los costes se pagan en una moneda de ExyliaLib: `currency` es su id, vacío para la moneda por defecto del servidor. Las fórmulas de `progression.yml` y `perks.yml` entienden `+ - * / % ^`, paréntesis, `min`, `max`, `floor`, `ceil`, `round` y `sqrt`, con `%level%` sustituido.
 
 <Callout type="note" title="Arenas puras">
-En una arena con **Mejoras** desactivado, las mejoras de cuenta y el bonus de
-recompensas no cuentan; con **Ventajas** desactivado, los perks no se activan. La XP y los niveles se ganan en
-todas partes. Consulta [Arenas](/docs/exyliarandomkits/arenas#arenas-puras).
+En una arena con **Mejoras** desactivado, las mejoras de cuenta y el bonus de recompensas no cuentan; con **Ventajas** desactivado, los perks no se activan. La XP y los niveles se ganan en todas partes. Consulta [Arenas](/docs/exyliarandomkits/arenas#arenas-puras).
 </Callout>
 
+## El ciclo
+
+1. Una kill, una asistencia o una racha dan XP (25, 10 y un extra por defecto), y las misiones también dan XP.
+2. Con suficiente XP subes de nivel. Cada subida ejecuta `on-level-up` y `on-level-<n>` en [`triggers.yml`](/docs/exyliarandomkits/configuracion#recompensas-triggersyml).
+3. Los niveles desbloquean lo de las pantallas **Mejoras** y **Ventajas**, que se compra con la moneda del servidor.
+4. En el nivel máximo (50 por defecto) un jugador puede hacer **prestigio**: vuelve al nivel 1, pero con bonus permanentes.
+
+El ritmo se cambia en tres sitios: la curva de XP y el prestigio en `progression.yml`, las mejoras también ahí, y los perks en `perks.yml`. Edítalos en disco y ejecuta `/rkadmin reload`, o usa el [editor web](/docs/exyliarandomkits/editor-web-e-importacion).
+
 ## Niveles y XP
+
+La XP necesaria para el siguiente nivel es `levels.curve`, con `%level%` el nivel actual. Por defecto es `100 + 40 * %level% + 2 * %level% ^ 2`: 142 de XP desde el nivel 1, unos miles cerca del máximo.
+
+<Details title="Claves de levels">
 
 | Clave | Por defecto | Qué hace |
 |---|---|---|
@@ -34,13 +42,13 @@ todas partes. Consulta [Arenas](/docs/exyliarandomkits/arenas#arenas-puras).
 | `levels.xp.assist` | `10` | XP por una asistencia. |
 | `levels.xp.streaks` | `{5: 50, 10: 120, 15: 200, 25: 400}` | XP extra por llegar a una racha, por racha. |
 
-Las misiones también dan XP. Cada subida de nivel ejecuta `on-level-up` y `on-level-<n>` (`%level%`).
+</Details>
 
 ## Prestigio
 
-En el nivel máximo, `/rk prestige` (o **Prestigio**) pide confirmación, y luego pone el nivel a 1 y la XP a 0
-y suma un prestigio. Todo lo comprado se conserva. Se anuncia al servidor y ejecuta `on-prestige`
-(`%prestige%`).
+En el nivel máximo, `/rk prestige` (o el botón **Prestigio**) pide confirmación, y luego pone el nivel a 1 y la XP a 0 y suma un prestigio. Todo lo comprado se conserva. Se anuncia al servidor y ejecuta `on-prestige` (`%prestige%`). Cada prestigio añade además un hueco de perk permanente y un pequeño bonus de pagos y XP (+2%), hasta un tope.
+
+<Details title="Claves de prestige">
 
 | Clave | Por defecto | Qué hace |
 |---|---|---|
@@ -50,32 +58,45 @@ y suma un prestigio. Todo lo comprado se conserva. Se anuncia al servidor y ejec
 | `prestige.reward-bonus` | `0.02` | Multiplicador permanente de pagos y XP que añade cada prestigio (+2%). |
 | `prestige.max-reward-bonus` | `0.2` | Su tope. |
 
-Cómo se escribe un prestigio (`%exyliarandomkits_prestige_display%`) es `progression.prestige-display` en
-`messages.yml`, una línea por prestigio desde 0, repitiéndose la última.
+Cómo se escribe un prestigio (`%exyliarandomkits_prestige_display%`) es `progression.prestige-display` en `messages.yml`, una línea por prestigio desde 0, repitiéndose la última. Consulta [Mensajes e idiomas](/docs/exylialib/mensajes-e-idiomas).
+
+</Details>
 
 ## Mejoras de cuenta
 
-Se compran una vez para toda la cuenta desde `/rk upgrades`, nivel a nivel. El juego entiende cinco ids;
-`effect` es el valor en el nivel que se tiene:
+Se compran una vez para toda la cuenta desde `/rk upgrades`, nivel a nivel. Hay cinco, y cada una pide un nivel mínimo para empezar:
 
-| Id | Máx. | Coste | Efecto | Requiere |
-|---|---|---|---|---|
-| `luck` | 10 | `400 * %level% ^ 1.4` | `0.03 * %level%`: peso de rareza extra por rango (+3% por rango y nivel), y la parte en que bajan los umbrales de mala suerte. | nivel 1 |
-| `rerolls` | 3 | `1500 * %level% ^ 1.6` | `%level%` rerolls por vida. | nivel 5 |
-| `perk-slots` | 2 | `5000 * %level% ^ 2` | `%level%` huecos de perk extra. | nivel 10 |
-| `rewards` | 10 | `500 * %level% ^ 1.5` | `0.03 * %level%`: multiplicador extra de pagos y XP (+3% por nivel). | nivel 3 |
-| `spawn-protection` | 4 | `800 * %level% ^ 1.5` | `0.5 * %level%` segundos extra de protección de spawn. | nivel 2 |
+| Mejora | Máx. | Qué da | Requiere |
+|---|---|---|---|
+| Suerte (`luck`) | 10 | Las piezas y encantamientos raros salen más seguido (+3% de peso por rango y nivel), y la protección contra la mala suerte actúa antes. | nivel 1 |
+| Cambios (`rerolls`) | 3 | Un reroll más por vida por cada nivel. | nivel 5 |
+| Ranuras de ventaja (`perk-slots`) | 2 | Un perk equipado más por nivel. | nivel 10 |
+| Recompensas (`rewards`) | 10 | +3% de dinero y XP por nivel. | nivel 3 |
+| Protección al aparecer (`spawn-protection`) | 4 | Medio segundo más de protección por nivel. | nivel 2 |
 
-Cada entrada de `upgrades` tiene `id`, `name`, `icon`, `description`, `max-level`, `cost` (el precio de
-llegar a `%level%`), `currency`, `effect`, `requires` (`level`, `prestige` o `kills` mínimos para comprar el
-siguiente nivel), `display` (cómo se muestra el efecto, siendo `%value%` el efecto por `scale`) y `scale`.
+El multiplicador de recompensas solo se aplica a los pagos y la XP de este plugin, a través del pipeline de modificadores de ExyliaLib.
 
-El multiplicador de recompensas solo se aplica a los pagos y la XP de este plugin, a través del pipeline de
-modificadores de ExyliaLib.
+<Details title="Costes y claves de una mejora">
+
+Precios, con `%level%` el nivel que se compra:
+
+| Id | Coste | Efecto |
+|---|---|---|
+| `luck` | `400 * %level% ^ 1.4` | `0.03 * %level%` |
+| `rerolls` | `1500 * %level% ^ 1.6` | `%level%` |
+| `perk-slots` | `5000 * %level% ^ 2` | `%level%` |
+| `rewards` | `500 * %level% ^ 1.5` | `0.03 * %level%` |
+| `spawn-protection` | `800 * %level% ^ 1.5` | `0.5 * %level%` |
+
+Cada entrada de `upgrades` tiene `id`, `name`, `icon`, `description`, `max-level`, `cost`, `currency`, `effect` (el valor en el nivel que se tiene), `requires` (`level`, `prestige` o `kills` mínimos para comprar el siguiente nivel), `display` (cómo se muestra el efecto, siendo `%value%` el efecto por `scale`) y `scale`. El juego solo entiende estos cinco ids.
+
+</Details>
 
 ### El techo
 
-`ceiling` es lo máximo que puede dar cualquier combinación de mejoras y prestigio:
+`ceiling` es lo máximo que puede dar cualquier combinación de mejoras y prestigio, así que una config generosa no rompe el juego.
+
+<Details title="Claves de ceiling">
 
 | Clave | Por defecto | Limita |
 |---|---|---|
@@ -86,37 +107,43 @@ modificadores de ExyliaLib.
 | `ceiling.rerolls` | `3` | Los rerolls por vida. |
 | `ceiling.perk-slots` | `5` | Los huecos de perk en total. |
 
+</Details>
 
+### Da un techo distinto a un rango
+
+Dos permisos sustituyen un techo para quien los tiene. Pon un número al final; gana el más alto que tenga el jugador. No conceden nada por sí solos: levantan el límite, y el jugador sigue teniendo que comprar o ganar los rerolls y los huecos.
+
+| Permiso | Sustituye |
+|---|---|
+| `exyliarandomkits.rerolls.<n>` | El máximo de rerolls por vida (`ceiling.rerolls`). |
+| `exyliarandomkits.perkslots.<n>` | El máximo de huecos de perk (`ceiling.perk-slots`). |
+
+Por ejemplo, da `exyliarandomkits.perkslots.7` a un rango de donantes en tu plugin de permisos y sus jugadores podrán llegar a siete huecos. Consulta [Permisos](/docs/exyliarandomkits/permisos).
 
 ## Rerolls
 
-| Clave | Por defecto | Qué hace |
-|---|---|---|
-| `rerolls.window` | `10s` | Cuánto tiempo tras el spawn se puede usar un reroll. Hacer daño también lo termina. |
+Un reroll descarta los objetos de una vida y los vuelve a tirar. `rerolls.window` (por defecto `10s`) es cuánto tiempo tras el spawn se puede usar uno; hacer daño también lo termina. Los rerolls por vida salen de la mejora, de perks como Segunda opinión y del techo.
 
 ## Perks
 
-Los perks se desbloquean y suben de nivel desde `/rk perks`, se equipan en huecos de perk, y se activan por lo
-que pasa en una pelea. En la pantalla, clic derecho desbloquea o sube de nivel un perk, clic izquierdo lo
-equipa o lo desequipa.
+Los perks se desbloquean y suben de nivel desde `/rk perks`, se equipan en huecos de perk, y se activan por lo que pasa en una pelea. En la pantalla, clic derecho desbloquea o sube de nivel un perk, clic izquierdo lo equipa o lo desequipa.
 
-**Huecos**: `base-slots` en `perks.yml` (1), más la mejora `perk-slots`, más el prestigio, bajo
-`ceiling.perk-slots`.
+Huecos: `base-slots` en `perks.yml` (1), más la mejora `perk-slots`, más el prestigio, bajo `ceiling.perk-slots`.
 
 | Perk | Activador | Efecto | Máx. | Requiere |
 |---|---|---|---|---|
-| Vampire | `KILL` | Cura 3, 4, 6 medios corazones. | 3 | nivel 2 |
-| Last Stand | `LOW_HEALTH` en 6 | 4, 6, 8 medios corazones de absorción, una vez por vida. | 3 | nivel 5 |
-| Quiver | `KILL` | Recupera el 35%, 60%, 100% de las flechas tiradas. | 3 | nivel 3 |
-| Second Opinion | `SPAWN` | Un reroll extra cada vida. | 1 | nivel 8 |
-| Adrenaline | `KILL` | Velocidad I 4s, 6s, luego Velocidad II 6s. | 3 | nivel 4 |
-| Scavenger | `KILL`, 35%, 50%, 65% | Una manzana dorada en la ranura de comida. | 3 | nivel 6 |
-| Bulwark | `SPAWN` | Resistencia I 5s, 8s, luego II 8s. | 3 | nivel 7 |
-| Executioner | `DAMAGE_DEALT`, objetivo por debajo de 6 | Golpes ×1.1, ×1.15, ×1.2. | 3 | nivel 10 |
-| Momentum | `STREAK` en 5 | Fuerza I 8s, 12s, 16s. | 3 | nivel 12 |
-| Thick Skin | `SPAWN` | Recibe ×0.85, ×0.8, ×0.75 de daño durante 5s, 6s, 7s. | 3 | nivel 1 |
+| Vampiro | kill | Cura 3, 4, 6 medios corazones. | 3 | nivel 2 |
+| Última resistencia | vida en 6 o menos | 4, 6, 8 medios corazones de absorción, una vez por vida. | 3 | nivel 5 |
+| Carcaj | kill | Recupera el 35%, 60%, 100% de las flechas tiradas. | 3 | nivel 3 |
+| Segunda opinión | spawn | Un reroll extra cada vida. | 1 | nivel 8 |
+| Adrenalina | kill | Velocidad I 4s, 6s, luego Velocidad II 6s. | 3 | nivel 4 |
+| Carroñero | kill, 35%, 50%, 65% | Una manzana dorada en la ranura de comida. | 3 | nivel 6 |
+| Baluarte | spawn | Resistencia I 5s, 8s, luego II 8s. | 3 | nivel 7 |
+| Verdugo | golpe a un objetivo con menos de 6 | Golpes x1.1, x1.15, x1.2. | 3 | nivel 10 |
+| Impulso | racha de 5 | Fuerza I 8s, 12s, 16s. | 3 | nivel 12 |
+| Piel gruesa | spawn | Recibe x0.85, x0.8, x0.75 de daño durante 5s, 6s, 7s. | 3 | nivel 1 |
 
-### Un perk en `perks.yml`
+<Details title="Un perk en perks.yml">
 
 | Clave | Qué hace |
 |---|---|
@@ -143,10 +170,15 @@ equipa o lo desequipa.
 | `SPEED` | `levels`, `seconds`. |
 | `COMMAND` | `command`, ejecutado por la consola; se rellenan `%player%` y `%level%`. |
 
+</Details>
+
 ## Misiones
 
-Cada jugador recibe su propio conjunto aleatorio de misiones cada día y cada semana, el mismo en todos los
-servidores de la red, sacado de las misiones de ese pool. `/rk missions` las muestra con su progreso.
+Cada jugador recibe su propio conjunto aleatorio de misiones cada día y cada semana, el mismo en todos los servidores de la red, sacado de las misiones de ese pool. `/rk missions` las muestra con su progreso. Una misión completada paga su XP y sus recompensas, y ejecuta `on-mission-complete` (`%mission%`, `%pool%`).
+
+Las de serie: Cazador (15 kills), Escolta (8 asistencias), Cazador de raros (5 kills en una vida rara o más), En racha (una racha de 5), Golpe de suerte (tirar un épico) y Habitual (30 minutos) diarias; Señor de la guerra (150 kills), Imparable (una racha de 15), Toque dorado (tirar un legendario), Verdugo épico (25 kills en una vida épica o más), Escalador (5 niveles) y Veterano (240 minutos) semanales. Cada una paga XP y dinero.
+
+<Details title="Claves de missions.yml">
 
 | Clave | Por defecto | Qué hace |
 |---|---|---|
@@ -157,9 +189,7 @@ servidores de la red, sacado de las misiones de ese pool. `/rk missions` las mue
 | `weekly` | `3` | Misiones que recibe cada jugador por semana. |
 | `missions` | doce misiones | Los pools. |
 
-Una misión tiene `id`, `pool` (`DAILY` o `WEEKLY`), `type`, `name`, `icon`, `amount`, `rarity`,
-`arena`, `xp` (se paga al completarla) y `rewards` (las mismas recompensas que `triggers.yml`, en cualquier
-moneda). `on-mission-complete` se ejecuta por cada misión completada (`%mission%`, `%pool%`).
+Una misión tiene `id`, `pool` (`DAILY` o `WEEKLY`), `type`, `name`, `icon`, `amount`, `rarity`, `arena`, `xp` (se paga al completarla) y `rewards` (las mismas recompensas que `triggers.yml`, en cualquier moneda).
 
 | Tipo | Cuenta |
 |---|---|
@@ -172,7 +202,9 @@ moneda). `on-mission-complete` se ejecuta por cada misión completada (`%mission
 | `LEVEL_UP` | Niveles ganados. |
 | `PRESTIGE` | Prestigios. |
 
-Las de serie: Hunter (15 kills), Wingman (8 asistencias), Rare Hunter (5 kills en una vida rara o más), On a Roll
-(una racha de 5), Lucky Draw (tirar un épico) y Regular (30 minutos) diarias; Warlord (150 kills), Unstoppable
-(una racha de 15), Golden Touch (tirar un legendario), Epic Slayer (25 kills en una vida épica o más), Climber (5
-niveles) y Veteran (240 minutos) semanales. Cada una paga XP y dinero.
+</Details>
+
+<Cards>
+  <Card title="Recompensas por nivel y misión" href="/docs/exyliarandomkits/configuracion#recompensas-triggersyml">Paga dinero o ejecuta comandos al subir de nivel, hacer prestigio o completar una misión.</Card>
+  <Card title="Eventos y temporadas" href="/docs/exyliarandomkits/eventos-y-temporadas">Clasificaciones con límite de tiempo sobre la progresión.</Card>
+</Cards>
