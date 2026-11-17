@@ -35,7 +35,7 @@ Follow WRITING.md. ExyliaFFA is the model. One row per plugin; mark done after r
 | `exyliaplayervaults` | `ExyliaPlayerVaults` | done (purchases, staff, network, configuration, faq on old text) |
 | `exyliapractice` | `ExyliaPracticeCore` | todo |
 | `exyliapracticebot` | `ExyliaPracticeBotV3` | todo |
-| `exyliaprotections` | `ExyliaProtections` | started (guide bodies pending) |
+| `exyliaprotections` | `ExyliaProtections` | done (configuration, api, faq leftovers) |
 | `exyliaproxyutils` | `ExyliaProxyUtils` | done (reference pages left on old text) |
 | `exyliarandomkits` | `ExyliaRandomKitsCore` | todo |
 | `exyliarewards` | `ExyliaRewards` | started (guide bodies pending, battle pass undocumented) |
