@@ -1,50 +1,53 @@
 ---
 title: "Vende baúles extra"
-description: "Vende baúles por encima de los de un rango: activarlo, qué moneda paga, cómo crece el precio, los límites y qué pasa cuando un pago falla."
+description: "Deja que los jugadores compren baúles por encima de los de su rango: actívalo, elige la moneda, fija cómo sube el precio y mira qué pasa cuando un pago falla."
 questions:
   - "¿Cómo dejo que los jugadores compren más baúles?"
   - "¿Cómo cambio el precio de los baúles?"
   - "¿Qué moneda usan las compras de baúles?"
   - "¿Qué pasa si una compra cobra pero no da el baúl?"
   - "¿Cuántos baúles puede comprar un jugador?"
+  - "¿Por qué un jugador no puede comprar otro baúl?"
 updated: "1.12.0"
 ---
 
-Los jugadores pueden comprar baúles por encima de lo que les da su rango, desde la lista de baúles. Las
-compras están desactivadas hasta que las actives.
+Los jugadores compran baúles extra desde su lista de baúles, además de los que les da el rango, pagando con cualquier moneda que alcance ExyliaLib. Las compras están desactivadas hasta que las actives.
 
-## Activarlo
+## Antes de empezar
+
+- Los [baúles](/docs/exyliaplayervaults/cofres) tienen que funcionar. Comprar necesita `exyliaplayervaults.buy`, que tiene todo el mundo por defecto.
+- La moneda tiene que existir. La moneda por defecto del servidor se define en `plugins/ExyliaLib/economy.yml`; para añadir otras mira [Economía](/docs/exylialib/economia).
+
+## Pasos
+
+<Steps>
+  <Step title="Activa las compras">
+    Ejecuta `/pvadmin`, abre **Ajustes** y la página **Compra**, y activa **enabled**. O edita `purchase.enabled` en `plugins/ExyliaPlayerVaults/config.yml` y ejecuta `/pvadmin reload`.
+  </Step>
+  <Step title="Elige la moneda">
+    Pon en `purchase.currency` el ID de una moneda. Vacío usa la moneda por defecto del servidor. Sirve una moneda de [ExyliaEconomy](/docs/exyliaeconomy/monedas) como `shards`, `vault` (el plugin que sirva Vault), PlayerPoints, etc. Los precios se escriben como los escribe esa moneda.
+  </Step>
+  <Step title="Fija el precio y el límite">
+    `base-price` es lo que cuesta el primer baúl, `price-multiplier` cuánto sube cada uno de los siguientes y `max-purchases` cuántos puede comprar un mismo jugador.
+  </Step>
+</Steps>
 
 ```yaml title="plugins/ExyliaPlayerVaults/config.yml"
 purchase:
   enabled: true
-  currency: ''
+  currency: shards
   base-price: 5000.0
   price-multiplier: 1.5
   max-purchases: 9
 ```
 
-`/pvadmin reload` lo aplica. A partir de ahí, el primer baúl bloqueado de la lista de un jugador se dibuja
-con `buy_template` y su precio, mientras todavía pueda comprar uno. Comprar necesita
-`exyliaplayervaults.buy`, que tiene todo el mundo por defecto.
+## Comprueba que funciona
 
-## Qué moneda se cobra
-
-`purchase.currency` es el ID de una moneda tal como la conoce ExyliaLib. Vacío, el valor por defecto, usa la
-moneda por defecto del servidor: `default-currency` en `plugins/ExyliaLib/economy.yml`. Sirve cualquier
-moneda que alcance ExyliaLib — una moneda de [ExyliaEconomy](/docs/exyliaeconomy/monedas) como `shards`,
-`vault` para el plugin que sirva Vault, PlayerPoints, etc. Los precios se escriben como los escribe esa
-moneda.
-
-```yaml
-purchase:
-  currency: shards
-```
+Abre `/pv` con un jugador que tenga menos baúles que `max-amount`. El primer baúl bloqueado aparece como una entrada de compra con su precio. Haz clic: la lista se cierra y una confirmación pregunta *"¿Comprar el baúl `<number>` por `<price>`?"*. Al confirmar, se le dice al jugador *"El baúl `<number>` es tuyo. Pagaste `<price>`."* y la lista se vuelve a abrir con el baúl nuevo. Rechazar solo vuelve a abrir la lista. A un jugador que no puede pagar se le dice *"Necesitas `<price>` para comprar ese baúl."*
 
 ## Cómo sube el precio
 
-El primer baúl que compra un jugador cuesta `base-price`. Cada uno de los siguientes cuesta
-`price-multiplier` veces el anterior:
+El primer baúl que compra un jugador cuesta `base-price`. Cada uno de los siguientes cuesta `price-multiplier` veces el anterior:
 
 ```text
 precio = base-price × price-multiplier ^ (baúles ya comprados)
@@ -66,48 +69,30 @@ Con `1.0` todos los baúles cuestan `base-price`.
 
 Un jugador no puede comprar otro baúl cuando se cumple cualquiera de estas dos cosas:
 
-- ya compró `max-purchases` (9);
+- ya compró `max-purchases` (9 por defecto);
 - los baúles de su rango más los que compró ya llegan a `vaults.max-amount`.
 
-Los baúles comprados se suman al rango, por debajo de `max-amount`. Por eso, un jugador cuyo rango sube
-después puede acabar con menos baúles comprados utilizables de los que pagó, porque el total tiene tope;
-sube `max-amount` junto con tus rangos si eso te importa.
+Los baúles comprados se suman al rango, por debajo de `max-amount`. Por eso, un jugador cuyo rango sube después puede acabar con menos baúles comprados utilizables de los que pagó, porque el total tiene tope. Sube `max-amount` junto con tus rangos si eso te importa.
 
-Sin nada más que comprar, la lista no muestra ninguna entrada de compra,
-`%exyliaplayervaults_playervaults_next_price%` queda vacío y un clic suelto responde *"No puedes comprar más
-baúles."*
-
-## Comprar
-
-<Steps>
-  <Step title="Clic en la entrada de compra">
-    La lista se cierra y una confirmación pregunta *"¿Comprar el baúl `<number>` por `<price>`?"*
-  </Step>
-  <Step title="Confirma">
-    Se cobra el dinero y luego se cuenta la compra. Al jugador se le dice
-    *"El baúl `<number>` es tuyo. Pagaste `<price>`."* y la lista se vuelve a abrir con el baúl nuevo.
-  </Step>
-</Steps>
-
-Rechazar vuelve a abrir la lista. A un jugador que no puede pagar se le dice *"Necesitas `<price>` para
-comprar ese baúl."*
+Sin nada más que comprar, la lista no muestra ninguna entrada de compra, `%exyliaplayervaults_playervaults_next_price%` queda vacío y un clic suelto responde *"No puedes comprar más baúles."*
 
 ## Cuando algo sale mal
 
-El dinero siempre se cobra **antes** de contar el baúl, porque un baúl contado antes del cobro es un baúl
-gratis cada vez que el cobro falla. La cuenta es un compare-and-set en la base de datos, así que dos compras
-a la vez en dos servidores, o un doble clic, nunca cuentan el mismo baúl dos veces.
+El dinero siempre se cobra **antes** de contar el baúl, porque un baúl contado antes del cobro es un baúl gratis cada vez que el cobro falla. La cuenta es un compare-and-set en la base de datos, así que dos compras a la vez en dos servidores, o un doble clic, nunca cuentan el mismo baúl dos veces.
 
 | Qué pasó | Qué recibe el jugador |
 |---|---|
-| Otra compra cambió la cuenta entre el precio mostrado y el clic | *"La compra no se completó y no se te cobró nada."* No se cobra nada. |
+| Otra compra cambió la cuenta entre el precio mostrado y el clic | *"La compra no se completó y no se te cobró nada. Inténtalo de nuevo."* No se cobra nada. |
 | Una compra en otro servidor se quedó la cuenta | Se le devuelve el dinero, con el mismo mensaje. |
-| La base de datos no respondió, y releerla tres veces no lo aclaró | *"No se pudo leer ese baúl."* El dinero queda cobrado, y la consola registra un error con el jugador, el precio y la cuenta que debería tener `playervaults_buyers`, para que el staff lo revise y lo devuelva. |
+| La base de datos no respondió, y releerla tres veces no lo aclaró | *"No se pudo leer ese baúl. No se ha perdido nada; inténtalo de nuevo."* El dinero queda cobrado, y la consola registra un error con el jugador, el precio y la cuenta que debería tener `playervaults_buyers`, para que el staff lo revise y lo devuelva. |
 
-Cada compra queda en el registro de auditoría como `vault-buy`, con el baúl y el precio.
+Cada compra queda en el registro de auditoría como `vault-buy`, con el baúl y el precio. Léelo con `/exylialib logs`; mira [Revisa y restaura los baúles de un jugador](/docs/exyliaplayervaults/staff#el-registro-de-auditoría).
 
-## Dónde se guarda la cuenta
+<Details title="Dónde se guarda la cuenta">
+Cuántos baúles compró cada jugador es una fila por jugador en `playervaults_buyers`, creada la primera vez que entra. Se lee al entrar y se mantiene en memoria mientras está conectado, que es lo que muestran la lista y los placeholders.
+</Details>
 
-Cuántos baúles compró cada jugador es una fila por jugador en `playervaults_buyers`, creada la primera vez
-que entra. Se lee al entrar y se mantiene en memoria mientras está conectado, que es lo que muestran la
-lista y los placeholders.
+<Cards>
+  <Card title="Siguiente: revisa y restaura baúles" href="/docs/exyliaplayervaults/staff">Mira dentro de los baúles de un jugador y devuelve una copia anterior.</Card>
+  <Card title="Configuración" href="/docs/exyliaplayervaults/configuracion#purchase">Cada clave de compras y su valor por defecto.</Card>
+</Cards>
