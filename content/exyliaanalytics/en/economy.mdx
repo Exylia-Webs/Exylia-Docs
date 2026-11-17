@@ -8,15 +8,58 @@ questions:
 updated: "1.2.0"
 ---
 
-The economy report answers one question: *is money piling up faster than people play?* To answer it the
-agent needs two things from every currency on a server: **what moved** (money created and destroyed,
-and why) and **what exists** (the money supply). This page covers where the agent gets both, and the
-dashboard page that reads them.
+In a few minutes you can see whether money is piling up faster than people play: how much was created and destroyed,
+for which reason, who holds it, and whether the economy is inflating. The agent needs two things from each currency:
+**what moved** (money created and destroyed, and why) and **what exists** (the money supply). This guide shows how to
+get both flowing and how to read the page.
 
-Economy is Paper and Spigot only; a proxy moves no money. Everything here is dropped at the agent when
-the **Economy** module is off.
+Economy is Paper and Spigot only; a proxy moves no money. Everything here is dropped at the agent when the
+**Economy** module is off.
 
-## The sources
+## Before you start
+
+- A Paper or Spigot server linked to your workspace, see [Connect your server](/docs/exyliaanalytics/linking).
+- The **Economy** module on. It is on by default; check it under **Settings**, then **What the plugin collects**
+  ([Remote configuration](/docs/exyliaanalytics/remote-config)).
+- At least one economy the agent can read: an ExyliaLib currency, a Vault or VaultUnlocked economy, PlayerPoints or
+  ExcellentEconomy. Any of them is measured on its own; for the exact money supply use an economy plugin that reports
+  it, such as ExyliaSurvivalCore.
+- The **Economy** permission (`view_economy`) in your role to read the page.
+
+## Steps
+
+<Steps>
+  <Step title="Check what the agent found">
+    On the game server, run `/analytics status`. The **Vault** and **VaultUnlocked** lines say whether the agent
+    stands in front of that economy, and the economy sources it hooked are listed with them. If your economy plugin
+    is missing, see [The Vault proxy](#the-vault-proxy).
+  </Step>
+  <Step title="Let a few players earn and spend">
+    Changes are sent once a minute. Play for a few minutes: sell something, buy something, pay another player.
+  </Step>
+  <Step title="Open the Economy page">
+    In the dashboard sidebar open **Revenue**, then the **In-game economy** tab. Pick the **Currency** at the top
+    (the list shows how many players each one has) and, if you run several game servers, the server filter.
+  </Step>
+  <Step title="Read the verdict">
+    Under **Is money losing value?** you get **Inflating**, **Stable** or **Deflating**. Then open **Every reason** to
+    see which source or sink drives it.
+  </Step>
+</Steps>
+
+## Check that it works
+
+A currency appears in the **Currency** list with a player count, and **Money added** and **Money removed** show the
+trades you just made. If the page says **No economy data in this range**, the module is off, the server is not Paper,
+or no economy was found: run `/analytics status` and see
+[Common problems](/docs/exyliaanalytics/troubleshooting).
+
+The **Is money losing value?** verdict needs at least 3 weeks of balance snapshots; before that it says there is not
+enough data. That is normal on a new install.
+
+## Going further
+
+### The sources
 
 Each balance change is counted **once**, from the first source that sees it:
 
@@ -33,42 +76,48 @@ Currency ids are lowercased and cut to 32 characters, reasons to 64. A change of
 
 ### The Vault proxy
 
-Vault gives no event when money moves, so the agent stands in front of it: it registers its own
-economy at the highest priority, forwards **every call untouched** to the real one, and once a deposit
-or withdrawal has succeeded, records it with the plugin that made the call — the first plugin on the
-call stack that is not Vault, VaultUnlocked, ExyliaLib or the agent. Nothing it does can change the
-result of a payment or make one fail.
+Vault gives no event when money moves, so the agent stands in front of it: it registers its own economy at the
+highest priority, forwards **every call untouched** to the real one, and once a deposit or withdrawal has succeeded,
+records it with the plugin that made the call (the first plugin on the call stack that is not Vault, VaultUnlocked,
+ExyliaLib or the agent). Nothing it does can change the result of a payment or make one fail.
 
 The proxy is **not** installed when:
 
-- `vault-wrapper: false` in `config.yml`;
-- the Vault economy already reports every change through ExyliaLib: ExyliaSurvivalCore, or any economy
-  ExyliaLib knows as a currency that announces its own changes, such as ExyliaEconomy (ExyliaLib 1.372.0
-  or newer; with an older one it is wrapped like any other);
-- VaultUnlocked's own bridge to a Vault economy that already reports through ExyliaLib (the bridge is left unwrapped, so each payment is not counted twice);
+- `vault-wrapper: false` in the agent's `config.yml`;
+- the Vault economy already reports every change through ExyliaLib: ExyliaSurvivalCore, or any economy ExyliaLib
+  knows as a currency that announces its own changes, such as ExyliaEconomy (ExyliaLib 1.372.0 or newer; with an
+  older one it is wrapped like any other);
+- VaultUnlocked's own bridge to a Vault economy that already reports through ExyliaLib (the bridge is left
+  unwrapped, so each payment is not counted twice);
 - the economy plugin registered itself at the highest priority first, so the proxy would sit unused.
 
 `/analytics status` says which of these applies on the **Vault** and **VaultUnlocked** lines.
 
 <Callout type="warning" title="Plugins that keep the economy they found at startup">
-The proxy goes in on the **first server tick**, after every plugin has enabled. A plugin that looked up
-Vault's economy while enabling and kept it calls the real economy directly, and its payments are not
-seen. The agent re-checks whenever an economy registers or unregisters.
+The proxy goes in on the **first server tick**, after every plugin has enabled. A plugin that looked up Vault's
+economy while enabling and kept it calls the real economy directly, and its payments are not seen. The agent
+re-checks whenever an economy registers or unregisters.
 </Callout>
 
-### Counting each change once
+### Read the page
 
-A server can run several of these at once, and they call each other: ExyliaLib's `vault` currency goes
-through Vault, VaultUnlocked answers through its own interface, and an economy fires its own event
-while Vault is moving the money. The rules:
+| Section | Shows |
+|---|---|
+| Money in circulation, Money per active player, Money added, Money removed | The headline numbers, with the sink ratio ("removed per 1 added"). |
+| **Is money losing value?** | Money per active player over the last 8 full weeks with a fitted line: **Inflating** above +5% a week, **Deflating** below −5%, otherwise **Stable**. Needs at least 3 weeks of data. |
+| **Money in circulation** | Every holder's balance summed, per period. |
+| **Money per active player** | Money in circulation ÷ players active in the trailing 30 days. Rising faster than play means inflation. |
+| **Money vs players** | The change of each since the period started. Money growing well above players means inflation. |
+| **Money added and removed** | Per period, what each reason added (above the line) and removed (below). |
+| **Every reason** | Every reason money moved for, largest impact first: **Paid in**, **Paid out**, **Net**, **Share of total**, **Players**, and the type (**Adds money**, **Removes money**, **Transfer**). Vault reasons show the calling plugin, marked *via Vault*. |
+| **Who holds the money** | **Typical balance**, **Inequality (Gini)**, the share held by the richest 1% and 10%, and **Unused money** (held by players away 30 days or more). |
+| **New player progress** | Typical balance of new players 1, 7 and 30 days after their first session. |
+| **Top balances** | Each player's latest known balance beside their highest ever and what they earned and spent through plugins since tracking began, up to 100 players. |
+| **Inflation causes** | Whole-season panels (not the range): who and what feeds the supply, with inflation alerts such as one player behind a money source. |
 
-- A change that happens **inside** a proxied Vault call is the same change: every event fired during it
-  is ignored, and the outer Vault call is the one recorded.
-- ExyliaLib's `vault` currency is dropped when Vault is already covered — by the proxy, by
-  an economy that reports through ExyliaLib, or by ExcellentEconomy's own event.
-- ExyliaLib's `points` currency is dropped when PlayerPoints is hooked.
+The **Market** tab beside it covers auction houses, shops and sell commands.
 
-### What exists: supply and balances
+<Details title="What exists: supply and balances">
 
 Changes alone cannot say how much money there is. Three sources can:
 
@@ -78,53 +127,60 @@ Changes alone cannot say how much money there is. Three sources can:
 | Balance reads | One player's balance: through Vault (unless the Vault economy reports through ExyliaLib), PlayerPoints, and each ExcellentEconomy currency other than the one read through Vault. Read off the main thread. | On join and quit, at most once per player every **5 minutes**. |
 | ExyliaLib holdings | What a player holds in every ExyliaLib currency no source above already reports. | On join, on quit, and every **10 minutes** for everybody online. |
 
-The holdings matter for currencies that change **without a transaction**: an experience bar grows from
-a mob, a currency item is picked up off the floor. For those, counting what people carry is the only
-money supply there is. ExyliaLib takes each count on the thread that owns the player, and a count that
-arrives after the player left — reading as zero because the inventory is gone — is thrown away rather
-than recorded as an empty pocket. It needs an ExyliaLib recent enough to count off the player's thread;
-with an older one the status reads *ExyliaLib (flows only)*.
+The holdings matter for currencies that change **without a transaction**: an experience bar grows from a mob, a
+currency item is picked up off the floor. For those, counting what people carry is the only money supply there is.
+ExyliaLib takes each count on the thread that owns the player, and a count that arrives after the player left
+(reading as zero because the inventory is gone) is thrown away rather than recorded as an empty pocket. It needs an
+ExyliaLib recent enough to count off the player's thread; with an older one the status reads *ExyliaLib (flows only)*.
 
-### How it is sent
+</Details>
 
-Changes are summed per **player, currency and reason** and sent once a minute as one `economy.flow`
-each: how many changes, the total gained, the total spent, and the balance after the last one. A sell
-wand firing a thousand times a minute costs one event. At most 50,000 of those keys are held at once;
-past that, new ones wait for the next minute. On shutdown the last partial minute is sent with the
-rest.
+<Details title="Counting each change once">
 
-## The Economy page
+A server can run several of these at once, and they call each other: ExyliaLib's `vault` currency goes through
+Vault, VaultUnlocked answers through its own interface, and an economy fires its own event while Vault is moving the
+money. The rules:
 
-Pick a **currency**; the list shows how many players each one has. The server filter picks one game
-server or all of them.
+- A change that happens **inside** a proxied Vault call is the same change: every event fired during it is ignored,
+  and the outer Vault call is the one recorded.
+- ExyliaLib's `vault` currency is dropped when Vault is already covered, by the proxy, by an economy that reports
+  through ExyliaLib, or by ExcellentEconomy's own event.
+- ExyliaLib's `points` currency is dropped when PlayerPoints is hooked.
 
-| Section | Shows |
-|---|---|
-| KPIs | Money supply, supply per active player, money created and destroyed, and the sink ratio. |
-| Economy verdict | Supply per active player over the last 8 full weeks with a fitted line: **Inflating** above +5% a week, **Deflating** below −5%, otherwise **Stable**. Needs at least 3 weeks of data. |
-| Money supply | Every holder's balance summed, per period. |
-| Supply per active player | Money supply ÷ players active in the trailing 30 days. Rising faster than play means inflation. |
-| Money created and destroyed | Per period, what each reason created (above the line) and destroyed (below). |
-| Sources and sinks | Every reason money moved for, largest net first: paid in, paid out, net, share, players, and whether it is a source, a sink or a transfer. Vault reasons show the calling plugin, marked *via Vault*. |
-| Who holds the money | Median balance, Gini, the share held by the richest 1% and 10%, and idle money — held by players away 30 days or more. |
-| New player progress | Median balance of new players 1, 7 and 30 days after their first session. |
+</Details>
 
-### Definitions
+<Details title="How it is sent">
+
+Changes are summed per **player, currency and reason** and sent once a minute as one `economy.flow` each: how many
+changes, the total gained, the total spent, and the balance after the last one. A sell wand firing a thousand times
+a minute costs one event. At most 50,000 of those keys are held at once; past that, new ones wait for the next
+minute. On shutdown the last partial minute is sent with the rest.
+
+</Details>
+
+<Details title="Definitions">
 
 | Metric | Definition |
 |---|---|
-| Money supply | Per period, each storage scope's latest `supply` report, summed over scopes. A period without a report is empty, never carried forward. |
+| Money in circulation | Per period, each storage scope's latest `supply` report, summed over scopes. A period without a report is empty, never carried forward. |
 | Estimated money supply | For a currency nobody reports a supply for: the sum of every known player's latest balance (below zero counts as zero), carried forward between changes. Players not seen since tracking began are missing, so it trails the real supply; the page labels it **estimated** with the number of players behind it. |
 | Reason net | Money in − money out of one reason, over every player. A payment between players cancels inside its reason. |
-| Created / destroyed | The positive / negative reason nets. |
-| Sink ratio | Destroyed ÷ created. Below 1 money piles up; above 1 it drains. |
-| Source, sink, transfer | A transfer when the net is within 5% of the larger of its gross in and out; otherwise a source (positive) or a sink (negative). |
+| Added / removed | The positive / negative reason nets. |
+| Sink ratio | Removed ÷ added. Below 1 money piles up; above 1 it drains. |
+| Adds money, removes money, transfer | A transfer when the net is within 5% of the larger of its gross in and out; otherwise it adds money (positive) or removes it (negative). |
 | Latest known balance | A player's most recent balance from a change or a balance read. |
 | Gini | 0 when everyone holds the same, 1 when one player holds everything. |
 
+</Details>
+
 <Callout type="note" title="Shared or separate economies">
-Every server reports the same currency ids (`vault`, `playerpoints`), whether they share one economy or
-each run their own. Over all servers, a player's balance is the last one reported anywhere — right for
-a shared economy, and one of two balances for separate ones. Read separate economies one server at a
-time.
+Every server reports the same currency ids (`vault`, `playerpoints`), whether they share one economy or each run
+their own. Over all servers, a player's balance is the last one reported anywhere: right for a shared economy, and
+one of two balances for separate ones. Read separate economies one server at a time.
 </Callout>
+
+<Cards>
+  <Card title="Report your own economy" href="/docs/exyliaanalytics/api#reporting-the-economy">Send changes and supply from your plugin.</Card>
+  <Card title="Revenue" href="/docs/exyliaanalytics/revenue">Compare in-game money with what the store earns.</Card>
+  <Card title="Common problems" href="/docs/exyliaanalytics/troubleshooting">The page is empty or a plugin is not seen.</Card>
+</Cards>
