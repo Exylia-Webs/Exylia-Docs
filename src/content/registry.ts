@@ -2207,8 +2207,8 @@ export const plugins: Plugin[] = [
     name: "ExyliaEmotes",
     tagline: { en: "Emotes performed by an animated body, filmed from outside", es: "Emotes hechos por un cuerpo animado, filmados desde fuera" },
     summary: {
-      en: "88 emotes in four tabs, each one a body choreographed joint by joint that the player watches from a camera outside it: 66 that loop until stopped, two duets that meet in the middle, props built from blocks, picked from a classic menu or a 3D selector that dances each one live in the player's skin, owned by permission or won out of a crate, looped in lobby showcases, and written in a file a server owner can edit in game.",
-      es: "88 emotes en cuatro pestañas, cada uno un cuerpo coreografiado articulación a articulación que el jugador mira desde una cámara fuera de él: 66 que se repiten hasta que se paran, dos duetos que se encuentran en el medio, atrezo hecho de bloques, elegidos en un menú clásico o en un selector 3D que baila cada uno en vivo con la skin del jugador, conseguidos por permiso o ganados en una caja, repetidos en showcases de lobby, y escritos en un archivo que el dueño puede editar en el juego.",
+      en: "107 emotes in five tabs, each one a body choreographed joint by joint that the player watches from a camera outside it: 85 that loop until stopped, two duets that meet in the middle, props built from blocks, picked from a classic menu or a 3D selector that dances each one live in the player's skin, owned by permission or won out of a crate, looped in lobby showcases, and written in a file a server owner can edit in game.",
+      es: "107 emotes en cinco pestañas, cada uno un cuerpo coreografiado articulación a articulación que el jugador mira desde una cámara fuera de él: 85 que se repiten hasta que se paran, dos duetos que se encuentran en el medio, atrezo hecho de bloques, elegidos en un menú clásico o en un selector 3D que baila cada uno en vivo con la skin del jugador, conseguidos por permiso o ganados en una caja, repetidos en showcases de lobby, y escritos en un archivo que el dueño puede editar en el juego.",
     },
     version: "1.4.1",
     status: "stable",
