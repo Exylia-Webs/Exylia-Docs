@@ -20,7 +20,7 @@ Follow WRITING.md. ExyliaFFA is the model. One row per plugin; mark done after r
 | `exyliaduels` | `ExyliaDuels` | done (es labels of kit-rules and history unchecked) |
 | `exyliaeconomy` | `ExyliaEconomy` | done |
 | `exyliaemotes` | `ExyliaEmotes` | done (configuration leftover) |
-| `exyliaevents` | `ExyliaEvents` | done (introduction, installation bodies; configuration, api, faq tables leftovers) |
+| `exyliaevents` | `ExyliaEvents` | done |
 | `exyliaffa` | `ExyliaFFA` | done |
 | `exyliagraves` | `ExyliaGraves` | done |
 | `exyliahiteffect` | `ExyliaHitEffect` | done (configuration, api, faq leftovers) |
