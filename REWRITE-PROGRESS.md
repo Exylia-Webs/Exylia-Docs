@@ -29,7 +29,7 @@ Follow WRITING.md. ExyliaFFA is the model. One row per plugin; mark done after r
 | `exyliakillcam` | `ExyliaKillCam` | done |
 | `exylialobby` | `ExyliaLobby` | done |
 | `exyliakilleffect` | `ExyliaKillEffect` | done |
-| `exyliamarket` | `ExyliaMarket` | done (introduction, installation, integrations pending cleanup) |
+| `exyliamarket` | `ExyliaMarket` | done |
 | `exyliamines` | `ExyliaMines` | done |
 | `exyliamobs` | `ExyliaMobs` | done |
 | `exyliaplayervaults` | `ExyliaPlayerVaults` | done |
