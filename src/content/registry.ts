@@ -2188,7 +2188,7 @@ const WARZONE_NAV: NavGroup[] = [
     ],
   },
   {
-    label: { en: "Modules", es: "Módulos" },
+    label: { en: "Guides", es: "Guías" },
     pages: [
       page("supply-drops", "supply-drops", "suministros"),
       page("power-ups", "power-ups", "power-ups"),
@@ -2196,11 +2196,6 @@ const WARZONE_NAV: NavGroup[] = [
       page("regen-zones", "regen-zones", "zonas-de-regeneracion"),
       page("duel-rooms", "duel-rooms", "salas-de-duelo"),
       page("banned-items", "banned-items", "objetos-prohibidos"),
-    ],
-  },
-  {
-    label: { en: "Server", es: "Servidor" },
-    pages: [
       page("region-flags", "region-flags", "flags-de-region"),
       page("integrations", "integrations", "integraciones"),
       page("migrating", "migrating", "migracion"),
@@ -2214,6 +2209,12 @@ const WARZONE_NAV: NavGroup[] = [
       page("placeholders", "placeholders", "placeholders"),
       page("configuration", "configuration", "configuracion"),
       page("api", "api", "api"),
+    ],
+  },
+  {
+    label: { en: "Help", es: "Ayuda" },
+    pages: [
+      page("troubleshooting", "troubleshooting", "problemas-comunes"),
       page("faq", "faq", "faq"),
     ],
   },
