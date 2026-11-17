@@ -21,7 +21,7 @@ Follow WRITING.md. ExyliaFFA is the model. One row per plugin; mark done after r
 | `exyliaeconomy` | `ExyliaEconomy` | todo |
 | `exyliaemotes` | `ExyliaEmotes` | todo |
 | `exyliaevents` | `ExyliaEvents` | todo |
-| `exyliaffa` | `ExyliaFFA` | pilot in progress |
+| `exyliaffa` | `ExyliaFFA` | done |
 | `exyliagraves` | `ExyliaGraves` | todo |
 | `exyliahiteffect` | `ExyliaHitEffect` | todo |
 | `exyliajobs` | `ExyliaJobs` | todo |
