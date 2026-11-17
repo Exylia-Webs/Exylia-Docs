@@ -333,12 +333,14 @@ const SHIELDS_NAV: NavGroup[] = [
     pages: [
       page("introduction", "introduction", "introduccion"),
       page("installation", "installation", "instalacion"),
+      page("first-steps", "first-steps", "primeros-pasos"),
     ],
   },
   {
-    label: { en: "Configuring", es: "Configurar" },
+    label: { en: "Guides", es: "Guías" },
     pages: [
       page("designs", "designs", "disenos"),
+      page("ranks", "ranks", "rangos"),
       page("community", "community", "comunidad"),
       page("crate", "crate", "caja"),
       page("3d-menus", "3d-menus", "menus-3d"),
@@ -348,8 +350,16 @@ const SHIELDS_NAV: NavGroup[] = [
     label: { en: "Reference", es: "Referencia" },
     pages: [
       page("commands", "commands", "comandos"),
+      page("permissions", "permissions", "permisos"),
       page("placeholders", "placeholders", "placeholders"),
+      page("configuration", "configuration", "configuracion"),
       page("api", "api", "api"),
+    ],
+  },
+  {
+    label: { en: "Help", es: "Ayuda" },
+    pages: [
+      page("troubleshooting", "troubleshooting", "problemas-comunes"),
       page("faq", "faq", "faq"),
     ],
   },
