@@ -565,17 +565,12 @@ const CLANS_NAV: NavGroup[] = [
     ],
   },
   {
-    label: { en: "Configuring", es: "Configurar" },
+    label: { en: "Guides", es: "Guías" },
     pages: [
       page("modules", "modules", "modulos"),
       page("roles", "roles", "roles"),
       page("claims", "claims", "terrenos"),
       page("levels", "levels", "niveles"),
-    ],
-  },
-  {
-    label: { en: "Systems", es: "Sistemas" },
-    pages: [
       page("dtr", "dtr", "dtr"),
       page("relations", "relations", "relaciones"),
       page("war-tools", "war-tools", "herramientas-de-guerra"),
@@ -596,6 +591,12 @@ const CLANS_NAV: NavGroup[] = [
       page("menus", "menus", "menus"),
       page("database", "database", "base-de-datos"),
       page("api", "api", "api"),
+    ],
+  },
+  {
+    label: { en: "Help", es: "Ayuda" },
+    pages: [
+      page("troubleshooting", "troubleshooting", "problemas-comunes"),
       page("faq", "faq", "faq"),
     ],
   },
