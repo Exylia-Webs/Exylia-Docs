@@ -1,60 +1,79 @@
 ---
 title: "Show staff a status line"
-description: "Put one line above the hotbar that shows the toggles that are on and how the server is doing."
+description: "Put one line above the hotbar that shows which staff toggles are on and how the server is doing, and change what it says."
 questions:
   - "How do I change the staff action bar?"
   - "Which toggles does the action bar show?"
+  - "How do I add TPS or a toggle to the staff action bar?"
   - "How do I turn the action bar off?"
+  - "Why do I see VANISH above my hotbar?"
 updated: "1.8.0"
 ---
 
-A staff member on duty has half a dozen toggles running at once, and reading each one means opening
-something. The action bar puts the answer on screen: which switches are on, and how the server is
-holding up, on a single line that redraws itself.
+A staff member on duty has half a dozen toggles running at once. The action bar puts them on one line above the hotbar, with a tick or a cross each, next to the server's TPS, MSPT and CPU. It redraws itself every second, and there is no command to learn.
 
-Module id `actionbar`, switch `modules.action-bar`. `refresh-ticks` is in `modules/actionbar/config.yml`;
-the lines and the icons are text, in `lang/<language>/modules/actionbar/messages.yml`.
+## Before you start
 
-There is no command: the line appears while it applies and is gone when it does not.
+- The module switch is `modules.action-bar` in `plugins/ExyliaStaff/config.yml`, on by default. You can also switch it from `/staffadmin settings` (**Modules**, then the communication card).
+- The line is drawn for players in [staff mode](/docs/exyliastaff/staff-mode), and for players who are [vanished](/docs/exyliastaff/vanish) while off duty. Nobody else sees it.
+- TPS, MSPT and CPU in the shipped line are `%server_tps%`, `%server_mspt%` and `%server_cpu_process:percent%`, provided by ExyliaLib's server placeholders.
 
-## The two lines
+## Steps
 
-| Key | When it shows |
-|---|---|
-| `staff-mode` | While in staff mode. |
-| `vanish` | While vanished off duty. |
+<Steps>
+  <Step title="See the default line">
+    Run `/staff`. Above your hotbar you read `STAFF ▎ ✔ Vanish · ✔ Alerts · ✖ Chat ▎ TPS 20.0 · MSPT 12.3 · CPU 8%`. The first three are the toggles for [vanish](/docs/exyliastaff/vanish), [mining alerts](/docs/exyliastaff/mining) and [staff chat](/docs/exyliastaff/staff-chat).
+  </Step>
+  <Step title="Open the text file">
+    Open `plugins/ExyliaStaff/lang/<language>/modules/actionbar/messages.yml`. `staff-mode` is the line shown on duty, `vanish` is the line shown when you are hidden off duty. Both are plain text, so [colours and gradients](/docs/exylialib/colours) work in them.
+  </Step>
+  <Step title="Add or remove a toggle">
+    To show a toggle, write `%staff_actionbar_check_<placeholder>%` followed by its name. The placeholder goes without its percent signs: `%staff_actionbar_check_staff_vanished%` asks `%staff_vanished%` and prints a green tick when it is on, a red cross when it is off. To remove one, delete its piece of the line.
+  </Step>
+  <Step title="Reload">
+    Run `/staffadmin reload`. The bar redraws with the new text at once.
+  </Step>
+</Steps>
 
-Staff mode wins, because somebody on duty and vanished is reading the staff line, which already says
-the vanish. Leaving a line empty turns that situation off.
+## Check that it works
 
-The vanish line exists for the state nothing else reports: `/vanish` on its own leaves no staff
-hotbar to read and no staff sidebar, so without it nothing on screen says you are hidden.
+Run `/staff` and read the bar, then `/staff` again to leave: it goes away. Run `/vanish` without staff mode and a yellow `VANISH ▎ Hidden and off duty` line appears; `/vanish` again removes it. If you are on duty and vanished you read the staff line, since that one already shows the vanish tick.
 
-Both are ordinary text with placeholders in them, so a server that wants a different summary edits
-the file rather than the plugin.
+## Going further
+
+### Change how often it redraws
+
+`refresh-ticks` in `modules/actionbar/config.yml` is the pause between redraws, `20` by default (once a second). The client fades an action bar after about three seconds, so keep it well under `60`.
+
+### Change the ticks and crosses
+
+`icon-on` (default `{success}✔`) and `icon-off` (default `{error}✖`) in the same `messages.yml` are what a toggle prints. `true`, `yes`, `on`, `1` and `enabled` get the tick; everything else, including a placeholder that does not resolve, gets the cross. A module that is switched off shows a cross, which is more honest than an error across the screen.
+
+### Show any value, not only toggles
+
+Anything PlaceholderAPI resolves can go in the line: `%server_tps%`, a balance, the number of open reports. Ticks and crosses are only for true or false placeholders.
+
+### Turn one line off
+
+Leave `staff-mode` or `vanish` empty and that situation shows no bar. To turn the whole thing off, set `modules.action-bar: false` and restart, or stop it from the module list in `/staffadmin modules`.
+
+<Details title="Technical details">
 
 | Key | File | Default | What it means |
 |---|---|---|---|
-| `refresh-ticks` | `config.yml` | `20` | Ticks between redraws. Once a second. The client fades an action bar after about 60, so this stays well below that. |
-| `icon-on` | `messages.yml` | `{success}✔` | Drawn for a toggle that is on. |
-| `icon-off` | `messages.yml` | `{error}✖` | Drawn for a toggle that is off. |
+| `refresh-ticks` | `modules/actionbar/config.yml` | `20` | Ticks between redraws. |
+| `staff-mode` | `lang/<language>/modules/actionbar/messages.yml` | the line above | Shown while in staff mode. It wins over `vanish`. |
+| `vanish` | same | `VANISH ▎ Hidden and off duty ▎ TPS … · MSPT …` | Shown while vanished with staff mode off. Without it nothing on screen says you are hidden, since `/vanish` alone has no hotbar or sidebar. |
+| `icon-on`, `icon-off` | same | `{success}✔`, `{error}✖` | What a toggle prints. |
 
-## Ticks and crosses
+The module id is `actionbar`. The client has one action bar: if another plugin writes to it, the newest writer wins and ExyliaStaff puts its line back on the next check.
 
-`%staff_actionbar_check_<placeholder>%` writes `icon-on` or `icon-off` for any other placeholder
-that reads as true or false. The placeholder named after `check` is written without its percent
-signs, so `%staff_actionbar_check_staff_vanished%` asks `%staff_vanished%`.
+<Placeholders group="action bar" />
 
-`true`, `yes`, `on`, `1` and `enabled` are the answers that get the tick. Everything else gets the
-cross, an unresolved placeholder included: a module that is switched off is off, and saying so is
-more honest than an error across the screen.
+</Details>
 
-## The shipped line
-
-```yaml title="plugins/ExyliaStaff/lang/en/modules/actionbar/messages.yml"
-staff-mode: '{primary}STAFF {letters_black}▎ %staff_actionbar_check_staff_vanished% {letters}Vanish {letters_black}· %staff_actionbar_check_staff_mining_alerts_active% {letters}Alerts {letters_black}· %staff_actionbar_check_staff_staffchat_active% {letters}Chat {letters_black}▎ {letters}TPS {info}%server_tps% {letters_black}· {letters}MSPT {info}%server_mspt% {letters_black}· {letters}CPU {info}%server_cpu_process:percent%'
-vanish: '{warning}VANISH {letters_black}▎ {letters}Hidden and {highlight}off duty {letters_black}▎ {letters}TPS {info}%server_tps% {letters_black}· {letters}MSPT {info}%server_mspt%'
-```
-
-Vanish, mining alerts and staff chat as ticks or crosses; TPS, MSPT and CPU as numbers. Any
-placeholder your server resolves works here, so the summary is whatever your staff need to see.
+<Cards>
+  <Card title="Staff mode" href="/docs/exyliastaff/staff-mode">The hotbar and sidebar that go with this line.</Card>
+  <Card title="Colours" href="/docs/exylialib/colours">Colour tags and gradients for the text.</Card>
+  <Card title="Messages and languages" href="/docs/exylialib/messages-and-languages">How the files under lang/ are chosen and edited.</Card>
+</Cards>

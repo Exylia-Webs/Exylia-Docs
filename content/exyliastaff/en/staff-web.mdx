@@ -1,131 +1,90 @@
 ---
 title: "Link the network to Exylia Staff Web"
-description: "Link your network to staff.exylia.net to manage punishments, reports, ranks, appeals and configuration from the browser."
+description: "Link your network to staff.exylia.net, let staff log in with one click, and get ban-evasion and anticheat alerts, ranks, appeals and managed configuration."
 questions:
   - "How do I link my server to Exylia Staff Web?"
   - "How do I unlink Exylia Staff Web?"
   - "How do staff log in to Exylia Staff Web?"
+  - "How do I get alerts for alternate accounts of banned players?"
+  - "Why does Exylia Staff Web not connect?"
 updated: "1.8.0"
 ---
 
-[Exylia Staff Web](https://staff.exylia.net) is the panel the team works from outside the game. Once
-the network is linked, every punishment, report, freeze, audit row and staff session reaches the web,
-and the web can act in game as the staff member who clicked. This page covers what a server owner sets
-up on the plugin's side; the web is configured on the web.
+[Exylia Staff Web](https://staff.exylia.net) is the panel your team works from outside the game. Once the network is linked, every punishment, report, freeze, audit row and staff session reaches the web, and the web can act in game as the staff member who clicked. This page is the plugin's side: linking, logging staff in, and the alerts that come with it. The web itself is configured on the web.
 
-Three modules take part:
+## Before you start
 
-| Module | Switch | What it does |
-|---|---|---|
-| `web` | `modules.web` | The link itself, the outbox, the commands the web sends and managed configuration. |
-| `alts` | `modules.alts` | Remembers the address of every login, sealed and hashed, to find alternate accounts. Needs `web`. |
-| `anticheat` | `modules.anticheat` | Sums Grim, Vulcan or Matrix alerts per player and minute for the web, and reacts to bursts. |
+- The link is stored in the database, not in a file: every server that reads the same database finds it and connects on its own. On a network, point every server at the same database first, as [Installation](/docs/exyliastaff/installation#database) describes. A server on its own H2 database is a network of one.
+- Nothing needs a port opened: each server keeps one outgoing connection to the gateway.
+- You need `exyliastaff.web.link` (op by default) or the console.
+- Behind a proxy, forward the real player address (Velocity modern forwarding or BungeeCord IP forwarding), or the alternate-account alerts below will think everyone is related.
 
-All three are on by default and do nothing until the network is linked.
+Three modules take part, all on by default and idle until the network is linked: `web` (the link), `alts` (alternate accounts, needs `web`) and `anticheat` (GrimAC, Vulcan and Matrix alerts).
 
-## Before you link
-
-The link is stored in the database, not in a file: every server that reads the same database finds it
-and connects on its own. On a network, point every server at the same database first, as
-[Installation](/docs/exyliastaff/installation#database) describes. A server on its own H2 database is a
-network of one.
-
-Nothing needs a port opened: each server keeps one outgoing connection to the gateway.
-
-## Linking
+## Steps
 
 <Steps>
   <Step title="Ask for a code">
-    On any one server, run `/staffadmin weblink`, from the console or in game with
-    `exyliastaff.web.link`. The plugin prints a code, how long it is valid for, and a link to
-    approve it. Until the network is linked, admins with `exyliastaff.web.link` are reminded of this
-    command, clickable, a few seconds after they join.
+    On any one server run `/staffadmin weblink`, from the console or in game. The plugin prints a code, how long it is valid for, and a link to approve it. Until the network is linked, admins with `exyliastaff.web.link` are reminded of this command, clickable, a few seconds after they join. It is refused while the network is already linked.
   </Step>
   <Step title="Approve it on the web">
-    Open the link, sign in and pick the workspace. The plugin waits for the approval and answers
-    "Network linked to `<workspace>`. Every server connects on its own."
+    Open the link, sign in and pick the workspace. The plugin waits for the approval and answers "Network linked to `<workspace>`. Every server connects on its own."
   </Step>
   <Step title="Check every server">
-    `/staff web status` on each server should read `connected`.
+    Run `/staff web status` on each server. It should read `connected`, and shows the workspace, whether this server sends its snapshots, whether LuckPerms is there, which anticheats are hooked, the last problem and the managed configuration.
+  </Step>
+  <Step title="Log staff in">
+    Each staff member runs `/staff web` (permission `exyliastaff.staff`). They get a single-use link, valid for five minutes: the Discord account that opens it is bound to their Minecraft account and joins the workspace without an invite. A staff member already bound gets a link to the web instead. Once the network is linked, staff whose account is not bound yet are reminded of `/staff web` when they join. Account linking can be turned off on the web; `/staff web` then says so.
   </Step>
 </Steps>
 
-| Command | Permission | What it does |
-|---|---|---|
-| `/staffadmin weblink` | `exyliastaff.web.link` | Links the network. Refused while it is already linked. |
-| `/staff web status` | `exyliastaff.web.link` | This server's state, workspace, whether it sends the snapshots, whether LuckPerms is there, which anticheats are hooked, the last problem, and the managed configuration. |
-| `/staff web unlink` | `exyliastaff.web.link` | Unlinks the network and drops what was waiting to be sent. Every server disconnects within a minute. |
-| `/staff web` | `exyliastaff.staff` | A single-use link, valid for five minutes: the Discord account that opens it is bound to this Minecraft account and joins the workspace without an invite. A staff member already bound gets a link to the web instead. |
-| `/appeal <code>` | None | A punished player confirms an appeal they opened on the web. |
+## Check that it works
 
-Account linking can be turned off on the web; `/staff web` then says so. Once the network is linked,
-staff with `exyliastaff.staff` whose account is not bound yet are reminded of `/staff web` when they
-join. When the web refuses this
-version of the plugin, online players with `exyliastaff.web.link` are told to update it.
+`/staff web status` reads `connected` on every server. Run `/staff web` as a staff member, open the link and sign in with Discord: the web shows you as that Minecraft account. Resolve a [report](/docs/exyliastaff/reports) in game and it appears on the web within moments.
 
-## What reaches the web
+To undo it, `/staff web unlink` unlinks the network and drops what was waiting to be sent; every server disconnects within a minute. If the web refuses this version of the plugin, online players with `exyliastaff.web.link` are told to update it.
 
-Every module writes what happens into an outbox table, `web_outbox`, and each server sends its own
-rows in order. Nothing is lost while the web or the connection is down: the rows wait and leave when
-it comes back. A command the web sends runs once, as the staff member who clicked, even if the gateway
-delivers it twice.
+## Going further
 
-## Managed configuration
+### What reaches the web
+
+Every module writes what happens into an outbox table, `web_outbox`, and each server sends its own rows in order. Nothing is lost while the web or the connection is down: the rows wait and leave when it comes back. A command the web sends runs once, as the staff member who clicked, even if the gateway delivers it twice.
+
+### Managed configuration
 
 From the web, a workspace can take over the plugin's behaviour files. A managed file:
 
 - has a header saying `Managed by Exylia Staff Web — local edits are ignored, edit it on the web`;
-- has the web's values written over it before it is loaded, at startup, when its module enables and
-  on `/staffadmin reload`, so an edit on disk never takes effect;
+- has the web's values written over it before it is loaded, at startup, when its module enables and on `/staffadmin reload`, so an edit on disk never takes effect;
 - keeps working while the web is down, from the last revision cached in `web/managed.json`.
 
-The files the web can manage are `config.yml` and every module's `modules/<id>/config.yml`. It never
-manages messages, menus or anything else under `lang/`, the scoreboard and inspect files, or
-`modules/web/config.yml`. In `config.yml`, `language` stays local; module switches are sent by the web
-apart from the files. A file the web stops managing keeps its content and loses the header.
-`/staff web status` shows the revision, how many files are managed and whether the last apply worked.
+The files the web can manage are `config.yml` and every module's `modules/<id>/config.yml`. It never manages messages, menus or anything else under `lang/`, the scoreboard and inspect files, or `modules/web/config.yml`. In `config.yml`, `language` stays local; module switches are sent by the web apart from the files. A file the web stops managing keeps its content and loses the header. In `/staffadmin settings`, managed files are left out, and `/staff web status` shows the revision, how many files are managed and whether the last apply worked.
 
-## LuckPerms
+### LuckPerms and ranks
 
-LuckPerms is optional. With it, the web reads who is staff — everybody holding `exyliastaff.staff`,
-directly or through a group, on any server — and can give and take ranks from the web, network-wide or
-on chosen servers.
+LuckPerms is optional. With it, the web reads who is staff, everybody holding `exyliastaff.staff` directly or through a group on any server, and can give and take ranks, network-wide or on chosen servers. A rank given to one server is a LuckPerms node with that server's `server` context, taken from the `server` value in each LuckPerms `config.yml`. A server left at `global` cannot be told apart, so name every backend there before giving ranks per server. Without LuckPerms, only players online right now can be checked and rank changes from the web are refused.
 
-A rank given to one server is a LuckPerms node with that server's `server` context. Each server
-reports its own: the `server` value in LuckPerms' `config.yml`. A server left at `global` cannot be
-told apart, so name every backend there before giving ranks per server.
+### Appeals
 
-Without LuckPerms, only players online right now can be checked for permissions, and rank changes
-from the web are refused.
+A punished player opens an appeal on the web, which shows them a six-character code. They join and type `/appeal <code>`; the plugin hands the code to the web, which matches it to the account. It needs no permission, has a ten-second cooldown against guessing, and answers "Appeals cannot be confirmed right now" while the network is not linked.
 
-## Appeals
+### Alternate accounts
 
-A punished player opens an appeal on the web, which shows them a six-character code. They join and
-type `/appeal <code>`; the plugin hands the code to the web, which matches it to the account. It needs
-no permission, has a ten-second cooldown against guessing, and answers "Appeals cannot be confirmed
-right now" while the network is not linked.
+With `alts` on, every login stores a hash of the address, to match accounts on, and the address sealed under a key only the network secret opens, for the web. Nothing is recorded before the link, and relinking starts a fresh history. How long a login is kept is set on the web: 90 days unless changed.
 
-## Alternate accounts
+When an account that shares an address with one under an active ban joins, online staff with `exyliastaff.alts` are told, with a click to the banned account's `/history`. Bans are the `BAN`, `TEMPBAN` and `IPBAN` punishments the [punishments](/docs/exyliastaff/punishments) module recorded.
 
-With `alts` on, every login stores a hash of the address, to match accounts on, and the address sealed
-under a key only the network secret opens, for the web. Both keys come from the network secret, so
-nothing is recorded before the link, and relinking starts a fresh history. How long a login is kept
-is set on the web: 90 days unless changed.
-
-When an account that shares an address with one under an active ban joins, online staff with
-`exyliastaff.alts` are told, with a click to the banned account's `/history`. Bans are the `BAN`,
-`TEMPBAN` and `IPBAN` punishments the [punishments](/docs/exyliastaff/punishments) module recorded.
-
-A shared address alone is weak evidence, so only a strong link alerts, and the alert says why: the two
-accounts share two or more addresses; they used this one within the web's overlap window (7 days unless
-changed) and it is not crowded; or the joining account is new since the ban. An address that 10 accounts
-(unless changed) used inside that window counts as crowded and never alerts. Both numbers are set on
-the web. A weak link stays on the web only.
+A shared address alone is weak evidence, so only a strong link alerts, and the alert says why: the two accounts share two or more addresses; they used this one within the web's overlap window (7 days unless changed) and it is not crowded; or the joining account is new since the ban. An address that 10 accounts (unless changed) used inside that window counts as crowded and never alerts. Both numbers are set on the web. A weak link stays on the web only.
 
 <Callout type="warning" title="Behind a proxy, forward the real address">
-A backend only sees players' real addresses with Velocity modern forwarding or BungeeCord IP
-forwarding. Without it, every player shares the proxy's address and every account looks related.
+A backend only sees players' real addresses with Velocity modern forwarding or BungeeCord IP forwarding. Without it, every player shares the proxy's address and every account looks related.
 </Callout>
+
+### Anticheat alerts
+
+With `anticheat` on, GrimAC, Vulcan and Matrix are hooked when they are installed, and their alerts are summed per player, check and minute for the web. A player who sets off a spike, as many alerts in one minute as the web's threshold (every check together, 20 unless changed, 0 for never), has their [replay](/docs/exyliastaff/replays) saved and is pointed out to staff with `exyliastaff.anticheat`, once per minute, with a click that teleports to them.
+
+<Details title="Technical details">
 
 ```yaml title="plugins/ExyliaStaff/modules/alts/config.yml"
 alert-evasion: true
@@ -138,14 +97,6 @@ ignored-addresses:
 | `alert-evasion` | `true` | Warn staff with `exyliastaff.alts` about a possible ban evasion. |
 | `ignored-addresses` | `127.0.0.1` | Addresses never recorded: the proxy itself, a shared office, a test bot. |
 
-## Anticheat alerts
-
-With `anticheat` on, GrimAC, Vulcan and Matrix are hooked when they are installed, and their alerts
-are summed per player, check and minute for the web. A player who sets off a spike — as many alerts in
-one minute as the web's threshold, every check together, 20 unless changed, 0 for never — has their
-[replay](/docs/exyliastaff/replays) saved and is pointed out to staff with `exyliastaff.anticheat`, once
-per minute, with a click that teleports to them.
-
 ```yaml title="plugins/ExyliaStaff/modules/anticheat/config.yml"
 capture-replay: true
 alert-staff: true
@@ -156,8 +107,6 @@ alert-staff: true
 | `capture-replay` | `true` | Save the replay of a player who sets off a spike. Needs the replay module. |
 | `alert-staff` | `true` | Tell online staff with `exyliastaff.anticheat`. |
 
-## The web module's file
-
 ```yaml title="plugins/ExyliaStaff/modules/web/config.yml"
 gateway-url: https://staff-gateway.exylia.net
 web-url: https://staff.exylia.net
@@ -165,68 +114,34 @@ chat-history:
   log-public: true
   log-private: true
   log-commands: true
-  private-commands:
-    - msg
-    - tell
-    - w
-    - whisper
-    - m
-    - t
-    - pm
-    - dm
-    - message
-    - r
-    - reply
-    - essentials:msg
-    - essentials:tell
-    - essentials:w
-    - essentials:r
-    - essentials:reply
-    - minecraft:msg
-    - minecraft:tell
-    - minecraft:w
-  sensitive-commands:
-    - login
-    - l
-    - log
-    - register
-    - reg
-    - changepassword
-    - changepass
-    - cp
-    - unregister
-    - premium
-    - 2fa
-    - totp
-    - authme
-    - password
-    - pass
-    - email
+  private-commands: [msg, tell, w, whisper, m, t, pm, dm, message, r, reply, essentials:msg, essentials:tell, essentials:w, essentials:r, essentials:reply, minecraft:msg, minecraft:tell, minecraft:w]
+  sensitive-commands: [login, l, log, register, reg, changepassword, changepass, cp, unregister, premium, 2fa, totp, authme, password, pass, email]
 ```
 
-Leave both URLs as they are unless Exylia support says otherwise.
+Leave both URLs as they are unless Exylia support says otherwise. The network secret is never in a file: it is sealed in the database, so this file is safe to paste into a support ticket.
 
-`chat-history` is what the web's chat history keeps. Nothing is sent while the network is not linked,
-and how long it is kept is set on the web.
+`chat-history` is what the web's chat history keeps. Nothing is sent while the network is not linked, and how long it is kept is set on the web.
 
 | Key | Default | What it does |
 |---|---|---|
 | `log-public` | `true` | Public chat, cancelled lines included: a muted player's attempts are marked as such. |
 | `log-private` | `true` | Private messages sent with one of `private-commands`. Only staff with the web's permission to read private chat see them. |
 | `log-commands` | `true` | Every other command players run. |
-| `private-commands` | `msg`, `tell`, `r` and the rest above | Commands that send a private message, `<command> <player> <message>`. `r` and `reply` answer the last conversation. |
-| `sensitive-commands` | `login`, `register`, `changepassword` and the rest above | Stored without their arguments, so passwords never leave the server. A plain name also covers its namespaced form. | The network secret is never in a file:
-it is sealed in the database, so this file is safe to paste into a support ticket.
+| `private-commands` | as above | Commands that send a private message, `<command> <player> <message>`. `r` and `reply` answer the last conversation. |
+| `sensitive-commands` | as above | Stored without their arguments, so passwords never leave the server. A plain name also covers its namespaced form. |
 
-## Messages
+Messages: `lang/<language>/modules/web/messages.yml` holds the link, account, status and appeal lines, with `account-linked` and the join reminders `remind-network` and `remind-account`, all with `%url%`; `modules/alts/messages.yml` has `evasion-alert` with `%player%`, `%banned%` and `%type%`; `modules/anticheat/messages.yml` has `spike-alert` with `%player%`, `%alerts%`, `%anticheat%` and `%check%`. See [Messages and languages](/docs/exylialib/messages-and-languages).
 
-`lang/<language>/modules/web/messages.yml` holds the link, account, status and appeal lines, with
-`account-linked` and the two join reminders `remind-network` and `remind-account`, all with `%url%`;
-`lang/<language>/modules/alts/messages.yml` has `evasion-alert` with `%player%`, `%banned%` and
-`%type%`; `lang/<language>/modules/anticheat/messages.yml` has `spike-alert` with `%player%`,
-`%alerts%`, `%anticheat%` and `%check%`.
+Tables: `web_link`, `web_lease`, `web_outbox` and `web_commands_done` for the link, `staff_alts` for the logins.
 
-## Storage
+<Commands group="staff web" />
 
-`web_link`, `web_lease`, `web_outbox` and `web_commands_done` for the link, `staff_alts` for the
-logins.
+<Permissions group="staff web" />
+
+</Details>
+
+<Cards>
+  <Card title="Punishments" href="/docs/exyliastaff/punishments">The bans the alternate-account alerts compare against.</Card>
+  <Card title="Replays" href="/docs/exyliastaff/replays">What an anticheat spike saves.</Card>
+  <Card title="Database" href="/docs/exylialib/database">Share one database so the whole network finds the link.</Card>
+</Cards>
