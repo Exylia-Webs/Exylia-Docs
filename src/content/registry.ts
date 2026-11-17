@@ -1150,6 +1150,12 @@ const SANDBOX_NAV: NavGroup[] = [
       page("menus", "menus", "menus"),
       page("database", "database", "base-de-datos"),
       page("api", "api", "api"),
+    ],
+  },
+  {
+    label: { en: "Help", es: "Ayuda" },
+    pages: [
+      page("troubleshooting", "troubleshooting", "problemas-comunes"),
       page("faq", "faq", "faq"),
     ],
   },
