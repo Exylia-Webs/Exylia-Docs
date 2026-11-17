@@ -1,139 +1,86 @@
 ---
-title: "Entitlements"
-description: "Available, owned and equipped as three separate questions, grants that expire, and why nothing is ever removed because a permission answered no."
+title: "Give and take cosmetics"
+description: "Give a player a cosmetic for good or for a time, take it back, or let a rank own it through a permission, and see what happens when it runs out."
+questions:
+  - "How do I give a player a cosmetic?"
+  - "How do I give a cosmetic for 30 days?"
+  - "How do I take a cosmetic away?"
+  - "Which permission unlocks a tag or a whole tab?"
+  - "What happens when a temporary cosmetic expires?"
+  - "A player lost their rank, why do they still have the cosmetic on?"
+updated: "1.3.0"
 ---
 
-Three separate questions get asked about every cosmetic, and it is worth keeping them apart:
+A player owns a cosmetic through a permission or through a grant from you. A grant can be permanent or expire, and you can take it back at any time.
 
-| | Means | Decided by |
-|---|---|---|
-| **Available** | the cosmetic exists, is not `hidden`, and the viewer meets its `requirement` | the catalogue |
-| **Owned** | the player holds at least one valid entitlement to it | `OwnershipService` |
-| **Equipped** | the player is wearing it | the profile row |
+## Before you start
 
-Owned and equipped are separate on purpose, and that separation is the reason the plugin behaves the
-way it does when a rank lapses or a permission plugin is slow.
+A cosmetic entry with `permission: false` is owned by grants only, whichever permission a player holds. For everything else, both ways work and can be mixed.
 
-## Nothing is removed because a permission said no
+## Give a cosmetic
 
-What a player equipped stays on their row. Ownership is asked again wherever a line is drawn, so a
-cosmetic they no longer own simply stops being drawn — and comes back the day it is theirs again,
-still on the row, still where they left it.
+<Steps>
+  <Step title="Run the command">
+    `/cca give <player> <type:id> [duration]`, for example `/cca give Notch tag:heart` (permanent) or `/cca give Notch chat_color:aurora 30d` (30 days). Durations are `30m`, `2h`, `14d`, `1w`; decimals are allowed.
+  </Step>
+  <Step title="Note where it came from (optional)">
+    Add `--source <name>`, `--ref <id>` and `--note <text>` so you can tell a purchase from a reward later, for example `--source PURCHASE --ref order-1042`. An unknown source is stored as `EXTERNAL`.
+  </Step>
+  <Step title="Check">
+    `/cca check <player> <type:id>` says whether they own it, and `/cca list <player>` lists their grants with a number each.
+  </Step>
+</Steps>
 
-<Callout type="warning" title="Why it works this way">
-An earlier design took off whatever a player wore and no longer owned, and wrote that to their row.
-One wrong answer — a permission plugin still attaching its data on join, a group sync in flight,
-LuckPerms mid recalculation — deleted a cosmetic for good. That is what "sometimes the things I have
-on come off" was. A question asked at draw time can be wrong for a second; a write cannot be undone.
-</Callout>
-
-There is exactly one removal that is written down: a cosmetic that stopped existing. When a player
-deletes a custom tag or colour of their own, or an admin deletes it for them, it comes off the row as
-it goes. Nothing can ever answer "yes" for it again, so leaving it there would only produce a line
-that draws nothing.
-
-## Where ownership comes from
-
-| Source | Stored? | Comes from |
-|---|---|---|
-| `PERMISSION` | no — asked live, memoised for the session | `exyliachatcosmetics.<type>.<id>` and the wildcards below. Ignored for entries with `permission: false` |
-| `ADMIN` | yes | `/cca give` without `--source` |
-| `PURCHASE`, `REWARD`, `EVENT`, `ACHIEVEMENT`, `EXTERNAL` | yes | `/cca give --source <name>`, or `ChatCosmeticsAPI.grant` |
-| the maker of a custom cosmetic | implicit | the `chatcosmetics_custom` row — theirs the way a permission would make it theirs, permanently, with no row to expire |
-| a group named by a rank colour | implicit | the `groups` list on an entry in `rank-colors.yml` |
-
-The permission is asked live and never stored, because it changes while the player is offline. Grants
-are read from whatever the caller holds — the profile in memory for somebody online, the table for
-somebody who is not — and filtered at the point of asking, so an expired row is simply not a grant.
-
-An unrecognised `--source` is read as `EXTERNAL` rather than refused, and `--ref` records which
-plugin or transaction it was.
-
-## Permission nodes
+Or give it by permission: `exyliachatcosmetics.<type>.<id>` unlocks one, and the wildcards below unlock more. Use your permissions plugin, for example LuckPerms, and see [Permissions](/docs/exyliachatcosmetics/permissions).
 
 | Node | Grants |
 |---|---|
-| `exyliachatcosmetics.<type>.<id>` | one cosmetic — `exyliachatcosmetics.tag.mvp` |
-| `exyliachatcosmetics.<type>.category.<category>` | every cosmetic in one category of a type |
-| `exyliachatcosmetics.<type>.*` | every cosmetic of a type |
+| `exyliachatcosmetics.tag.heart` | one cosmetic |
+| `exyliachatcosmetics.tag.category.premium` | every cosmetic in one tab of a type |
+| `exyliachatcosmetics.tag.*` | every cosmetic of a type |
 | `exyliachatcosmetics.*` | everything |
 
-An entry written with `permission: false` is never owned by a node, whichever of the four a player
-holds. The full list is in [Permissions](/docs/exyliachatcosmetics/permissions).
+## Check that it works
 
-## Expiry belongs to the grant
+The player runs `/cc tags` (or the menu of that type). The cosmetic is no longer locked and they can click it to wear it.
 
-Not to the cosmetic. A grant is a row, and the row carries its own clock:
+## Going further
 
-| Column | Means |
-|---|---|
-| `expires_at = 0` | permanent |
-| `revoked_at != 0` | revoked, with the moment it happened kept for the audit |
-| neither expired nor revoked | active |
+### Take it back
 
-An inactive row is simply not a grant. Nothing has to run for an offline player's grant to stop
-counting — the next read filters it out. What the timers do is announce and tidy:
+- `/cca remove <player> <type:id> [source] confirm` revokes every active grant of that cosmetic, or only those of one source.
+- `/cca revoke <id>` revokes exactly one, by the number `/cca list` prints.
+- `/cca unequip <player> <type>` and `/cca equip <player> <type:id>` change what they wear. `/cca clear <player> confirm` takes everything off an online player.
 
-- **Online sweep, every 30 seconds.** One timer walks the profiles of players who are here, because a
-  grant that ran out is only worth announcing to somebody present. Each newly expired grant fires
-  `EntitlementExpiredEvent`, sends the `expired` message, and the cosmetic stops being drawn.
-- **On join.** With `expiry.notify-on-join` on, a player gets one `expiring-soon` line per temporary
-  grant they are actually wearing, with the time left, and one `expired-on-join` line counting the
-  worn grants that ran out while they were away.
-- **Retention, once a day.** Rows that expired or were revoked longer than `expiry.retention-days`
-  ago are deleted. Until then they stay, so `/cca list` and an audit can still see what was given.
+A player may hold several grants for one cosmetic (a permanent one from a rank, a 30-day purchase). Removing one never touches the others.
 
-Durations are ExyliaLib's: `30m`, `2h`, `14d`, `1w`, decimals allowed.
+### When a grant expires
 
-## Several grants for the same cosmetic
+The cosmetic stops being drawn, the player gets an `expired` message, and an online sweep runs every 30 seconds. With `expiry.notify-on-join` on (default), a player is told on join about temporary grants running low and about worn ones that ran out while they were away. Expired and revoked rows stay for `expiry.retention-days` (default `30`) so `/cca list` still shows what was given, then are deleted.
 
-A player may hold more than one grant for one cosmetic at once — a permanent one from a rank, a
-14-day admin grant, a 30-day purchase. A row per grant rather than one expiry per cosmetic is what
-makes that work: removing one never touches the others.
+### Why a cosmetic stays "on" after losing the rank
 
-`/cca remove <player> <type:id> [source]` revokes every active grant of that cosmetic, or only the
-ones from one source. `/cca revoke <id>` revokes exactly one, by the number `/cca list` prints.
+What a player wears is stored on their row, and ownership is asked again whenever a line is drawn. A cosmetic they no longer own is simply not drawn, and it comes back the day it is theirs again, still where they left it. Nothing is removed because a permission said no: a permission plugin still loading on join must never take someone's cosmetics away for good. The only removal that is written down is a custom cosmetic that was deleted.
 
-What everything reads is the single answer `Ownership` gives:
+<Details title="Technical details">
 
-| Field | Is |
-|---|---|
-| `owned` | whether the player has it at all right now |
-| `permanent` | whether any of the grants, or the permission, never runs out |
-| `expiresAt` | when the last of the temporary grants runs out, or `0` when anything is permanent |
-| `byPermission` | whether the node alone would have answered yes |
-| `grants` | the stored grants that are active at this moment |
+Three separate questions: available (exists, not `hidden`), owned (a valid permission or grant) and equipped (worn). Ownership sources:
 
-That is also what decides how a row is drawn in a menu: not owned is locked, owned and worn is
-selected, owned and permanent is the plain template, owned on a clock is expiring. See
-[Menus](/docs/exyliachatcosmetics/menus).
-
-## The database
-
-ExyliaLib's database module, configured in `plugins/ExyliaChatCosmetics/database.yml` — H2 by
-default, with MySQL, MariaDB, PostgreSQL and MongoDB supported. Tables are created and widened
-automatically; nothing needs importing by hand. The full reference is in
-[Database](/docs/exylialib/database).
-
-| Table | Key | Columns |
+| Source | Stored | Comes from |
 |---|---|---|
-| `chatcosmetics_profiles` | `uuid` | `name`, `equipped` (`type=id,id;type=id`), `favorites` (`type:id,type:id`), `active_loadout`, `created_at`, `updated_at` |
-| `chatcosmetics_entitlements` | `id`, generated | `player_uuid`\*, `cosmetic_key`\*, `source`, `source_ref`, `granted_by`, `granted_at`, `expires_at`, `revoked_at`, `note` |
-| `chatcosmetics_custom` | `id`, generated | `player_uuid`\*, `type` (`customtag`, `customcolor`, `customnick`, `customrank`), `text`, `color`, `animation`, `created_at` |
-| `chatcosmetics_loadouts` | `id`, generated | `player_uuid`\*, `name`, `slots`, `created_at` |
-| `chatcosmetics_tokens` | `id`, generated | `player_uuid`\*, `type`, `kind` (`create` or `edit`), `amount`, `updated_at` |
+| `PERMISSION` | no, asked live | `exyliachatcosmetics.<type>.<id>` and the wildcards; ignored for `permission: false` |
+| `ADMIN` | yes | `/cca give` without `--source` |
+| `PURCHASE`, `REWARD`, `EVENT`, `ACHIEVEMENT`, `EXTERNAL` | yes | `/cca give --source <name>`, or the [API](/docs/exyliachatcosmetics/api) |
+| the maker of a custom cosmetic | implicit | their row, permanent |
+| a group named by a rank colour | implicit | the `groups` list in `rank-colors.yml` |
 
-\* indexed.
+A grant row carries `expires_at` (`0` is permanent) and `revoked_at`; an inactive row is simply not a grant, so an offline player's grant stops counting without anything running.
 
-A profile is read once on join — the row, the grants, the custom rows, the loadouts and the token
-balances, in one pass — and held in memory for as long as the player is online. Two joins in flight
-at once share the one read, so a fast relog cannot have a second read finish first and write older
-data.
+Tables (H2 by default, others as in [Database](/docs/exylialib/database)): `chatcosmetics_profiles`, `chatcosmetics_entitlements`, `chatcosmetics_custom`, `chatcosmetics_loadouts`, `chatcosmetics_tokens`. A profile is read once on join and held in memory, so chat adds no queries. Writes are batched and flushed every 5 seconds, on quit and on shutdown.
 
-Writes are debounced. A menu click marks the row dirty and a timer flushes every **5 seconds**, on
-quit, and on shutdown. A player picking through a browser produces one write, not thirty.
+</Details>
 
-<Callout type="note" title="Chat never touches the database">
-Every line drawn in chat reads the profile that is already in memory. However busy the chat is, it
-adds no queries.
-</Callout>
+<Cards>
+  <Card title="Permissions" href="/docs/exyliachatcosmetics/permissions">Every node, with its default.</Card>
+  <Card title="Edit the catalogue" href="/docs/exyliachatcosmetics/catalogue">Set `permission` and `hidden` per entry.</Card>
+</Cards>

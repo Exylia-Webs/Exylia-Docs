@@ -1,209 +1,120 @@
 ---
-title: "Custom cosmetics"
-description: "The four things a player makes for themselves, the rules that keep them printable, and what happens when one is edited or deleted."
+title: "Let players make their own cosmetics"
+description: "Players write their own tag and mix their own chat, nick and rank colours: how they do it, the text rules you control, and how to write one for them."
+questions:
+  - "How do players make their own tag?"
+  - "How do I stop players from writing bad words in custom tags?"
+  - "How long can a custom tag be?"
+  - "Does deleting a custom tag refund the token?"
+  - "How do I create a custom tag for a player myself?"
+  - "How do I let a rank mix longer gradients?"
+updated: "1.3.0"
 ---
 
-Four kinds of cosmetic are not in any file. A player writes them, they belong to that player alone,
-and each one is a row in a table rather than an entry you curate.
+Four kinds of cosmetic are not in any file: a player writes them. They belong to that player alone, and each costs a token the player holds, see [Tokens](/docs/exyliachatcosmetics/tokens).
 
-| Type | What it is | Made with |
+| Kind | What it is | Command |
 |---|---|---|
-| `customtag` | a tag in front of the name: text and colour, both theirs | `/cc customtag create <text> [colour]` |
-| `customcolor` | the colour of what they write | `/cc customcolor create <colour>` |
-| `customnick` | the colour of their name | `/cc customnick create <colour>` |
-| `customrank` | the colour their rank's prefix and suffix are repainted in | `/cc customrank create <colour>` |
+| Custom tag | a tag in front of the name: text, and optionally a colour | `/cc customtag create <text> [color]` |
+| Custom chat colour | the colour of what they write | `/cc customcolor create <color>` |
+| Custom nick colour | the colour of their name | `/cc customnick create <color>` |
+| Custom rank colour | the colour their rank's prefix and suffix are repainted in | `/cc customrank create <color>` |
 
-They behave like any other cosmetic once they exist: they sit in a browser, they can be starred,
-they go into a loadout, they are named `type:id` in commands and placeholders. What is different is
-where they come from and who may wear them.
+## Before you start
 
-## Where a player makes one
+- Players need a **create token** of that kind. Give them one with [`/cca tokens give`](/docs/exyliachatcosmetics/tokens) or let them buy it.
+- A custom tag shows in chat only if your format has a `{tag}` piece, see [Formats](/docs/exyliachatcosmetics/formats).
 
-Two ways in, and they end at the same service.
+## Make one as a player
 
 <Steps>
-  <Step title="From the browser">
-    Every catalogue browser that pairs with one of the four — tags, chat colours, nick colours,
-    rank colours — has a button that switches the grid from the catalogue to what the player made.
-    While that list is open, a **MAKE ONE** button appears. It asks for the text, then for the
-    colour, and writes the row.
+  <Step title="Open the browser">
+    Run `/cc tags` (or `/cc` and open the chat, name or rank colours). These are the browsers that pair with a custom kind.
   </Step>
-  <Step title="From a command">
-    `/cc customtag create`, `/cc customcolor create`, `/cc customnick create` and
-    `/cc customrank create` do the same thing in one line, for a player who would rather type it.
+  <Step title="Switch to what you made">
+    Click the **Cosmetics** button at the bottom left of the grid. It swaps the catalogue for the player's own list.
+  </Step>
+  <Step title="Click Create">
+    While that list is open, the anvil **Create** button (**Make one**) appears. It asks for the text, then for the colour, and writes the row. With no create token left, it says so at once and asks nothing.
   </Step>
 </Steps>
 
-The list of what a player made is a button rather than a tab on purpose: a kind nobody has made
-anything of would otherwise take a tab away from the catalogue on every browser, for every player,
-forever.
+The same thing in one line: `/cc customtag create Dragon #8a51c4`.
 
-<Callout type="note" title="The balance is checked before the questions">
-Opening MAKE ONE with no create token left says so immediately and asks nothing. Asking somebody to
-write a tag and then telling them they could never have afforded it is the one order worth avoiding.
-The token itself is taken later, by the service, which checks the balance again.
-</Callout>
+## Check that it works
 
-## The id is the row number
+Equip it from the same list, then write in chat. Their own tag or colour is drawn. If they own a catalogue tag as well, what they made wins.
 
-A custom cosmetic is keyed by the database row it was written as. The forty-second row anybody ever
-made is `customtag:42`, and it stays `customtag:42` for as long as it exists.
+## Going further
 
-The text cannot be the identity — two players may write the same word — and neither can the colour,
-since a gradient has colons in it and colons are what separate a type from an id. The row number is
-the only thing that is unique, stable and safe to print.
+### Set the text rules
 
-Ownership follows from the row rather than from a permission. The owner owns it the way a permission
-would: permanently, with nothing to expire. Nobody else can equip it, and there is no node that
-would let them — a custom cosmetic declares `permission: false`, so the usual
-`exyliachatcosmetics.<type>.<id>` node grants nothing here.
-
-## What a player made wins
-
-Both slots can be filled at once — a player may own a catalogue tag and have written their own — so
-something has to decide. What they made wins, in all four places, because it is the more deliberate
-choice.
-
-| Drawn | First | Then | Then |
-|---|---|---|---|
-| The tag | `customtag` | `tag` | nothing |
-| The name | `customnick` | `nick_color` | the name as it comes |
-| The message | `customcolor` | `chat_color` | the group's `defaults.chat-color` |
-| The rank's prefix and suffix | `customrank` | `rank_color` | the rank as it wrote itself |
-
-A rank colour has no say over the name, custom or not. It paints the prefix and the suffix, which is
-what a rank owns; the name is the player's.
-
-## What a custom tag has to survive
-
-The text is checked in a fixed order, and the first rule it fails is the one the player is told
-about. Nothing is written and no token is taken until every one of them has passed.
-
-<Steps>
-  <Step title="The permission">
-    `exyliachatcosmetics.customtag.create`, default `true`. Denied here, nothing else is even asked.
-  </Step>
-  <Step title="Length">
-    Between `custom-tags.min-length` and `custom-tags.max-length`, counted in code points so that a
-    character outside the basic plane counts as one and not two.
-  </Step>
-  <Step title="The characters that are never text">
-    `<`, `>`, `{`, `}`, `&`, `§`, `%` and `\` are refused outright, whatever `pattern` allows.
-  </Step>
-  <Step title="`pattern`">
-    A regular expression matched against the whole text. A pattern that does not compile is treated
-    as no pattern at all.
-  </Step>
-  <Step title="`blacklist`">
-    Words the text may not contain, matched case-insensitively anywhere inside it.
-  </Step>
-  <Step title="Uniqueness">
-    With `custom-tags.unique` on, a text somebody else already holds is refused.
-  </Step>
-  <Step title="The create token">
-    Taken last, so a refused tag costs nothing, and taken before the row is written, so a second
-    click finds the balance already short.
-  </Step>
-</Steps>
-
-The third step is the one that matters most and the one easiest to widen by accident. Those eight
-characters are what the text module reads as an instruction rather than as text: a tag is drawn as
-literal text and named in menus as formatted text, so a character that opens a MiniMessage tag, a
-palette token, a legacy colour code or a placeholder is never part of a name. The check is not
-inside `pattern`; it runs before it and regardless of it. An owner who widens `pattern` to let
-players use punctuation still cannot get `<` into a tag.
+A custom tag has to pass these checks in order, and the first one it fails is what the player is told. No token is taken until all pass. The numbers live in `config.yml` under `custom-tags`:
 
 ```yaml title="plugins/ExyliaChatCosmetics/config.yml"
 custom-tags:
   min-length: 2
   max-length: 16
-  # What the text may contain, as a regular expression over the whole text
   pattern: '[A-Za-z0-9_\-]+'
-  # Words a custom tag may not contain, case-insensitively
   blacklist:
     - admin
     - staff
     - owner
-  # Whether two players may not hold the same text
   unique: true
 ```
 
-## The colour
+- `exyliachatcosmetics.customtag.create` is needed (everyone has it by default).
+- The length must sit between `min-length` and `max-length`.
+- The characters `<`, `>`, `{`, `}`, `&`, `§`, `%` and `\` are always refused, whatever `pattern` allows.
+- `pattern` is a regular expression over the whole text; a pattern that does not compile is ignored.
+- `blacklist` words are refused anywhere inside the text, in any case.
+- With `unique: true`, a text somebody already holds is refused.
 
-A custom tag may name a colour and does not have to; the three custom colours are nothing but one.
-Either way the colour is written in the ordinary grammar — `#8a51c4`, `&#8a51c4`, `8a51c4`, a named
-colour like `gold`, a palette token like `{primary}`, or several of those separated by colons for a
-gradient.
+Give a rank a longer limit with the permission `exyliachatcosmetics.customtag.length.<n>` (for example `.length.24`); the highest number a player holds wins.
 
-| Rule | Where |
-|---|---|
-| A gradient may run through at most `custom-colors.max-stops` stops | default `4` |
-| `-` typed at the colour question leaves the tag without one | the tag is drawn in the chat's own colour |
-| A colour that cannot be read is refused before anything is written | no token is taken |
+### Limit gradients
 
-```yaml title="plugins/ExyliaChatCosmetics/config.yml"
-custom-colors:
-  # How many colours a custom gradient may run through
-  max-stops: 4
-```
+A colour is written in the usual way (`#8a51c4`, `gold`, `{primary}`, or several joined with colons for a gradient), see [the catalogue](/docs/exyliachatcosmetics/catalogue). A gradient may use `custom-colors.max-stops` colours, `4` by default. Raise it for a rank with `exyliachatcosmetics.customcolor.stops.<n>`. Typing `-` at the colour question leaves a tag without a colour.
 
-Both rules are enforced while the player types, in the input itself, and again by the service when
-it writes. The first is a courtesy; the second is what actually holds.
+### Edit and delete
 
-## Editing keeps the row number
+- Editing costs an **edit token**, a separate balance. The row keeps its id, so a worn tag stays worn and a starred colour stays starred.
+- Deleting refunds nothing. `/cc customtag delete` removes every custom tag the player has; `/cc customcolor delete <id>`, `/cc customnick delete <id>` and `/cc customrank delete <id>` remove one. Each asks for `confirm`. A worn one is taken off first.
 
-Changing one costs an edit token, which is a separate balance from the create token and is never
-touched by a creation. What comes back is the same row: same id, same key, same everything except
-what it reads or what colour it is.
+### Write one for a player
 
-That is deliberate, and it is the whole reason edits are done this way rather than as a delete and a
-create. A tag that is worn stays worn. A colour that is starred stays starred. A loadout that names
-it still names it. What changed is what the cosmetic looks like, not which cosmetic it is.
-
-A custom tag being edited goes through the same seven checks as a new one, minus the create token and
-plus an edit token. Uniqueness ignores the row being edited, so a player may re-save the text they
-already hold.
-
-## Deleting refunds nothing
-
-A token buys the act of writing, not the row it wrote. Deleting one gives nothing back, and there is
-no way to reclaim a balance short of `/cca tokens give`.
-
-| Command | Removes |
-|---|---|
-| `/cc customtag delete` | every custom tag the player has |
-| `/cc customcolor delete <id>` | one custom chat colour, by row number |
-| `/cc customnick delete <id>` | one custom nick colour |
-| `/cc customrank delete <id>` | one custom rank colour |
-
-A row that is worn is taken off before it stops existing. Nothing can own it afterwards, so leaving
-it equipped would only be a line that draws nothing.
-
-## Writing one for somebody
-
-`/cca customtag set <player> <text> [colour]` writes a custom tag for a player without spending a
-token and without asking for the create permission. Everything else still applies: the length, the
-eight forbidden characters, `pattern`, `blacklist` and uniqueness are all checked exactly as they
-would be for the player themselves.
-
-That is the point of it. The text rules are not a quota — they are what keeps a slur out of chat, and
-staff writing a tag for a player is not a reason to skip them.
+`/cca customtag set <player> <text> [color]` writes a custom tag for them, free and without the create permission. The text rules above still apply, because they keep slurs out of chat.
 
 | Command | Does |
 |---|---|
-| `/cca customtag set <player> <text> [colour]` | writes one, free, rules enforced |
+| `/cca customtag set <player> <text> [color]` | writes one, free, rules enforced |
 | `/cca customtag clear <player>` | removes every custom tag they made |
-| `/cca customcolor clear <player>` | removes every custom chat colour they mixed |
-| `/cca customnick clear <player>` | the same for nick colours |
-| `/cca customrank clear <player>` | the same for rank colours |
+| `/cca customcolor clear <player>` | removes their custom chat colours |
+| `/cca customnick clear <player>` | removes their custom nick colours |
+| `/cca customrank clear <player>` | removes their custom rank colours |
 
-All of them sit under `exyliachatcosmetics.admin`.
+All of them need `exyliachatcosmetics.admin`; the `clear` ones ask for `confirm`.
+
+<Details title="Technical details">
+
+A custom cosmetic is keyed by its database row: `customtag:42` stays `customtag:42` while it exists. The owner owns it permanently, nobody else can equip it, and it declares `permission: false`, so the usual `exyliachatcosmetics.<type>.<id>` node grants nothing.
+
+What a player made wins in all four places:
+
+| Drawn | First | Then | Then |
+|---|---|---|---|
+| The tag | custom tag | catalogue tag | nothing |
+| The name | custom nick colour | nick colour | the name as it comes |
+| The message | custom chat colour | chat colour | the group's `defaults.chat-color` |
+| Rank prefix and suffix | custom rank colour | rank colour | the rank as it wrote itself |
+
+A rank colour never paints the name, only the prefix and suffix.
+
+The forbidden characters are the ones the text module reads as an instruction (a MiniMessage tag, a palette token, a legacy colour code, a placeholder). The check runs before `pattern` and regardless of it.
+
+</Details>
 
 <Cards>
-  <Card title="Tokens" href="/docs/exyliachatcosmetics/tokens">
-    The two balances, how they are given out and what a placeholder can read of them.
-  </Card>
-  <Card title="Entitlements" href="/docs/exyliachatcosmetics/entitlements">
-    How ownership is decided everywhere else, and why a custom cosmetic sidesteps it.
-  </Card>
+  <Card title="Tokens" href="/docs/exyliachatcosmetics/tokens">The create and edit balances, and how to hand them out.</Card>
+  <Card title="Entitlements" href="/docs/exyliachatcosmetics/entitlements">How ownership works for everything else.</Card>
 </Cards>

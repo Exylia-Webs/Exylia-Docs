@@ -1,134 +1,91 @@
 ---
-title: "Integrations"
-description: "Chat plugins, LuckPerms, PlaceholderAPI, Redis, the cosmetics gate, Folia and what each reload re-reads."
+title: "Connect other plugins"
+description: "Use ExyliaChatCosmetics with another chat plugin, LuckPerms, PlaceholderAPI, Redis and Folia, and know what each reload re-reads."
+questions:
+  - "How do I use ExyliaChatCosmetics with another chat plugin?"
+  - "Which chat hook should I pick?"
+  - "Do I need LuckPerms?"
+  - "Does it work with several servers and Redis?"
+  - "Does it support Folia?"
+  - "What does /cca reload reload?"
+updated: "1.3.0"
 ---
 
-The plugin is written to sit next to whatever you already run rather than to replace it. It never
-cancels a chat event, never owns a chat format, and asks the same questions of the ecosystem that
-every other Exylia cosmetic plugin asks.
+ExyliaChatCosmetics sits next to what you already run: it never cancels a chat event and never owns your chat format unless you turn its own chat on.
 
-## Chat plugins
+## Use it with another chat plugin
 
-A chat line has two halves, and this plugin hands them to you separately.
+<Steps>
+  <Step title="Turn the built-in chat off">
+    In `config.yml` set `modules.chat: false`, then run `/cca reload`.
+  </Step>
+  <Step title="Put the identity in your format">
+    In your chat plugin's format, write `%exyliachatcosmetics_tag%%exyliachatcosmetics_nick%` where the tag and the name go. PlaceholderAPI must be installed. If your plugin reads another notation, use `%exyliachatcosmetics_tag_legacy%` with `%exyliachatcosmetics_nick_legacy%`, or the `_section` pair.
+  </Step>
+  <Step title="Pick the hook">
+    In `config.yml`, `chat.hook` styles the message body (colour, shadow, font, decorations). Use the row that matches the plugin that renders your chat:
+  </Step>
+</Steps>
 
-**Identity** — the tag and the coloured name — is yours to place. Put `%exyliachatcosmetics_tag%` and
-`%exyliachatcosmetics_nick%` wherever your chat plugin's format wants them, or the legacy spellings —
-`%exyliachatcosmetics_tag_legacy%` with `%exyliachatcosmetics_nick_legacy%`, or
-`%exyliachatcosmetics_tag_section%` with `%exyliachatcosmetics_nick_section%` — if your chat plugin
-reads one of those instead. Nothing is injected on your behalf, because only your format knows where
-the name belongs.
-
-**The message body** — the colour, the shadow, the font, the decorations a player types with — is
-styled by the hook set in `config.yml` under `chat.hook`. That is the half no format can express,
-so the plugin rewrites the message itself and leaves delivery alone. The hook only runs with
-`modules.chat: false`; with the built-in chat on, the module delivers and styles the line itself.
-
-Pick the hook that matches the plugin actually rendering your chat:
-
-| Your chat plugin | Hook | Why |
+| Your chat plugin | `chat.hook` | Why |
 |---|---|---|
-| Paper's own chat, or any plugin using `AsyncChatEvent` / a `ChatRenderer` | `decorate` | the decorated message is what those render, and nothing else fires |
-| Spigot, with no Paper events | any | `decorate` and `chat_event` fall back to `legacy_event` with a warning at startup |
-| A plugin that reads `AsyncChatEvent.message()` but ignores decoration | `chat_event`, at a priority **below** it (`LOW`) | the rewrite lands before that plugin reads |
-| A plugin still on `AsyncPlayerChatEvent` | `legacy_event`, at a priority below it | the string it reads already carries `§` colours |
-| You compose the line yourself | `off`, plus `CosmeticsService.styleMessage` | nothing is styled twice |
+| Paper's own chat, or a plugin using `AsyncChatEvent` and a `ChatRenderer` | `decorate` (default) | the decorated message is what they render |
+| Spigot without Paper events | any | `decorate` and `chat_event` fall back to `legacy_event`, with a warning at startup |
+| A plugin that reads `AsyncChatEvent.message()` but ignores decoration | `chat_event`, with `chat.priority: LOW` | the rewrite lands before that plugin reads it |
+| A plugin on the old `AsyncPlayerChatEvent` | `legacy_event`, with a priority below it | the string already carries `§` colours |
+| You compose the line yourself | `off` | nothing is styled twice |
 
-Both event hooks skip a cancelled event, so a plugin that already refused a message never has it
-restyled behind its back. The keys themselves are on [Configuration](/docs/exyliachatcosmetics/configuration),
-and the placeholder notations on [Placeholders](/docs/exyliachatcosmetics/placeholders).
+The hook only runs with `modules.chat: false`; with the built-in chat on, the module styles and delivers the line. Both event hooks skip a cancelled event.
 
-<Callout type="note" title="Secure chat">
-Any change to a message body — a colour included — marks the message as modified for a vanilla
-client. It still shows, but a client with *Only Show Secure Chat* turned on hides it. Every
-chat-colour plugin on the market has this property; it is not specific to this one. Servers that care
-set `enforce-secure-profile=false` in `server.properties`.
-</Callout>
+## Check that it works
 
-### Formatting a player types
+Equip a tag and a chat colour with `/cc`, then write in chat. The tag and name show in the format you wrote, and the message has its colour. Nothing styled at all means the hook does not match the plugin that renders chat: try the next row.
 
-With `chat.sanitize` on — the default — a player's own `&c`, `<red>` or `{primary}` is shown as the
-text they typed rather than obeyed, so nobody paints their line a colour they never bought. The
-`exyliachatcosmetics.chat.format` permission lets it through for the people you trust with it.
-`§` is neutralised regardless of the setting and of the permission.
+## Going further
 
-## LuckPerms
+### Let players type colours
 
-A soft dependency, and only two classes in the plugin ever name it, so a server without LuckPerms
-never loads either of them.
+With `chat.sanitize: true` (default) a player's own `&c`, `<red>` or `{primary}` is shown as text instead of obeyed. Give `exyliachatcosmetics.chat.format` to the people you trust with it. `§` is neutralised regardless.
 
-**Rank colours need it.** The prefix and suffix a rank colour repaints are LuckPerms meta, read from
-the player's cached data, and an entry's `groups` list is what decides who may wear it. Without
-LuckPerms `{prefix}` and `{suffix}` draw nothing and the rank-colour screen is empty — the other five
-cosmetic types are unaffected.
+### LuckPerms
 
-**Live permission changes.** Permission answers are memoised per profile, which is what keeps chat
-rendering off the permission plugin's hot path. `UserDataRecalculateEvent` is the correction: when it
-fires, the player's memoised permissions are dropped along with their render cache, on that player's
-own thread, so the next line they send is drawn with what they own now. A rank that ran out takes its
-cosmetics off within the tick, with no relog.
+Optional. Rank colours need it: the prefix and suffix they repaint are LuckPerms meta and an entry's `groups` list decides who may wear it. Without it `{prefix}` and `{suffix}` draw nothing and the rank-colour screen is empty; the other cosmetics are unaffected. With it, a rank change takes cosmetics on or off within the tick, no relog. Without it, ownership refreshes on join, on reload and on the 30-second sweep.
 
-Without LuckPerms, permission ownership still works through Bukkit; the memo simply refreshes on
-join, on reload and on the thirty-second expiry sweep instead of the moment a rank changes.
+### PlaceholderAPI
 
-## PlaceholderAPI
+Optional. Every placeholder is bridged automatically as `%exyliachatcosmetics_<name>%`, with nothing to download. Inside any ExyliaLib text the same names work without it. The list is in [Placeholders](/docs/exyliachatcosmetics/placeholders).
 
-A soft dependency. Every placeholder is registered with ExyliaLib's own placeholder module, and
-ExyliaLib bridges the lot into PlaceholderAPI automatically under
-`%exyliachatcosmetics_<name>%`. There is nothing to install beyond PAPI itself and no expansion to
-download. Inside any ExyliaLib text the same names work with PAPI absent.
+### Several servers with Redis
 
-## Redis and several servers
+Storage is the database. With Redis enabled in ExyliaLib's `database.yml`, a change made while a player is on another server (an admin grant, a purchase) makes their server re-read the profile. Without Redis nothing changes. See [Database](/docs/exylialib/database).
 
-Storage is the database; nothing is kept in Redis. With ExyliaLib's Redis enabled in `database.yml`,
-a `profiles` channel tells the other servers that a profile or a grant was written, and a server with
-that player online re-reads their profile. The payload is a UUID and nothing else — the database is
-the truth, and the channel only says *look again*. A server that reloads publishes nothing, so two
-servers cannot bounce the same player back and forth.
+### Staff mode and vanish
 
-Without Redis the channel is local and its own messages are ignored, so nothing changes. A player
-switching servers is read fresh on join either way, which means the channel only matters for a change
-made while they are sitting somewhere else — an admin grant, a purchase that lands mid-session.
-Loadouts and custom rows travel the same way. See [Database](/docs/exylialib/database).
+When another Exylia plugin says a player's cosmetics should not show (staff mode, vanish), their tag is empty, their name plain and their message untouched. You register nothing.
 
-## The cosmetics gate
+### Folia
 
-ExyliaLib carries a gate every cosmetic plugin in the ecosystem asks before drawing anything:
-`net.exylia.lib.cosmetic.Cosmetics`. While any plugin's rule says a player's cosmetics should not be
-shown — staff mode, a vanish that lends them another identity — the tag is empty, the name is plain
-and the message is left untouched. Calling `Cosmetics.refresh(player)` from that plugin drops the
-render cache here.
+Supported (`folia-supported: true`). The `Player` methods of the [API](/docs/exyliachatcosmetics/api) change what somebody wears and must be called on that player's thread.
 
-You register nothing. A staff-mode plugin that answers the gate is answering it for every cosmetic
-plugin at once, which is the point of putting the question in the library.
+<Details title="What each reload re-reads">
 
-## Folia
-
-`folia-supported: true`, and it is written for it rather than merely tolerated. Everything
-thread-bound goes through ExyliaLib's `Tasks`: profile writes and event firing land on the player's
-own region, the animation clock and the expiry sweep run async, and chat and placeholder rendering
-read memory only and touch nothing that belongs to a region.
-
-<Callout type="warning" title="Equipping belongs to the player's thread">
-The API methods that take a `Player` change what somebody is wearing and must be called on the thread
-that owns them. The ones taking a `UUID` only read. See the [API](/docs/exyliachatcosmetics/api).
-</Callout>
-
-## What each reload re-reads
-
-`/cca reload` runs five steps in order, and a step that fails is reported while the rest still run —
-a broken menu file costs you that menu, not your chat.
+`/cca reload` runs five steps; a step that fails is reported while the rest still run.
 
 | Step | Re-read |
 |---|---|
-| configs | `config.yml` and `messages.yml` |
+| configs | `config.yml` and `lang/<language>/messages.yml` |
 | catalogs | every cosmetic file and `animations.yml` |
 | menus | the menu files |
 | chat | the chat module is started, reloaded or stopped, and the chat hook reinstalled to match |
 | hooks | the LuckPerms subscription |
 
-`/exylialib reload` is the palette's reload, and this plugin listens to it: the render cache is
-dropped and the menus are read again, so recolouring `colors.yml` recolours tags, names and menu rows
-without touching this plugin at all. Menus are on that list because a menu holds the palette it was
-compiled with.
+`/exylialib reload` (the [palette](/docs/exylialib/colours)) drops the render cache and re-reads the menus, so recolouring tags, names and menu rows needs nothing here. `/cca chat reload` re-reads only the chat module's files.
 
-`/cca chat reload` is narrower still — the chat module's own files, with the cosmetics left alone.
+Soft dependencies: ExyliaLib, PlaceholderAPI, LuckPerms, ExyliaEconomy, Vault, packetevents. Any change to a message body marks it as modified for vanilla clients, so players with *Only Show Secure Chat* on do not see it; servers that care set `enforce-secure-profile=false`.
+
+</Details>
+
+<Cards>
+  <Card title="The chat module" href="/docs/exyliachatcosmetics/chat">Use the built-in chat instead.</Card>
+  <Card title="Configuration" href="/docs/exyliachatcosmetics/configuration">Every `config.yml` key.</Card>
+</Cards>
