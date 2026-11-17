@@ -1,6 +1,6 @@
 ---
 title: "Choose menu, weapon or both"
-description: "Decide whether effects follow the player, live on weapons or both, and how tokens and removers work."
+description: "Decide whether effects follow the player, live on weapons or both, and hand out tokens and removers."
 questions:
   - "Can an effect be tied to a weapon?"
   - "What does behaviour.mode do?"
@@ -10,19 +10,72 @@ questions:
 updated: "1.6.1"
 ---
 
-## The three modes
+Choose where a hit effect comes from: what the player picked in `/hiteffect`, what is bound to the weapon they hit with, or both. Tokens put an effect on a weapon, removers take it off.
 
-`behaviour.mode` decides where the effect comes from:
+## Before you start
 
-| Mode | Where it comes from | What it implies |
+Tokens need `behaviour.mode` set to `weapon` or `both`. For the menu side, see [Choose how players pick an effect](/docs/exyliahiteffect/menu).
+
+## Steps
+
+<Steps>
+  <Step title="Pick the mode">
+    In `plugins/ExyliaHitEffect/config.yml` set `behaviour.mode` to `player`, `weapon` or `both` (the default), then run `/hiteffectsadmin reload`.
+  </Step>
+  <Step title="Give a token">
+    Run `/hiteffectsadmin item give <player> <effect> [1-64]`, for example `crit_spark`.
+  </Step>
+  <Step title="Bind it to a weapon">
+    The player picks the token up with the cursor and clicks it onto a sword, axe, trident, mace, bow or crossbow in their own inventory.
+  </Step>
+  <Step title="Take it off again">
+    Run `/hiteffectsadmin item remover <player> [1-64]` and click the remover onto the weapon the same way. The effect comes off and returns to the player's inventory as a token.
+  </Step>
+</Steps>
+
+## Check that it works
+
+The weapon shows a line under its own lore with the effect's name, and hitting with it plays the effect. With a mode that reads weapons, a bound weapon plays its own effect even if the player picked another in the menu.
+
+## Going further
+
+### The three modes
+
+| Mode | Where the effect comes from | What it implies |
 |---|---|---|
-| `player` | Only what the player picked in `/hiteffect`. | It follows the player and plays whatever they hit with. Tokens do nothing. |
-| `weapon` | Only what is bound to the weapon. | It is traded, dropped and lost with the weapon. The menu refuses to open and says so. |
-| `both` | The weapon's own effect, and the player's choice for a weapon carrying none. | The default. |
+| `player` | Only what the player picked in `/hiteffect`. | It follows the player and plays on whatever they hit with. Tokens do nothing. |
+| `weapon` | Only what is bound to the weapon. | It is traded, dropped and lost with the weapon. `/hiteffect` refuses to open and says it is disabled. |
+| `both` | The weapon's own effect, and the player's choice for a weapon carrying none. | The default. The weapon wins. |
 
-In `both` the **weapon wins**: a bound weapon plays its own effect, and the menu choice only covers
-weapons carrying none.
+### Tokens
 
+| Rule | Detail |
+|---|---|
+| Weapons only | Swords, axes, tridents, maces, bows and crossbows. Anything else is ignored. |
+| One at a time | A weapon already carrying an effect is refused: take the first off with a remover. |
+| Fitting | An effect declaring `weapons` is refused on a weapon it does not list, see [Edit the effect catalogue](/docs/exyliahiteffect/effects). |
+| No permission | Holding the token is the proof, so binding one asks for no permission node. It is bought, traded and lost like any item. |
+| Consumed | `behaviour.consume-token` (default `true`) decides whether it is spent. Off, the token is reusable. |
+
+To bind an effect yourself, with no token and ignoring ownership, hold the weapon and run `/hiteffectsadmin weapon bind <effect> [player]`. `/hiteffectsadmin weapon unbind [player]` strips it and gives nothing back.
+
+### Removers
+
+The effect comes off and returns as a token in the inventory of whoever removed it. With a full inventory the removal is refused, so a token is never lost. A weapon carrying an effect the catalogue no longer declares is refused rather than turned into nothing. `behaviour.consume-remover` (default `true`) decides whether the remover is spent.
+
+### The line under the weapon
+
+The line comes from `weapon-lore` in `lang/<code>/messages.yml` (`%effect%` is the effect's name; see [Messages and languages](/docs/exylialib/messages-and-languages)) and is switched with `weapon-lore.enabled` in `config.yml`. It is drawn on packets only and never written to the item. A shop, a crate or any plugin reading that weapon finds the lore it had, renaming an effect updates every weapon at once, and switching it off hides the lines without touching an item.
+
+### What happens when a rank lapses
+
+By default players see effects they may not use locked. Set `behaviour.hide-without-permission: true` (default `false`) to hide them. A choice a player can no longer justify is taken off, not quietly skipped: on their next hit, when they open the menu, on join and with `/hiteffectsadmin player validate [player]`. Starred effects are never dropped.
+
+<Callout type="note" title="A token is not the item it is drawn as">
+Tokens and removers are inert: drawn as an ender pearl one cannot be thrown, drawn as food it cannot be eaten. Whatever it looks like, it can only be dropped onto a weapon.
+</Callout>
+
+<Details title="Technical details">
 ```yaml title="config.yml"
 behaviour:
   mode: both
@@ -31,60 +84,16 @@ behaviour:
   hide-without-permission: false
 ```
 
-## The token
-
-An item that carries one effect. It is used by **dragging it onto a weapon in your own inventory**:
-pick the token up with the cursor and click it onto the weapon.
-
-| Rule | Detail |
-|---|---|
-| Weapons only | Swords, axes, tridents, maces, bows and crossbows. Anything else is ignored and the click carries on normally. |
-| One at a time | A weapon that already carries an effect is refused — take the first one off with a remover. |
-| Fitting | An effect declaring `weapons` is refused on a weapon it does not list. |
-| No permission | Holding the token is the proof. It is bought, traded and lost like any other item, so binding it asks for no node. |
-| Consumed | `consume-token` decides whether it is spent. Off, the token is reusable. |
-
-What is written onto the weapon is **one value**: `exyliahiteffect:effect`, the effect id. Nothing
-else on the item changes.
-
-<Callout type="note" title="A token is not the item it is drawn as">
-Tokens and removers are inert: drawn as an ender pearl one cannot be thrown, drawn as food it cannot
-be eaten. Whatever it looks like, it can only be dropped onto a weapon.
-</Callout>
-
-## The remover
-
-Dragged the same way onto a bound weapon. The effect comes off and **comes back as a token** in the
-inventory of whoever removed it.
-
-| Rule | Detail |
-|---|---|
-| A free slot first | With a full inventory nothing happens at all: the weapon is only written once the token is known to fit. |
-| Unknown effects | A weapon carrying an id the file no longer declares is refused rather than turned into nothing. |
-| Consumed | `consume-remover` decides whether the remover is spent. |
-
-## The lines under a bound weapon
-
 ```yaml title="lang/<code>/messages.yml"
 weapon-lore:
   - "{secondary}Hit Effect:"
   - " {letters_black}▎ {highlight}%effect%"
 ```
 
-`weapon-lore.enabled` in `config.yml` turns them on and off.
+What is written onto a weapon is one value, `exyliahiteffect:effect`, the effect id. Nothing else on the item changes. The item's material comes from the token and remover item settings in `config.yml`.
+</Details>
 
-They travel **on packets only** and are never written to the item. Consequences worth knowing:
-
-- A shop, a crate or any plugin reading that weapon finds exactly the lore it had.
-- Renaming an effect updates every weapon on the server at once.
-- Turning `weapon-lore.enabled` off hides the lines without touching a single item.
-
-## Permission, and what happens when it lapses
-
-| Switch | What it does |
-|---|---|
-| `hide-without-permission` | Whether an effect the player may not use is hidden in the menu instead of shown locked. |
-
-A choice the player can no longer justify is **taken off**, not quietly skipped: it is dropped on the
-next hit, on the next menu open, on join, and on `/hiteffectsadmin player validate`. A starred effect is
-never dropped — a shortlist is what somebody is saving up for as much as what they already have.
+<Cards>
+  <Card title="Edit the effect catalogue" href="/docs/exyliahiteffect/effects">Restrict an effect to some weapons.</Card>
+  <Card title="Set up the crate" href="/docs/exyliahiteffect/crate">Let players win tokens.</Card>
+</Cards>

@@ -1,28 +1,81 @@
 ---
 title: "Elige menú, arma o ambos"
-description: "Decide si los efectos siguen al jugador, viven en las armas o ambos, y cómo funcionan las fichas y los removedores."
+description: "Decide si los efectos siguen al jugador, viven en las armas o ambos, y reparte fichas y removedores."
 questions:
   - "¿Se puede atar un efecto a un arma?"
   - "¿Qué hace behaviour.mode?"
   - "¿Cómo funcionan las fichas y los removedores?"
-  - "¿Por qué el menú dice que está apagado?"
+  - "¿Por qué el menú dice que está desactivado?"
   - "¿Se gasta la ficha?"
 updated: "1.6.1"
 ---
 
-## Los tres modos
+Elige de dónde sale un efecto de golpe: de lo que el jugador eligió en `/hiteffect`, de lo que está atado al arma con la que golpea, o de ambos. Las fichas ponen un efecto en un arma y los removedores lo quitan.
 
-`behaviour.mode` decide de dónde sale el efecto:
+## Antes de empezar
 
-| Modo | De dónde sale | Qué implica |
+Las fichas necesitan `behaviour.mode` en `weapon` o `both`. Para la parte del menú, mira [Elige cómo escogen los jugadores un efecto](/docs/exyliahiteffect/menu).
+
+## Pasos
+
+<Steps>
+  <Step title="Elige el modo">
+    En `plugins/ExyliaHitEffect/config.yml` pon `behaviour.mode` en `player`, `weapon` o `both` (el valor por defecto) y ejecuta `/hiteffectsadmin reload`.
+  </Step>
+  <Step title="Da una ficha">
+    Ejecuta `/hiteffectsadmin item give <jugador> <efecto> [1-64]`, por ejemplo `crit_spark`.
+  </Step>
+  <Step title="Átala a un arma">
+    El jugador coge la ficha con el cursor y hace clic con ella sobre una espada, hacha, tridente, maza, arco o ballesta de su propio inventario.
+  </Step>
+  <Step title="Quítala otra vez">
+    Ejecuta `/hiteffectsadmin item remover <jugador> [1-64]` y haz clic con el removedor sobre el arma igual. El efecto sale y vuelve al inventario del jugador como ficha.
+  </Step>
+</Steps>
+
+## Comprueba que funciona
+
+El arma muestra una línea bajo su lore con el nombre del efecto, y golpear con ella reproduce el efecto. Con un modo que lea armas, un arma atada lanza su propio efecto aunque el jugador haya elegido otro en el menú.
+
+## Ir más allá
+
+### Los tres modos
+
+| Modo | De dónde sale el efecto | Qué implica |
 |---|---|---|
 | `player` | Solo de lo que el jugador eligió en `/hiteffect`. | Sigue al jugador y suena con lo que golpee. Las fichas no hacen nada. |
-| `weapon` | Solo de lo que está atado al arma. | Se comercia, se cae y se pierde con el arma. El menú se niega a abrir y lo dice. |
-| `both` | El efecto propio del arma y, para un arma sin ninguno, la elección del jugador. | El valor por defecto. |
+| `weapon` | Solo de lo que está atado al arma. | Se comercia, se cae y se pierde con el arma. `/hiteffect` se niega a abrir y avisa de que está desactivado. |
+| `both` | El efecto propio del arma y, para un arma sin ninguno, la elección del jugador. | El valor por defecto. Gana el arma. |
 
-En `both` **gana el arma**: un arma atada lanza lo suyo, y la elección del menú solo cubre las armas
-que no llevan nada.
+### Fichas
 
+| Regla | Detalle |
+|---|---|
+| Solo armas | Espadas, hachas, tridentes, mazas, arcos y ballestas. Cualquier otra cosa se ignora. |
+| De una en una | Un arma que ya lleva un efecto se rechaza: quita el primero con un removedor. |
+| Encaje | Un efecto que declara `weapons` se rechaza en un arma que no lista, mira [Edita el catálogo de efectos](/docs/exyliahiteffect/efectos). |
+| Sin permiso | Tener la ficha es la prueba, así que atarla no pide ningún permiso. Se compra, se intercambia y se pierde como cualquier objeto. |
+| Se gasta | `behaviour.consume-token` (por defecto `true`) decide si se gasta. Desactivado, la ficha es reutilizable. |
+
+Para atar un efecto tú mismo, sin ficha y sin comprobar si lo tiene, sostén el arma y ejecuta `/hiteffectsadmin weapon bind <efecto> [jugador]`. `/hiteffectsadmin weapon unbind [jugador]` lo quita y no devuelve nada.
+
+### Removedores
+
+El efecto sale y vuelve como ficha al inventario de quien lo quitó. Con el inventario lleno se rechaza, así que nunca se pierde una ficha. Un arma con un efecto que el catálogo ya no declara se rechaza en vez de quedar en nada. `behaviour.consume-remover` (por defecto `true`) decide si el removedor se gasta.
+
+### La línea bajo el arma
+
+La línea sale de `weapon-lore` en `lang/<código>/messages.yml` (`%effect%` es el nombre del efecto; mira [Mensajes e idiomas](/docs/exylialib/mensajes-e-idiomas)) y se activa con `weapon-lore.enabled` en `config.yml`. Se dibuja solo con paquetes y nunca se escribe en el objeto. Una tienda, una caja o cualquier plugin que lea esa arma encuentra el lore que tenía, renombrar un efecto actualiza todas las armas a la vez, y desactivarla oculta las líneas sin tocar ningún objeto.
+
+### Qué pasa cuando caduca un rango
+
+Por defecto los jugadores ven bloqueados los efectos que no pueden usar. Pon `behaviour.hide-without-permission: true` (por defecto `false`) para ocultarlos. Una elección que el jugador ya no puede justificar se quita, no se salta en silencio: en su siguiente golpe, al abrir el menú, al entrar y con `/hiteffectsadmin player validate [jugador]`. Los efectos con estrella nunca se quitan.
+
+<Callout type="note" title="Una ficha no es el objeto con el que se dibuja">
+Las fichas y los removedores son inertes: dibujada como una perla de ender no se puede lanzar, dibujada como comida no se puede comer. Parezca lo que parezca, solo se puede soltar sobre un arma.
+</Callout>
+
+<Details title="Detalles técnicos">
 ```yaml title="config.yml"
 behaviour:
   mode: both
@@ -31,62 +84,16 @@ behaviour:
   hide-without-permission: false
 ```
 
-## La ficha
-
-Un objeto que lleva un efecto dentro. Se usa **arrastrándola sobre un arma en tu propio inventario**:
-se coge con el cursor y se hace clic sobre el arma.
-
-| Regla | Detalle |
-|---|---|
-| Solo armas | Espadas, hachas, tridentes, mazas, arcos y ballestas. Lo demás se ignora y el clic sigue su curso normal. |
-| Una a la vez | Un arma que ya lleva efecto se rechaza: primero hay que quitárselo con un removedor. |
-| Compatibilidad | Un efecto con `weapons` declarado se rechaza en un arma que no lista. |
-| Sin permiso | Tener la ficha es la prueba. Se compra, se intercambia y se pierde como cualquier otro objeto, así que atarla no pide ningún nodo. |
-| Consumo | `consume-token` decide si se gasta. Apagado, la ficha es reutilizable. |
-
-Lo que se escribe en el arma es **un valor**: `exyliahiteffect:effect`, el id del efecto. Nada más
-del objeto cambia.
-
-<Callout type="note" title="Una ficha no es el objeto que aparenta">
-Las fichas y los removedores son inertes: dibujados como una perla del end no se pueden lanzar,
-dibujados como comida no se pueden comer. Tengan la pinta que tengan, solo sirven para soltarse sobre
-un arma.
-</Callout>
-
-## El removedor
-
-Se arrastra igual, sobre un arma atada. El efecto sale y **vuelve como ficha** al inventario de quien
-lo quita.
-
-| Regla | Detalle |
-|---|---|
-| Primero un hueco | Con el inventario lleno no pasa nada: el arma solo se escribe cuando la ficha ya tiene sitio. |
-| Efectos desconocidos | Un arma con un id que el archivo ya no declara se rechaza en vez de convertirse en nada. |
-| Consumo | `consume-remover` decide si se gasta el removedor. |
-
-## Las líneas bajo un arma atada
-
-```yaml title="lang/<code>/messages.yml"
+```yaml title="lang/es/messages.yml"
 weapon-lore:
-  - "{secondary}Hit Effect:"
+  - "{secondary}Efecto de golpe:"
   - " {letters_black}▎ {highlight}%effect%"
 ```
 
-`weapon-lore.enabled` en `config.yml` las enciende y las apaga.
+Lo que se escribe en el arma es un único valor, `exyliahiteffect:effect`, el id del efecto. Nada más del objeto cambia. El material de la ficha y del removedor sale de los ajustes de esos objetos en `config.yml`.
+</Details>
 
-Viajan **solo en paquetes** y nunca se escriben en el objeto. Consecuencias que conviene saber:
-
-- Una tienda, una caja o cualquier plugin que lea esa arma encuentra exactamente el lore que tenía.
-- Renombrar un efecto actualiza todas las armas del servidor a la vez.
-- Apagar `weapon-lore.enabled` esconde las líneas sin tocar un solo objeto.
-
-## El permiso, y qué pasa cuando caduca
-
-| Interruptor | Qué hace |
-|---|---|
-| `hide-without-permission` | Si un efecto que el jugador no puede usar se esconde en el menú en vez de mostrarse bloqueado. |
-
-Una elección que el jugador ya no puede justificar **se quita**, no se ignora en silencio: se retira en
-el siguiente golpe, al abrir el menú, al entrar y con `/hiteffectsadmin player validate`. Un efecto marcado
-como favorito nunca se quita — una lista de deseos es tanto lo que alguien está ahorrando como lo que
-ya tiene.
+<Cards>
+  <Card title="Edita el catálogo de efectos" href="/docs/exyliahiteffect/efectos">Limita un efecto a ciertas armas.</Card>
+  <Card title="Configura la caja" href="/docs/exyliahiteffect/caja">Deja que los jugadores ganen fichas.</Card>
+</Cards>
