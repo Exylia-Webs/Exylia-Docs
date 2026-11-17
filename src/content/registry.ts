@@ -1687,22 +1687,22 @@ const SPECIALS_NAV: NavGroup[] = [
     ],
   },
   {
-    label: { en: "Special items", es: "Ítems especiales" },
+    label: { en: "Guides", es: "Guías" },
     pages: [
       page("items", "items", "items"),
-      page("actions", "actions", "acciones"),
-      page("states", "states", "estados"),
       page("item-catalogue", "item-catalogue", "catalogo-de-items"),
       page("tools", "tools", "herramientas"),
       page("trackers", "trackers", "contadores"),
+      page("cooldowns", "cooldowns", "cooldowns"),
+      page("duels", "duels", "duelos"),
     ],
   },
   {
-    label: { en: "Systems", es: "Sistemas" },
+    label: { en: "How it works", es: "Cómo funciona" },
     pages: [
+      page("actions", "actions", "acciones"),
+      page("states", "states", "estados"),
       page("combat", "combat", "combate"),
-      page("cooldowns", "cooldowns", "cooldowns"),
-      page("duels", "duels", "duelos"),
     ],
   },
   {
@@ -1713,6 +1713,12 @@ const SPECIALS_NAV: NavGroup[] = [
       page("placeholders", "placeholders", "placeholders"),
       page("configuration", "configuration", "configuracion"),
       page("api", "api", "api"),
+    ],
+  },
+  {
+    label: { en: "Help", es: "Ayuda" },
+    pages: [
+      page("troubleshooting", "troubleshooting", "problemas-comunes"),
       page("faq", "faq", "faq"),
     ],
   },
