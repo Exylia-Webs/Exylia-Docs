@@ -704,7 +704,7 @@ const ANALYTICS_NAV: NavGroup[] = [
     ],
   },
   {
-    label: { en: "The dashboard", es: "El panel" },
+    label: { en: "Guides", es: "Guías" },
     pages: [
       page("dashboard", "dashboard", "panel"),
       page("audience", "audience", "audiencia"),
@@ -714,28 +714,34 @@ const ANALYTICS_NAV: NavGroup[] = [
       page("events", "events", "eventos"),
       page("revenue", "revenue", "ingresos"),
       page("analyst", "analyst", "analista"),
+      page("economy", "economy", "economia"),
+      page("integrations", "integrations", "integraciones"),
+      page("remote-config", "remote-config", "configuracion-remota"),
       page("team", "team", "equipo"),
     ],
   },
   {
-    label: { en: "The agent", es: "El agente" },
+    label: { en: "How it works", es: "Cómo funciona" },
     pages: [
       page("data", "data", "datos"),
       page("privacy", "privacy", "privacidad"),
-      page("economy", "economy", "economia"),
-      page("integrations", "integrations", "integraciones"),
-      page("configuration", "configuration", "configuracion"),
-      page("remote-config", "remote-config", "configuracion-remota"),
-      page("commands", "commands", "comandos"),
     ],
   },
   {
-    label: { en: "Developers", es: "Desarrolladores" },
-    pages: [page("api", "api", "api")],
+    label: { en: "Reference", es: "Referencia" },
+    pages: [
+      page("commands", "commands", "comandos"),
+      page("permissions", "permissions", "permisos"),
+      page("configuration", "configuration", "configuracion"),
+      page("api", "api", "api"),
+    ],
   },
   {
     label: { en: "Help", es: "Ayuda" },
-    pages: [page("faq", "faq", "faq")],
+    pages: [
+      page("troubleshooting", "troubleshooting", "problemas-comunes"),
+      page("faq", "faq", "faq"),
+    ],
   },
 ];
 
