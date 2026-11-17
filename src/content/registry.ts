@@ -1482,29 +1482,20 @@ const RANDOMKITS_NAV: NavGroup[] = [
     pages: [
       page("introduction", "introduction", "introduccion"),
       page("installation", "installation", "instalacion"),
+      page("first-steps", "first-steps", "primeros-pasos"),
     ],
   },
   {
-    label: { en: "RandomKits", es: "RandomKits" },
+    label: { en: "Guides", es: "Guías" },
     pages: [
       page("playing", "playing", "jugar"),
       page("arenas", "arenas", "arenas"),
       page("kits", "kits", "kits"),
-    ],
-  },
-  {
-    label: { en: "Progression", es: "Progresión" },
-    pages: [
       page("progression", "progression", "progresion"),
       page("events-and-seasons", "events-and-seasons", "eventos-y-temporadas"),
-      page("kit-balance", "kit-balance", "balance-de-kits"),
-    ],
-  },
-  {
-    label: { en: "Integrations", es: "Integraciones" },
-    pages: [
       page("network", "network", "red"),
       page("web-editor-and-import", "web-editor-and-import", "editor-web-e-importacion"),
+      page("kit-balance", "kit-balance", "balance-de-kits"),
     ],
   },
   {
@@ -1514,6 +1505,12 @@ const RANDOMKITS_NAV: NavGroup[] = [
       page("permissions", "permissions", "permisos"),
       page("placeholders", "placeholders", "placeholders"),
       page("configuration", "configuration", "configuracion"),
+    ],
+  },
+  {
+    label: { en: "Help", es: "Ayuda" },
+    pages: [
+      page("troubleshooting", "troubleshooting", "problemas-comunes"),
       page("faq", "faq", "faq"),
     ],
   },
