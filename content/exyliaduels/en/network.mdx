@@ -9,35 +9,53 @@ questions:
 updated: "1.1.0"
 ---
 
-With `network.enabled: true` players can challenge anyone on the network, and server-kit duels are fought on
-one **arena server**. Both players are sent there, fight, and are sent back to their own server afterwards.
+With network duels on, players can challenge anyone on the network, and server-kit duels are fought on one
+**arena server**: both players are sent there, fight, and are sent back to their own server afterwards.
 
-## What a network needs
+## Before you start
+
+- Two or more servers behind a proxy, each running ExyliaDuels and ExyliaLib.
+- [ExyliaProxyUtils](/docs/exyliaproxyutils/introduction) on the proxy, with the proxy's server names
+  **equal to the backends' `server-id`s**: that name is where messages and players are sent.
+- One server with the arenas built on it: the arena server.
+
+## Steps
 
 <Steps>
-  <Step title="One database">
-    The same database on every server in `plugins/ExyliaDuels/database.yml` (MySQL, MariaDB, PostgreSQL or
-    MongoDB), so kits, records and the escrow are shared.
+  <Step title="Share one database">
+    Use the same database on every server in `plugins/ExyliaDuels/database.yml` (MySQL, MariaDB, PostgreSQL
+    or MongoDB), so kits, records and the escrow are shared.
   </Step>
-  <Step title="Redis">
-    Redis enabled in that same `database.yml` on every server, with the same Redis and `key-prefix`, and a
+  <Step title="Turn on Redis">
+    Enable Redis in that same `database.yml` on every server, with the same Redis and `key-prefix`, and a
     **different `server-id` on each server**. See [ExyliaLib's database](/docs/exylialib/database).
   </Step>
-  <Step title="ExyliaProxyUtils">
-    [ExyliaProxyUtils](/docs/exyliaproxyutils/introduction) on the proxy, with the proxy's server names
-    **equal to the backends' `server-id`s**: that name is where messages and players are sent.
+  <Step title="Name the arena server">
+    In `config.yml` on every server, set `network.enabled: true` and `network.arena-server` to the arena
+    server's `server-id` (`arena` by default). Then restart each server.
   </Step>
-  <Step title="One arena server">
-    The arenas built on it, its `server-id` written in `network.arena-server` on every server, and
-    `network.enabled: true` there too.
-  </Step>
-  <Step title="Shared economy, if any">
-    `network.shared-economy: true` only when every server reads the same balances (a shared ExyliaEconomy,
-    or a Vault economy on the shared database). Otherwise players on different servers cannot bet money.
+  <Step title="Decide on money bets">
+    Set `network.shared-economy: true` only when every server reads the same balances (a shared
+    ExyliaEconomy, or a Vault economy on the shared database). Otherwise players on different servers cannot
+    bet money.
   </Step>
 </Steps>
 
-## How a network duel goes
+## Check that it works
+
+From a server that is not the arena server, run `/duel <player>` for a player on another server: the name
+tab-completes. Pick a server kit, send, and accept. Both players arrive on the arena server, fight after the
+countdown, and are sent back to their own servers.
+
+## Going further
+
+### Share arenas between servers
+
+`network.arenas-scope` (default `default`) decides which servers see the same arenas: `default` follows the
+network group set in ExyliaLib's `config.yml` (identical servers of a pool share arenas; with no group every
+server shares), `server` gives each server its own, `global` shares them with all, or write a group name.
+
+### How a network duel goes
 
 - `/duel <player>` finds the player wherever they are and tab-completes every name on the network. The
   request, the answer and its expiry travel between the two servers; the challenged player gets the same
@@ -56,14 +74,14 @@ one **arena server**. Both players are sent there, fight, and are sent back to t
   Where it does not, the kit is not offered, and a duel naming it is called off with "That kit is not
   available on this server." before anybody is dressed.
 
-## After a network duel
+### After a network duel
 
 The duel is decided on the arena server and both players are sent home. The end-of-duel summary is kept in
 the shared database until `after-duel.window` closes, so **[INVENTORY]**, **[YOURS]** and **[⟲ REMATCH]**
 work from any server. A rematch with the opponent on another server travels like any challenge; their
 balance is checked when they accept. Each history row names the server that decided the duel.
 
-## What never crosses servers
+### What never crosses servers
 
 | Term | Across servers |
 |---|---|
@@ -76,10 +94,16 @@ When the players are on different servers the challenge screen opens on a server
 to own inventory or turn on an item bet. The arena picker then lists every enabled arena, since the duel is
 fought on the arena server.
 
-## Spectating
+### Spectating
 
 Arenas, spectators and their schematics are local to the server that built them: spectate a network duel
 from the arena server.
 
 Replays are stored in the shared database, but a replay is watched in its own arena: a server without that
 arena refuses it, so watch the replays of network duels from the arena server.
+
+<Cards>
+  <Card title="Arenas and kits" href="/docs/exyliaduels/arenas-and-kits">Build the arenas on the arena server.</Card>
+  <Card title="Bets" href="/docs/exyliaduels/bets">What changes for bets across servers.</Card>
+  <Card title="Configuration" href="/docs/exyliaduels/configuration">The `network` keys.</Card>
+</Cards>
