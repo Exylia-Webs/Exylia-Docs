@@ -48,4 +48,4 @@ Follow WRITING.md. ExyliaFFA is the model. One row per plugin; mark done after r
 | `exyliastaff` | `ExyliaStaff` | done |
 | `exyliasurvivalcore` | `ExyliaSurvivalCore` | done |
 | `exyliatabletop` | `ExyliaTabletop` | done |
-| `exyliatotemtrainer` | `ExyliaTotemTrainer` | done (11 guide bodies kept, spot-checked) |
+| `exyliatotemtrainer` | `ExyliaTotemTrainer` | done |
