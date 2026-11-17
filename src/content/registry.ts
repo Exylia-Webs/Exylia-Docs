@@ -1593,11 +1593,21 @@ const GRAVES_NAV: NavGroup[] = [
     ],
   },
   {
-    label: { en: "Graves", es: "Tumbas" },
+    label: { en: "Guides", es: "Guías" },
     pages: [
-      page("graves", "graves", "tumbas"),
+      page("protection", "protection", "proteccion"),
+      page("expiry", "expiry", "caducidad"),
+      page("contents", "contents", "contenido"),
+      page("teleport", "teleport", "teletransporte"),
+      page("ranks", "ranks", "rangos"),
       page("menu", "menu", "menu"),
       page("staff", "staff", "staff"),
+    ],
+  },
+  {
+    label: { en: "How it works", es: "Cómo funciona" },
+    pages: [
+      page("graves", "graves", "tumbas"),
       page("network", "network", "red"),
     ],
   },
@@ -1608,6 +1618,12 @@ const GRAVES_NAV: NavGroup[] = [
       page("permissions", "permissions", "permisos"),
       page("placeholders", "placeholders", "placeholders"),
       page("configuration", "configuration", "configuracion"),
+    ],
+  },
+  {
+    label: { en: "Help", es: "Ayuda" },
+    pages: [
+      page("troubleshooting", "troubleshooting", "problemas-comunes"),
       page("faq", "faq", "faq"),
     ],
   },
