@@ -1549,6 +1549,7 @@ const REWARDS_NAV: NavGroup[] = [
       page("afk-zones", "afk-zones", "zonas-afk"),
       page("votes", "votes", "votos"),
       page("referrals", "referrals", "referidos"),
+      page("battle-pass", "battle-pass", "pase-de-batalla"),
     ],
   },
   {

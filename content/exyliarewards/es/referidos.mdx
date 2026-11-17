@@ -10,78 +10,81 @@ questions:
 updated: "1.0.0"
 ---
 
-Un jugador nuevo escribe `/referral <player>` para indicar quién le invitó. Todavía no se paga nada: los dos
-jugadores cobran cuando el nuevo ha jugado `referrals.qualify-minutes` (por defecto 60) desde que lo indicó,
-sin contar el tiempo inactivo, tal como lo cuenta el contador de tiempo de juego de ExyliaLib en todos los
-servidores de la red.
+Deja que los jugadores nuevos indiquen quién los invitó con `/referral <jugador>`, y paga a ambos cuando el recién llegado haya jugado el tiempo suficiente, con recompensas extra para quien trae a varios amigos. Las recompensas están en `referrals.yml`.
 
-## Indicar quién te invitó
+## Antes de empezar
 
-`/referral <player>` (también `/ref` y `/referrals`) necesita `exyliarewards.referrals.use`. Se rechaza
-cuando:
+- Los jugadores necesitan `exyliarewards.referrals.use`, que todos tienen por defecto. El staff que reinicia referidos necesita `exyliarewards.referrals.admin`.
+- Una recompensa de dinero necesita un [plugin de economía](/docs/exylialib/economia).
+- Los referidos usan el contador de tiempo de juego y los registros de conexión de ExyliaLib, así que con varios servidores en una base de datos funcionan en toda la red.
 
-| Rechazo | Por qué |
+## Pasos
+
+<Steps>
+  <Step title="Abre el archivo">
+    Abre `plugins/ExyliaRewards/referrals.yml`. El archivo es tuyo: lo que cambies nunca se sobrescribe.
+  </Step>
+  <Step title="Fija lo que recibe el recién llegado">
+    En `invited`, edita `rewards` (una lista de recompensas de ExyliaLib; consulta [Recompensas en ExyliaLib](/docs/exylialib/recompensas#en-un-archivo-de-config)) y el `message` que se envía al pagarle. Se paga al jugador nuevo cuando ha jugado lo suficiente.
+  </Step>
+  <Step title="Fija lo que recibe quien invita">
+    En `referrer`, edita `rewards` y `message`. Se paga a quien lo invitó en el mismo momento.
+  </Step>
+  <Step title="Añade hitos">
+    En `milestones`, cada clave es un número de amigos. Se paga una vez a quien invita cuando exactamente esa cantidad de los jugadores que invitó se ha asentado. El archivo trae 5 y 15.
+  </Step>
+  <Step title="Recarga">
+    Ejecuta `/rewardsadmin reload`.
+  </Step>
+</Steps>
+
+En los mensajes, `%player%` es quien cobra, `%friend%` el otro jugador, `%count%` los jugadores que trajo quien invita, y `%rewards%` y `%money%` lo que se pagó.
+
+## Comprueba que funciona
+
+Con una segunda cuenta nueva en el servidor (y en otra conexión si `block-same-address` está activado), ejecuta `/referral <quien invita>`. Al recién llegado se le dice cuánto debe jugar, y a quien invita se le avisa donde esté en la red, o en su próxima conexión. Ejecuta `/referral` sin nombre en cualquiera de las cuentas: muestra quién te invitó, cuántos jugadores trajiste, cuántos siguen asentándose y el próximo hito. La tarjeta **Referidos** de `/rewards` muestra lo mismo.
+
+Tras `referrals.qualify-minutes` de tiempo de juego (60 por defecto, sin contar el tiempo inactivo), se paga a ambos en el mismo momento, y si quien invita alcanza un hito se le paga también.
+
+## Ir más allá
+
+### Cambia las reglas
+
+En `config.yml` bajo `referrals`, o en `/rewardsadmin`, **Plugin ▸ Ajustes**, **Referidos**:
+
+- `qualify-minutes` (por defecto 60): tiempo de juego que necesita el recién llegado.
+- `join-window-hours` (por defecto 72): horas desde su primera conexión a la red durante las que un jugador aún puede indicar a alguien.
+- `block-same-address` (por defecto activado): rechaza cuentas que usaron la misma dirección.
+
+### Por qué se rechaza un referido
+
+| Rechazo | Motivo |
 |---|---|
-| Demasiado tarde | Han pasado más de `referrals.join-window-hours` (por defecto 72) desde la primera entrada del jugador en cualquier servidor de la red. |
-| Uno mismo | Un jugador no puede indicarse a sí mismo. |
-| Misma conexión | Con `referrals.block-same-address` activado (por defecto), las dos cuentas usaron la misma dirección en los últimos 30 días, en cualquier servidor, o están conectadas desde ella ahora. Cuando los registros no pueden responder, el referido se rechaza. |
-| Ya indicado | Un jugador indica a una sola persona, una vez. |
-| Circular | El jugador indicado ya indicó a este jugador: dos jugadores no pueden invitarse mutuamente. |
+| Demasiado tarde | Han pasado más de `join-window-hours` desde la primera conexión del jugador a la red. |
+| A ti mismo | Un jugador no puede indicarse a sí mismo. |
+| Misma conexión | Con `block-same-address` activado, las dos cuentas usaron la misma dirección en los últimos 30 días, en cualquier servidor, o están conectadas desde ella ahora. Si los registros no pueden responder, el referido se rechaza. |
+| Ya indicado | Un jugador indica a un único referente, una vez. |
+| Circular | El jugador indicado ya indicó a este jugador. |
 
-Cuando se acepta, se avisa a quien invitó esté donde esté en la red, o en su siguiente entrada.
+### Reinicia un referido equivocado
 
-## Asentarse
+`/referraladmin reset <jugador>` (también `/refadmin reset`) olvida a quién indicó un jugador, para que pueda indicar a otro. Pide `confirm` antes: `/referraladmin reset <jugador> confirm`. Solo se puede reiniciar un referido por el que aún no se pagó nada; uno que ya se asentó se mantiene.
 
-Cuando el jugador nuevo ha jugado lo suficiente, los dos cobran a la vez, y sube la cuenta de jugadores
-traídos de quien invitó. Si la cuenta llega a un **hito**, también se le paga. Solo un servidor puede
-cerrar un referido, así que un jugador que cambia de servidor en ese minuto no hace que nadie cobre dos
-veces. Cualquiera de los dos puede estar desconectado o en otro servidor: lo que ganan se entrega por id, y
-la línea que lo explica les llega donde estén, o en su siguiente entrada.
+<Details title="Detalles técnicos">
 
-## referrals.yml
-
-```yaml
-invited:
-  rewards:
-    - type: ECONOMY
-      value: '50'
-  message: '%prefix% {success}You settled in! {highlight}%friend% {letters}invited you ...'
-
-referrer:
-  rewards:
-    - type: ECONOMY
-      value: '150'
-  message: '%prefix% {highlight}%friend% {letters}is settling in, thanks to you ...'
-
-milestones:
-  '5':
-    rewards:
-      - type: ECONOMY
-        value: '750'
-    message: '%prefix% {highlight}5 {letters}friends brought to the server ...'
-```
-
-| Sección | Se paga |
+| Sección de `referrals.yml` | Se paga |
 |---|---|
-| `invited` | Al jugador nuevo, cuando ha jugado lo suficiente. |
-| `referrer` | A quien le invitó, en el mismo momento. |
-| `milestones` | Una vez a quien invita cuando exactamente ese número de jugadores que invitó se han asentado. El archivo incluido trae 5 y 15. |
+| `invited` | Al jugador nuevo cuando ha jugado lo suficiente. |
+| `referrer` | A quien lo invitó, en el mismo momento. |
+| `milestones` | Una vez a quien invita cuando exactamente esa cantidad de invitados se ha asentado. |
 
-Cada bloque acepta `rewards`, una lista de recompensas de ExyliaLib (consulta
-[Recompensas en ExyliaLib](/docs/exylialib/recompensas#en-un-archivo-de-config)), y `message` (vacío para
-ninguno). En los mensajes: `%player%` (quien cobra), `%friend%` (el otro jugador), `%count%` (jugadores que
-trajo quien invita), `%rewards%` y `%money%`. El dinero y los ítems se potencian con la fuente `referrals`.
-Como `votes.yml`, el archivo es tuyo y se recarga con `/rewardsadmin reload`.
+Cada bloque admite `rewards` y `message` (vacío para ninguno). El dinero y los ítems se potencian para la fuente `referrals`. `/referral` es también `/ref` y `/referrals`.
 
-## Ver tus referidos
+Solo un servidor puede asentar un referido, así que un jugador que cambia de servidor en ese minuto no paga dos veces. Cualquiera de los dos puede estar desconectado o en otro servidor: lo que gana se entrega por id, y la línea que explica por qué le llega donde esté, o en su próxima conexión.
 
-`/referral` sin nombre muestra quién te invitó, cuántos jugadores trajiste, cuántos se están asentando
-todavía, el siguiente hito y cómo te indican los jugadores nuevos. La tarjeta **Referidos** de `/rewards`
-muestra lo mismo.
+</Details>
 
-## Reiniciar un referido
-
-`/referraladmin reset <player>` (también `/refadmin reset`, `exyliarewards.referrals.admin`) olvida a quién
-indicó un jugador, para que pueda indicar a otro. Primero pide `confirm`:
-`/referraladmin reset <player> confirm`. Solo se puede reiniciar un referido por el que todavía no se ha
-pagado a nadie; uno que ya se asentó se queda.
+<Cards>
+  <Card title="Comandos" href="/docs/exyliarewards/comandos">/referral y /referraladmin.</Card>
+  <Card title="Recompensar los votos" href="/docs/exyliarewards/votos">El otro módulo que paga desde un archivo.</Card>
+</Cards>

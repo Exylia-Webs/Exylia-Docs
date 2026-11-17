@@ -10,75 +10,81 @@ questions:
 updated: "1.0.0"
 ---
 
-A new player types `/referral <player>` to name who invited them. Nothing is paid yet: both players are
-rewarded once the new player has played `referrals.qualify-minutes` (default 60) since naming somebody,
-idle time not counted, as ExyliaLib's playtime tracker counts it on every server of the network.
+Let new players name who invited them with `/referral <player>`, and pay both of them once the newcomer has played long enough, with extra rewards for referrers who bring a number of friends. Rewards live in `referrals.yml`.
 
-## Naming who invited you
+## Before you start
 
-`/referral <player>` (also `/ref` and `/referrals`) needs `exyliarewards.referrals.use`. It is refused when:
+- Players need `exyliarewards.referrals.use`, which everyone has by default. Staff who reset referrals need `exyliarewards.referrals.admin`.
+- A money reward needs an [economy plugin](/docs/exylialib/economy).
+- Referrals use ExyliaLib's playtime tracker and join records, so with several servers on one database they work network-wide.
+
+## Steps
+
+<Steps>
+  <Step title="Open the file">
+    Open `plugins/ExyliaRewards/referrals.yml`. The file is yours: what you change is never overwritten.
+  </Step>
+  <Step title="Set what the newcomer gets">
+    Under `invited`, edit `rewards` (an ExyliaLib reward list; see [Rewards in ExyliaLib](/docs/exylialib/rewards#in-a-config-file)) and the `message` sent when they are paid. Paid to the new player once they have played long enough.
+  </Step>
+  <Step title="Set what the referrer gets">
+    Under `referrer`, edit `rewards` and `message`. Paid to whoever invited them, at the same moment.
+  </Step>
+  <Step title="Add milestones">
+    Under `milestones`, each key is a number of friends. It is paid once to a referrer when exactly that many of the players they invited have settled in. The file ships with 5 and 15.
+  </Step>
+  <Step title="Reload">
+    Run `/rewardsadmin reload`.
+  </Step>
+</Steps>
+
+In messages, `%player%` is who is paid, `%friend%` the other player, `%count%` the players the referrer brought, and `%rewards%` and `%money%` what was paid.
+
+## Check that it works
+
+With a second account that is new to the server (and on another connection if `block-same-address` is on), run `/referral <referrer>`. The newcomer is told how long they must play, and the referrer is told wherever they are on the network, or on their next join. Run `/referral` with no name on either account: it shows who invited you, how many players you brought, how many are still settling in, and the next milestone. The **Referrals** card of `/rewards` shows the same.
+
+After `referrals.qualify-minutes` of playtime (default 60, idle time not counted), both are paid at the same moment, and if the referrer reaches a milestone they are paid that too.
+
+## Going further
+
+### Change the rules
+
+In `config.yml` under `referrals`, or in `/rewardsadmin`, **Plugin ▸ Settings**, **Referrals**:
+
+- `qualify-minutes` (default 60): playtime the newcomer needs.
+- `join-window-hours` (default 72): hours after their first join anywhere on the network during which a player can still name somebody.
+- `block-same-address` (default on): refuses accounts that used the same address.
+
+### Why a referral is refused
 
 | Refusal | Why |
 |---|---|
-| Too late | More than `referrals.join-window-hours` (default 72) have passed since the player's first join anywhere on the network. |
+| Too late | More than `join-window-hours` since the player's first join anywhere on the network. |
 | Yourself | A player cannot name themselves. |
-| Same connection | With `referrals.block-same-address` on (the default), the two accounts used the same address within the last 30 days, on any server, or are online from it now. When the records cannot answer, the referral is refused. |
+| Same connection | With `block-same-address` on, the two accounts used the same address within the last 30 days, on any server, or are online from it now. When the records cannot answer, the referral is refused. |
 | Already named | A player names one referrer, once. |
-| Circular | The player being named already named this player: two players cannot invite each other. |
+| Circular | The player being named already named this player. |
 
-When it is accepted, the referrer is told wherever they are on the network, or on their next join.
+### Reset a mistaken referral
 
-## Settling in
+`/referraladmin reset <player>` (also `/refadmin reset`) forgets who a player named, so they can name somebody again. It asks for `confirm` first: `/referraladmin reset <player> confirm`. Only a referral nobody was paid for yet can be reset; one that already settled in stays.
 
-Once the new player has played long enough, both are paid at the same moment, and the referrer's count of
-players brought goes up. If the count reaches a **milestone**, the referrer is paid that too. Only one server
-can settle a referral, so a player moving servers at that minute pays nobody twice. Either player may be
-offline or on another server: what they earn is delivered by id, and the line saying why reaches them where
-they are, or on their next join.
+<Details title="Technical details">
 
-## referrals.yml
-
-```yaml
-invited:
-  rewards:
-    - type: ECONOMY
-      value: '50'
-  message: '%prefix% {success}You settled in! {highlight}%friend% {letters}invited you ...'
-
-referrer:
-  rewards:
-    - type: ECONOMY
-      value: '150'
-  message: '%prefix% {highlight}%friend% {letters}is settling in, thanks to you ...'
-
-milestones:
-  '5':
-    rewards:
-      - type: ECONOMY
-        value: '750'
-    message: '%prefix% {highlight}5 {letters}friends brought to the server ...'
-```
-
-| Section | Paid |
+| Section of `referrals.yml` | Paid |
 |---|---|
-| `invited` | To the new player, once they have played long enough. |
+| `invited` | To the new player once they have played long enough. |
 | `referrer` | To whoever invited them, at the same moment. |
-| `milestones` | Once to a referrer when exactly that many of the players they invited have settled in. The bundled file has 5 and 15. |
+| `milestones` | Once to a referrer when exactly that many invited players have settled in. |
 
-Every block takes `rewards`, an ExyliaLib reward list (see
-[Rewards in ExyliaLib](/docs/exylialib/rewards#in-a-config-file)), and `message` (empty for none). In
-messages: `%player%` (who is paid), `%friend%` (the other player), `%count%` (players the referrer brought),
-`%rewards%` and `%money%`. Money and items are boosted for the `referrals` source. Like `votes.yml`, the file
-is yours and reloads with `/rewardsadmin reload`.
+Every block takes `rewards` and `message` (empty for none). Money and items are boosted for the `referrals` source. `/referral` is also `/ref` and `/referrals`.
 
-## Seeing your referrals
+Only one server can settle a referral, so a player moving servers at that minute pays nobody twice. Either player may be offline or on another server: what they earn is delivered by id, and the line saying why reaches them where they are, or on their next join.
 
-`/referral` with no name shows who invited you, how many players you brought, how many are still settling
-in, the next milestone, and how new players name you. The **Referrals** card of `/rewards` shows the same.
+</Details>
 
-## Resetting a referral
-
-`/referraladmin reset <player>` (also `/refadmin reset`, `exyliarewards.referrals.admin`) forgets who a
-player named, so they can name somebody again. It asks for `confirm` first:
-`/referraladmin reset <player> confirm`. Only a referral nobody was paid for yet can be reset; one that
-already settled in stays.
+<Cards>
+  <Card title="Commands" href="/docs/exyliarewards/commands">/referral and /referraladmin.</Card>
+  <Card title="Reward votes" href="/docs/exyliarewards/votes">The other module that pays from a file.</Card>
+</Cards>
