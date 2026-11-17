@@ -39,7 +39,7 @@ Follow WRITING.md. ExyliaFFA is the model. One row per plugin; mark done after r
 | `exyliaproxyutils` | `ExyliaProxyUtils` | done (reference pages left on old text) |
 | `exyliarandomkits` | `ExyliaRandomKitsCore` | started (guide bodies pending) |
 | `exyliarewards` | `ExyliaRewards` | done (faq lacks battle pass) |
-| `exyliasandbox` | `ExyliaSandBox` | todo |
+| `exyliasandbox` | `ExyliaSandBox` | started (guide bodies pending) |
 | `exyliascreens` | `ExyliaScreens` | done (config/faq pending, importer unverified) |
 | `exyliashields` | `ExyliaShields` | done (pages left on old text: see .rewrite-notes) |
 | `exyliaspecials` | `ExyliaSpecials` | done (config/api/faq pending) |
