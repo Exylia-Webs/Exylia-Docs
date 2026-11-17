@@ -1,6 +1,6 @@
 ---
 title: "Add effects to a skin"
-description: "What a skin does beyond looking different: the equip and unequip effects, the ambient it repeats while worn, and the set bonus for wearing every piece it fits."
+description: "Play a sound or particles when a skin goes on, while it is worn and when the whole set is complete."
 questions:
   - "How do I add a sound when a skin is equipped?"
   - "What is a set bonus?"
@@ -9,50 +9,86 @@ questions:
 updated: "1.4.1"
 ---
 
-Every skin may declare an `effects` block. All of it is optional, and a skin with none simply looks
-different and does nothing else.
+Effects are what a skin does beyond looking different: a sound or title when it goes on, particles while it is worn, and a bonus when the whole set is on. You end with a skin that plays a sound when equipped and a particle around the body when the set is complete. Every part is optional.
 
-```yaml title="skins.yml"
-skins:
-  inferno:
-    effects:
-      on-equip:
-        sound:
-          name: ITEM_ARMOR_EQUIP_NETHERITE
-          volume: 0.8
-          pitch: 1.2
-        title:
-          text: '{warning}&lINFERNO'
-          subtitle: '{letters}The armour burns'
-      on-unequip:
-        sound:
-          name: BLOCK_FIRE_EXTINGUISH
-      ambient:
-        particle: 'FLAME|5|0.3|0'
-        sound: ''
-        interval: 1.0
-        radius: 32.0
-      set:
-        on-complete:
-          sound:
-            name: ITEM_FIRECHARGE_USE
-            volume: 1.0
-            pitch: 1.4
-        on-break: {}
-        ambient:
-          particle: 'FLAME|4|0.4|0.01'
-          sound: ''
-          interval: 0.25
-          radius: 32.0
-```
+## Before you start
 
-| Block | When it runs |
+You have a skin, see [Create and edit skins](/docs/exyliaarmorskin/skins). The forty shipped skins already carry effects, so you can copy from them in `skins.yml`.
+
+## Steps
+
+<Steps>
+  <Step title="Open the skin">
+    In `skins.yml`, find your skin and add an `effects` block under it.
+  </Step>
+  <Step title="Add a sound on equip">
+    ```yaml title="skins.yml"
+    skins:
+      inferno:
+        effects:
+          on-equip:
+            sound:
+              name: ITEM_ARMOR_EQUIP_NETHERITE
+              volume: 0.8
+              pitch: 1.2
+    ```
+  </Step>
+  <Step title="Add a particle while the set is worn">
+    ```yaml title="skins.yml"
+    skins:
+      inferno:
+        effects:
+          set:
+            ambient:
+              particle: 'FLAME|4|0.4|0.01'
+              interval: 0.25
+              radius: 32.0
+    ```
+  </Step>
+  <Step title="Reload">
+    Run `/armorskinsadmin reload`.
+  </Step>
+</Steps>
+
+## Check that it works
+
+Put the skin on: you hear the sound. Wear every piece the skin fits and flames appear around your body; take one off and they stop. If you hear nothing, check the sound name (a Minecraft sound id such as `ITEM_ARMOR_EQUIP_NETHERITE`) and see [Common problems](/docs/exyliaarmorskin/troubleshooting).
+
+## Going further
+
+### Titles, action bars and more on equip
+
+`on-equip` and `on-unequip` are standard ExyliaLib effects played to the wearer. Each can carry a `title`, `action-bar`, `boss-bar`, `sound`, `particle` and `firework`. The full reference is the [ExyliaLib effects module](/docs/exylialib/effects).
+
+<Callout type="note" title="They fire on a real equip, not on every redraw">
+`on-equip` plays when a piece is equipped or when its skin changes on the body. Joining, respawning, changing world, `/armorskinsadmin refresh` and `/armorskinsadmin reload` rebuild the visual **silently**, so a player logging in is not greeted by four titles. Swapping armour back and forth plays them at most once a second.
+</Callout>
+
+### Particles on each piece
+
+`ambient` repeats at **each worn piece**, at that piece's own height, for as long as the piece is worn. `particle` is `NAME|count|spread|speed`, `sound` is `NAME|volume|pitch`, `interval` is seconds between repetitions (minimum `0.05`, default `1.0`) and `radius` is how many blocks around can see or hear it (default `32.0`). Details below.
+
+### Set bonus
+
+`effects.set` fires when a player wears **every piece the skin fits** with that same skin: all four when `pieces` is empty, two for a skin with `pieces: [helmet, chestplate]`.
+
+| Key | What it is |
 |---|---|
-| `on-equip` / `on-unequip` | The moment a piece with this skin goes on or comes off. |
-| `ambient` | Repeated at **each worn piece**, at that piece's own height. |
-| `set` | Once every piece the skin fits is worn with it — see [Set bonus](#set-bonus). |
+| `on-complete` | An effect played once, the moment the set becomes complete. |
+| `on-break` | An effect played once, the moment it stops being complete. |
+| `ambient` | The same keys as the per-piece ambient, played **around the player** at a height of 1.0 while the set holds. |
 
-## `on-equip` and `on-unequip`
+The set is judged from the topmost skinned piece downwards: whatever skin sits in the first occupied slot is the only one that can complete. Three `inferno` pieces and an `ocean` helmet complete nothing.
+
+Every shipped skin carries the full show: a sound as it goes on, a particle around the body while the set holds, an action bar line `✦ Full set » <NAME>` when it closes and `✧ Set broken` when it ends. Changing straight from one complete set to another plays the new `on-complete` but not the old `on-break`.
+
+### The sound of applying and removing
+
+Putting a skin on and taking it off with a skin item or remover play their own sound, set under `effects.on-apply` and `effects.on-remove` in `config.yml` (defaults `ITEM_ARMOR_EQUIP_LEATHER` and `ITEM_BUNDLE_REMOVE_ONE`, volume 0.7). They only fire on a successful drag in the inventory: a refused apply plays nothing, and neither does the [API](/docs/exyliaarmorskin/api).
+
+<Details title="Effect sections and ambient keys">
+
+**`on-equip` and `on-unequip`**
 
 Both are standard ExyliaLib effects, so each one may carry any combination of six sections. They are
 played **to the wearer**.
@@ -77,7 +113,7 @@ player logging in is not greeted by four titles. Swapping armour back and forth 
 once a second: a change inside that second redraws the piece without a sound.
 </Callout>
 
-## `ambient`
+**`ambient`**
 
 Repeated for as long as the piece is worn.
 
@@ -115,25 +151,9 @@ The floor exists so a typo cannot ask for less, not as an invitation. A particle
 chestplate is what the defaults are shaped for.
 </Callout>
 
-## Set bonus
+</Details>
 
-`effects.set` fires when a player wears **every piece the skin fits** with that same skin. For a skin
-with an empty `pieces` list that means all four; for `golden_sentry`, which fits only the helmet and
-the chestplate, two pieces complete the set.
-
-| Key | What it is |
-|---|---|
-| `on-complete` | An effect played once, the moment the set becomes complete. |
-| `on-break` | An effect played once, the moment it stops being complete. |
-| `ambient` | The same four keys as the per-piece ambient, played **around the player** at a fixed height of 1.0 while the set holds. |
-
-The set is judged from the topmost skinned piece downwards: whatever skin sits in the first occupied
-slot is the only one that can complete. Three `inferno` pieces and an `ocean` helmet complete nothing.
-
-<Callout type="note" title="One extra timer, and only while the set holds">
-The set ambient is a single timer per player, on top of the per-piece ones. It is cancelled the tick
-the set breaks, when the wearer quits, and on disable.
-</Callout>
+<Details title="Effects shipped on every skin">
 
 ### What the defaults ship
 
@@ -196,25 +216,9 @@ Changing straight from a complete `inferno` set to a complete `ocean` set plays 
 `on-complete` but not `inferno`'s `on-break` — the break line is for a set that actually ended.
 </Callout>
 
-## Applying and removing
+</Details>
 
-Putting a skin on and taking it off play their own effect, and those two live in `config.yml` rather
-than on the skin, because they belong to the system:
-
-```yaml title="config.yml"
-effects:
-  on-apply:
-    sound:
-      name: ITEM_ARMOR_EQUIP_LEATHER
-      volume: 0.7
-      pitch: 1.2
-  on-remove:
-    sound:
-      name: ITEM_BUNDLE_REMOVE_ONE
-      volume: 0.7
-      pitch: 1.0
-```
-
-Both are full ExyliaLib effects, both are played to the player who did it, and both only fire on a
-**successful** drag in the inventory — a refused apply plays nothing, and the
-[API](/docs/exyliaarmorskin/api) plays nothing either.
+<Cards>
+  <Card title="Next: Animate a skin" href="/docs/exyliaarmorskin/animations">Make the colour move too.</Card>
+  <Card title="Effects in ExyliaLib" href="/docs/exylialib/effects">Titles, boss bars and fireworks.</Card>
+</Cards>
