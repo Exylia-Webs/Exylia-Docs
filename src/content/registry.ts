@@ -58,6 +58,8 @@ export type Plugin = {
   download?: string;
   /** Sidebar structure. Empty for plugins whose docs are not written yet. */
   nav: NavGroup[];
+  /** Runs without ExyliaLib: its sidebar does not get the shared "Customise" group. */
+  standalone?: boolean;
 };
 
 export const SITE = {
@@ -200,6 +202,23 @@ const EVENTS_NAV: NavGroup[] = [
   },
 ];
 
+/**
+ * Server-owner guides for what ExyliaLib configures for every Exylia plugin at once. Written once in
+ * `content/exylialib/` and shown in every plugin's sidebar (see `getNav`), so someone who bought
+ * ExyliaFFA finds how to change its colours without knowing the library exists.
+ */
+export const SHARED_GROUP: NavGroup = {
+  label: { en: "Customise (all Exylia plugins)", es: "Personalizar (todos los plugins Exylia)" },
+  pages: [
+    page("colours", "colours", "colores"),
+    page("messages", "messages-and-languages", "mensajes-e-idiomas"),
+    page("edit-menus", "edit-menus", "editar-menus"),
+    page("economy-setup", "economy-setup", "configurar-economia"),
+    page("database-setup", "database-setup", "configurar-base-de-datos"),
+  ],
+};
+export const SHARED_PLUGIN = "exylialib";
+
 const LIB_NAV: NavGroup[] = [
   {
     label: { en: "Getting started", es: "Empezar" },
@@ -212,6 +231,7 @@ const LIB_NAV: NavGroup[] = [
       page("first-plugin", "first-plugin", "primer-plugin"),
     ],
   },
+  SHARED_GROUP,
   {
     label: { en: "Foundations", es: "Fundamentos" },
     pages: [

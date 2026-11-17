@@ -12,6 +12,7 @@ import { LANGS, SITE, getPlugin, toLang, translateSlug } from "@/content/registr
 import { dict } from "@/content/dictionary";
 import { buildConfigMap, noteFor } from "@/lib/config-map";
 import { ConfigExplorer } from "@/components/docs/ConfigExplorer";
+import { toPlainText } from "@/lib/assistant/docs-tools";
 
 type Params = Promise<{ lang: string; plugin: string; slug: string }>;
 
@@ -55,7 +56,7 @@ export default async function DocPage({ params }: { params: Params }) {
   const flat = getFlatNav(resolved.plugin, lang);
   const index = flat.findIndex((d) => d.slug === doc.slug) + 1;
   const minutes = Math.max(1, Math.round(doc.body.split(/\s+/).length / 200));
-  const markdown = `# ${doc.title}\n\n${doc.description ? `${doc.description}\n\n` : ""}${doc.body.trim()}\n\nSource: ${SITE.url}/${lang}/docs/${entry.id}/${doc.slug}\n`;
+  const markdown = `# ${doc.title}\n\n${doc.description ? `${doc.description}\n\n` : ""}${toPlainText(doc.body, lang, entry.id)}\n\nSource: ${SITE.url}/${lang}/docs/${entry.id}/${doc.slug}\n`;
   const config = buildConfigMap(doc.body);
   const explorer = config?.files.map((f) => ({
     name: f.name,
@@ -87,7 +88,7 @@ export default async function DocPage({ params }: { params: Params }) {
           <ArticleFade>
             {explorer && <ConfigExplorer files={explorer} lang={lang} />}
             <div className="prose-docs">
-              <Mdx source={doc.body} lang={lang} />
+              <Mdx source={doc.body} lang={lang} plugin={entry.id} />
             </div>
           </ArticleFade>
 

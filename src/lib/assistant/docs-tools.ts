@@ -1,5 +1,6 @@
 import type { AssistantTool } from "@exylia-webs/ui/assistant";
 import { getAllDocParams, readDoc } from "@/lib/docs";
+import { dataMarkdown, type DataKind } from "@/lib/plugin-data";
 import { DEFAULT_LANG, LANGS, SITE, documentedPlugins, getPlugin, plugins, type Lang } from "@/content/registry";
 
 /**
@@ -24,8 +25,13 @@ const attr = (attrs: string, name: string) => new RegExp(`\\b${name}=(?:"([^"]*)
 const withLang = (href: string, lang: Lang) => (href.startsWith("/docs/") ? `/${lang}${href}` : href);
 
 /** One MDX component tag as the text it shows. Tags we do not know are left alone: they are prose like `<player>`. */
-function tagText(name: string, attrs: string, lang: Lang): string {
+function tagText(name: string, attrs: string, lang: Lang, plugin: string): string {
   switch (name) {
+    case "Commands":
+    case "Permissions":
+    case "Placeholders":
+      return `\n\n${dataMarkdown(attr(attrs, "from") ?? plugin, name.toLowerCase() as DataKind, lang, attr(attrs, "group"))}\n\n`;
+    case "Details":
     case "Callout":
     case "Step": {
       const title = attr(attrs, "title");
@@ -47,7 +53,7 @@ function tagText(name: string, attrs: string, lang: Lang): string {
   }
 }
 
-const COMPONENTS = "Callout|Cards|Card|Steps|Step|Badge|Field|AiPrompt";
+const COMPONENTS = "Callout|Cards|Card|Steps|Step|Badge|Field|AiPrompt|Details|Commands|Permissions|Placeholders";
 const OPEN_TAG = new RegExp(`<(${COMPONENTS})\\b([^<>]*?)\\/?>`, "g");
 const CLOSE_TAG = new RegExp(`<\\/(?:${COMPONENTS})\\s*>`, "g");
 
@@ -56,7 +62,7 @@ const CLOSE_TAG = new RegExp(`<\\/(?:${COMPONENTS})\\s*>`, "g");
  * comments go, links get the page's language. Code (fenced and inline) is kept verbatim: it is
  * where the configuration keys and commands are.
  */
-export function toPlainText(body: string, lang: Lang): string {
+export function toPlainText(body: string, lang: Lang, plugin = ""): string {
   const out: string[] = [];
   let fenced = false;
   for (const line of body.replace(/\{\/\*[\s\S]*?\*\/\}/g, "").split("\n")) {
@@ -72,7 +78,7 @@ export function toPlainText(body: string, lang: Lang): string {
           i % 2
             ? part
             : part
-                .replace(OPEN_TAG, (_, name: string, attrs: string) => tagText(name, attrs, lang))
+                .replace(OPEN_TAG, (_, name: string, attrs: string) => tagText(name, attrs, lang, plugin))
                 .replace(CLOSE_TAG, "")
                 .replace(/\]\(\/docs\//g, `](/${lang}/docs/`),
         )
@@ -111,7 +117,7 @@ function indexOf(lang: Lang): Entry[] {
       for (const ref of group.pages) {
         const doc = readDoc(entry.id, lang, ref.slugs[lang]);
         if (!doc) continue;
-        const text = toPlainText(doc.body, lang).slice(0, INDEX_CHARS);
+        const text = `${doc.questions.join("\n")}\n${toPlainText(doc.body, lang, entry.id)}`.slice(0, INDEX_CHARS);
         index.push({
           plugin: entry.id,
           pluginName: entry.name,
@@ -250,7 +256,7 @@ export function readPage(args: { url?: string; plugin?: string; slug?: string },
   if (!isPublished(lang, entry.id, parsed.slug)) throw new Error(`No page "${parsed.slug}" in ${entry.name} (${lang}): use search_docs or read the plugin's address to list its pages`);
   const doc = readDoc(entry.id, lang, parsed.slug);
   if (!doc) throw new Error("That page could not be read");
-  const text = toPlainText(doc.body, lang);
+  const text = toPlainText(doc.body, lang, entry.id);
   return {
     title: doc.title,
     plugin: entry.id,

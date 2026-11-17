@@ -1,0 +1,107 @@
+---
+title: "Configura la base de datos de tus plugins Exylia"
+description: "Dónde guardan los datos por defecto los plugins Exylia, cómo pasar a MySQL, MariaDB o PostgreSQL paso a paso y cómo compartir datos entre servidores."
+questions:
+  - "¿Dónde guardan sus datos los plugins Exylia?"
+  - "¿Cómo paso mis plugins Exylia a MySQL o MariaDB?"
+  - "¿Cómo comparto datos entre varios servidores?"
+  - "¿Perderé mis datos al cambiar de base de datos?"
+  - "¿Dónde está database.yml?"
+  - "¿Necesito Redis?"
+updated: "1.595.0"
+---
+
+Por defecto tus plugins Exylia guardan sus datos en un archivo del servidor y no necesitan nada de ti. Esta página explica cuándo pasar a MySQL, MariaDB o PostgreSQL y cómo hacerlo sin perder nada.
+
+ExyliaLib es la librería que instala cada plugin Exylia. Ella abre la base de datos de cada plugin, así que cada plugin tiene su propio `database.yml` en `plugins/<Plugin>/`, por ejemplo `plugins/ExyliaFFA/database.yml`.
+
+## ¿Necesitas cambiar algo?
+
+- **Un solo servidor:** no. El valor por defecto, H2, es un archivo dentro de la carpeta del servidor. Es rápido y se le hacen copias de seguridad solo.
+- **Varios servidores con los mismos jugadores, saldos o estadísticas:** sí, usa un servidor de base de datos para que todos lean los mismos datos.
+- **Quieres ver los datos con una herramienta externa o incluirlos en las copias del resto de tus bases de datos:** usa un servidor de base de datos.
+
+Por defecto los datos están en `plugins/<Plugin>/database/h2`, con una copia cada 6 horas en `database/backups/` (se guardan las 5 más recientes).
+
+## Pasa a MySQL o MariaDB
+
+### La forma rápida: el asistente
+
+Ejecuta `/exylialib setup` (permiso `exylialib.admin`) y abre el paso **Database**. Elige **Network**, rellena en el formulario el host, puerto, base de datos, usuario y contraseña, y confirma. ExyliaLib prueba antes la conexión y luego cambia el `database.yml` de todos los plugins Exylia. La contraseña se pide como entrada oculta y nunca llega al chat. Los datos que ya tenía cada plugin se copian a la base nueva la primera vez que ese plugin arranca tras el reinicio. El archivo antiguo se conserva como copia. Mira el [Asistente de configuración](/docs/exylialib/asistente-de-configuracion).
+
+### A mano, plugin por plugin
+
+<Steps>
+  <Step title="Crea la base de datos">
+    En tu servidor MySQL o MariaDB, crea una base de datos vacía (por ejemplo `minecraft`) y un usuario con acceso a ella.
+  </Step>
+  <Step title="Exporta los datos actuales">
+    Mientras el plugin sigue en su base antigua, ejecuta `/exylialib export <plugin>` (por ejemplo `/exylialib export ExyliaFFA`). Escribe un volcado en `plugins/ExyliaLib/dumps/` y muestra el nombre del archivo.
+  </Step>
+  <Step title="Edita database.yml">
+    Para el servidor y abre `plugins/<Plugin>/database.yml`. Pon el tipo y rellena el bloque con el mismo nombre:
+
+    ```yaml title="plugins/ExyliaFFA/database.yml"
+    database:
+      type: mysql
+      mysql:
+        host: localhost
+        port: 3306
+        database: minecraft
+        username: exylia
+        password: "tu-contraseña"
+    ```
+    Usa `type: mariadb` y un bloque `mariadb:` para MariaDB, o `type: postgresql` (puerto por defecto 5432). Solo se lee el bloque que coincide con `type`.
+  </Step>
+  <Step title="Arranca el servidor e importa">
+    Arranca el servidor y ejecuta `/exylialib import <plugin> <archivo>` con el nombre del archivo del volcado. Por defecto solo escribe en tablas vacías; añade `force` al final para mezclar con tablas que ya tienen filas.
+  </Step>
+</Steps>
+
+Repite con cada plugin cuyos datos quieras mover. Los plugins que apuntan a la misma base comparten una conexión, así que no abres conexiones de más.
+
+<Callout type="warning" title="Un tipo incorrecto vuelve a H2">
+Si `type` no es `h2`, `mysql`, `mariadb`, `postgresql` o `mongodb`, el plugin vuelve a H2 y muestra un error. Nada de lo que guarde llega entonces a tu servidor de base de datos. Un plugin que aún tiene un archivo H2 antiguo también lo avisa una vez al arrancar: ese archivo no se lee hasta que lo importas.
+</Callout>
+
+## Comparte datos entre servidores
+
+Varios servidores pueden usar una misma base para que saldos, estadísticas y ajustes sean iguales en todos.
+
+1. Apunta todos los servidores a la misma base, como arriba (el asistente lo hace con todos los plugins a la vez).
+2. Dale a cada servidor su propio nombre en el formulario del asistente, para que dos servidores nunca compartan nombre.
+3. Opcional: agrupa servidores. Los servidores con el mismo `network-group` en `plugins/ExyliaLib/config.yml` (por ejemplo `survival` o `boxpvp`) comparten lo que los plugins guardan por grupo. Reinicia para aplicarlo.
+4. Opcional: añade Redis, para que un cambio en un servidor se vea en los demás al instante y no tras un pequeño retraso. Viene desactivado:
+
+```yaml
+database:
+  redis:
+    enabled: true
+    host: 10.0.0.6
+    port: 6379
+    password: ""
+    server-id: lobby-1
+```
+
+`server-id` debe ser distinto en cada servidor. Si Redis deja de responder, todo sigue funcionando directamente contra la base de datos y la consola lo avisa.
+
+<Callout type="tip" title="¿No tienes un servidor Redis?">
+Pon `cross-server: database` en `database.yml` y los servidores hablan a través de la base compartida. Funciona con MySQL, MariaDB y PostgreSQL, pero no con H2.
+</Callout>
+
+## Comprueba que funciona
+
+Tras el reinicio, arranca el plugin y usa algo que guarde datos (por ejemplo entra en una arena que registre estadísticas). Busca tus tablas en la base de datos, o haz lo mismo en un segundo servidor y comprueba que ve el resultado. Si la consola muestra una línea diciendo que la base no responde, revisa host, puerto, usuario y contraseña: el plugin reintenta cada 30 segundos y se recupera solo en cuanto la base responde.
+
+## Copias y limpieza
+
+`/exylialib export <plugin>` guarda los datos de un plugin en un archivo que puedes conservar, y `/exylialib wipe <plugin> <tabla|*>` vacía tablas tras una exportación de seguridad y un código de confirmación (permiso `exylialib.admin.wipe`). No hay deshacer, así que exporta antes.
+
+<Details title="Detalles técnicos">
+Claves de `database.yml`: `type`, `settings.pool-size` (déjalo en `0`) y un bloque por motor (`h2`, `mysql`, `mariadb`, `postgresql`, `mongodb`, `redis`). `auto-server: true` de H2 permite que dos procesos de una misma máquina compartan el archivo. MongoDB acepta un `connection-string` completo. `share-database: true` en `plugins/ExyliaLib/config.yml` hace que un plugin instalado después sin `database.yml` arranque en la misma base; el asistente lo activa para una red. Vista para desarrolladores: [Base de datos](/docs/exylialib/base-de-datos).
+</Details>
+
+<Cards>
+  <Card title="Asistente de configuración" href="/docs/exylialib/asistente-de-configuracion">Idioma, colores y una base compartida probada, de una sentada.</Card>
+  <Card title="Base de datos para desarrolladores" href="/docs/exylialib/base-de-datos">Motores, reparación de H2, canales Redis y grupos de red a fondo.</Card>
+</Cards>

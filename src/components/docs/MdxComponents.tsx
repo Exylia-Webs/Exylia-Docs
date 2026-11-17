@@ -8,6 +8,7 @@ import { PreviewLink, type Preview } from "./PreviewLink";
 import { getPlugin, type Lang } from "@/content/registry";
 import { readDoc } from "@/lib/docs";
 import { dict } from "@/content/dictionary";
+import { dataTable, type DataKind } from "@/lib/plugin-data";
 
 /* ---------------- Callout ---------------- */
 
@@ -184,6 +185,45 @@ export function Field({
   );
 }
 
+/** Technical detail most readers skip: folded, but in the HTML so search and crawlers still read it. */
+export function Details({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <details className="group/d not-prose my-6 rounded-xl border hair bg-white/[0.015]">
+      <summary className="flex cursor-pointer list-none items-center gap-2.5 px-4 py-3 text-[14px] text-white/70 transition-colors hover:text-white [&::-webkit-details-marker]:hidden">
+        <svg className="h-3 w-3 shrink-0 text-white/35 transition-transform group-open/d:rotate-90" viewBox="0 0 16 16" fill="none">
+          <path d="M6 3l5 5-5 5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+        {title}
+      </summary>
+      <div className="prose-docs border-t hair px-4 pb-1 pt-1 [&>*:first-child]:mt-3">{children}</div>
+    </details>
+  );
+}
+
+/** `<Commands />`, `<Permissions />`, `<Placeholders />`: rows from `content/<plugin>/data.json`. */
+function DataTable({ kind, plugin, lang, group, from }: { kind: DataKind; plugin: string; lang: Lang; group?: string; from?: string }) {
+  const table = dataTable(from ?? plugin, kind, lang, group);
+  if (!table) return null;
+  return (
+    <LiveTable lang={lang}>
+      <table>
+        <thead>
+          <tr>{table.head.map((h) => <th key={h}>{h}</th>)}</tr>
+        </thead>
+        <tbody>
+          {table.rows.map((row, i) => (
+            <tr key={i}>
+              {row.map((cell, j) => (
+                <td key={j}>{typeof cell === "string" ? cell : <InlineCode lang={lang}>{cell.code}</InlineCode>}</td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </LiveTable>
+  );
+}
+
 /** A heading with a `#` link that shows on hover, so any section can be shared. */
 function Anchored({ as: Tag, id, children }: { as: "h2" | "h3"; id?: string; children?: ReactNode }) {
   return (
@@ -221,7 +261,8 @@ function previewOf(href: string, lang: Lang): Preview | null {
   };
 }
 
-export function createMdxComponents(lang: Lang) {
+export function createMdxComponents(lang: Lang, plugin: string) {
+  type DataProps = { group?: string; from?: string };
   return {
     pre: (props: { children?: ReactNode }) => <CodeBlock {...props} lang={lang} />,
     h2: (props: { id?: string; children?: ReactNode }) => <Anchored as="h2" {...props} />,
@@ -255,6 +296,10 @@ export function createMdxComponents(lang: Lang) {
     Step,
     Badge,
     Field,
+    Details,
+    Commands: (p: DataProps) => <DataTable kind="commands" plugin={plugin} lang={lang} {...p} />,
+    Permissions: (p: DataProps) => <DataTable kind="permissions" plugin={plugin} lang={lang} {...p} />,
+    Placeholders: (p: DataProps) => <DataTable kind="placeholders" plugin={plugin} lang={lang} {...p} />,
     AiPrompt: (props: { id: Parameters<typeof AiPrompt>[0]["id"] }) => (
       <AiPrompt {...props} lang={lang} />
     ),

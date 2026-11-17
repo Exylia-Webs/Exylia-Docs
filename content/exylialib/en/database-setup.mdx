@@ -1,0 +1,107 @@
+---
+title: "Set up the database of your Exylia plugins"
+description: "Where Exylia plugins keep their data by default, how to move to MySQL, MariaDB or PostgreSQL step by step, and how to share data between servers."
+questions:
+  - "Where do Exylia plugins store their data?"
+  - "How do I switch my Exylia plugins to MySQL or MariaDB?"
+  - "How do I share data between several servers?"
+  - "Will I lose my data when I change database?"
+  - "Where is database.yml?"
+  - "Do I need Redis?"
+updated: "1.595.0"
+---
+
+By default your Exylia plugins keep their data in a file on the server, and need nothing from you. This page shows when to move to MySQL, MariaDB or PostgreSQL, and how to do it without losing anything.
+
+ExyliaLib is the library every Exylia plugin installs. It opens the database for every plugin, so each plugin has its own `database.yml`, in `plugins/<Plugin>/`, for example `plugins/ExyliaFFA/database.yml`.
+
+## Do you need to change anything?
+
+- **One server:** no. The default, H2, is a file inside the server folder. It is fast and is backed up for you.
+- **Several servers sharing the same players, balances or stats:** yes, use a database server so every server reads the same data.
+- **You want to look at the data with an external tool or back it up with the rest of your databases:** use a database server.
+
+By default the data is in `plugins/<Plugin>/database/h2`, with a backup every 6 hours into `database/backups/` (the newest 5 are kept).
+
+## Move to MySQL or MariaDB
+
+### The quick way: the setup assistant
+
+Run `/exylialib setup` (permission `exylialib.admin`) and open the **Database** step. Choose **Network**, fill in the host, port, database, user and password in the form, and confirm. ExyliaLib tests the connection first, then changes the `database.yml` of every Exylia plugin. The password is asked as a hidden input and never reaches chat. Each plugin's existing data is copied into the new database the first time that plugin starts after the restart. The old file is kept as a copy. See [Setup wizard](/docs/exylialib/setup-wizard).
+
+### By hand, one plugin at a time
+
+<Steps>
+  <Step title="Create the database">
+    On your MySQL or MariaDB server, create an empty database (for example `minecraft`) and a user with access to it.
+  </Step>
+  <Step title="Export the current data">
+    While the plugin still runs on its old database, run `/exylialib export <plugin>` (for example `/exylialib export ExyliaFFA`). It writes a dump into `plugins/ExyliaLib/dumps/` and prints the file name.
+  </Step>
+  <Step title="Edit database.yml">
+    Stop the server and open `plugins/<Plugin>/database.yml`. Set the type and fill in the block with the same name:
+
+    ```yaml title="plugins/ExyliaFFA/database.yml"
+    database:
+      type: mysql
+      mysql:
+        host: localhost
+        port: 3306
+        database: minecraft
+        username: exylia
+        password: "your-password"
+    ```
+    Use `type: mariadb` and a `mariadb:` block for MariaDB, or `type: postgresql` (default port 5432). Only the block that matches `type` is read.
+  </Step>
+  <Step title="Start the server and import">
+    Start the server, then run `/exylialib import <plugin> <file>` with the name of the dump file. By default it only writes into empty tables; add `force` at the end to merge into tables that already have rows.
+  </Step>
+</Steps>
+
+Repeat for each plugin whose data you want to move. Plugins pointed at the same database share one connection, so you do not open extra connections.
+
+<Callout type="warning" title="A wrong type falls back to H2">
+If `type` is not one of `h2`, `mysql`, `mariadb`, `postgresql` or `mongodb`, the plugin falls back to H2 and prints an error. Nothing it saves then reaches your database server. A plugin that still has an old H2 file also says so once at startup: that file is not read until you import it.
+</Callout>
+
+## Share data between servers
+
+Several servers can use one database so balances, stats and settings are the same everywhere.
+
+1. Point every server at the same database, as above (the setup assistant does it for all plugins at once).
+2. Give each server its own name in the setup form, so two servers never share a name.
+3. Optional: group servers. Servers with the same `network-group` in `plugins/ExyliaLib/config.yml` (for example `survival` or `boxpvp`) share what plugins keep per group. Restart to apply.
+4. Optional: add Redis, so a change on one server shows on the others at once rather than after a short delay. It is off by default:
+
+```yaml
+database:
+  redis:
+    enabled: true
+    host: 10.0.0.6
+    port: 6379
+    password: ""
+    server-id: lobby-1
+```
+
+`server-id` must be different on every server. If Redis stops answering, everything keeps working straight against the database and the console says so.
+
+<Callout type="tip" title="No Redis server?">
+Set `cross-server: database` in `database.yml` and the servers talk through the shared database. It works with MySQL, MariaDB and PostgreSQL but not with H2.
+</Callout>
+
+## Check that it works
+
+After the restart, start the plugin and use a feature that saves data (for example join an arena that records stats). Look for your tables in the database, or run the same action on a second server and check that it sees the result. If the console prints one line saying the database is not answering, check the host, port, user and password: the plugin retries every 30 seconds and recovers by itself once the database answers.
+
+## Back up and clean up
+
+`/exylialib export <plugin>` writes one plugin's data to a file you can keep, and `/exylialib wipe <plugin> <table|*>` empties tables after a safety export and a confirmation code (permission `exylialib.admin.wipe`). There is no undo, so export first.
+
+<Details title="Technical details">
+`database.yml` keys: `type`, `settings.pool-size` (leave it at `0`), and one block per engine (`h2`, `mysql`, `mariadb`, `postgresql`, `mongodb`, `redis`). H2's `auto-server: true` lets two processes on one machine share the file. MongoDB accepts a full `connection-string`. `share-database: true` in `plugins/ExyliaLib/config.yml` makes a plugin installed later with no `database.yml` start on the same database; the setup assistant turns it on for a network. Developer view: [Database](/docs/exylialib/database).
+</Details>
+
+<Cards>
+  <Card title="Setup wizard" href="/docs/exylialib/setup-wizard">Language, colours and a tested shared database in one sitting.</Card>
+  <Card title="Database for developers" href="/docs/exylialib/database">Engines, H2 repair, Redis channels and network groups in depth.</Card>
+</Cards>

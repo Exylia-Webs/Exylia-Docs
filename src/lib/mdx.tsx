@@ -15,11 +15,11 @@ const prettyCode: PrettyCodeOptions = {
   defaultLang: { block: "text", inline: "text" },
 };
 
-export function Mdx({ source, lang }: { source: string; lang: Lang }) {
+export function Mdx({ source, lang, plugin }: { source: string; lang: Lang; plugin: string }) {
   return (
     <MDXRemote
       source={source}
-      components={createMdxComponents(lang)}
+      components={createMdxComponents(lang, plugin)}
       options={{
         parseFrontmatter: true,
         mdxOptions: {

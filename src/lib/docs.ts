@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import matter from "gray-matter";
-import { getPlugin, plugins, LANGS, type Lang, type NavGroup } from "@/content/registry";
+import { getPlugin, plugins, LANGS, SHARED_GROUP, SHARED_PLUGIN, type Lang, type NavGroup } from "@/content/registry";
 import { slugify } from "./slug";
 
 export { slugify };
@@ -28,6 +28,8 @@ export type DocMeta = {
 
 export type Doc = DocMeta & {
   body: string;
+  /** Frontmatter `questions`: how readers ask for this page ("how do I change the colours?"). Search and the assistant match on them. */
+  questions: string[];
   headings: Heading[];
 };
 
@@ -99,6 +101,7 @@ function loadDoc(plugin: string, lang: Lang, slug: string): Doc | null {
     fresh: !!data.updated && String(data.updated) === getPlugin(plugin)?.version,
     group: placed?.group ?? "",
     body: content,
+    questions: Array.isArray(data.questions) ? data.questions.map(String) : [],
     headings: extractHeadings(content),
   };
 }
@@ -126,10 +129,14 @@ function metaOf(plugin: string, lang: Lang, id: string, slug: string, group: str
 export function getNav(plugin: string, lang: Lang): NavSection[] {
   const entry = getPlugin(plugin);
   if (!entry) return [];
-  return entry.nav.map((group: NavGroup) => ({
+  const own = entry.nav.map((group: NavGroup) => ({
     label: group.label[lang],
     pages: group.pages.map((ref) => metaOf(plugin, lang, ref.id, ref.slugs[lang], group.label[lang])),
   }));
+  if (plugin === SHARED_PLUGIN || entry.standalone || !entry.nav.length) return own;
+  // The library's server-owner guides, linked (not copied) at the end of every plugin's sidebar.
+  const label = SHARED_GROUP.label[lang];
+  return [...own, { label, pages: SHARED_GROUP.pages.map((ref) => metaOf(SHARED_PLUGIN, lang, ref.id, ref.slugs[lang], label)) }];
 }
 
 /** Every page of a plugin, flattened in reading order. */
@@ -140,7 +147,7 @@ export function getFlatNav(plugin: string, lang: Lang): DocMeta[] {
 /** The previous and next page around a slug, for the pager. */
 export function getNeighbours(plugin: string, lang: Lang, slug: string) {
   const flat = getFlatNav(plugin, lang);
-  const index = flat.findIndex((page) => page.slug === slug);
+  const index = flat.findIndex((page) => page.plugin === plugin && page.slug === slug);
   return {
     previous: index > 0 ? flat[index - 1] : null,
     next: index >= 0 && index < flat.length - 1 ? flat[index + 1] : null,
@@ -201,7 +208,7 @@ export function buildSearchIndex(lang: Lang): SearchEntry[] {
           sections: doc.headings
             .filter((h) => h.level === 2)
             .map((h) => ({ text: h.text, id: h.id })),
-          haystack: `${doc.title} ${doc.description} ${text}`.toLowerCase(),
+          haystack: `${doc.title} ${doc.description} ${doc.questions.join(" ")} ${text}`.toLowerCase(),
         };
       }),
     ),
