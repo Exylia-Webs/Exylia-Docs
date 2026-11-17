@@ -1589,12 +1589,15 @@ const TABLETOP_NAV: NavGroup[] = [
     pages: [
       page("introduction", "introduction", "introduccion"),
       page("installation", "installation", "instalacion"),
-      page("playing", "playing", "jugar"),
+      page("first-steps", "first-steps", "primeros-pasos"),
     ],
   },
   {
-    label: { en: "Games", es: "Juegos" },
-    pages: [page("games", "games", "juegos")],
+    label: { en: "Guides", es: "Guías" },
+    pages: [
+      page("playing", "playing", "jugar"),
+      page("games", "games", "juegos"),
+    ],
   },
   {
     label: { en: "Reference", es: "Referencia" },
@@ -1604,6 +1607,12 @@ const TABLETOP_NAV: NavGroup[] = [
       page("placeholders", "placeholders", "placeholders"),
       page("configuration", "configuration", "configuracion"),
       page("api", "api", "api"),
+    ],
+  },
+  {
+    label: { en: "Help", es: "Ayuda" },
+    pages: [
+      page("troubleshooting", "troubleshooting", "problemas-comunes"),
       page("faq", "faq", "faq"),
     ],
   },
