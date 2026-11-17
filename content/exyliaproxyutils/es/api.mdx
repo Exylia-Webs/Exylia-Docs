@@ -4,14 +4,16 @@ description: "Llegar al proxy desde un plugin de servidor con la clase Proxy de 
 questions:
   - "¿Cómo llama un plugin al proxy?"
   - "¿Cómo encuentro a un jugador de otro servidor?"
+  - "¿Cómo listo los servidores de la red y sus jugadores?"
   - "¿Cómo añado un módulo a ExyliaProxyUtils?"
 updated: "2.4.0"
 ---
 
-## Desde un plugin de backend
+Esta página es para desarrolladores. Si solo gestionas la red, no la necesitas: mira [Ejecuta comandos del proxy desde un servidor](/docs/exyliaproxyutils/comandos).
 
-Los plugins de backend nunca hablan directamente con ExyliaProxyUtils. `net.exylia.lib.proxy.Proxy`, de
-ExyliaLib, se encarga del formato, el enrutado y la espera:
+## Desde un plugin de servidor
+
+Los plugins de los servidores nunca hablan directamente con ExyliaProxyUtils. `net.exylia.lib.proxy.Proxy`, de ExyliaLib, se encarga del formato, el enrutado y la espera:
 
 ```java
 import net.exylia.lib.proxy.Proxy;
@@ -33,37 +35,42 @@ Proxy.find("Steve").thenAccept(found -> found.ifPresent(p -> { /* el servidor de
 |---|---|
 | `Proxy.request(Player, String module, String payload)` | Una petición sobre un jugador. |
 | `Proxy.request(String module, String payload)` | Una petición sobre nadie. |
-| `Proxy.find(String nameOrId)` | El módulo [`player`](/docs/exyliaproxyutils/modulos#player); vacío si no lo encuentra o no hay puente. |
+| `Proxy.find(String nameOrId)` | El módulo [`player`](/docs/exyliaproxyutils/modulos#player); vacío si no lo encuentra o no hay puente. `Proxy.find(Player asking, String nameOrId)` es lo mismo; el jugador se ignora. |
 | `Proxy.players()` | Todos los nombres de la red según el último refresco de diez segundos. Seguro para autocompletar. |
+| `Proxy.servers()` | Todos los servidores como `NetworkServer(name, players, online)`, en el orden del proxy. Se refresca cada tres segundos mientras haya alguien en este servidor; el módulo [`servers`](/docs/exyliaproxyutils/modulos#servers) necesita ExyliaProxyUtils 2.2.0 o superior, o la lista queda vacía. |
+| `Proxy.server(String name)` | Uno de ellos por nombre, sin distinguir mayúsculas; `Optional`. |
 | `Proxy.isAvailable()` | Si el proxy ha respondido. Es un diagnóstico: las peticiones se intentan siempre. |
-| `Proxy.bridge()` | Qué respondió al ping, por ejemplo `ExyliaProxyUtils 2.4.0 on Velocity`. |
+| `Proxy.bridge()` | Un `Optional<String>` con lo que respondió al ping, por ejemplo `ExyliaProxyUtils 2.4.0 on Velocity`; vacío hasta que responde. |
 
-El future devuelto nunca falla con excepción: un proxy ausente vuelve como respuesta `TIMEOUT` a los
-cinco segundos. Se completa en el hilo suscriptor de Redis, así que pasa al scheduler del servidor antes
-de tocar la API de Bukkit. Los formatos de payload están en [Módulos](/docs/exyliaproxyutils/modulos).
+El future devuelto nunca falla con excepción: un proxy ausente vuelve como respuesta `TIMEOUT` a los cinco segundos. Se completa en el hilo suscriptor de Redis, así que pasa al scheduler del servidor antes de tocar la API de Bukkit. Los formatos de payload están en [Módulos](/docs/exyliaproxyutils/modulos).
 
 ## Añadir un módulo al proxy
 
-El plugin del proxy no publica ninguna API para otros plugins del proxy; un módulo nuevo es un cambio en
-su código. Una clase en `common` y una línea en `Bridge.withBuiltIns`:
+El plugin del proxy no publica ninguna API para otros plugins del proxy; un módulo nuevo es un cambio en su código. Una clase en `common` y una línea `register` en `Bridge.withBuiltIns`:
 
 ```java
-public final class ServersModule implements BridgeModule {
-    @Override public String name() { return "servers"; }
+public final class EchoModule implements BridgeModule {
+    @Override public String name() { return "echo"; }
     @Override public CompletableFuture<Reply> handle(Request request) {
-        return CompletableFuture.completedFuture(Reply.ok(String.join(",", names())));
+        return CompletableFuture.completedFuture(Reply.ok(request.payload()));
     }
 }
 ```
 
-- Un módulo ve el proxy solo a través de `Platform`, así que la misma clase funciona en Velocity y en
-  BungeeCord.
-- `Request` lleva el nombre del módulo, el payload, el uuid y el nombre del portador, y el `server-id`
-  de origen.
-- Responde con `Reply.ok(detalle)` o `Reply.rejected(motivo)`; un módulo que lanza un error responde
-  `FAILED`.
-- Un módulo corre en el hilo suscriptor de Redis: devuelve un future para cualquier cosa lenta.
-- Un módulo que tenga algo que decirle más tarde a un servidor recibe el `Publisher` y envía un push.
-- Un módulo posterior con el mismo nombre reemplaza al anterior.
+```java
+bridge.register(new EchoModule());
+```
 
-Después llámalo desde un backend con `Proxy.request(..., "servers", "")`.
+- Un módulo ve el proxy solo a través de `Platform`, así que la misma clase funciona en Velocity y en BungeeCord.
+- `Request` lleva `module`, `payload`, `carrier` (el uuid del jugador, o `null`), `carrierName` y `server` (el `server-id` de origen).
+- Responde con `Reply.ok(detalle)` o `Reply.rejected(motivo)`; un módulo que lanza un error responde `FAILED`.
+- Un módulo corre en el hilo suscriptor de Redis: devuelve un future para cualquier cosa lenta.
+- Un módulo que tenga algo que decirle más tarde a un servidor recibe el `Publisher` y llama a `push(server, module, carrier, payload)`.
+- Un módulo posterior con el mismo nombre reemplaza al anterior, y los nombres no distinguen mayúsculas. No reutilices por accidente el nombre de uno incluido.
+
+Luego llámalo desde un servidor con `Proxy.request("echo", "hola")`.
+
+<Cards>
+  <Card title="Módulos" href="/docs/exyliaproxyutils/modulos">Qué acepta y responde cada módulo incluido.</Card>
+  <Card title="Protocolo" href="/docs/exyliaproxyutils/protocolo">Los mensajes detrás de las llamadas Java.</Card>
+</Cards>

@@ -1,79 +1,30 @@
 ---
 title: "Configuración"
-description: "config.properties clave por clave: el Redis de la red, el prefijo, el interruptor de actualizaciones, el transporte por base de datos y las claves de Redis que usa el plugin."
+description: "config.properties: dónde está, las pocas líneas que casi todo el mundo cambia y todas las claves con su valor por defecto."
 questions:
   - "¿Qué va en config.properties?"
   - "¿Qué es redis.key-prefix?"
   - "¿Puedo usar contraseña o TLS en Redis?"
   - "¿Dónde está config.properties en Velocity?"
+  - "¿Cómo recargo ExyliaProxyUtils después de editar la configuración?"
   - "¿Qué claves de Redis usa ExyliaProxyUtils?"
 updated: "2.4.0"
 ---
 
-Toda la configuración es un archivo, escrito en el primer arranque y nunca sobrescrito:
+ExyliaProxyUtils tiene un solo archivo, `config.properties`. Se escribe en el primer arranque y nunca se sobrescribe. Casi todos solo ponen una vez la dirección de Redis, la contraseña y el prefijo.
 
 | Proxy | Ruta |
 |---|---|
 | Velocity | `plugins/exyliaproxyutils/config.properties` |
 | BungeeCord | `plugins/ExyliaProxyUtils/config.properties` |
 
-```properties title="config.properties"
-# ExyliaProxyUtils talks to the backends over Redis, so nothing a player
-# sends can ever reach it. Point this at the same Redis every backend has
-# under database.redis in plugins/ExyliaLib/database.yml, with the same
-# key-prefix. Server names on this proxy must equal the backends' server-id.
-redis.host=localhost
-redis.port=6379
-redis.password=
-# ACL user (Redis 6+), empty for the default user.
-redis.username=
-# true for a Redis with TLS on (rediss://), like the backends' database.redis.ssl.
-redis.ssl=false
-redis.database=0
-redis.key-prefix=exylia
-# New releases download at start and stop and load on the next restart.
-updates.enabled=true
-# redis (recommended), or database when the backends have cross-server: database.
-transport=redis
-# mysql, mariadb, postgresql or mongodb
-database.type=mysql
-database.host=localhost
-# 0 uses the engine's default port.
-database.port=0
-database.name=minecraft
-database.username=root
-database.password=
-# mongodb only: a full mongodb:// URI, which wins over the fields above.
-database.connection-string=
-```
+No hay comando de recarga: el archivo se lee una vez, al arrancar. Reinicia el proxy después de editarlo.
 
-Se lee una vez, al arrancar. Reinicia el proxy después de editarlo.
+## Apúntalo a tu Redis
 
-| Clave | Por defecto | Qué hace |
-|---|---|---|
-| `redis.host` | `localhost` | El host de Redis. |
-| `redis.port` | `6379` | El puerto de Redis. Tiene que ser un número, o el plugin no arranca. |
-| `redis.password` | vacío | La contraseña; vacía si no hay. Se toma tal cual, espacios incluidos. |
-| `redis.database` | `0` | Qué base de datos numerada de Redis. Tiene que coincidir con la de los backends. |
-| `redis.key-prefix` | `exylia` | Con qué empieza cada clave y canal. Tiene que coincidir con el `key-prefix` de los backends. Vacío vuelve a `exylia`. |
-| `redis.username` | vacío | El usuario ACL de Redis (Redis 6+); vacío para el usuario por defecto. |
-| `redis.ssl` | `false` | `true` conecta por TLS (`rediss://`) a un Redis que lo tenga activado, con un certificado que Java acepte. Necesita ExyliaLib 1.484.0 o superior en los backends, con `database.redis.ssl: true`. |
-| `transport` | `redis` | `redis` o `database`. Mira [Funciona sin Redis](/docs/exyliaproxyutils/sin-redis). |
-| `database.type` | `mysql` | `mysql`, `mariadb`, `postgresql` o `mongodb`. Solo se lee con `transport=database`. |
-| `database.host` / `database.port` | `localhost` / `0` | El servidor de base de datos; el puerto `0` es el del motor. |
-| `database.name` | `minecraft` | La base de datos que usan los backends. |
-| `database.username` / `database.password` | `root` / vacío | Sus credenciales. |
-| `database.connection-string` | vacío | Solo MongoDB: una URI `mongodb://` completa, que gana a los campos anteriores. |
-| `updates.enabled` | `true` | Instala versiones nuevas de la misma versión mayor al arrancar y al apagar. Solo `false` lo desactiva. Ver [Actualizaciones](/docs/exyliaproxyutils/actualizaciones). |
+Copia los valores que cada servidor tiene en `database.redis` de `plugins/ExyliaLib/database.yml`:
 
-Una clave que falte en el archivo toma su valor por defecto. Todos los valores salvo la contraseña se
-recortan. Un archivo escrito por una versión anterior no tiene las claves de usuario Redis, TLS ni `transport` y sigue como antes: al siguiente arranque se le añade la sección `transport` con `transport=redis`.
-
-## Coincidir con los backends
-
-Los valores son los que cada backend tiene en su `database.yml`:
-
-```yaml title="plugins/ExyliaLib/database.yml (en un backend)"
+```yaml title="plugins/ExyliaLib/database.yml (en un servidor)"
 database:
   redis:
     enabled: true
@@ -93,45 +44,103 @@ redis.database=0
 redis.key-prefix=exylia
 ```
 
-`server-id` no tiene equivalente aquí: vive en la lista de servidores del propio proxy, donde el nombre
-del backend tiene que ser ese mismo `server-id`.
+`server-id` no tiene equivalente aquí. Vive en la lista de servidores del propio proxy, donde el nombre de cada servidor tiene que ser ese mismo `server-id`. Mira [Conecta tu red](/docs/exyliaproxyutils/primeros-pasos).
 
 <Callout type="warning" title="Dos redes, un Redis">
-El prefijo es lo que las separa. Dos redes con el mismo prefijo en el mismo Redis responden a los
-servidores de la otra y leen sus baneos.
+El prefijo es lo que las separa. Dos redes con el mismo prefijo en el mismo Redis responden a los servidores de la otra y leen sus baneos.
 </Callout>
 
-## Sin Redis: `transport=database`
+## Redis con usuario o TLS
 
-La versión paso a paso es [Funciona sin Redis](/docs/exyliaproxyutils/sin-redis).
+Pon `redis.username` para un usuario ACL de Redis 6+ (vacío es el usuario por defecto). Pon `redis.ssl=true` para un Redis con TLS (`rediss://`) cuyo certificado Java acepte; los servidores necesitan ExyliaLib 1.484.0 o superior con `database.redis.ssl: true`.
 
-Una red cuyos backends comparten una base de datos pero no usan Redis pone `cross-server: database` en su
-`database.yml` (ExyliaLib 1.555.0 o superior), y el proxy la sigue con `transport=database` y la misma
-base de datos en `database.type`, `database.host`, `database.port`, `database.name`, `database.username` y
-`database.password` (o `database.connection-string` para MongoDB). `redis.key-prefix` sigue nombrando la
-red.
+## Desactiva las actualizaciones
 
-Todo funciona igual por ahí: peticiones, avisos, el espejo de baneos y el flujo de sanciones, a través de
-las tablas que mantiene el bus de base de datos de ExyliaLib (`exylia_bus_*`). El precio es la latencia:
-un mensaje tarda hasta un cuarto de segundo (PostgreSQL despierta al instante con `LISTEN/NOTIFY`), y cada
-servidor consulta la base de datos varias veces por segundo, así que Redis sigue siendo lo recomendado.
-Los drivers de MariaDB (que también habla MySQL), PostgreSQL y MongoDB van incluidos en el jar. El log de
-arranque indica que el proxy habla con los backends a través de la base de datos.
+`updates.enabled=true` instala versiones nuevas de la misma versión mayor al arrancar y al apagar. Solo `false` lo desactiva. Ver [Actualizaciones](/docs/exyliaproxyutils/actualizaciones).
 
-## Conexión
+## Funciona sin Redis
 
-El plugin abre un pool pequeño (como mucho cuatro conexiones, 200 ms de espera por una libre) para
-respuestas y escrituras, y una conexión dedicada para escuchar, con dos segundos de timeout de conexión y
-de lectura. Se identifica ante Redis como `exylia-proxyutils`.
+Una red cuyos servidores comparten una base de datos pero no usan Redis pone `cross-server: database` en su `database.yml` (ExyliaLib 1.555.0 o superior). El proxy la sigue con `transport=database` y la misma base de datos en las claves `database.*`. `redis.key-prefix` sigue nombrando la red. La versión paso a paso es [Funciona sin Redis](/docs/exyliaproxyutils/sin-redis).
 
-## Claves y canales de Redis
+Todo funciona igual por ahí, pero un mensaje tarda hasta un cuarto de segundo (PostgreSQL despierta al instante con `LISTEN/NOTIFY`) y cada servidor consulta la base de datos varias veces por segundo, así que Redis sigue siendo lo recomendado. Los drivers de MariaDB (que también habla MySQL), PostgreSQL y MongoDB van incluidos en el jar. Al arrancar, la consola dice `Talking to the backends through <base de datos> (transport=database).` seguido de ese aviso de latencia.
+
+<Details title="Todas las claves y sus valores por defecto">
+
+El archivo tal como lo escribe el plugin:
+
+```properties title="config.properties"
+# ExyliaProxyUtils talks to the backends over Redis (or their database,
+# see transport below), so nothing a player
+# sends can ever reach it. Point this at the same Redis every backend has
+# under database.redis in plugins/ExyliaLib/database.yml, with the same
+# key-prefix. Server names on this proxy must equal the backends' server-id.
+redis.host=localhost
+redis.port=6379
+redis.password=
+# ACL user (Redis 6+), empty for the default user.
+redis.username=
+# true for a Redis with TLS on (rediss://), like the backends' database.redis.ssl.
+redis.ssl=false
+redis.database=0
+redis.key-prefix=exylia
+# New releases download at start and stop and load on the next restart.
+updates.enabled=true
+# How this proxy reaches the backends: redis (above, recommended), or
+# database for a network whose backends set cross-server: database in
+# their database.yml. Then fill in the same database they use; the
+# redis.key-prefix above still names the network.
+transport=redis
+# mysql, mariadb, postgresql or mongodb
+database.type=mysql
+database.host=localhost
+# 0 uses the engine's default port.
+database.port=0
+database.name=minecraft
+database.username=root
+database.password=
+# mongodb only: a full mongodb:// URI, which wins over the fields above.
+database.connection-string=
+```
+
+| Clave | Por defecto | Qué hace |
+|---|---|---|
+| `redis.host` | `localhost` | El host de Redis. |
+| `redis.port` | `6379` | El puerto de Redis. Tiene que ser un número, o el plugin no arranca. |
+| `redis.password` | vacío | La contraseña; vacía si no hay. Se toma tal cual, espacios incluidos. |
+| `redis.username` | vacío | El usuario ACL de Redis (Redis 6+); vacío para el usuario por defecto. |
+| `redis.ssl` | `false` | `true` conecta por TLS. |
+| `redis.database` | `0` | Qué base de datos numerada de Redis. Tiene que coincidir con la de los servidores. |
+| `redis.key-prefix` | `exylia` | Con qué empieza cada clave y canal. Tiene que coincidir con el `key-prefix` de los servidores. Vacío vuelve a `exylia`. |
+| `updates.enabled` | `true` | Instala versiones nuevas de la misma versión mayor al arrancar y al apagar. |
+| `transport` | `redis` | `redis` o `database`. |
+| `database.type` | `mysql` | `mysql`, `mariadb`, `postgresql` o `mongodb`; cualquier otro valor impide el arranque con `transport=database`. Solo se lee con `transport=database`. |
+| `database.host` | `localhost` | El servidor de base de datos. |
+| `database.port` | `0` | `0` (o un valor que no sea un número) usa el puerto del motor. |
+| `database.name` | `minecraft` | La base de datos que usan los servidores. |
+| `database.username` / `database.password` | `root` / vacío | Sus credenciales. |
+| `database.connection-string` | vacío | Solo MongoDB: una URI `mongodb://` completa, que gana a los campos anteriores. |
+
+Una clave que falte en el archivo toma su valor por defecto. Los valores se recortan, salvo las dos contraseñas. Un archivo escrito por una versión anterior no tiene las claves de usuario Redis, TLS ni `transport` y sigue como antes: al siguiente arranque se le añade la sección `transport` con `transport=redis`.
+
+</Details>
+
+<Details title="Conexión y claves de Redis">
+
+El plugin abre un pool pequeño (como mucho cuatro conexiones, 200 ms de espera por una libre, timeouts de dos segundos de conexión y lectura) para respuestas y escrituras, y una conexión dedicada para escuchar. Si la de escucha se cae, registra `Redis subscription dropped` y reintenta cada dos segundos. Se identifica ante Redis como `exylia-proxyutils`. Con `transport=database` el mismo tráfico va por las tablas que mantiene el bus de base de datos de ExyliaLib (`exylia_bus_*`).
 
 | Nombre | Tipo | Dirección |
 |---|---|---|
-| `<prefix>:bridge:proxy` | Canal pub/sub | De los backends al proxy: peticiones. |
-| `<prefix>:bridge:<server-id>` | Canal pub/sub | Del proxy a un backend: respuestas y pushes. |
+| `<prefix>:bridge:proxy` | Canal pub/sub | De los servidores al proxy: peticiones. |
+| `<prefix>:bridge:<server-id>` | Canal pub/sub | Del proxy a un servidor: respuestas y pushes. |
 | `<prefix>:punish:external` | Stream | Del proxy a ExyliaStaff: sanciones de los plugins de sanciones del proxy. |
 | `<prefix>:punish:ban:<uuid>` | String | Lo lee el proxy al entrar; lo escribe ExyliaStaff. |
 | `<prefix>:punish:ipban:<sha256>` | String | Lo lee el proxy al entrar; lo escribe ExyliaStaff. |
 
 Ver [Protocolo](/docs/exyliaproxyutils/protocolo) para el formato de los mensajes.
+
+</Details>
+
+<Cards>
+  <Card title="Funciona sin Redis" href="/docs/exyliaproxyutils/sin-redis">Usa la base de datos de los servidores.</Card>
+  <Card title="Problemas comunes" href="/docs/exyliaproxyutils/problemas-comunes">Cuando los servidores dicen que el proxy no responde.</Card>
+</Cards>
