@@ -1,197 +1,280 @@
 ---
-title: "Crea rangos, hitos de cultivo y reclamos"
-description: "La escalera de rangos y su prestigio, hitos de farmeo y las secciones de /reclaim. Las recompensas por tiempo jugado viven en ExyliaRewards."
+title: "Crea rangos, hitos de farming y reclamos"
+description: "Escribe la escalera de rangos con requisitos y prestigio, paga a los jugadores por farmear y matar mobs, y configura secciones de /reclaim por rango. Las recompensas por tiempo jugado viven en ExyliaRewards."
 questions:
   - "¿Cómo escribo la escalera de rangos?"
-  - "¿Qué cuenta como cultivo?"
-  - "¿Cómo funcionan las recompensas de reclamo?"
+  - "¿Cómo pongo requisitos a un rango?"
+  - "¿Cómo funciona el prestigio y cuánto cuesta?"
+  - "¿Qué cuenta como farming y cómo lo recompenso?"
+  - "¿Cómo funcionan las recompensas de reclaim y cada cuánto se pueden reclamar?"
+  - "¿Por qué está apagado el módulo de farming?"
 updated: "1.2.2"
 ---
 
+Tres módulos dan a los jugadores algo que escalar: una escalera de rangos con prestigio (`rankup`),
+recompensas por farmear (`farming`) y un comando `/reclaim` para ventajas compradas fuera del juego
+(`reclaim`). Cada uno se enciende en `config.yml` ([Enciende y apaga módulos](/docs/exyliasurvivalcore/modulos)).
+
 ## Rankup
 
-Una escalera de rangos en `modules/rankup/ranks.yml`. Cada uno tiene requisitos que cumplir y una
-recompensa por cumplirlos.
+### Añade un rango
+
+<Steps>
+  <Step title="Abre el archivo de la escalera">
+    Edita `modules/rankup/ranks.yml`. Cada bloque bajo `ranks:` es un rango, y su clave es el id que usan
+    `/rankup` y los placeholders.
+  </Step>
+  <Step title="Ordénalo y pon requisitos">
+    Dale un `order` (la posición en la escalera) y una lista de `requirements`.
+  </Step>
+  <Step title="Di qué da">
+    Pon comandos de consola en `reward.commands` (`%player%` es el jugador), y opcionalmente `broadcast` y
+    `sound`.
+  </Step>
+  <Step title="Recarga">
+    Ejecuta `/survivalcoreadmin reload`.
+  </Step>
+</Steps>
 
 ```yaml
 ranks:
   member:
-    display-name: "&7Member"
-    icon: COAL
+    display-name: "&7Miembro"
+    icon: IRON_INGOT
     order: 1
     description: []
-    requirements: []
+    requirements:
+      - type: money
+        amount: 250
+      - type: playtime
+        time: 2h
     reward:
-      commands: []
+      commands:
+        - lp user %player% parent set member
       broadcast: ""
-      sound: ""
+      sound: ENTITY_PLAYER_LEVELUP|1.0|1.0
     auto-rankup: false
 ```
 
-`/rankup` abre la escalera y muestra qué se cumple y qué no; `/rankup claim` sube al siguiente rango
-cuando está todo satisfecho. `settings.auto-rankup` asciende sin preguntar, y un `auto-rankup` por
-rango hace lo mismo para un peldaño.
+`/rankup` abre la escalera y muestra qué se cumple y qué no; `/rankup claim` sube al siguiente rango cuando
+todo se cumple. `settings.auto-rankup` en `modules/rankup/config.yml` asciende sin preguntar, y un
+`auto-rankup` por rango hace lo mismo para un solo escalón. `settings.notify-on-login` avisa al jugador al
+entrar cuando puede subir de rango.
 
-### Requisitos
+### Elige los requisitos
 
-Un requisito es un `type` y un campo. Cualquier entrada puede llevar además `display`, que es la línea
-que se muestra en el menú en vez de una generada.
+Un requisito es un `type` y un campo. Cualquier entrada puede llevar también `display`, la línea que se
+muestra en el menú en lugar de una generada.
 
 | `type` | Campo | Significado |
 |---|---|---|
-| `money` | `amount` (y un `currency` opcional) | Un saldo, a través de la economía. `currency` es un id del `economy.yml` de ExyliaLib; si falta, la moneda por defecto |
-| `playtime` | `time` | Tiempo jugado — `30m`, `1h`, `5h` |
-| `placeholder` | `condition` | Una comparación de PlaceholderAPI |
-| `permission` | `node` | Un nodo de permiso que debe tener |
+| `money` | `amount` (y un `currency` opcional) | Un saldo, a través de la economía. `currency` es un id del `economy.yml` de ExyliaLib; si se omite, la moneda por defecto |
+| `playtime` | `time` | Tiempo jugado: `30m`, `1h`, `5h` |
+| `placeholder` | `condition` | Una comparación de PlaceholderAPI, por ejemplo `%player_level% >= 30` |
+| `permission` | `node` | Un permiso que deben tener |
 
-La cantidad de un `money` crece con el prestigio: se multiplica por `prestige.cost-multiplier` una vez
-por cada nivel de prestigio del jugador, y el menú enseña la cantidad que de verdad necesita.
+Un requisito con cualquier otro `type` se avisa en la consola y se ignora, así que un rango cuyo único
+requisito tenga un tipo desconocido no cuesta nada. Mira [Economía](/docs/exylialib/economia) para las
+monedas.
 
-Un requisito cuyo `type` no sea uno de los cuatro de arriba se avisa en la consola y se ignora, así que un
-rango cuyo único requisito tenga un tipo desconocido sale gratis.
+Todo ascenso, con `/rankup claim` o automático, sigue el mismo camino: primero se lanza `RankUpEvent` (uno
+cancelado no cuesta nada), luego se cobra cada requisito `money`, todas las monedas o ninguna, y después se
+ejecuta la recompensa. Si el ascenso pierde una carrera, el cobro se reembolsa.
 
-Todo ascenso, pedido con `/rankup claim` o automático (`settings.auto-rankup`, o el `auto-rankup` del propio
-rango), sigue el mismo camino: primero se lanza `RankUpEvent` (uno cancelado no cuesta nada), luego se
-cobra cada requisito `money`, ajustado al prestigio, moneda a moneda o ninguna, y por último se ejecuta la
-recompensa. Si la promoción pierde una carrera, el cobro se devuelve. Los rangos que vienen ya no llevan
-líneas `eco take`; los comandos de recompensa solo reparten la recompensa.
+<Callout type="note" title="Las recompensas por tiempo jugado pasaron a ExyliaRewards">
+Aquí ya no hay módulo de tiempo jugado ni comando `/playtime`: los tramos de tiempo son de
+[ExyliaRewards](/docs/exyliarewards/recompensas). El tiempo jugado lo mide el servicio de tiempo de
+ExyliaLib, que leen el requisito `playtime` de los rangos y la estadística `PLAYTIME`.
+</Callout>
 
-### Prestigio
+### Deja que los jugadores hagan prestigio
 
-Un jugador en lo alto de la escalera puede hacer prestigio con `/rankup prestige` o con la estrella de
-la esquina del menú de `/rankup`. Cobra el coste del prestigio, le quita el rango, sube su nivel de
-prestigio en uno y ejecuta las recompensas de prestigio. Después vuelve a subir la escalera desde el
-primer rango, con cada requisito `money` ajustado al nuevo nivel.
+Un jugador en lo alto de la escalera hace prestigio con `/rankup prestige` o con la estrella de la esquina
+del menú `/rankup`. Cobra el coste del prestigio, le quita el rango, sube su nivel de prestigio en uno y
+ejecuta las recompensas de prestigio. Después vuelve a subir la escalera desde el primer rango.
 
-La sección `prestige` de `modules/rankup/config.yml`:
+Cada requisito `money` se multiplica por `prestige.cost-multiplier` una vez por nivel de prestigio (1.5 por
+defecto: un rango de 1.000 $ cuesta 1.500 $ en el prestigio 1 y 2.250 $ en el 2), y el menú muestra la
+cantidad que de verdad necesitan. Pon `1.0` para que la escalera no cambie.
+
+Un prestigio se rechaza cuando está desactivado, cuando el jugador no está en el último rango, cuando ya
+está en `max-level` y cuando no puede pagar, incluido el caso en que `cost` es mayor que 0 y no hay economía.
+
+<Details title="Ajustes de prestigio (modules/rankup/config.yml)">
 
 | Ajuste | Por defecto | Qué hace |
 |---|---|---|
-| `enabled` | `true` | Si se puede hacer prestigio |
-| `max-level` | 0 | Nivel de prestigio más alto. `0` es sin límite |
+| `enabled` | `true` | Si alguien puede hacer prestigio |
+| `max-level` | 0 | Nivel de prestigio máximo. `0` significa sin límite |
 | `cost` | 25000 | Dinero que cuesta el prestigio. `0` es gratis |
 | `cost-currency` | vacío | La moneda en que se cobra `cost`: un id del `economy.yml` de ExyliaLib. Vacío es la moneda por defecto |
-| `cost-multiplier` | 1.5 | Se aplica a cada requisito `money` una vez por nivel: un rango de 1.000 $ cuesta 1.500 $ en el prestigio 1 y 2.250 $ en el 2. `1.0` deja la escalera igual |
-| `reward-commands` | `lp user %player% parent set member` | Comandos de consola. `%player%` es el jugador y `%level%` el nivel alcanzado |
-| `reward-broadcast` | `{highlight}✦ {letters}%player% {muted}reached prestige {highlight}%level%{muted}!` | Se envía a quien tenga activados los anuncios de rango. Vacío para ninguno |
-| `reward-sound` | `UI_TOAST_CHALLENGE_COMPLETE\|1.0\|1.0` | Suena para el jugador. Vacío para ninguno |
+| `cost-multiplier` | 1.5 | Mira arriba |
+| `reward-commands` | `lp user %player% parent set member` | Comandos de consola. `%player%` es el jugador, `%level%` el nivel recién alcanzado |
+| `reward-sound` | `ENTITY_PLAYER_LEVELUP\|0.6\|1.0` | Se reproduce al jugador. Vacío para ninguno |
 
-El prestigio se rechaza si está desactivado, si el jugador no está en el último rango, si ya está en
-`max-level` y si no puede pagarlo, también cuando `cost` es mayor que 0 y no hay economía disponible.
-La estrella del menú enseña el nivel actual y el siguiente, el coste (`Free` si es 0) y cuál de esos
-casos aplica. `%exyliasurvivalcore_rankup_can_prestige%` responde `yes` o `no`.
+El anuncio de prestigio es la línea `prestige-broadcast` de `modules/rankup/messages.yml`; llega a todos los
+que tienen activados los anuncios de ascenso, y vacío significa ninguno. `%exyliasurvivalcore_rankup_can_prestige%`
+responde `yes` o `no`.
+</Details>
 
-`/rankupadmin` (alias `/rua`, `survivalcore.rankup.admin`) tiene `prestige <jugador> <nivel>` para poner un
-nivel de prestigio directamente, `set <jugador> <rango>` para mover a un jugador por la escalera e `info
-<jugador>` para ver dónde está; `prestige` y `set` necesitan `survivalcore.rankup.admin.set`. Un id de rango
-que no esté en el archivo se rechaza. Borrar el progreso de un jugador es `/exylialib resetplayer`.
+`/rankupadmin` (alias `/rua`, `survivalcore.rankup.admin`) tiene `set <jugador> <rango>` para mover a un
+jugador por la escalera, `prestige <jugador> <nivel>` para fijar un nivel de prestigio directamente e
+`info <jugador>`; `set` y `prestige` necesitan `survivalcore.rankup.admin.set`. Un id de rango que no está en
+el archivo se rechaza. Borrar el progreso de un jugador es `/exylialib resetplayer`.
 
-`settings.notify-on-login` avisa al jugador al entrar cuando puede subir de rango.
+## Farming
 
-<Callout type="note" title="Las recompensas por tiempo jugado pasaron a ExyliaRewards">
-Aquí ya no hay módulo de tiempo jugado ni comando `/playtime`: los escalones de tiempo jugado son de
-[ExyliaRewards](/docs/exyliarewards/recompensas). El tiempo jugado lo lleva el servicio de tiempo jugado de
-ExyliaLib, que leen el requisito de rango `playtime` y la stat `PLAYTIME`.
+<Callout type="note" title="Farming cede el paso a ExyliaJobs">
+Mientras [ExyliaJobs](/docs/exyliajobs/introduccion) esté instalado, este módulo se queda apagado y Jobs paga
+por las mismas acciones. Vuelve a cargarse si quitas Jobs.
 </Callout>
 
-## Farmeo
+El módulo de farming cuenta bloques rotos o mobs matados, y paga cada N y en hitos.
 
-<Callout type="note" title="El farmeo se aparta ante ExyliaJobs">
-Mientras [ExyliaJobs](/docs/exyliajobs/introduccion) esté instalado, este módulo queda apagado y Jobs paga por las mismas acciones. Vuelve a cargar si quitas Jobs.
-</Callout>
+### Recompensa una categoría de farming
 
-Cuenta bloques rotos o mobs matados, y paga por cada N y en los hitos.
+<Steps>
+  <Step title="Edita las categorías">
+    Abre `modules/farming/categories.yml`. Cada bloque bajo `categories:` es una categoría, y su clave es el
+    id que usan `/farming` y los placeholders.
+  </Step>
+  <Step title="Di qué cuenta">
+    Pon `type` (`BLOCK` para romper, `ENTITY` para matar) y `tracked` (nombres de material o de tipo de
+    entidad).
+  </Step>
+  <Step title="Di qué paga">
+    Pon `reward-every` y un bloque `reward`, y añade `milestones` para recompensas únicas.
+  </Step>
+  <Step title="Recarga">
+    Ejecuta `/survivalcoreadmin reload`.
+  </Step>
+</Steps>
 
 ```yaml
 categories:
   wheat_farming:
     type: BLOCK
-    display-name: "&eWheat"
+    display-name: "&eTrigo"
     icon: WHEAT
     tracked: [WHEAT]
     require-max-growth: true
     count-above: false
     reward-every: 50
-    reward:      { money: 2, commands: [], message: "", actionbar: "", sound: "" }
+    reward:      { money: 2, message: "", actionbar: "", sound: "" }
     milestones:
-      novice: { display-name: "…", required-count: 100, money: 10, … }
+      novice: { display-name: "Granjero novato", required-count: 100, money: 10 }
     infinite-milestone:
       enabled: true
       interval: 1000
       money: 50
 ```
 
+Los bloques que un jugador colocó nunca cuentan, por mucho tiempo que haya pasado desde que se colocaron.
+`/farming` muestra el progreso. `/farmingadmin` (alias `/fa`) tiene `set`, `reset` e `info`, todos tras
+`survivalcore.farming.admin`; los dos que escriben necesitan además `survivalcore.farming.admin.set`.
+`settings.notify-on-login` en `modules/farming/config.yml` envía un resumen corto al entrar.
+
+<Details title="Claves de categoría">
+
 | Clave | Qué hace |
 |---|---|
 | `type` | `BLOCK` para romper, `ENTITY` para matar |
 | `tracked` | Los materiales o tipos de entidad que cuentan |
-| `require-max-growth` | Solo cuentan los cultivos crecidos del todo |
-| `count-above` | Para plantas que se apilan — caña, bambú — cuenta también los bloques de encima |
-| `reward-every` | Paga cada N. `0` apaga la recompensa por cada N |
-| `milestones` | Recompensas de una vez al llegar a un total |
+| `require-max-growth` | Solo cuentan los cultivos totalmente crecidos |
+| `count-above` | En plantas que se apilan, como la caña de azúcar y el bambú, cuenta también los bloques de encima |
+| `reward-every` | Paga cada N. `0` apaga la recompensa por N |
+| `milestones` | Recompensas únicas en un `required-count` |
 | `infinite-milestone` | Sigue pagando cada `interval` cuando se acaban los hitos con nombre |
+| `ignored-spawn-reasons` | Para `ENTITY`, motivos de aparición cuyos mobs no cuentan. Si se omite, se ignora `SPAWNER`; una lista vacía cuenta todos |
 
-Cada bloque de recompensa — `reward`, cada hito e `infinite-milestone` — acepta `money`, `commands`,
-`message`, `actionbar` y `sound`. `money` se paga en la moneda por defecto y lo multiplican los
-potenciadores de dinero de `farming` (ver [Economía](/docs/exyliasurvivalcore/economia)); `%money%` es
-lo que se pagó, con potenciadores incluidos. Las categorías que vienen pagan con `money` en vez de con
-comandos `eco give`.
-
-El `money` de una recompensa puede nombrar otra moneda: `money: {amount: 50, currency: gems}` (un id del
-`economy.yml` de ExyliaLib).
-
-`/farming` muestra el progreso. `/farmingadmin` (alias `/fa`) tiene `set`, `reset` e `info`, todos tras
-`survivalcore.farming.admin`; los dos que escriben necesitan además `survivalcore.farming.admin.set`.
+Cada bloque de recompensa (`reward`, cada hito e `infinite-milestone`) admite `money`, `commands`,
+`message`, `actionbar` y `sound`. Omite uno para saltártelo. `money` se paga en la moneda por defecto y lo
+multiplican los potenciadores de dinero de `farming` (mira [Economía](/docs/exyliasurvivalcore/economia)).
+Otra moneda se escribe `money: {amount: 50, currency: gems}`, un id del `economy.yml` de ExyliaLib.
+Placeholders: `%player%`, `%count%` y `%money%` (lo que se pagó, tras los potenciadores).
+</Details>
 
 ## Reclaim
 
-`/reclaim` ejecuta un bloque de comandos: un kit de donador, una caja mensual, lo que escribas. Las
-secciones se definen en `modules/reclaim/config.yml`.
+`/reclaim` entrega a un jugador un conjunto de recompensas ligado a un permiso, como un kit de donante o una
+caja mensual. Necesita `exyliasurvivalcore.reclaim` (concedido a todos), y cada sección pide además su
+propio permiso.
+
+### Añade una sección de reclaim
+
+<Steps>
+  <Step title="Abre las secciones">
+    Edita `modules/reclaim/config.yml`. Cada bloque bajo `sections:` es una sección, con el nombre que
+    quieras.
+  </Step>
+  <Step title="Elige quién y cada cuánto">
+    Pon `permission`, `priority` y `each`.
+  </Step>
+  <Step title="Lista qué reciben">
+    Rellena `rewards` y, para lo que una recompensa no pueda expresar, `commands`.
+  </Step>
+  <Step title="Recarga y concede el permiso">
+    Ejecuta `/survivalcoreadmin reload` y concede el permiso de la sección al grupo que deba tenerlo.
+  </Step>
+</Steps>
 
 ```yaml
 sections:
-  default:
-    permission: exyliasurvivalcore.reclaim.default
-    priority: 0
-    each: "-1"
-    broadcast: ""
-    commands: []
   vip:
     permission: exyliasurvivalcore.reclaim.vip
     priority: 1
     each: "7d"
+    broadcast: true
+    rewards:
+      - type: ITEM
+        itemSnapshot: DIAMOND
+        itemAmount: 5
+      - type: ECONOMY
+        value: "50"
     commands: []
 ```
 
-Las secciones se ordenan por **prioridad, la más alta primero**, y se ejecuta la primera cuyo permiso
-tenga el jugador. Así que un VIP recibe la sección VIP y ninguna más, no las dos.
+Las secciones se ordenan por **prioridad, de mayor a menor**, y se ejecuta la primera cuyo permiso tenga el
+jugador. Un VIP recibe la sección VIP y nada más, no las dos. A un jugador sin ningún permiso de sección se
+le dice que no hay nada para él, así que concede `exyliasurvivalcore.reclaim.default` solo al grupo que deba
+tener la sección por defecto.
 
-`each` es cada cuánto se puede ejecutar: `-1` significa una sola vez en la vida, y cualquier otra cosa
-es una duración — `7d`, `12h`, `30m`, `45s`. `%player%` se sustituye en cada comando.
+`each` es cada cuánto se puede ejecutar una sección: `-1` significa una sola vez en la vida, y cualquier otra
+cosa es una duración como `7d`, `12h`, `30m` o `45s`. `rewards` es la lista de recompensas estándar de
+Exylia (mira [Recompensas](/docs/exylialib/recompensas)); los objetos que no caben se guardan para el
+jugador en lugar de tirarse. `commands` son comandos de consola que se ejecutan también, sustituyendo
+`%player%`. `broadcast: true` anuncia el reclamo a los jugadores con el ajuste de anuncios de compras
+activado.
 
-`/reclaimadmin resetsection <jugador> <sección>` (`exyliasurvivalcore.reclaim.admin`) borra el registro de una sección.
+`/reclaimadmin resetsection <jugador> <sección>` (`exyliasurvivalcore.reclaim.admin`) borra el registro de
+reclamo de una sección.
 
-`/reclaim` necesita `exyliasurvivalcore.reclaim` (concedido a todos), y cada sección pide además su propio
-nodo. A quien no tenga ningún nodo de sección se le dice que no hay nada para él. Da
-`exyliasurvivalcore.reclaim.default` al grupo que deba tener la sección por defecto, y nada más ancho.
+## Comandos, permisos y placeholders
 
-<Callout type="note" title="Cuatro módulos perdían un reclamo">
-Farming, recompensas por tiempo jugado (que han pasado a ExyliaRewards), rankup y reclaim guardaban una copia vieja de la fila del
-jugador junto a la escritura del propio reclamo, y cuando la copia vieja llegaba la segunda el reclamo
-desaparecía y se podía volver a cobrar al siguiente login. Arreglado en 1.1.1; si estás en una build
-anterior, eso es lo que estabas viendo.
-</Callout>
+Estas tablas incluyen también los comandos de misiones, temporadas, proyectos y reputación, que tienen sus
+propias páginas.
 
-## Contadores
+<Commands group="progression" />
 
-Estos módulos suman a los contadores de estadísticas, que leen los rankings, las misiones y las
-temporadas — ver [Estadísticas](/docs/exyliasurvivalcore/combate#estadísticas).
+<Permissions group="progression" />
+
+<Placeholders group="rank-ladder" />
+
+<Details title="Contadores que alimentan estos módulos">
+Cuentan en los contadores de estadísticas que leen las clasificaciones, las misiones y las temporadas; mira
+[Estadísticas](/docs/exyliasurvivalcore/combate#estadísticas).
 
 | Contador | Qué cuenta |
 |---|---|
 | `rankup.ranks` | Rangos subidos, a mano o automáticamente |
-| `farming.harvested` | Cada bloque o mob que ha contado una categoría de farmeo |
+| `rankup.prestiges` | Prestigios hechos |
+| `farming.harvested` | Cada bloque o mob que contó una categoría de farming |
 | `farming.<categoría>.harvested` | Lo mismo, para una categoría |
 | `reclaim.claimed` | Secciones de reclaim ejecutadas |
 | `reclaim.<sección>.claimed` | Lo mismo, para una sección |
-| `rankup.prestiges` | Prestigios hechos |
+</Details>
+
+<Cards>
+  <Card title="Siguiente: Misiones y temporadas" href="/docs/exyliasurvivalcore/misiones-y-temporadas">Da a los jugadores objetivos diarios medidos con estos contadores.</Card>
+  <Card title="Potenciadores" href="/docs/exyliasurvivalcore/economia">Multiplica el dinero del farming.</Card>
+</Cards>

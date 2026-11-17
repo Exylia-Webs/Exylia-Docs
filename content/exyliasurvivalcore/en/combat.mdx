@@ -1,12 +1,18 @@
 ---
 title: "Track statistics and deaths"
-description: "Tracked statistics and module counters with leaderboards, and what happens on death. Kill rewards, bounties and graves now live in ExyliaCombat and ExyliaGraves."
+description: "Choose which statistics ExyliaSurvivalCore ranks, show leaderboards in menus, holograms and scoreboards, and tune how drops scatter on death. Kill rewards, bounties and graves live in other plugins."
 questions:
-  - "Which statistics are tracked?"
+  - "Which statistics does ExyliaSurvivalCore track?"
   - "How do I show a leaderboard?"
-  - "Where did kill rewards and graves go?"
+  - "How do I add a stat to the leaderboards?"
+  - "Why does /stats not exist?"
+  - "How do I stop drops piling up or burning on death?"
+  - "Where did kill rewards, bounties and graves go?"
 updated: "1.2.2"
 ---
+
+The stats module counts what your players do (kills, deaths, blocks mined, crates opened, warps taken) and
+ranks them in leaderboards. The death module controls how drops fall when a player dies.
 
 <Callout type="note" title="Kill rewards, bounties and graves moved out">
 Kill rewards and streak payouts were dropped from this plugin: [ExyliaCombat](/docs/exyliacombat/kill-rewards)
@@ -18,118 +24,134 @@ read.
 
 ## Statistics
 
-Everything on the stats screen is a **counter**: kills, deaths, best kill streak, blocks mined, crates opened,
-warps taken. Modules here count what their players do, and other Exylia plugins feed the same table through
-the survival service. `modules/stats/stats.yml` decides which of them are shown and
-ranked.
+Everything on the stats screen is a **counter**. Modules here count what their players do, and other Exylia
+plugins feed the same table through the survival service. `modules/stats/stats.yml` decides which counters
+are shown and ranked. It ships with 19 stats: `kills`, `deaths`, `kdr`, `best_kill_streak`,
+`current_streak`, `duels_won`, `balance`, `bounties_claimed`, `bounties_earned`, `votes_total`,
+`votes_best_streak`, `market_sold`, `market_earned`, `blocks_mined`, `farming_harvested`, `crates_opened`,
+`missions_completed`, `mobs_killed` and `playtime`. Every one is `enabled: true` and ranked, except
+`current_streak`. A stat with no counter feeding it (a bounty, vote or duel stat on a server without the
+plugin that counts it) reads 0.
 
-The shipped file is deliberately short — the stats players compete on:
+### Show a leaderboard
+
+<Steps>
+  <Step title="Pick the stat">
+    Use the id of an entry in `modules/stats/stats.yml`, for example `kills` or `blocks_mined`. Make sure it
+    has `leaderboard: true`.
+  </Step>
+  <Step title="Open it from a menu">
+    Bind the action `survivalcore:stats_leaderboard <id>` to a button, NPC or hotbar item to open that
+    board, or `survivalcore:stats_open` to open the player's own stats profile.
+  </Step>
+  <Step title="Or print it in a hologram or scoreboard">
+    With PlaceholderAPI, use `%exyliasurvivalcore_stats_top_name_<position>_<stat>%` and
+    `%exyliasurvivalcore_stats_top_value_<position>_<stat>%`, for example position `1` of `kills`.
+  </Step>
+</Steps>
+
+Boards include offline players. The full list is in the placeholder slice below.
+
+<Placeholders group="statistics" />
+
+### Add a stat to the leaderboards
+
+Add a block to `stats:` in `modules/stats/stats.yml`, then run `/survivalcoreadmin reload`. For example,
+to rank warps taken:
 
 ```yaml
 stats:
-  kills:              { type: COUNTER, counter: 'kills.players',      format: NUMBER,  leaderboard: true, … }
-  deaths:             { type: COUNTER, counter: 'deaths.total',       format: NUMBER,  leaderboard: true, … }
-  kdr:                { type: COMPUTED, format: DECIMAL, formula: KILLS_PER_DEATH }
-  best_kill_streak:   { type: COUNTER, counter: 'kills.best_streak',  format: NUMBER,  leaderboard: true, … }
-  current_streak:     { type: STREAK,  format: NUMBER,  leaderboard: false, … }
-  duels_won:          { type: COUNTER, counter: 'duels.wins',         format: NUMBER }
-  balance:            { type: VAULT,   format: MONEY }
-  bounties_claimed:   { type: COUNTER, counter: 'bounties.claimed',   format: NUMBER }
-  bounties_earned:    { type: COUNTER, counter: 'bounties.earned',    format: MONEY }
-  votes_total:        { type: COUNTER, counter: 'votes.total',        format: NUMBER }
-  votes_best_streak:  { type: COUNTER, counter: 'votes.best_streak',  format: NUMBER }
-  market_sold:        { type: COUNTER, counter: 'market.sold',        format: NUMBER }
-  market_earned:      { type: COUNTER, counter: 'market.earned',      format: MONEY }
-  blocks_mined:       { type: COUNTER, counter: 'mines.blocks',       format: NUMBER }
-  farming_harvested:  { type: COUNTER, counter: 'farming.harvested',  format: NUMBER }
-  crates_opened:      { type: COUNTER, counter: 'crates.opened',      format: NUMBER }
-  missions_completed: { type: COUNTER, counter: 'missions.completed', format: NUMBER }
-  mobs_killed:        { type: COUNTER, counter: 'kills.mobs',         format: NUMBER }
-  playtime:           { type: PLAYTIME, format: TIME }
+  warps_taken:
+    enabled: true
+    type: COUNTER
+    counter: 'warps.used'
+    format: NUMBER
+    display-name: '{primary}&lWARPS'
+    icon: ENDER_PEARL
+    leaderboard: true
 ```
 
-Every entry ships `enabled: true`, and every one except `current_streak` is ranked. A stat that has no counter feeding it (the bounty, vote or duel ones on a server without the plugin that counts them) simply reads 0.
+`format` is `NUMBER`, `DECIMAL`, `MONEY` or `TIME`. `leaderboard: false` keeps a stat off the boards while
+still showing it on the profile. A counter exists the moment a module counts it, and
+`%exyliasurvivalcore_stats_counter_<key>%` reads any counter by its key as a plain number, whether or not
+`stats.yml` lists it. Missions and seasons read the same counters: see
+[Missions and seasons](/docs/exyliasurvivalcore/missions-and-seasons).
+
+<Callout type="danger" title="/stats does not exist at runtime">
+The `/stats` command, with `exyliasurvivalcore.stats` and `exyliasurvivalcore.stats.others`, is in the code
+but is not registered with the server, so typing it does nothing and looking at another player's stats
+through it is not possible. The screens themselves work through the two actions above, and the viewer's own
+profile and every leaderboard open normally.
+</Callout>
+
+### Check that it works
+
+Open the screen from your menu button. You should see the stat with its icon and a ranked list. Counters
+are written every 60 seconds by default, so a new kill may take that long to show on a board.
+
+<Details title="Stat types, settings and counters">
 
 | `type` | Where the number comes from |
 |---|---|
 | `COUNTER` | A counter, named by `counter`. Left out, the stat's own id is used as the key |
-| `COMPUTED` | A formula over counters (`KILLS_PER_DEATH` reads `kills.players` and `deaths.total`) |
+| `COMPUTED` | A formula over counters. `KILLS_PER_DEATH` is the only value `formula` accepts; anything else falls back to it |
 | `STREAK` | The kill streak the player is on now |
 | `PLAYTIME` | Time played, from ExyliaLib's playtime service |
-| `PAPI` | Any PlaceholderAPI name |
+| `PAPI` | Any PlaceholderAPI name, set with `placeholder` |
 | `VAULT` | The player's balance |
 
-A file that still says `INTERNAL` for `kills`, `deaths`, `best_kill_streak` or `current_streak` is read as the counter or streak that replaced it.
-
-`format` is `NUMBER`, `DECIMAL`, `MONEY` or `TIME`. `leaderboard: false` keeps a stat off the boards
-while still showing it on the profile.
-
-<Callout type="note" title="`COMPUTED` has exactly one formula">
-`KILLS_PER_DEATH` is the only value `formula` accepts. Anything else silently falls back to it.
-</Callout>
+A file that still says `INTERNAL` for `kills`, `deaths`, `best_kill_streak` or `current_streak` is read as
+the counter or streak that replaced it.
 
 | Setting | Default | What it does |
 |---|---|---|
 | `leaderboard-refresh-interval` | 300 | Seconds between leaderboard rebuilds |
-| `papi-sample-interval` | 60 | Seconds between samples of a `PAPI` or `VAULT` stat |
+| `papi-sample-interval` | 60 | Seconds between samples of a `PAPI`, `VAULT` or computed stat |
 | `leaderboard-size` | 100 | How deep a board goes |
 | `counter-flush-interval` | 60 | Seconds between writes of the counters that changed. Anything below 5 is treated as 5 |
 | `ignored-mob-spawn-reasons` | `SPAWNER`, `SPAWNER_EGG`, `DISPENSE_EGG` | Mobs that spawned this way do not count as mob kills (`kills.mobs`, missions). Names from Bukkit's `SpawnReason` |
 
-A reload reschedules the timers with the new values.
+These live under `settings:` in `modules/stats/config.yml`. A reload reschedules the timers with the new values.
 
-### Counters
-
-A counter exists the moment a module counts it; nothing has to be declared.
-`%exyliasurvivalcore_stats_counter_<key>%` reads any counter by its key, as a plain number, whether or
-not `stats.yml` lists it — `%exyliasurvivalcore_stats_counter_mines.blocks%`, for instance. A `COUNTER`
-block is only what puts it on the stats screen and gives it a leaderboard. Missions and seasons read the
-same counters: see [Missions and seasons](/docs/exyliasurvivalcore/missions-and-seasons).
+Counters:
 
 | Source | Counters |
 |---|---|
 | Stats (PvP) | `kills.players`, `kills.best_streak`, `kills.mobs`, `kills.mob.<type>`, `deaths.total` |
 | Rankup, farming, reclaim | `rankup.ranks`, `rankup.prestiges`, `farming.harvested`, `farming.<category>.harvested`, `reclaim.claimed`, `reclaim.<section>.claimed` |
 | Kits | `kits.claimed`, `kits.<kit>.claimed` |
-| Warps, homes, spawn, back, tpa, rtp | `warps.used`, `warps.<warp>.used`, `homes.teleports`, `homes.created`, `homes.deleted`, `spawn.teleports`, `back.used`, `tpa.teleports`, `rtp.used`, `rtp.<id>.used` |
+| Warps, homes, spawn, back, tpa, rtp | `warps.used`, `warps.<warp>.used`, `homes.teleports`, `homes.created`, `homes.deleted`, `spawn.teleports`, `back.used`, `tpa.teleports`, `rtp.used`, `rtp.<world>.used` |
 | Portals, jump pads | `portals.used`, `portals.<portal>.used`, `jumpads.used`, `jumpads.<jumpad>.used` |
 | Repair | `repair.items` |
 | Missions | `missions.completed`, `missions.<pool>.completed`, `missions.earned` |
 | Fed by other plugins | `mines.blocks`, `crates.opened`, `bounties.*`, `graves.*`, `duels.*`, `votes.*`, `rewards.claimed`, `market.*`, `auctions.*`, `orders.*`, `trade.completed`, `protections.*`, `lootchests.*`, `powerups.picked`, `afkzones.rewards`, `playtime.rewards` |
 
-Market, auction and order money counters also come per currency (`market.<currency>.earned`, `auctions.<currency>.spent`, `orders.<currency>.earned`). The last row is fed by the Exylia plugins that now own those features, where installed; the list at the top of the shipped `stats.yml` documents the keys.
+Market, auction and order money counters also come per currency (`market.<currency>.earned`,
+`auctions.<currency>.spent`, `orders.<currency>.earned`). The last row is fed by the Exylia plugins that now
+own those features, where installed; the comment at the top of the shipped `stats.yml` lists the keys.
 
-Keys are lower-cased, and one longer than 100 characters is ignored rather than cut short. Money
-counters — `.earned`, `.spent` — add whole units. `votes.best_streak` is a best, not a sum: it keeps the
-highest streak seen. 
+Keys are lower-cased, and one longer than 100 characters is ignored rather than cut short. Money counters
+(`.earned`, `.spent`) add whole units. `votes.best_streak` is a best, not a sum.
 
 Counting happens in memory. Changed counters are written every `counter-flush-interval` seconds, when a
 player leaves and on shutdown, so a crash can lose at most that interval. While the stats module is off
 nothing is counted, and what would have been is not kept for later.
+</Details>
 
-<Callout type="danger" title="`/stats` still does not exist at runtime">
-The command was rewritten to open anybody's stats, including a player who is offline — their PvP
-values, their counters, and the last sample of their `PAPI` and `VAULT` stats — but its method still
-carries none of the annotations that make Lamp register a command, so nothing is added to the server.
-`exyliasurvivalcore.stats` and `exyliasurvivalcore.stats.others` are therefore unreachable, and so is
-looking at another player's stats.
+## Change what happens on death
 
-The screens themselves work: bind `survivalcore:stats_open` to a button in any menu, an NPC or a
-hotbar item and the viewer's own profile and its leaderboards open normally. Leaderboards include
-offline players.
-</Callout>
-
-## Death
-
-The death module is three settings.
+The death module has three settings in `modules/death/config.yml`:
 
 | Setting | Default | What it does |
 |---|---|---|
-| `scatter-radius` | 0.3 | How far drops are spread, so a stack is not one pile |
-| `fire-protection` | `true` | Drops survive fire — **not** lava |
+| `scatter-radius` | 0.3 | How far drops are spread in blocks, so a stack is not one pile. `0` drops everything at the exact death spot |
+| `fire-protection` | `true` | Drops survive fire, but **not** lava |
 | `custom-messages` | `true` | The death line comes from `messages.yml` rather than vanilla |
 
-The death broadcast is one of the broadcasts that respect a player's `/settings` preferences.
+The death broadcast respects each player's `/settings` preferences. When a grave plugin such as
+[ExyliaGraves](/docs/exyliagraves/graves) takes the drops, the death module finds nothing left to scatter.
 
-When a grave plugin such as [ExyliaGraves](/docs/exyliagraves/graves) takes the drops, the death module finds
-nothing left to scatter.
+<Cards>
+  <Card title="Next: Ranks, farming and reclaims" href="/docs/exyliasurvivalcore/progression">Turn those counters into a ladder.</Card>
+  <Card title="Placeholders" href="/docs/exyliasurvivalcore/placeholders">Every placeholder this plugin provides.</Card>
+</Cards>

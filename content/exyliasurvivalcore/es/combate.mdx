@@ -1,12 +1,19 @@
 ---
 title: "Registra estadísticas y muertes"
-description: "Estadísticas y contadores de módulos con rankings, y qué pasa al morir. Las recompensas por baja, por cabeza y las tumbas viven ahora en ExyliaCombat y ExyliaGraves."
+description: "Elige qué estadísticas clasifica ExyliaSurvivalCore, muestra clasificaciones en menús, hologramas y marcadores, y ajusta cómo se dispersan los drops al morir. Las recompensas por baja, por cabeza y las tumbas viven en otros plugins."
 questions:
-  - "¿Qué estadísticas se registran?"
+  - "¿Qué estadísticas registra ExyliaSurvivalCore?"
   - "¿Cómo muestro una clasificación?"
-  - "¿Dónde fueron las recompensas por kill y las tumbas?"
+  - "¿Cómo añado una estadística a las clasificaciones?"
+  - "¿Por qué no existe /stats?"
+  - "¿Cómo evito que los drops se amontonen o se quemen al morir?"
+  - "¿Dónde fueron las recompensas por baja, por cabeza y las tumbas?"
 updated: "1.2.2"
 ---
+
+El módulo de estadísticas cuenta lo que hacen tus jugadores (bajas, muertes, bloques minados, cajas
+abiertas, warps usados) y lo clasifica en rankings. El módulo de muerte controla cómo caen los drops cuando
+un jugador muere.
 
 <Callout type="note" title="Recompensas por baja, por cabeza y tumbas, fuera">
 Las recompensas por baja y de racha se eliminaron de este plugin: [ExyliaCombat](/docs/exyliacombat/recompensas)
@@ -17,120 +24,140 @@ paga las bajas. Las recompensas por cabeza también son ahora de ExyliaCombat. L
 
 ## Estadísticas
 
-Todo lo que hay en la pantalla de estadísticas es un **contador**: bajas, muertes, mejor racha, bloques
-minados, cajas abiertas, warps usados. Los módulos de aquí cuentan lo que hacen sus jugadores, y otros
-plugins de Exylia alimentan la misma tabla a través del servicio de survival. `modules/stats/stats.yml`
-decide cuáles se muestran y se clasifican.
+Todo lo que hay en la pantalla de estadísticas es un **contador**. Los módulos de aquí cuentan lo que hacen
+sus jugadores, y otros plugins de Exylia alimentan la misma tabla a través del servicio de survival.
+`modules/stats/stats.yml` decide qué contadores se muestran y se clasifican. Viene con 19 estadísticas:
+`kills`, `deaths`, `kdr`, `best_kill_streak`, `current_streak`, `duels_won`, `balance`, `bounties_claimed`,
+`bounties_earned`, `votes_total`, `votes_best_streak`, `market_sold`, `market_earned`, `blocks_mined`,
+`farming_harvested`, `crates_opened`, `missions_completed`, `mobs_killed` y `playtime`. Todas están con
+`enabled: true` y clasificadas, salvo `current_streak`. Una estadística sin contador que la alimente (una de
+cabezas, votos o duelos en un servidor sin el plugin que la cuenta) vale 0.
 
-El archivo que viene es corto a propósito, con las stats por las que compiten los jugadores:
+### Muestra una clasificación
+
+<Steps>
+  <Step title="Elige la estadística">
+    Usa el id de una entrada de `modules/stats/stats.yml`, por ejemplo `kills` o `blocks_mined`. Comprueba
+    que tenga `leaderboard: true`.
+  </Step>
+  <Step title="Ábrela desde un menú">
+    Enlaza la acción `survivalcore:stats_leaderboard <id>` a un botón, un NPC o un objeto de la barra para
+    abrir esa clasificación, o `survivalcore:stats_open` para abrir el perfil de estadísticas del propio
+    jugador.
+  </Step>
+  <Step title="O imprímela en un holograma o marcador">
+    Con PlaceholderAPI, usa `%exyliasurvivalcore_stats_top_name_<posición>_<stat>%` y
+    `%exyliasurvivalcore_stats_top_value_<posición>_<stat>%`, por ejemplo la posición `1` de `kills`.
+  </Step>
+</Steps>
+
+Las clasificaciones incluyen jugadores desconectados. La lista completa está en la tabla de placeholders.
+
+<Placeholders group="statistics" />
+
+### Añade una estadística a las clasificaciones
+
+Añade un bloque a `stats:` en `modules/stats/stats.yml` y ejecuta `/survivalcoreadmin reload`. Por ejemplo,
+para clasificar los warps usados:
 
 ```yaml
 stats:
-  kills:              { type: COUNTER, counter: 'kills.players',      format: NUMBER,  leaderboard: true, … }
-  deaths:             { type: COUNTER, counter: 'deaths.total',       format: NUMBER,  leaderboard: true, … }
-  kdr:                { type: COMPUTED, format: DECIMAL, formula: KILLS_PER_DEATH }
-  best_kill_streak:   { type: COUNTER, counter: 'kills.best_streak',  format: NUMBER,  leaderboard: true, … }
-  current_streak:     { type: STREAK,  format: NUMBER,  leaderboard: false, … }
-  duels_won:          { type: COUNTER, counter: 'duels.wins',         format: NUMBER }
-  balance:            { type: VAULT,   format: MONEY }
-  bounties_claimed:   { type: COUNTER, counter: 'bounties.claimed',   format: NUMBER }
-  bounties_earned:    { type: COUNTER, counter: 'bounties.earned',    format: MONEY }
-  votes_total:        { type: COUNTER, counter: 'votes.total',        format: NUMBER }
-  votes_best_streak:  { type: COUNTER, counter: 'votes.best_streak',  format: NUMBER }
-  market_sold:        { type: COUNTER, counter: 'market.sold',        format: NUMBER }
-  market_earned:      { type: COUNTER, counter: 'market.earned',      format: MONEY }
-  blocks_mined:       { type: COUNTER, counter: 'mines.blocks',       format: NUMBER }
-  farming_harvested:  { type: COUNTER, counter: 'farming.harvested',  format: NUMBER }
-  crates_opened:      { type: COUNTER, counter: 'crates.opened',      format: NUMBER }
-  missions_completed: { type: COUNTER, counter: 'missions.completed', format: NUMBER }
-  mobs_killed:        { type: COUNTER, counter: 'kills.mobs',         format: NUMBER }
-  playtime:           { type: PLAYTIME, format: TIME }
+  warps_taken:
+    enabled: true
+    type: COUNTER
+    counter: 'warps.used'
+    format: NUMBER
+    display-name: '{primary}&lWARPS'
+    icon: ENDER_PEARL
+    leaderboard: true
 ```
 
-Todas vienen con `enabled: true`, y todas menos `current_streak` tienen ranking. Una stat sin contador que la alimente (las de recompensas por cabeza, votos o duelos en un servidor sin el plugin que las cuenta) marca 0.
+`format` es `NUMBER`, `DECIMAL`, `MONEY` o `TIME`. `leaderboard: false` deja una estadística fuera de las
+clasificaciones pero la sigue mostrando en el perfil. Un contador existe desde que un módulo lo cuenta, y
+`%exyliasurvivalcore_stats_counter_<clave>%` lee cualquier contador por su clave como número simple, esté o
+no en `stats.yml`. Las misiones y las temporadas leen los mismos contadores: mira
+[Misiones y temporadas](/docs/exyliasurvivalcore/misiones-y-temporadas).
+
+<Callout type="danger" title="/stats no existe en ejecución">
+El comando `/stats`, con `exyliasurvivalcore.stats` y `exyliasurvivalcore.stats.others`, está en el código
+pero no se registra en el servidor, así que escribirlo no hace nada y no se pueden ver las estadísticas de
+otro jugador con él. Las pantallas funcionan con las dos acciones de arriba: el perfil del propio jugador y
+todas las clasificaciones se abren con normalidad.
+</Callout>
+
+### Comprueba que funciona
+
+Abre la pantalla desde tu botón de menú. Deberías ver la estadística con su icono y una lista ordenada. Los
+contadores se escriben cada 60 segundos por defecto, así que una baja nueva puede tardar eso en aparecer en
+una clasificación.
+
+<Details title="Tipos de estadística, ajustes y contadores">
 
 | `type` | De dónde sale el número |
 |---|---|
-| `COUNTER` | Un contador, nombrado en `counter`. Si falta, se usa el id de la propia stat como clave |
-| `COMPUTED` | Una fórmula sobre contadores (`KILLS_PER_DEATH` lee `kills.players` y `deaths.total`) |
+| `COUNTER` | Un contador, nombrado en `counter`. Si se omite, se usa el id de la propia estadística como clave |
+| `COMPUTED` | Una fórmula sobre contadores. `KILLS_PER_DEATH` es el único valor que acepta `formula`; cualquier otro vuelve a él |
 | `STREAK` | La racha de bajas en la que está el jugador ahora |
-| `PLAYTIME` | Tiempo jugado, del servicio de tiempo jugado de ExyliaLib |
-| `PAPI` | Cualquier nombre de PlaceholderAPI |
+| `PLAYTIME` | Tiempo jugado, del servicio de tiempo de ExyliaLib |
+| `PAPI` | Cualquier nombre de PlaceholderAPI, indicado con `placeholder` |
 | `VAULT` | El saldo del jugador |
 
-Un archivo que aún diga `INTERNAL` para `kills`, `deaths`, `best_kill_streak` o `current_streak` se lee como el contador o la racha que lo sustituyó.
-
-`format` es `NUMBER`, `DECIMAL`, `MONEY` o `TIME`. `leaderboard: false` deja una stat fuera de los
-rankings pero visible en el perfil.
-
-<Callout type="note" title="`COMPUTED` tiene exactamente una fórmula">
-`KILLS_PER_DEATH` es el único valor que acepta `formula`. Cualquier otro cae en él en silencio.
-</Callout>
+Un archivo que todavía diga `INTERNAL` en `kills`, `deaths`, `best_kill_streak` o `current_streak` se lee
+como el contador o la racha que lo sustituyó.
 
 | Ajuste | Por defecto | Qué hace |
 |---|---|---|
-| `leaderboard-refresh-interval` | 300 | Segundos entre reconstrucciones del ranking |
-| `papi-sample-interval` | 60 | Segundos entre muestras de una stat `PAPI` o `VAULT` |
-| `leaderboard-size` | 100 | Hasta dónde llega un ranking |
-| `counter-flush-interval` | 60 | Segundos entre escrituras de los contadores que han cambiado. Menos de 5 cuenta como 5 |
-| `ignored-mob-spawn-reasons` | `SPAWNER`, `SPAWNER_EGG`, `DISPENSE_EGG` | Los mobs que aparecieron así no cuentan como bajas de mobs (`kills.mobs`, misiones). Nombres del `SpawnReason` de Bukkit |
+| `leaderboard-refresh-interval` | 300 | Segundos entre reconstrucciones de las clasificaciones |
+| `papi-sample-interval` | 60 | Segundos entre muestreos de una estadística `PAPI`, `VAULT` o calculada |
+| `leaderboard-size` | 100 | Hasta qué posición llega una clasificación |
+| `counter-flush-interval` | 60 | Segundos entre escrituras de los contadores que cambiaron. Menos de 5 se trata como 5 |
+| `ignored-mob-spawn-reasons` | `SPAWNER`, `SPAWNER_EGG`, `DISPENSE_EGG` | Los mobs generados así no cuentan como bajas de mobs (`kills.mobs`, misiones). Nombres del `SpawnReason` de Bukkit |
 
-Una recarga reprograma los temporizadores con los valores nuevos.
+Viven bajo `settings:` en `modules/stats/config.yml`. Un reload reprograma los temporizadores con los
+valores nuevos.
 
-### Contadores
-
-Un contador existe en cuanto un módulo cuenta algo; no hay que declarar nada.
-`%exyliasurvivalcore_stats_counter_<clave>%` lee cualquier contador por su clave, como número sin
-formato, lo liste `stats.yml` o no: por ejemplo `%exyliasurvivalcore_stats_counter_mines.blocks%`. Un
-bloque `COUNTER` solo sirve para ponerlo en la pantalla de estadísticas y darle ranking. Las misiones y
-las temporadas leen los mismos contadores: ver
-[Misiones y temporadas](/docs/exyliasurvivalcore/misiones-y-temporadas).
+Contadores:
 
 | Origen | Contadores |
 |---|---|
-| Estadísticas (PvP) | `kills.players`, `kills.best_streak`, `kills.mobs`, `kills.mob.<tipo>`, `deaths.total` |
-| Rankup, farmeo, reclaim | `rankup.ranks`, `rankup.prestiges`, `farming.harvested`, `farming.<categoría>.harvested`, `reclaim.claimed`, `reclaim.<sección>.claimed` |
+| Stats (PvP) | `kills.players`, `kills.best_streak`, `kills.mobs`, `kills.mob.<tipo>`, `deaths.total` |
+| Rankup, farming, reclaim | `rankup.ranks`, `rankup.prestiges`, `farming.harvested`, `farming.<categoría>.harvested`, `reclaim.claimed`, `reclaim.<sección>.claimed` |
 | Kits | `kits.claimed`, `kits.<kit>.claimed` |
-| Warps, homes, spawn, back, tpa, rtp | `warps.used`, `warps.<warp>.used`, `homes.teleports`, `homes.created`, `homes.deleted`, `spawn.teleports`, `back.used`, `tpa.teleports`, `rtp.used`, `rtp.<id>.used` |
-| Portales, jumpads | `portals.used`, `portals.<portal>.used`, `jumpads.used`, `jumpads.<jumpad>.used` |
-| Reparación | `repair.items` |
+| Warps, casas, spawn, back, tpa, rtp | `warps.used`, `warps.<warp>.used`, `homes.teleports`, `homes.created`, `homes.deleted`, `spawn.teleports`, `back.used`, `tpa.teleports`, `rtp.used`, `rtp.<mundo>.used` |
+| Portales, plataformas de salto | `portals.used`, `portals.<portal>.used`, `jumpads.used`, `jumpads.<jumpad>.used` |
+| Reparar | `repair.items` |
 | Misiones | `missions.completed`, `missions.<grupo>.completed`, `missions.earned` |
 | Alimentados por otros plugins | `mines.blocks`, `crates.opened`, `bounties.*`, `graves.*`, `duels.*`, `votes.*`, `rewards.claimed`, `market.*`, `auctions.*`, `orders.*`, `trade.completed`, `protections.*`, `lootchests.*`, `powerups.picked`, `afkzones.rewards`, `playtime.rewards` |
 
-Los contadores de dinero de mercado, subastas y pedidos también existen por moneda (`market.<moneda>.earned`, `auctions.<moneda>.spent`, `orders.<moneda>.earned`). La última fila la alimentan los plugins de Exylia que ahora son dueños de esas funciones, donde estén instalados; la lista de la cabecera del `stats.yml` que viene documenta las claves.
+Los contadores de dinero de mercado, subastas y pedidos también existen por moneda
+(`market.<moneda>.earned`, `auctions.<moneda>.spent`, `orders.<moneda>.earned`). La última fila la alimentan
+los plugins de Exylia que ahora son dueños de esas funciones, donde estén instalados; el comentario del
+principio del `stats.yml` incluido lista las claves.
 
-Las claves se pasan a minúsculas, y una de más de 100 caracteres se ignora en vez de recortarse. Los
-contadores de dinero — `.earned`, `.spent` — suman unidades enteras. `votes.best_streak` es un récord,
-no una suma: guarda la racha más alta vista.
+Las claves se pasan a minúsculas, y una de más de 100 caracteres se ignora en lugar de recortarse. Los
+contadores de dinero (`.earned`, `.spent`) suman unidades enteras. `votes.best_streak` es un máximo, no una
+suma.
 
-Se cuenta en memoria. Los contadores que cambian se escriben cada `counter-flush-interval` segundos,
-cuando un jugador sale y al apagar el servidor, así que una caída puede perder como mucho ese intervalo.
-Con el módulo de estadísticas apagado no se cuenta nada, y lo que se habría contado no se guarda para
-después.
+El conteo ocurre en memoria. Los contadores que cambian se escriben cada `counter-flush-interval` segundos,
+cuando un jugador se va y al apagar, así que un fallo puede perder como mucho ese intervalo. Con el módulo de
+estadísticas apagado no se cuenta nada, y lo que se habría contado no se guarda para después.
+</Details>
 
-<Callout type="danger" title="`/stats` sigue sin existir en ejecución">
-El comando se reescribió para abrir las estadísticas de cualquiera, también de un jugador desconectado
-— sus valores de PvP, sus contadores y la última muestra de sus stats `PAPI` y `VAULT` —, pero a su
-método le sigue faltando cualquiera de las anotaciones con las que Lamp registra un comando, así que no
-se añade nada al servidor. `exyliasurvivalcore.stats` y `exyliasurvivalcore.stats.others` quedan por
-tanto inalcanzables, y con ellos ver las estadísticas de otro jugador.
+## Cambia lo que pasa al morir
 
-Las pantallas sí funcionan: enlaza `survivalcore:stats_open` a un botón de cualquier menú, a un NPC o a
-un objeto de hotbar y el perfil de quien lo pulsa y sus rankings abren con normalidad. Los rankings
-incluyen a los jugadores desconectados.
-</Callout>
-
-## Muerte
-
-El módulo de muerte son tres ajustes.
+El módulo de muerte tiene tres ajustes en `modules/death/config.yml`:
 
 | Ajuste | Por defecto | Qué hace |
 |---|---|---|
-| `scatter-radius` | 0.3 | Cuánto se esparcen los drops, para que una pila no sea un montón |
-| `fire-protection` | `true` | Los drops sobreviven al fuego — **no** a la lava |
+| `scatter-radius` | 0.3 | Cuánto se esparcen los drops, en bloques, para que una pila no sea un montón. `0` lo suelta todo en el punto exacto de la muerte |
+| `fire-protection` | `true` | Los drops sobreviven al fuego, pero **no** a la lava |
 | `custom-messages` | `true` | La línea de muerte sale de `messages.yml` en vez de la de vanilla |
 
-El mensaje de muerte es uno de los que respetan las preferencias de `/settings` del jugador.
+El anuncio de muerte respeta las preferencias de `/settings` de cada jugador. Cuando un plugin de tumbas como
+[ExyliaGraves](/docs/exyliagraves/tumbas) se queda los drops, el módulo de muerte no encuentra nada que
+esparcir.
 
-Cuando un plugin de tumbas como [ExyliaGraves](/docs/exyliagraves/tumbas) se queda con los drops, el módulo de
-muerte no encuentra nada que esparcir.
+<Cards>
+  <Card title="Siguiente: Rangos, farming y reclamos" href="/docs/exyliasurvivalcore/progresion">Convierte esos contadores en una escalera.</Card>
+  <Card title="Placeholders" href="/docs/exyliasurvivalcore/placeholders">Todos los placeholders de este plugin.</Card>
+</Cards>
