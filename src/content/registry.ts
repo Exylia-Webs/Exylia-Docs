@@ -465,20 +465,20 @@ const TOTEMTRAINER_NAV: NavGroup[] = [
     ],
   },
   {
-    label: { en: "Configuring", es: "Configurar" },
+    label: { en: "Guides", es: "Guías" },
     pages: [
-      page("modes", "modes", "modos"),
-      page("grading", "grading", "calificacion"),
-      page("duels", "duels", "duelos"),
       page("arenas", "arenas", "arenas"),
+      page("modes", "modes", "modos"),
+      page("duels", "duels", "duelos"),
+      page("grading", "grading", "calificacion"),
+      page("stats", "stats", "estadisticas"),
+      page("scoreboard", "scoreboard", "scoreboard"),
     ],
   },
   {
-    label: { en: "Systems", es: "Sistemas" },
+    label: { en: "How it works", es: "Cómo funciona" },
     pages: [
       page("training", "training", "entrenamiento"),
-      page("stats", "stats", "estadisticas"),
-      page("scoreboard", "scoreboard", "scoreboard"),
       page("compatibility", "compatibility", "compatibilidad"),
     ],
   },
@@ -490,6 +490,12 @@ const TOTEMTRAINER_NAV: NavGroup[] = [
       page("placeholders", "placeholders", "placeholders"),
       page("configuration", "configuration", "configuracion"),
       page("api", "api", "api"),
+    ],
+  },
+  {
+    label: { en: "Help", es: "Ayuda" },
+    pages: [
+      page("troubleshooting", "troubleshooting", "problemas-comunes"),
       page("faq", "faq", "faq"),
     ],
   },
