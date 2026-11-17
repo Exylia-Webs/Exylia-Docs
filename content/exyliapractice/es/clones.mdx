@@ -10,97 +10,105 @@ questions:
 updated: "1.4.0"
 ---
 
-Un servidor de practice corre más partidas a la vez de las arenas que tiene construidas. La respuesta
-de este plugin es pegar copias de una arena en un mundo vacío y tratar cada una como una arena aparte.
+Un servidor de práctica juega más partidas a la vez de las arenas que tiene construidas. ExyliaPracticeCore pega copias de una arena en un mundo vacío y trata cada una como una arena aparte, hasta diez por arena por defecto. Los clones se crean cuando hacen falta; también puedes crearlos antes de un evento.
 
-## Cuándo se hace un clon
+## Antes de empezar
 
-Solo bajo demanda, y solo como último recurso:
+- La arena está configurada del todo y activada, con los dos esquemas guardados: mira [Configura las arenas](/docs/exyliapractice/arenas).
+- FastAsyncWorldEdit está instalado. Sin él, la clonación está desactivada (mira la última sección).
+- En Folia, el plugin Worlds está instalado: Folia no puede crear un mundo mediante Bukkit, así que sin él no hay dónde pegar clones (mira [Problemas comunes](/docs/exyliapractice/problemas-comunes)).
+
+## Pasos
+
+No hay que configurar nada para que los clones funcionen: se crean solos cuando todas las arenas que puede usar un kit están ocupadas. Para crear algunos por adelantado:
+
+<Steps>
+  <Step title="Abre los clones de la arena">
+    Ejecuta `/epc`, pulsa **Gestionar arenas**, elige la arena y pulsa **Ver clones**. La pantalla lista la original y cada clon, con su estado.
+  </Step>
+  <Step title="Precarga clones">
+    Pulsa **Forzar carga de clones**. El chat te pregunta cuántos, entre 1 y `arena.max-clones-per-arena` (10 por defecto). La pantalla de configuración de la arena se reabre cuando están pegados y un mensaje dice cuántos se crearon.
+  </Step>
+  <Step title="Mira uno">
+    Pulsa una instancia de la lista para teletransportarte a ella. Es la única forma de ver un clon.
+  </Step>
+</Steps>
+
+Hazlo antes de un evento, para que las primeras partidas no paguen cada una un pegado.
+
+## Comprueba que funciona
+
+- **Ver clones** muestra en la pantalla de configuración el número de clones activos y lista cada uno como `Clon #<n>` junto a la original.
+- Inicia más partidas simultáneas que arenas tienes: los jugadores caen en copias distintas y ninguna comparte bloques con otra.
+
+## Cuándo se crea un clon
+
+Solo cuando hace falta, y solo como último recurso:
 
 <Steps>
   <Step title="Probar todas las arenas compatibles">
-    La partida recorre en orden la lista de arenas compatibles del kit y toma la primera instancia
-    libre que encuentre: original o clon.
+    La partida recorre en orden la lista de arenas compatibles del kit y toma la primera instancia libre que encuentra, original o clon.
   </Step>
   <Step title="Barajar y clonar">
-    Si no hay nada libre, la lista se baraja y se clona la primera arena completamente configurada.
-    El barajado es lo que evita que un servidor lleno clone diez veces la misma arena.
+    Si no hay ninguna libre, se baraja la lista y se clona la primera arena completamente configurada. El barajado es lo que evita que un servidor ocupado clone diez veces la misma arena.
   </Step>
   <Step title="Rendirse">
-    Si no se puede clonar ninguna —límite de clones alcanzado, sin esquemático, mundo de clones no
-    listo— se avisa a los jugadores de que no hay arenas disponibles y vuelven al lobby.
+    Si no se puede clonar ninguna arena (límite de clones alcanzado, sin esquema, mundo de clones no listo), se avisa a los jugadores de que no hay arenas disponibles y se les devuelve al lobby.
   </Step>
 </Steps>
 
 ## Dónde van
 
-Cada clon recibe su propia parcela en el mundo temporal de ExyliaLib, pegada a la altura de
-`arena.clone-paste-y` (64 por defecto). Las parcelas empiezan en el borde de un chunk, nunca se reusan
-durante una sesión del servidor y quedan más lejos entre sí que la distancia de visión, así que un
-jugador en el borde de una copia nunca ve otra y nada de una partida llega a la siguiente.
+Cada clon recibe su propia parcela en el mundo temporal de ExyliaLib, pegada en la Y de `arena.clone-paste-y` (64 por defecto). Las parcelas empiezan en un límite de chunk, no se reutilizan durante una ejecución y están más separadas entre sí que la distancia de renderizado del servidor, así que un jugador en el borde de una copia nunca ve otra y nada de una partida llega a la siguiente.
 
-| Ajuste | Defecto | Qué hace |
+| Ajuste | Por defecto | Qué hace |
 |---|---|---|
-| `arena.max-clones-per-arena` | `10` | El tope duro por arena. Cuenta los clones ya creados y vivos. |
-| `arena.clone-paste-y` | `64` | La Y a la que se pega la esquina de la región de copia |
+| `arena.max-clones-per-arena` | `10` | El tope por arena. Incluye los clones ya creados y aún vivos. |
+| `arena.clone-paste-y` | `64` | La Y en la que se pega la esquina de la región de copia |
 
-<Callout type="note" title="Los clones no se destruyen nunca">
-Un clon se queda pegado durante toda la vida del servidor y se reutiliza para la siguiente partida que
-lo necesite. Lo que se reinicia entre partidas son los bloques, no el pegado. Diez clones de una arena
-significan diez copias en el mundo de clones hasta el reinicio, y el mundo entero se borra al apagar de
-todas formas.
+<Callout type="note" title="Los clones nunca se destruyen">
+Un clon queda pegado mientras viva el servidor y se reutiliza en la siguiente partida que lo necesite. Lo que se reinicia entre partidas son los bloques, no el pegado. Diez clones de una arena significan que el mundo de clones guarda diez copias hasta reiniciar, y el mundo entero se borra al apagar de todos modos. Para gastar menos memoria, baja `arena.max-clones-per-arena`.
 </Callout>
-
-## Qué se reubica
-
-Pegar los bloques es la mitad fácil. Todo lo que la arena sabe de sí misma tiene que moverse con ella:
-
-- **Spawn 1, spawn 2, spawn de espectador, spawn de party FFA**: desplazados desde la esquina mínima
-  de la región de copia, conservando su orientación exacta.
-- **La región jugable**: desplazada y registrada de nuevo con el id
-  `practice_arena_<id>_clone_<n>_playable`.
-- **Cada región extra**: desplazada y registrada como
-  `practice_arena_<id>_clone_<n>_extra_<i>`.
 
 ## Regeneración
 
-Cuando termina una partida, la instancia se libera. Lo que pasa con los bloques depende del kit:
+Cuando termina una partida, la instancia de arena se libera. Qué pasa con los bloques depende del kit:
 
 | Reglas del kit | Qué ocurre |
 |---|---|
 | `build` o `block-break` activados | La región jugable se restaura desde `practice_arena_<id>_playable` y luego se descargan los chunks |
-| Ninguno de los dos | Ningún trabajo de bloques: solo limpieza de entidades y descarga de chunks |
+| Ninguno activado | Ningún trabajo con bloques, solo limpieza de entidades y descarga de chunks |
 
-Los objetos tirados, las flechas, la TNT y cualquier otra entidad que no sea un jugador dentro de la
-región jugable se eliminan en ambos casos.
-
-<Callout type="note" title="La regeneración no mueve a los jugadores que estén dentro">
-Se le indica explícitamente que no reubique a jugadores atrapados. Quien siga ahí pertenece a la
-partida que acaba de terminar, y esa partida decide dónde acaba, cosa que hace un tick después
-mandándolo al lobby.
-</Callout>
+Los objetos soltados, flechas, TNT y cualquier otra entidad que no sea un jugador dentro de la región jugable se eliminan en ambos casos. Para restaurar una arena a mano, haz clic derecho en **Esquema** en su pantalla de configuración.
 
 ### Regeneración a mitad de partida
 
-Un kit con **regenerate after point** restaura la arena *sin* liberarla, entre un punto y el siguiente.
-La instancia pasa de `IN_USE` a `REGENERATING` y vuelve a `IN_USE`, y la cuenta atrás del reinicio de
-punto empieza cuando los bloques ya están de vuelta.
+Un kit con **Regenerar tras punto** (mira [Define las reglas de un kit](/docs/exyliapractice/reglas-de-kit)) restaura la arena sin liberarla, entre un punto y el siguiente. La instancia pasa de `IN_USE` a `REGENERATING` y de nuevo a `IN_USE`, y la cuenta atrás de reinicio de punto empieza cuando los bloques han vuelto.
 
-## Precargar clones
+## Cuando la clonación está desactivada
 
-`/epc` → **Manage Arenas** → una arena → **Clones** muestra cada instancia y ofrece crear más a la
-fuerza. Úsalo antes de un evento para que las diez primeras partidas no paguen cada una su pegado.
-
-Esa misma pantalla te teletransporta a cualquier instancia, que es la única forma de ver un clon.
-
-## Cuando la clonación está apagada
-
-Si el módulo de esquemáticos se declara no soportado —sin FastAsyncWorldEdit— la consola lo dice una
-vez al arrancar:
+Si el módulo de esquemas se declara no compatible (sin FastAsyncWorldEdit), la consola lo dice una vez al arrancar:
 
 ```
-Arena regeneration is off: <motivo>
+Arena regeneration is off: <reason>
 ```
 
-A partir de ahí cada arena tiene exactamente una instancia, las partidas hacen cola una detrás de otra
-y los bloques no se restauran nunca.
+A partir de ahí, cada arena tiene exactamente una instancia, las partidas hacen cola unas tras otras y los bloques nunca se restauran.
+
+<Details title="Qué se reubica en un clon">
+Pegar los bloques es la parte fácil. Todo lo que la arena sabe de sí misma se mueve con ella:
+
+- **Spawn 1, spawn 2, spawn de espectador, spawn FFA de grupo**: desplazados desde la esquina mínima de la región de copia, conservando su orientación exacta.
+- **La región jugable**: desplazada y registrada de nuevo con el id `practice_arena_<id>_clone_<n>_playable`.
+- **Cada región extra**: desplazada y registrada como `practice_arena_<id>_clone_<n>_extra_<i>`.
+</Details>
+
+<Details title="Los jugadores dentro no se mueven con una regeneración">
+A la regeneración se le dice expresamente que no reubique a jugadores atrapados. Quien siga dentro pertenece a la partida que acaba de terminar, y esa partida decide adónde van, cosa que hace un tick después enviándolos al lobby.
+</Details>
+
+<Cards>
+  <Card title="Configura las arenas" href="/docs/exyliapractice/arenas">Regiones, spawns y esquemas: de lo que se hacen los clones.</Card>
+  <Card title="Define las reglas de un kit" href="/docs/exyliapractice/reglas-de-kit">Construir, romper y regenerar tras un punto.</Card>
+  <Card title="Problemas comunes" href="/docs/exyliapractice/problemas-comunes">Sin arenas disponibles, sin clones en Folia.</Card>
+</Cards>
