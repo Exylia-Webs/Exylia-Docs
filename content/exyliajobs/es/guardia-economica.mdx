@@ -10,54 +10,79 @@ questions:
 updated: "1.0.0"
 ---
 
-Al final de esta página has decidido cuánto dinero pueden crear los trabajos y sabes dónde ver si funciona. Los valores por defecto son seguros para la mayoría de servidores.
+Al final de esta página has decidido cuánto dinero pueden crear los trabajos y sabes dónde ver si funciona. Los valores por defecto son seguros para la mayoría de servidores: la protección está activa desde el primer arranque.
 
-La guardia vive en `economy.yml`, y cada valor se puede editar desde **Ajustes** en el centro de administración (**Presupuesto y topes** y **Mercado y fatiga**). Se puede desactivar con `features: {economy: false}`. El dinero pasa por mercado, fatiga, presupuesto y topes; la experiencia solo pasa por la fatiga.
+## Antes de empezar
 
-## Presupuesto
+Necesitas un plugin de economía (ExyliaEconomy o Vault). La protección vive en `economy.yml`; cada valor también se edita en el juego. Se puede desactivar con `features: {economy: false}` en `config.yml` (reinicio). El dinero pasa por el mercado, la fatiga, el presupuesto y los topes; la experiencia solo pasa por la fatiga.
 
-`budget.mode`:
+## Pasos
 
-| Modo | El presupuesto |
-|---|---|
-| `per-active-hour` (por defecto) | `per-active-hour` (4000) de dinero por cada jugador **activo** cada hora. Los jugadores inactivos no cuentan. |
-| `daily` | `daily` (200000) de dinero repartido a lo largo del día, entre todos los jugadores. |
-| `off` | Sin presupuesto ni ritmo. |
+<Steps>
+  <Step title="Abre el panel">
+    Ejecuta `/jobsadmin economy`, o ejecuta `/jobsadmin` y haz clic en **Economía**. La primera pantalla muestra el modo de presupuesto, el dinero permitido y pagado por hora y el factor de pago.
+  </Step>
+  <Step title="Mira el último día">
+    Haz clic en **Últimas 24 horas** para ver el dinero creado cada hora frente al presupuesto de esa hora. Haz clic en **Por trabajo** para ver el dinero de cada trabajo, su parte, sus objetivos más trabajados y sus servidores.
+  </Step>
+  <Step title="Elige el presupuesto">
+    Ejecuta `/jobsadmin`, haz clic en **Ajustes** y luego en **Presupuesto y topes**. Haz clic en **Modo de presupuesto** y elige por hora activa (por defecto), diario o desactivado, y fija la cantidad.
+  </Step>
+  <Step title="Revisa a los que más ganan">
+    De vuelta en la pantalla de economía haz clic en **Mayores ganadores**. Haz clic en un jugador para ver su hora, hoy, objetivo principal y topes, o usa **Inspeccionar jugador** para buscar a cualquiera.
+  </Step>
+</Steps>
 
-Cada 5 segundos el factor de pago avanza un paso hacia `allowed / demand` (la demanda es lo que se habría pagado con factor 1, así que el factor nunca se alimenta de sí mismo), limitado entre `lowest` (0.5) y `highest` (1.25). La ventana es la última hora, ponderada, y se comparte en toda la red mediante Redis. Las órdenes del servidor gastan del mismo presupuesto.
+## Comprueba que funciona
 
-## Tasa de mercado
+Farmea un mismo sitio unos minutos: el aviso de ganancias se encoge y **Acciones y tarifas** muestra una flecha en ese objetivo. Eso es la fatiga funcionando. En un servidor con actividad, el factor de pago del panel se mueve entre 0.5 y 1.25 según se gane más o menos que el presupuesto.
 
-El volumen reciente de dinero por trabajo, acción y objetivo decae con una vida media (`market.half-life`, 2 horas). La tasa es:
+## Para ir más allá
 
-- Por debajo del volumen normal (`normal-per-player-hour`, 1500 por jugador activo): hasta `highest` (1.5, es decir, 150%) cuando nadie trabaja el objetivo.
-- En el volumen normal: 100%.
-- Por encima: `1 / (1 + 0.5 x (load - 1))`, nunca por debajo de `lowest` (0.25). El doble de lo normal paga el 67%.
+### Fija el presupuesto
 
-**Calentamiento** (`warm-up`, 3 horas de jugador de volumen normal): hasta que el mercado haya visto tanto volumen reciente entre todos los objetivos, los objetivos ignorados pagan como máximo el 100%, así que un servidor tranquilo o recién creado paga las tasas base. Pasado ese punto la bonificación crece poco a poco. `0` desactiva el calentamiento. Un objetivo en `hot-from` (1.2) o más se marca como caliente en la pantalla de tasas, y un trabajo muy poco trabajado frente a los demás se señala en las pantallas de trabajos. Se comparte mediante Redis; sin Redis cada servidor cuenta el suyo.
+- **Por hora activa** (por defecto): 4000 de dinero por cada jugador activo y hora. Los jugadores inactivos no cuentan.
+- **Diario**: 200000 de dinero repartido durante el día entre todos los jugadores.
+- **Desactivado**: sin presupuesto ni ritmo.
 
-## Fatiga
+Cada 5 segundos el factor de pago avanza un paso hacia lo permitido, sin bajar de 0.5 ni subir de 1.25. Los encargos del servidor gastan del mismo presupuesto.
 
-Por jugador, se cuentan las acciones sobre un objetivo dentro de una misma zona de 3x3 chunks (decaen con `recovery`, 10 minutos). Las primeras `free-actions` (64) pagan completas; a partir de ahí el pago se reduce a la mitad cada `halves-every` (64) más, nunca por debajo de `floor` (0.1). Moverse a otra zona u otro objetivo empieza de cero. Un trabajo la desactiva con `economy: {fatigue: false}`.
+### Deja actuar al mercado
 
-## Topes
+Los objetivos que muchos jugadores farmean pagan menos (hasta un 25%); los que nadie trabaja pagan más (hasta un 150%). Un servidor nuevo o tranquilo paga las tarifas base hasta que los jugadores llevan un rato trabajando (el calentamiento), para que no veas bonificaciones de la nada. Los objetivos marcados como calientes en **Acciones y tarifas** son los que nadie trabaja. Cámbialo en **Ajustes**, **Mercado y fatiga**.
 
-Desactivados por defecto (`caps.enabled`). Los grupos tienen `soft-per-hour` y `hard-per-day` (0 es sin tope). La parte de un pago que pasa del tope blando paga `soft-share` (0.5); nada pasa del tope duro. `default` se aplica a todos; un jugador con `exyliajobs.caps.<group>` recibe el más generoso de sus grupos (0 gana a cualquier número). Grupos incluidos: `default` 5000 y 50000, `vip` 7500 y 75000. Las ganancias se cargan desde el libro al entrar, así que un reinicio o un cambio de servidor no hace que el jugador empiece de cero.
+### Topes
 
-## Panel
+Los topes limitan lo que gana un jugador. Vienen desactivados. Actívalos en **Ajustes**, **Presupuesto y topes**. Cada grupo tiene un tope blando por hora y uno duro por día. Pasado el tope blando el pago se reduce a la mitad; nada pasa del tope duro. Da a un rango su grupo con `exyliajobs.caps.<grupo>` (mira [Permisos](/docs/exyliajobs/permisos)); los grupos incluidos son `default` y `vip`.
 
-`/jobsadmin economy`, o la tarjeta **Economía** del centro:
+### Pausa a un jugador
 
-- **Panel**: el modo de presupuesto, el dinero permitido y pagado por hora y el factor de pago.
-- **Últimas 24 horas**: el dinero creado cada hora frente al presupuesto de esa hora.
-- **Por trabajo**: el dinero de cada trabajo, su proporción, los objetivos más activos y los servidores.
-- **Sumideros**: el dinero que los trabajos recuperaron (tarifas por dejar un trabajo, cambios de ventaja, impuesto de órdenes) en 24 horas.
-- **Mayores ganadores**: los que más ganan esta hora, con marcas, y una búsqueda de jugadores.
+En la pantalla de economía del jugador haz clic en **Pago ▸ Pausar**. Todo su pago de trabajos (dinero y experiencia) se detiene hasta que hagas clic en **Reanudar**. La pausa sobrevive a los reinicios.
 
-Marcas en un jugador: **above p99** (más esta hora que el percentil 99 de las horas de jugador terminadas recientemente, en silencio hasta que existan 50 muestras), **single target** (64 o más acciones con el 90% del dinero de un solo objetivo) y **standing still** (ganando durante tres minutos sin moverse cuatro bloques). La pantalla de economía de un jugador muestra hora, hoy, objetivo principal y topes, y **Pause** detiene todo su pago de trabajos (dinero y experiencia) hasta reanudarlo; la pausa sobrevive a los reinicios y se vuelve a leer al entrar.
+### Recibe un informe semanal en Discord
 
-## Informe de Discord
-
-`report.enabled`, `report.webhook`: una vez a la semana, un resumen con el dinero creado, recuperado y neto, el presupuesto en palabras y una línea por trabajo. El mensaje es `report.message` (placeholders `%created%`, `%sunk%`, `%net%`, `%budget%`, `%jobs%`). Un webhook vacío o no válido no envía nada.
+Pon `report.enabled` en true y `report.webhook` en `economy.yml`. Una vez por semana el webhook recibe el dinero creado, retirado y neto, el presupuesto en palabras y una línea por trabajo. Un webhook vacío o inválido no envía nada.
 
 Al primer admin que entra tras la instalación se le avisa una vez del presupuesto por defecto.
+
+<Details title="Cómo funciona cada parte">
+
+**Presupuesto.** `budget.mode` es `per-active-hour` (por defecto), `daily` u `off`. Cada 5 segundos el factor de pago avanza un paso hacia `permitido / demanda` (la demanda es lo que se habría pagado con factor 1, así que el factor nunca se alimenta a sí mismo), limitado entre `lowest` (0.5) y `highest` (1.25). La ventana es la última hora, ponderada, y se comparte en toda la red por Redis.
+
+**Tasa de mercado.** El volumen reciente de dinero por trabajo, acción y objetivo decae con una vida media (`market.half-life`, 2 horas). La tasa llega hasta `highest` (1.5) cuando nadie trabaja el objetivo, es 100% en el volumen normal (`normal-per-player-hour`, 1500 por jugador activo) y por encima es `1 / (1 + 0.5 x (carga - 1))`, nunca por debajo de `lowest` (0.25); el doble de lo normal paga un 67%. `warm-up` (3 horas-jugador de volumen normal): hasta que el mercado ha visto tanto volumen reciente en todos los objetivos, los objetivos ignorados pagan como máximo el 100%; `0` lo desactiva. Un objetivo en `hot-from` (1.2) o más se marca como caliente. Compartido por Redis; sin Redis cada servidor cuenta el suyo.
+
+**Fatiga.** Por jugador se cuentan las acciones sobre un objetivo dentro de un área de 3x3 chunks (decae con `recovery`, 10 minutos). Las primeras `free-actions` (64) pagan completas; después el pago se reduce a la mitad cada `halves-every` (64) más, nunca por debajo de `floor` (0.1). Moverse a otra área u objetivo empieza de cero. Un trabajo la desactiva con `economy: {fatigue: false}`.
+
+**Topes.** `caps.enabled` (false), `soft-share` (0.5), grupos con `soft-per-hour` y `hard-per-day` (0 es sin tope). `default` se aplica a todos; un jugador con `exyliajobs.caps.<grupo>` recibe el más generoso de sus grupos (0 gana a cualquier número). Grupos incluidos: `default` 5000 y 50000, `vip` 7500 y 75000. Las ganancias se cargan desde el libro al entrar, así que un reinicio o un cambio de servidor no reinicia al jugador.
+
+**Marcas en un ganador.** **por encima de p99** (más esta hora que el percentil 99 de las horas-jugador recientes terminadas; en silencio hasta que hay 50 muestras), **un solo objetivo** (64 o más acciones con el 90% del dinero de un objetivo) y **quieto** (ganando durante tres minutos sin moverse cuatro bloques).
+
+**Sumideros** (dinero que los trabajos recuperaron en 24 horas): tarifas por dejar un trabajo, cambios de ventaja e impuesto de encargos.
+
+**Informe.** `report.message` admite `%created%`, `%sunk%`, `%net%`, `%budget%` y `%jobs%`.
+</Details>
+
+<Cards>
+  <Card title="Cómo se calcula un pago" href="/docs/exyliajobs/pago">El orden en que se aplican las cuatro protecciones.</Card>
+  <Card title="Úsalo en una red de servidores" href="/docs/exyliajobs/red">Comparte presupuesto y mercado entre servidores.</Card>
+</Cards>

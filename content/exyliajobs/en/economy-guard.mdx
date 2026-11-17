@@ -10,54 +10,79 @@ questions:
 updated: "1.0.0"
 ---
 
-At the end of this page you have decided how much money jobs may create, and you know where to see whether it is working. The defaults are safe for most servers.
+At the end of this page you have decided how much money jobs may create, and you know where to see whether it is working. The defaults are safe for most servers: the guard is on from the first start.
 
-The guard lives in `economy.yml`, and every value is editable from the admin hub's **Settings**. It can be turned off with `features: {economy: false}`. Money passes market, fatigue, budget and caps; experience passes only fatigue.
+## Before you start
 
-## Budget
+You need an economy plugin (ExyliaEconomy or Vault). The guard lives in `economy.yml`; every value is also editable in game. It can be turned off with `features: {economy: false}` in `config.yml` (restart). Money passes market rate, fatigue, budget and caps; experience passes only fatigue.
 
-`budget.mode`:
+## Steps
 
-| Mode | The budget |
-|---|---|
-| `per-active-hour` (default) | `per-active-hour` (4000) money for each **active** player each hour. Idle players do not count. |
-| `daily` | `daily` (200000) money spread over the day, across every player. |
-| `off` | No budget and no pacing. |
+<Steps>
+  <Step title="Open the dashboard">
+    Run `/jobsadmin economy`, or run `/jobsadmin` and click **Economy**. The first screen shows the budget mode, the money allowed and paid per hour, and the pay factor.
+  </Step>
+  <Step title="Look at the last day">
+    Click **Last 24 hours** to see the money created each hour against that hour's budget. Click **By job** to see each job's money, share, busiest targets and servers.
+  </Step>
+  <Step title="Choose the budget">
+    Run `/jobsadmin`, click **Settings**, then **Budget & caps**. Click **Budget mode** and pick **Per active hour** (default), **Daily** or **Off**, and set the amount.
+  </Step>
+  <Step title="Check the top earners">
+    Back on the economy screen click **Top earners**. Click a player for their hour, today, main target and caps, or use **Inspect player** to look anybody up.
+  </Step>
+</Steps>
 
-Every 5 seconds the pay factor moves a step towards `allowed / demand` (demand is what would have been paid at factor 1, so the factor never feeds on itself), clamped between `lowest` (0.5) and `highest` (1.25). The window is the last hour, weighted, and shared across the network over Redis. Server orders spend from the same budget.
+## Check that it works
 
-## Market rate
+Farm one spot for a few minutes: the earnings popup shrinks and **Actions & rates** shows an arrow on that target. That is fatigue working. On a busy server the **Dashboard** pay factor moves between 0.5 and 1.25 as players earn more or less than the budget.
 
-Recent money volume per job, action and target decays with a half-life (`market.half-life`, 2 hours). The rate is:
+## Going further
 
-- Below the normal volume (`normal-per-player-hour`, 1500 per active player): up to `highest` (1.5, i.e. 150%) when nobody works the target.
-- At the normal volume: 100%.
-- Above it: `1 / (1 + 0.5 x (load - 1))`, never under `lowest` (0.25). Twice normal pays 67%.
+### Set the budget
 
-**Warm-up** (`warm-up`, 3 player-hours of normal volume): until the market has seen that much recent volume across all targets, ignored targets pay at most 100%, so a quiet or fresh server pays base rates. Past it the bonus grows in. `0` turns the warm-up off. A target at `hot-from` (1.2) or more is marked hot on the rates screen, and a job worked far less than the others is hinted on job screens. Shared over Redis; without Redis each server counts its own.
+- **Per active hour** (default): 4000 money for each active player each hour. Idle players do not count.
+- **Daily**: 200000 money spread over the day, across every player.
+- **Off**: no budget and no pacing.
 
-## Fatigue
+Every 5 seconds the pay factor moves a step towards what is allowed, never under 0.5 or over 1.25. Server work orders spend from the same budget.
 
-Per player, actions on one target inside one 3x3 chunk area are counted (decaying with `recovery`, 10 minutes). The first `free-actions` (64) pay in full; past that pay halves every `halves-every` (64) more, never under `floor` (0.1). Moving to another area or target starts fresh. A job turns it off with `economy: {fatigue: false}`.
+### Let the market rate work
 
-## Caps
+Targets many players farm pay less (down to 25%); targets nobody works pay more (up to 150%). A fresh or quiet server pays base rates until players have worked a while (the warm-up), so you do not see bonuses from nothing. Targets marked hot on **Actions & rates** are the ones nobody works. Change this in **Settings**, **Market & fatigue**.
 
-Off by default (`caps.enabled`). Groups have `soft-per-hour` and `hard-per-day` (0 is no cap). The part of a payout past the soft cap pays `soft-share` (0.5); nothing passes the hard cap. `default` applies to everyone; a player with `exyliajobs.caps.<group>` gets the most generous of their groups (0 beats any number). Shipped groups: `default` 5000 and 50000, `vip` 7500 and 75000. Earnings are seeded from the ledger on join, so a restart or a server change does not start the player over.
+### Caps
 
-## Dashboard
+Caps limit what one player earns. They are off by default. Turn them on in **Settings**, **Budget & caps**. Each group has a soft cap per hour and a hard cap per day. Above the soft cap a payout pays half; nothing passes the hard cap. Give a rank its group with `exyliajobs.caps.<group>` (see [Permissions](/docs/exyliajobs/permissions)); the shipped groups are `default` and `vip`.
 
-`/jobsadmin economy`, or the hub's **Economy** card:
+### Pause a player
 
-- **Dashboard**: the budget mode, allowed and paid money per hour and the pay factor.
-- **Last 24 hours**: money created each hour against that hour's budget.
-- **By job**: each job's money, share, busiest targets and servers.
-- **Sinks**: money jobs took back (leave fees, perk swaps, order tax) in 24 hours.
-- **Top earners**: this hour's earners with flags, and a player lookup.
+On a player's economy screen click **Pay ▸ Pause**. All their job pay (money and experience) stops until you click **Resume**. The pause survives restarts.
 
-Flags on an earner: **above p99** (more this hour than the 99th percentile of recent finished player-hours, quiet until 50 samples exist), **single target** (64 or more actions with 90% of the money from one target) and **standing still** (earning for three minutes without moving four blocks). A player's economy screen shows hour, today, main target and caps, and **Pause** stops all their job pay (money and experience) until resumed; the pause survives restarts and is read again on join.
+### Get a weekly Discord report
 
-## Discord report
-
-`report.enabled`, `report.webhook`: once a week, a summary with money created, sunk and net, the budget in words and one line per job. The message is `report.message` (placeholders `%created%`, `%sunk%`, `%net%`, `%budget%`, `%jobs%`). An empty or invalid webhook sends nothing.
+Set `report.enabled` to true and `report.webhook` in `economy.yml`. Once a week the webhook gets money created, sunk and net, the budget in words and one line per job. An empty or invalid webhook sends nothing.
 
 The first admin who joins after installation is told once about the default budget.
+
+<Details title="How each part works">
+
+**Budget.** `budget.mode` is `per-active-hour` (default), `daily` or `off`. Every 5 seconds the pay factor moves a step towards `allowed / demand` (demand is what would have been paid at factor 1, so the factor never feeds on itself), clamped between `lowest` (0.5) and `highest` (1.25). The window is the last hour, weighted, and shared across the network over Redis.
+
+**Market rate.** Recent money volume per job, action and target decays with a half-life (`market.half-life`, 2 hours). The rate is up to `highest` (1.5) when nobody works the target, 100% at the normal volume (`normal-per-player-hour`, 1500 per active player), and above it `1 / (1 + 0.5 x (load - 1))`, never under `lowest` (0.25); twice normal pays 67%. `warm-up` (3 player-hours of normal volume): until the market has seen that much recent volume across all targets, ignored targets pay at most 100%; `0` turns it off. A target at `hot-from` (1.2) or more is marked hot. Shared over Redis; without Redis each server counts its own.
+
+**Fatigue.** Per player, actions on one target inside one 3x3 chunk area are counted (decaying with `recovery`, 10 minutes). The first `free-actions` (64) pay in full; past that pay halves every `halves-every` (64) more, never under `floor` (0.1). Moving to another area or target starts fresh. A job turns it off with `economy: {fatigue: false}`.
+
+**Caps.** `caps.enabled` (false), `soft-share` (0.5), groups with `soft-per-hour` and `hard-per-day` (0 is no cap). `default` applies to everyone; a player with `exyliajobs.caps.<group>` gets the most generous of their groups (0 beats any number). Shipped groups: `default` 5000 and 50000, `vip` 7500 and 75000. Earnings are seeded from the ledger on join, so a restart or a server change does not start the player over.
+
+**Flags on an earner.** **above p99** (more this hour than the 99th percentile of recent finished player-hours, quiet until 50 samples exist), **single target** (64 or more actions with 90% of the money from one target) and **standing still** (earning for three minutes without moving four blocks).
+
+**Sinks** (money jobs took back in 24 hours): leave fees, perk swaps and order tax.
+
+**Report.** `report.message` accepts `%created%`, `%sunk%`, `%net%`, `%budget%` and `%jobs%`.
+</Details>
+
+<Cards>
+  <Card title="How a payout is calculated" href="/docs/exyliajobs/payout">The order the four guards apply in.</Card>
+  <Card title="Run it on a network" href="/docs/exyliajobs/network">Share the budget and market across servers.</Card>
+</Cards>

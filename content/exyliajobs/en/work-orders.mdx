@@ -10,26 +10,80 @@ questions:
 updated: "1.0.0"
 ---
 
-Work orders let one player pay others to bring an item. The server holds the price until the items arrive, so nobody gets cheated.
+Work orders let one player pay others to bring an item. The server holds the price until the items arrive, so nobody is cheated. At the end of this page you can post an order, deliver to one, and tune the tax, limits and the orders the server posts itself.
 
-`/jobs orders` opens the board; each job hub has a **Work orders** button for that job. Settings are in `orders.yml`.
+## Before you start
 
-## Posting
+You need an economy plugin: orders cannot work without money. Players need `exyliajobs.orders.post` (everyone has it by default) to post, and `exyliajobs.use` to open the board.
 
-**Post an order** asks, in this order: the item (inserted or picked), the job whose workers may deliver (or anyone), then a form with units, unit price, an optional minimum level in that job and a duration, then a confirmation. Needs `exyliajobs.orders.post`.
+## Steps
 
-- The **whole price is taken** when the order goes up, into a persistent escrow hold, plus the **posting tax** (`tax`, 1% by default) charged on top and never refunded.
-- Limits: `limit` open orders per player (5; `exyliajobs.orders.limit.<n>` raises it, `.unlimited` removes it), `max-quantity` 2304, `min-unit-price` 0.01, `duration` 3 days by default and `max-duration` 7 days.
-- An order can ask for a plain item or a custom item id, never a tag.
+<Steps>
+  <Step title="Open the board">
+    Run `/jobs orders`. Every job hub also has a **Work orders** button that shows that job's orders.
+  </Step>
+  <Step title="Post an order">
+    Click **Post an order**. It asks, in this order: the item (insert it or pick it), the job whose workers may deliver (or anyone), then a form with units, unit price, an optional minimum level in that job and a duration, then a confirmation.
+  </Step>
+  <Step title="Deliver">
+    Another player opens the board and left-clicks the order to deliver everything they carry that it takes, or right-clicks to choose how many. They are paid per unit at once.
+  </Step>
+  <Step title="Collect what was bought">
+    Delivered items go straight to the buyer. Items that did not fit the inventory wait in **My orders**: click **Claim deliveries**.
+  </Step>
+</Steps>
 
-## Delivering
+## Check that it works
 
-Left-click an order to deliver everything you carry that it takes, right-click to choose how many. You cannot deliver to your own order, and an order tied to a job needs that job held and the minimum level. Items leave your inventory first; the unit price is then paid from the hold for each unit, and the items reach the buyer (queued if their inventory is full). Both are told. `delivery-xp` (0) gives job experience per unit in the order's job. `WorkOrderFilledEvent` fires.
+Post an order for 10 cobblestone at a low price with one account and deliver with another (Miner, if you tied it to that job). Both players get a message; the seller is paid and the buyer receives the stone. The order stays under **My orders** for three days after it finishes.
 
-## Closing
+## Going further
 
-Cancelling, expiry or staff removal refunds what was not delivered; staff remove from the admin board. Finished orders stay in **My orders** for `keep-finished` (3 days). Every change is written under a cross-server row lock before money moves, so a delivery, cancel and expiry each move a unit's money once, on any server. A write whose outcome cannot be told pays nobody and is logged for staff.
+### Set the tax and limits
 
-## Server orders
+Run `/jobsadmin`, click **Settings**, then **Work orders**. By default:
 
-`server-orders` (needs the economy feature and a budget): every `interval` (30 minutes) the server looks for items to order, up to `max-open` (5) open at once, each lasting `duration` (1 day). Candidates are `harvest`, `fish`, `smelt` and `craft` targets with an explicit `money` that the market reports as hot (ignored by players, at `hot-from` or more); each asks for one stack at the rule's money times the market rate, reserved against the hour's budget (none with the budget off). Deliveries count as created money and as budget and market volume.
+- The whole price is taken when the order goes up, plus a **posting tax** of 5% on top that is never refunded.
+- Each player may have 5 open orders. Give a rank more with `exyliajobs.orders.limit.<n>`, or no limit with `exyliajobs.orders.limit.unlimited`.
+- At most 2304 units per order, at least 0.01 per unit.
+- An order lasts 3 days by default and 7 at most.
+- **Delivery experience** (0 by default) gives job experience per unit delivered in the order's job.
+
+### What happens when an order ends
+
+Cancelling, expiry or staff removal refunds what was not delivered. Staff remove orders from the admin board: `/jobsadmin`, then **Work orders**.
+
+### Let the server post orders
+
+With the economy guard on and a budget set, the server looks every 30 minutes for items players are ignoring, and posts up to 5 open orders at once, each lasting one day. Each asks for one stack at the job's price times the market rate. Turn it off with **Server orders** in the work order settings. Deliveries count as money created, and as budget and market volume ([Protect your economy](/docs/exyliajobs/economy-guard)).
+
+<Details title="Technical details">
+
+`orders.yml`:
+
+| Key | Default | Meaning |
+|---|---|---|
+| `tax` | 5 | Posting tax as a percentage of the price, charged on top, never refunded. |
+| `duration` | 3d | Default time an order stays up. |
+| `max-duration` | 7d | Longest an order may last. |
+| `limit` | 5 | Open orders per player. |
+| `max-quantity` | 2304 | Most units in one order. |
+| `min-unit-price` | 0.01 | Lowest price per unit. |
+| `delivery-xp` | 0 | Job experience per unit delivered. |
+| `keep-finished` | 3d | How long finished orders stay in **My orders**. |
+| `server-orders.enabled` | true | Whether the server posts orders (needs the economy feature and a budget). |
+| `server-orders.interval` | 30m | How often it looks. |
+| `server-orders.max-open` | 5 | Open server orders at once (per server). |
+| `server-orders.duration` | 1d | How long each lasts. |
+
+An order can ask for a plain item or a custom item id, never a tag. You cannot deliver to your own order, and an order tied to a job needs that job held and the minimum level. Items leave the deliverer's inventory first; the unit price is then paid from the hold for each unit. `WorkOrderFilledEvent` fires.
+
+Every change is written under a cross-server row lock before money moves, so a delivery, cancel and expiry each move a unit's money once, on any server. A write whose outcome cannot be told pays nobody and is logged for staff.
+
+Server order candidates are `harvest`, `fish`, `smelt` and `craft` targets with an explicit `money` that the market reports as hot (ignored by players, at `hot-from` or more); the price is reserved against the hour's budget (none with the budget off).
+</Details>
+
+<Cards>
+  <Card title="Run it on a network" href="/docs/exyliajobs/network">Orders are shared across servers.</Card>
+  <Card title="Permissions" href="/docs/exyliajobs/permissions">Posting and order limits per rank.</Card>
+</Cards>

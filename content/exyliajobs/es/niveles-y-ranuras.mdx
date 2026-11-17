@@ -10,30 +10,68 @@ questions:
 updated: "1.0.0"
 ---
 
-Al final de esta página has elegido cuántos trabajos tienen los jugadores a la vez, cuánto cuesta cambiar y cuándo se pagan las recompensas de nivel.
+Al final de esta página has elegido cuántos trabajos tienen los jugadores a la vez, cuánto cuesta dejar un trabajo y cuándo se pagan las recompensas de nivel.
 
-## Niveles
+## Antes de empezar
 
-La experiencia necesaria para un nivel sale de la `curve` del trabajo ([Trabajos y acciones](/docs/exyliajobs/trabajos-y-acciones)), como mínimo 1. Cada nivel alcanzado lanza `JobLevelUpEvent`, reproduce el efecto de subida de nivel y da las **recompensas de hito** de ese nivel (`rewards:` en el archivo del trabajo, recompensas de ExyliaLib; lo que no cabe en el inventario se pone en cola y se reclama al entrar). En el nivel máximo la experiencia se detiene. `income-bonus` y `xp-bonus` se aplican por nivel por encima de 1.
+Necesitas `exyliajobs.admin` y una idea de la regla que quieres: pocos trabajos por jugador (por defecto 2), todos los trabajos para todos, o una tarifa por cambiar. Si usas una tarifa, debe haber un plugin de economía instalado.
 
-Un hito paga **una vez por jugador y trabajo**: dejar el trabajo, la experiencia conservada y el prestigio nunca lo repiten. Con `milestones.repeat-after-prestige: true` pagan de nuevo en la subida posterior a un prestigio.
+## Pasos
 
-## Apuntarse y dejar un trabajo
+<Steps>
+  <Step title="Abre los ajustes">
+    Ejecuta `/jobsadmin`, haz clic en **Ajustes** y luego en **Trabajos**.
+  </Step>
+  <Step title="Elige las ranuras">
+    Haz clic en **Espacios de trabajo** y fija el número de trabajos que un jugador tiene a la vez (de 1 a 64, por defecto 2). Para dar todos los trabajos a todos sin entrar ni salir, activa en su lugar **Unión automática**.
+  </Step>
+  <Step title="Pon precio a dejar un trabajo">
+    Fija las reglas de salida: **Experiencia conservada** (la parte que se conserva al dejarlo, por defecto el 100%), **Espera al salir** (una espera antes de dejar otro trabajo, por defecto ninguna) y **Coste de salida** (por defecto 0, cobrado en la moneda por defecto).
+  </Step>
+  <Step title="Da más ranuras a un rango">
+    Da al rango `exyliajobs.slots.<n>` en tu plugin de permisos, por ejemplo `exyliajobs.slots.4`. Gana el más alto, y nunca baja el valor configurado.
+  </Step>
+</Steps>
 
-Un jugador tiene trabajos hasta el límite de sus ranuras. Apuntarse es instantáneo. Con todas las ranuras ocupadas, el plugin no rechaza: con un trabajo, pregunta "Leaves X first, keeps N% experience?", y con varios pregunta cuál se va, luego confirma y hace ambas cosas en un solo paso. Dejar un trabajo siempre pregunta antes.
+## Comprueba que funciona
+
+Como jugador ejecuta `/jobs` y entra en trabajos hasta llenar las ranuras. Haz clic en uno más: el plugin no lo rechaza, te pregunta cuál dejar y confirma. Tras dejarlo, vuelve a entrar en el mismo trabajo: tu experiencia vuelve a la parte que conservaste.
+
+## Para ir más allá
+
+### Niveles y recompensas de hito
+
+La experiencia necesaria para cada nivel sale de la curva del trabajo ([Cambia lo que paga un trabajo](/docs/exyliajobs/trabajos-y-acciones)). Cada nivel alcanzado reproduce el efecto de subida y da las **recompensas de hito** de ese nivel; lo que no cabe en el inventario queda en cola y se reclama al entrar. En el nivel máximo la experiencia se detiene. Un hito paga **una vez por jugador y trabajo**: dejar el trabajo, la experiencia conservada y el prestigio nunca lo repiten. Activa `milestones.repeat-after-prestige` para que se paguen de nuevo en la subida tras un prestigio.
+
+### Entrar y salir
+
+Entrar es instantáneo. Con todas las ranuras ocupadas, un jugador con un trabajo ve "¿dejar X primero y conservar N% de experiencia?" y uno con varios elige cuál se va y confirma: las dos cosas pasan en un solo paso. Dejar un trabajo siempre pregunta, con **Dejar** en el centro del trabajo o `/jobs leave <trabajo>`. Una salida bloqueada por la espera o por una tarifa que no puede pagar se rechaza indicando el tiempo o la cantidad.
+
+### Apaga un trabajo sin perder progreso
+
+Desactiva **Activado** en el trabajo. Nadie puede entrar y no paga nada, pero los niveles se conservan.
+
+### Listas de mejores
+
+`/jobs top <trabajo>` (o **Mejores jugadores** en el centro del trabajo) ordena a los jugadores por prestigio, luego nivel y luego experiencia.
+
+<Details title="Detalles técnicos">
 
 | Clave de `config.yml` | Por defecto | Significado |
 |---|---|---|
-| `slots` | 2 | Trabajos que se tienen a la vez (de 1 a 64). |
-| `auto-join` | false | Todos los jugadores tienen todos los trabajos: sin apuntarse, dejarlos ni ranuras. |
-| `leave.kept-xp` | 1.0 | Proporción de la experiencia total del trabajo que se conserva al dejarlo; volver a apuntarse empieza ahí. |
+| `slots` | 2 | Trabajos a la vez (1 a 64). |
+| `auto-join` | false | Cada jugador tiene todos los trabajos: sin entrar, salir ni ranuras. |
+| `leave.kept-xp` | 1.0 | Parte de la experiencia total del trabajo que se conserva al dejarlo; al volver a entrar se empieza ahí. |
 | `leave.cooldown` | 0s | Espera tras dejar un trabajo antes de dejar otro. |
 | `leave.fee` | 0 | Dinero que cuesta dejarlo, en la moneda por defecto; se registra como sumidero. |
+| `milestones.repeat-after-prestige` | false | Los hitos se pagan de nuevo tras un prestigio. |
+| `storage.flush-interval` | 30s | Cada cuánto se escribe el progreso, y al salir un jugador. |
+| `storage.top-refresh` | 1m | Cada cuánto se vuelve a leer la lista de mejores. |
 
-`exyliajobs.slots.<n>` aumenta las ranuras (gana el más alto y nunca baja el valor configurado). Dejar un trabajo bloqueado por el cooldown o por una tarifa que no se puede pagar es una regla real y se rechaza indicando el tiempo o la cantidad. `JobJoinEvent` y `JobLeaveEvent` se pueden cancelar.
+La experiencia de un nivel es como mínimo 1. `income-bonus` y `xp-bonus` se aplican por nivel por encima de 1. Existen `JobLevelUpEvent`, `JobJoinEvent` y `JobLeaveEvent`; los de entrar y salir se pueden cancelar. Mira [API](/docs/exyliajobs/api).
+</Details>
 
-Un trabajo desactivado (`enabled: false`) no permite apuntarse y no paga nada, pero los niveles se conservan.
-
-## Clasificaciones
-
-`/jobs top <job>` ordena a los jugadores por prestigio, luego nivel y luego experiencia. La lista se vuelve a leer cada `storage.top-refresh` (1 minuto). El progreso se escribe cada `storage.flush-interval` (30 segundos) y cuando un jugador se va.
+<Cards>
+  <Card title="Añade ventajas y prestigio" href="/docs/exyliajobs/mejoras-y-prestigio">Lo que eligen los jugadores en niveles altos.</Card>
+  <Card title="Permisos" href="/docs/exyliajobs/permisos">Ranuras, límites de encargos y topes por rango.</Card>
+</Cards>
