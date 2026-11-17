@@ -13,7 +13,7 @@ Follow WRITING.md. ExyliaFFA is the model. One row per plugin; mark done after r
 | `exyliacasino` | `ExyliaCasino` | done |
 | `exyliachatcosmetics` | `ExyliaChatCosmetics` | done |
 | `exyliaclans` | `ExyliaClans` | done |
-| `exyliaclasses` | `ExyliaClasses` | done (notes) |
+| `exyliaclasses` | `ExyliaClasses` | done |
 | `exyliacombat` | `ExyliaCombat` | done |
 | `exyliacrates` | `ExyliaCrates` | done (guide bodies spot-checked only) |
 | `exyliadisplays` | `ExyliaDisplays` | done |
