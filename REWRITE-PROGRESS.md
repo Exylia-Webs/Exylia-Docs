@@ -26,12 +26,12 @@ Follow WRITING.md. ExyliaFFA is the model. One row per plugin; mark done after r
 | `exyliahiteffect` | `ExyliaHitEffect` | todo |
 | `exyliajobs` | `ExyliaJobs` | todo |
 | `exyliajourney` | `ExyliaJourney` | todo |
-| `exyliakillcam` | `ExyliaKillCam` | todo |
+| `exyliakillcam` | `ExyliaKillCam` | done (pages left on old text: see .rewrite-notes) |
 | `exylialobby` | `ExyliaLobby` | todo |
 | `exyliakilleffect` | `ExyliaKillEffect` | todo |
 | `exyliamarket` | `ExyliaMarket` | todo |
 | `exyliamines` | `ExyliaMines` | todo |
-| `exyliamobs` | `ExyliaMobs` | todo |
+| `exyliamobs` | `ExyliaMobs` | done |
 | `exyliaplayervaults` | `ExyliaPlayerVaults` | todo |
 | `exyliapractice` | `ExyliaPracticeCore` | todo |
 | `exyliapracticebot` | `ExyliaPracticeBotV3` | todo |
@@ -41,7 +41,7 @@ Follow WRITING.md. ExyliaFFA is the model. One row per plugin; mark done after r
 | `exyliarewards` | `ExyliaRewards` | todo |
 | `exyliasandbox` | `ExyliaSandBox` | todo |
 | `exyliascreens` | `ExyliaScreens` | todo |
-| `exyliashields` | `ExyliaShields` | todo |
+| `exyliashields` | `ExyliaShields` | done (pages left on old text: see .rewrite-notes) |
 | `exyliaspecials` | `ExyliaSpecials` | todo |
 | `exyliaspawners` | `ExyliaSpawners` | todo |
 | `exyliawarzone` | `ExyliaWarzone` | todo |
