@@ -2,6 +2,12 @@
 title: "API"
 description: "Two services: reading and driving the cosmetics, and the chat this plugin runs when you let it."
 badge: "dev"
+questions:
+  - "Does ExyliaChatCosmetics have an API?"
+  - "How do I grant a cosmetic from my own plugin?"
+  - "How do I check whether a player owns a tag?"
+  - "Which events does ExyliaChatCosmetics fire?"
+updated: "1.3.0"
 ---
 
 ExyliaChatCosmetics publishes two services. `CosmeticsService` is the catalogue, who owns what, what
@@ -11,7 +17,7 @@ the module is switched on.
 
 ```java
 ExyliaAPI.get(CosmeticsService.class).ifPresent(cosmetics ->
-    CosmeticKey.parse("tag:mvp").ifPresent(key ->
+    CosmeticKey.parse("tag:heart").ifPresent(key ->
         cosmetics.grantFor(player.getUniqueId(), key, EntitlementSource.PURCHASE,
                 Duration.ofDays(30), "order-1234", "store")));
 ```
@@ -136,6 +142,14 @@ out its own line. Memory only, and safe from a chat thread.
 | `Component tag(Player player)` | Their equipped tag inside its format. Empty when they wear none. |
 | `Component nick(Player player)` | Their name in their nick or rank colour. |
 | `Component styleMessage(Player player, String message)` | Text in their font, decorations and colour. |
+| `Component prefix(Player player)` | Their rank prefix, repainted in the rank colour they wear. Empty when their rank writes none. |
+| `Component suffix(Player player)` | Their rank suffix, in the same colour as the prefix. |
+| `Component preview(Player player, Collection<CosmeticKey> tryOn, String message)` | The whole chat line with the `tryOn` cosmetics shown in place of what they wear; an empty collection draws the line as it is. |
+
+Two more methods open screens: `void openMenu(Player player)` opens the main cosmetics menu
+(the one `/cosmetics` opens) and `boolean openCatalogue(Player player, String type)` opens the
+catalogue of one type, `false` when the type does not exist. Neither checks a permission; you have
+already decided the player should see it.
 
 `styleMessage` takes text rather than a component because the cosmetics *are* the styling: whatever
 you pass is restyled whole. It is what `chat.hook: off` expects you to call — see
@@ -172,6 +186,7 @@ ExyliaAPI.get(ChatService.class)
 | Method | What it does |
 |---|---|
 | `boolean speak(Player sender, String channelId, String text)` | Says something on a player's behalf. The whole pipeline runs — the gate, the filter, their cosmetics, the format — on a thread of its own, and the call returns immediately. `false` only when the channel does not exist. |
+| `boolean whisper(Player sender, String receiver, String text)` | Sends a private message as `/msg` would, `receiver` being the name typed after it. `false` when the module is off or whispers are switched off on this server. |
 | `boolean send(String channelId, Component line)` | A line from the server to everybody reading a channel. Sent as it is: no format, no filter, no cosmetics. |
 
 The difference matters. `speak` is for a message a player is responsible for, and a message the filter
@@ -201,7 +216,7 @@ trade request or a duel challenge should honour an ignore the same way a whisper
 
 ### `CosmeticKey`
 
-`type` and `id`: `tag:mvp`, `chat_color:aurora`, `customtag:42`.
+`type` and `id`: `tag:heart`, `chat_color:aurora`, `customtag:42`.
 
 Both halves are normalised on construction — lower case, spaces to underscores, and anything that is
 not a letter, a digit, an underscore or a dash dropped. That happens in the record rather than only
@@ -357,7 +372,7 @@ A store plugin selling a tag for thirty days, and handing it back on a chargebac
 ```java
 public void onPurchase(UUID buyer, String orderId) {
     ExyliaAPI.get(CosmeticsService.class).ifPresentOrElse(cosmetics ->
-            CosmeticKey.parse("tag:mvp").ifPresent(key ->
+            CosmeticKey.parse("tag:heart").ifPresent(key ->
                     cosmetics.grantFor(buyer, key, EntitlementSource.PURCHASE,
                                     Duration.ofDays(30), orderId, "MyStore")
                              .thenAccept(grant -> log(orderId, grant.id()))
@@ -370,7 +385,7 @@ public void onPurchase(UUID buyer, String orderId) {
 
 public void onChargeback(UUID buyer) {
     ExyliaAPI.get(CosmeticsService.class).ifPresent(cosmetics ->
-            CosmeticKey.parse("tag:mvp").ifPresent(key ->
+            CosmeticKey.parse("tag:heart").ifPresent(key ->
                     cosmetics.revokeAll(buyer, key, EntitlementSource.PURCHASE)));
 }
 ```
