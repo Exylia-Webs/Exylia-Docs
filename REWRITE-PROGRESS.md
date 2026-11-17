@@ -40,7 +40,7 @@ Follow WRITING.md. ExyliaFFA is the model. One row per plugin; mark done after r
 | `exyliarandomkits` | `ExyliaRandomKitsCore` | done (notes) |
 | `exyliarewards` | `ExyliaRewards` | done (faq lacks battle pass) |
 | `exyliasandbox` | `ExyliaSandBox` | done |
-| `exyliascreens` | `ExyliaScreens` | done (config/faq pending, importer unverified) |
+| `exyliascreens` | `ExyliaScreens` | done |
 | `exyliashields` | `ExyliaShields` | done |
 | `exyliaspecials` | `ExyliaSpecials` | done |
 | `exyliaspawners` | `ExyliaSpawners` | done (faq/api not rechecked) |
