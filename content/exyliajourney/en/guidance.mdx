@@ -10,9 +10,194 @@ questions:
 updated: "1.0.0"
 ---
 
-Guidance is everything that shows a player where to go while a step runs. Every piece is drawn for that
-player alone — a hundred new players crossing the same square each see only their own beacon — and each one
-can be switched off per step and per player.
+By the end of this page a step shows the player where to go: a beam of light over the place, footprints along
+a path, text with the distance, and a glow on the NPC to talk to. Every piece is drawn for that player alone (a
+hundred new players crossing the same square each see only their own beacon) and each one can be switched off
+per step and per player.
+
+## Before you start
+
+You need a journey with a step: see [Add steps and objectives](/docs/exyliajourney/steps). Without a
+target (a place or an NPC) there is nothing to point at; a step with no target still shows its text and
+trail.
+
+## Steps
+
+<Steps>
+  <Step title="Open the step's guidance">
+    Run `/journeyadmin`, click your journey, **Steps**, the step, then **Guidance**.
+  </Step>
+  <Step title="Point at a place">
+    Click **Target** and stand where the beacon should be. A step that asks to reach a place or talk to an NPC
+    already has a target, so you can skip this.
+  </Step>
+  <Step title="Pick what shows">
+    Click **Beacon**, **Waypoint** and **Glow** to switch each on or off. **Text panel**, **Panel lines** and
+    **Panel place** change the text shown for the step.
+  </Step>
+  <Step title="Add a trail">
+    Click **Trail** and choose a recorded route. No route yet? Record one first, see
+    [Recording a route](#recording-a-route).
+  </Step>
+  <Step title="Play a cinematic when the step starts">
+    Click **Cinematic** and pick one. The step does not wait for it.
+  </Step>
+</Steps>
+
+## Check that it works
+
+Click **Test from here** on the step (or **Preview as a player**). You should see the beam over the target
+with its distance, the step text, and footprints leading to it. Walk away and the way-back markers point to
+the route; stand idle for 45 seconds and the beacon pulses with a hint.
+
+## Going further
+
+### The target
+
+The beacon, the waypoint, the glow and the distance on the panel all point at the step's **target**:
+
+1. `guidance.target`, when set;
+2. otherwise the objective's `location` (a `REACH`, or any objective limited to a place);
+3. otherwise, for `INTERACT_NPC`, where that NPC stands, and it follows the NPC if it moves.
+
+A step with none of these has no beacon, waypoint or distance; its text and trail still show.
+
+### Text
+
+The step tracker is a boss bar at the top of the screen with the journey, the step and how far along it is.
+Where the step's full text (journey, step number, title, description, the extra `lines`, progress and
+distance to the target, or *Head to `<world>`* in another world) shows is the server's choice,
+`guide.step-text` in `config.yml`. Change it in game with **Settings**, **Guidance**, **Step text** (the
+journeys list's settings hub, see [The editor](/docs/exyliajourney/editor)):
+
+| `guide.step-text` | What it is |
+|---|---|
+| `PANEL` (default) | A small subtitle riding the player's view near the bottom of the screen, above the hotbar, like a cinematic subtitle. It goes down while a cinematic plays and comes back after it. |
+| `TRACKER` | A quest tracker on the left edge of the screen. Players can hide it in `/settings`. |
+| `CHAT` | Told in chat once when the step starts. Bedrock players and servers without PacketEvents always get this. |
+
+The text updates in place as progress changes. There is **no panel behind it by default**
+(`guide.panel-background-opacity: 0`); raise it to draw one. The text is hidden while a conversation plays.
+The same settings page has **Tracker colour** and **Footprints**. Colours follow
+[Colours](/docs/exylialib/colours).
+
+A step's text mode (**Text panel** in the editor, `guidance.text.mode` in the file) adds to that:
+
+| Mode | What it is |
+|---|---|
+| `COMPANION` (default) | Only the tracker and text above. |
+| `ANCHORED` | Also a sign standing at a place, always facing the player and growing with distance so it stays readable from across a square. It stands at `anchor` (**Panel place**), or over the target when there is no anchor. |
+
+Sizes, distances, backgrounds and line widths are in
+[Configuration](/docs/exyliajourney/configuration#guide); the text's lines are in `messages.yml`
+(`guide.panel-*`), see [Messages and languages](/docs/exylialib/messages-and-languages).
+
+### Beacon
+
+A beam of light over the target, outlined in the step's `color` (a palette token such as `{accent}` or
+`#rrggbb`), with a label showing `label`, or the step title when blank, and the distance in metres. It is
+drawn at full brightness so it reads at night and through terrain.
+
+Beyond the player's view distance the beam is replaced by a short stand-in a few blocks ahead in the
+target's direction (`beacon-marker-distance`, 30), so it reads as a mark on the horizon. Nothing is drawn
+while the target is in another world. When a hint is sent, the beam pulses.
+
+### Trail and routes
+
+A trail is a line of small glowing markers on the ground along a recorded **route**, drawn only from the
+point nearest the player to `ahead` blocks along it (14 by default, at least 4). Walking costs one marker
+appearing ahead and one disappearing behind. A player who strays more than `trail-off-route` blocks (6)
+from the route sees a short line of way-back markers pointing back to it.
+
+### Recording a route
+
+<Steps>
+  <Step title="Start">
+    Run `/journeyadmin route record <id>`, or in `/journeyadmin` click **Routes**, then **Record route**.
+  </Step>
+  <Step title="Walk it">
+    A point is recorded every 1.5 blocks and the path is drawn behind you as you go.
+  </Step>
+  <Step title="Stop">
+    Sneak twice quickly, or run `/journeyadmin route stop`. The path is thinned and saved to
+    `routes/<id>.yml`.
+  </Step>
+</Steps>
+
+**Generate route** on the same list makes one for you, and a route's screen has **Preview** (draws it for ten
+seconds, like `/journeyadmin route preview <id>`), **Record again**, **Extend** and **Reverse**. A route needs
+at least two points. `route-simplify` in `config.yml` (0.4 blocks) thins it further before it is drawn.
+
+<Details title="Route and trail files">
+
+```yaml
+# routes/spawn-path.yml: a world and a list of points; can be written by hand
+world: world
+points:
+  - 0.5,64.0,0.5
+  - 6.2,64.0,3.1
+  - 12.0,65.0,4.8
+```
+
+```yaml
+# on the step
+trail:
+  route: spawn-path
+  ahead: 14
+```
+
+</Details>
+
+### Waypoint
+
+The waypoint puts a mark at the target:
+
+- on the vanilla **locator bar**, when the server and the player's client are both 1.21.6 or newer and the
+  installed PacketEvents knows the packet;
+- as a **minimap waypoint** for players on Lunar or Feather.
+
+It is shown only while the player has the beacon switched on, and is removed while they are in another
+world than the target.
+
+### Glow
+
+The glow outlines the thing to act on, for that player alone, in `glow-color`:
+
+- the NPC of an `INTERACT_NPC` step: this plugin's, ExyliaDisplays' or any other plugin's;
+- the target block of an `INTERACT_BLOCK` or `BREAK_BLOCK` step that has a place, through terrain.
+
+### Cinematic
+
+`cinematic: <id>` plays that cinematic when the step starts. Unlike a `WATCH_CINEMATIC` objective, the step
+does not wait for it. See [Create a cinematic](/docs/exyliajourney/cinematics).
+
+### Hints
+
+A player idle on a step for its `hint-after` (45 s by default) gets the step's `hint` in chat, once per step,
+with the beacon pulsing and the hint sound. *Idle* means no progress on that step. A step with no `hint`
+of its own sends a line pointing at `/journey`.
+
+### Each player's switches
+
+Players choose what they see from `/journey`, or ExyliaLib's `/settings` under **Journey guidance**:
+
+| Switch | Turns off |
+|---|---|
+| Tracker | The step text (panel or tracker). |
+| Beacon | The beam and the waypoint. |
+| Trail | The trail. |
+| Journey sounds | The step sound and the hint sound. |
+
+`/journey hide` hides all guidance at once and shows it again. Progress counts either way.
+
+### Without PacketEvents, and on Bedrock
+
+Without PacketEvents, and always for Bedrock players one by one, guidance is drawn with what every client
+understands: the step in chat when it starts, one action bar segment with the title, progress and distance, a
+particle column over the target (or a particle mark towards it when far) and particle footprints along the
+trail. There is no waypoint and no glow. See [Installation](/docs/exyliajourney/installation#packetevents).
+
+<Details title="Guidance in the step file">
 
 ```yaml
 guidance:
@@ -38,141 +223,9 @@ A step with no `guidance` section gets the defaults: tracker and text, beacon, w
 no cinematic. `text: false` and `beacon: false` switch one piece off; `trail: spawn-path` is the short form
 of a trail.
 
-## The target
+</Details>
 
-The beacon, the waypoint, the glow and the distance on the panel all point at the step's **target**:
-
-1. `guidance.target`, when set;
-2. otherwise the objective's `location` (a `REACH`, or any objective limited to a place);
-3. otherwise, for `INTERACT_NPC`, where that NPC stands — and it follows the NPC if it moves.
-
-A step with none of these has no beacon, waypoint or distance; its text and trail still show.
-
-## Text
-
-The step tracker is a boss bar at the top of the screen with the journey, the step and how far along it is.
-Where the step's full text (journey, step number, title, description, the extra `lines`, progress and
-distance to the target — or *Head to `<world>`* in another world) shows is the server's choice,
-`guide.step-text` in `config.yml`, and can be changed from the in-game [settings](/docs/exyliajourney/editor):
-
-| `guide.step-text` | What it is |
-|---|---|
-| `PANEL` (default) | A small subtitle riding the player's view near the bottom of the screen, above the hotbar, like a cinematic subtitle. It goes down while a cinematic plays and comes back after it. |
-| `TRACKER` | A quest tracker on the left edge of the screen. Players can hide it in `/settings`. |
-| `CHAT` | Told in chat once when the step starts. Bedrock players and servers without PacketEvents always get this. |
-
-The text updates in place as progress changes. There is **no panel behind it by default**
-(`guide.panel-background-opacity: 0`); raise it to draw one. The text is hidden while a conversation plays.
-
-A step's `guidance.text.mode` adds to that:
-
-| Mode | What it is |
-|---|---|
-| `COMPANION` (default) | Only the tracker and text above. |
-| `ANCHORED` | Also a sign standing at a place, always facing the player and growing with distance so it stays readable from across a square. It stands at `anchor`, or over the target when there is no anchor. |
-
-Sizes, distances, backgrounds and line widths are in
-[Configuration](/docs/exyliajourney/configuration#guide); the text's lines are in `messages.yml`
-(`guide.panel-*`).
-
-## Beacon
-
-A beam of light over the target, outlined in the step's `color` (a palette token such as `{accent}` or
-`#rrggbb`), with a label showing `label` — or the step title when blank — and the distance in metres. It is
-drawn at full brightness so it reads at night and through terrain.
-
-Beyond the player's view distance the beam is replaced by a short stand-in a few blocks ahead in the
-target's direction (`beacon-marker-distance`, 30), so it reads as a mark on the horizon. Nothing is drawn
-while the target is in another world. When a hint is sent, the beam pulses.
-
-## Trail and routes
-
-A trail is a line of small glowing markers on the ground along a recorded **route**, drawn only from the
-point nearest the player to `ahead` blocks along it (14 by default, at least 4). Walking costs one marker
-appearing ahead and one disappearing behind. A player who strays more than `trail-off-route` blocks (6)
-from the route sees a short line of way-back markers pointing back to it.
-
-```yaml
-trail:
-  route: spawn-path
-  ahead: 14
-```
-
-### Recording a route
-
-<Steps>
-  <Step title="Start">
-    `/journeyadmin route record <id>`, or **RECORD ROUTE** in the editor's route list.
-  </Step>
-  <Step title="Walk it">
-    A point is recorded every 1.5 blocks and the path is drawn behind you as you go.
-  </Step>
-  <Step title="Stop">
-    Sneak twice quickly, or `/journeyadmin route stop`. The path is thinned and saved to
-    `routes/<id>.yml`.
-  </Step>
-</Steps>
-
-`/journeyadmin route preview <id>` draws a saved route for ten seconds. A route file is a world and a list
-of points; it can be written by hand too:
-
-```yaml
-world: world
-points:
-  - 0.5,64.0,0.5
-  - 6.2,64.0,3.1
-  - 12.0,65.0,4.8
-```
-
-A route needs at least two points. `route-simplify` in `config.yml` (0.4 blocks) thins it further before it
-is drawn.
-
-## Waypoint
-
-`waypoint: true` puts a mark at the target:
-
-- on the vanilla **locator bar**, when the server and the player's client are both 1.21.6 or newer and the
-  installed PacketEvents knows the packet;
-- as a **minimap waypoint** for players on Lunar or Feather.
-
-It is shown only while the player has the beacon switched on, and is removed while they are in another
-world than the target.
-
-## Glow
-
-`glow: true` outlines the thing to act on, for that player alone, in `glow-color`:
-
-- the NPC of an `INTERACT_NPC` step — this plugin's, ExyliaDisplays' or any other plugin's;
-- the target block of an `INTERACT_BLOCK` or `BREAK_BLOCK` step that has a place, through terrain.
-
-## Cinematic
-
-`cinematic: <id>` plays that cinematic when the step starts. Unlike a `WATCH_CINEMATIC` objective, the step
-does not wait for it. See [Cinematics](/docs/exyliajourney/cinematics).
-
-## Hints
-
-A player idle on a step for its `hint-after` (45 s by default) gets the step's `hint` in chat, once per step,
-with the beacon pulsing and the hint sound. *Idle* means no progress on that step. A step with no `hint`
-of its own sends a line pointing at `/journey`.
-
-## Each player's switches
-
-Players choose what they see from `/journey`, or ExyliaLib's `/settings` under **Journey guidance**:
-
-| Switch | Turns off |
-|---|---|
-| Tracker | The step text (panel or tracker). |
-| Beacon | The beam and the waypoint. |
-| Trail | The trail. |
-| Journey sounds | The step sound and the hint sound. |
-
-`/journey hide` hides all guidance at once and shows it again. Progress counts either way.
-
-## Without PacketEvents, and on Bedrock
-
-Without PacketEvents — and always for Bedrock players, one by one — guidance is drawn with what every
-client understands: the step in chat when it starts, one action bar segment with the title, progress and
-distance, a particle column over the target (or a particle mark towards it when far) and particle
-footprints along the trail. There is no waypoint and no glow. See
-[Installation](/docs/exyliajourney/installation#packetevents).
+<Cards>
+  <Card title="Keep players focused" href="/docs/exyliajourney/focus-mode">Hide other players and hold a player on the step.</Card>
+  <Card title="Create a cinematic" href="/docs/exyliajourney/cinematics">Open a step with a camera flight.</Card>
+</Cards>
