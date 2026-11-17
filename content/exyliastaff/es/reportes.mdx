@@ -1,36 +1,56 @@
 ---
 title: "Gestiona los reportes de jugadores"
-description: "Deja que los jugadores se reporten entre sí y revisa, reclama y cierra los reportes desde la cola con prioridades."
+description: "Deja que los jugadores se reporten entre sí y revisa, resuelve y descarta reportes desde una cola ordenada por prioridad."
 questions:
   - "¿Cómo reportan los jugadores a alguien?"
   - "¿Cómo responde el staff a los reportes?"
   - "¿Cómo limito cada cuánto pueden reportar los jugadores?"
+  - "¿Cómo añado o cambio un motivo de reporte?"
 updated: "1.8.0"
 ---
 
-Un jugador reporta a otro con `/report`, eligiendo un motivo de un menú o escribiéndolo. El staff de
-todos los servidores recibe una alerta clicable, y `/reports` lista lo que está abierto por prioridad,
-la más alta primero.
+Un jugador ejecuta `/report <jugador>` y elige un motivo en una pantalla. El staff de todos los servidores recibe un aviso clicable y `/reports` lista lo abierto con la prioridad más alta primero, para que el caso más grave nunca quede al final.
 
-Id de módulo `reports`, interruptor `modules.reports`, archivos en `modules/reports/`.
+## Antes de empezar
 
-## Reportar
+- Los jugadores necesitan `exyliastaff.report`. El staff que revisa necesita `exyliastaff.reports.manage`.
+- El interruptor del módulo es `modules.reports` en `plugins/ExyliaStaff/config.yml`.
+- Opcional: el módulo de [repeticiones](/docs/exyliastaff/repeticiones) adjunta a cada reporte el último minuto del jugador reportado.
 
-| Comando | Permiso | Qué hace |
-|---|---|---|
-| `/report <player>` | `exyliastaff.report` | Abre el menú de motivos; los clientes con menús de pantalla lo reciben como pantalla (`screens/report_reasons.html`) con los mismos motivos, y el menú de cofre en otro caso. |
-| `/report <player> <reason>` | `exyliastaff.report` | Lo envía. Un id de motivo como `cheating` se convierte en ese motivo; cualquier otro texto se conserva tal cual, sin colores. |
+## Pasos
 
-Solo se puede reportar a jugadores conectados. Un reporte se rechaza, en este orden, cuando quien
-reporta se nombra a sí mismo, el objetivo tiene `exyliastaff.staff` y `allow-report-staff` está
-desactivado, quien reporta sigue dentro de los `cooldown-seconds` desde su último reporte, o ya tiene
-`max-open-per-reporter` reportes abiertos. Nada impide que el mismo jugador reporte dos veces al mismo
-objetivo.
+<Steps>
+  <Step title="Un jugador reporta">
+    El jugador ejecuta `/report <jugador>`. Se abre un menú titulado "Reportar a" y el nombre del jugador, con una tarjeta por motivo (Cheating, Exploiting, Griefing, Toxicity y Other por defecto), cada una con su icono y una línea de descripción. Al hacer clic en una tarjeta se envía el reporte. Los jugadores con clientes de menús de pantalla reciben los mismos motivos como pantalla en vez de menú de cofre. Para saltarte el menú, escribe el motivo: `/report <jugador> cheating`. Cualquier otro texto se conserva tal cual, sin colores.
+  </Step>
+  <Step title="Se avisa al staff">
+    Todo el staff conectado con `exyliastaff.reports.manage`, en cualquier servidor, recibe un mensaje con tres botones: **[ ✦ Abrir ]** (los reportes de ese jugador), **[ ➥ Teletransportar ]** (en servicio, como `/tpstaff`) y **[ ▶ Replay ]**. Los reportes urgentes suenan distinto.
+  </Step>
+  <Step title="Revisa la cola">
+    Ejecuta `/reports`, o haz clic en la pólvora de blaze **REPORTES** (casilla 12) de la barra del [modo staff](/docs/exyliastaff/modo-staff). `/reports <jugador>` abre los reportes abiertos de ese jugador, esté conectado o no.
+  </Step>
+  <Step title="Cierra cada reporte">
+    Clic derecho en un reporte para **resolverlo**, Shift + clic derecho para **descartarlo**. Ambos lo quitan de la cola y registran quién lo hizo.
+  </Step>
+</Steps>
 
-## Prioridad
+## Comprueba que funciona
 
-Cada motivo tiene un `weight`. La puntuación de un reporte es ese peso, más uno por cada otro reporte
-abierto contra el mismo objetivo, hasta tres. El texto libre pesa 1.
+Como jugador ejecuta `/report <alguien conectado>` y elige **Toxicity**. Como staff debes ver el aviso, y `/reports` debe listar una cabeza con el nombre del jugador reportado, con el motivo, la prioridad y la antigüedad.
+
+## Ir más allá
+
+### A quién se puede reportar y cada cuánto
+
+Solo se puede reportar a jugadores conectados. Un reporte se rechaza, en este orden, cuando quien reporta se nombra a sí mismo, el objetivo tiene `exyliastaff.staff` y `allow-report-staff` está desactivado, quien reporta sigue dentro de `cooldown-seconds` desde su último reporte, o ya tiene `max-open-per-reporter` reportes abiertos. Nada impide que dos jugadores reporten al mismo objetivo. Un rango recibe su propia espera con `exyliastaff.report.cooldown.<segundos>`; gana la más baja que tenga.
+
+### Añade o cambia un motivo
+
+Los motivos son `reasons.<id>` en `modules/reports/config.yml`: un `name`, una `description`, un `icon` (un material) y un `weight` de 1 a 5. Añade un bloque, recarga y aparece como tarjeta en la pantalla de reporte. La lista `punish-reasons` nombra ids de motivos de [sanción](/docs/exyliastaff/sanciones) que [Exylia Staff Web](/docs/exyliastaff/staff-web) sugiere cuando se actúa sobre un reporte con ese motivo.
+
+### Cómo se calcula la prioridad
+
+La puntuación de un reporte es el `weight` de su motivo más uno por cada otro reporte abierto contra el mismo objetivo, hasta tres extra. El texto libre pesa 1. La puntuación se calcula al mostrarla y nunca se guarda, así que cambiar un peso reordena la cola al instante.
 
 | Puntuación | Nivel |
 |---|---|
@@ -39,41 +59,32 @@ abierto contra el mismo objetivo, hasta tres. El texto libre pesa 1.
 | 3 o 4 | `NORMAL` |
 | menos de 3 | `LOW` |
 
-La puntuación se calcula al leerla, nunca se guarda, así que cambiar un peso reordena los reportes
-abiertos. Las alertas `HIGH` y `CRITICAL` reproducen `alert-urgent` en lugar de `alert`.
+Los reportes `HIGH` y `CRITICAL` usan `alert-urgent` en lugar de `alert`.
 
-## Revisar
+### Clics en los menús
 
-`/reports`, con `exyliastaff.reports.manage`, abre la lista; `/reports <player>` abre los reportes
-abiertos de ese jugador, esté conectado, en otro servidor o ya se haya ido. El polvo de blaze de la
-hotbar abre la lista. Las alertas llegan a todos los miembros del staff conectados con el mismo
-permiso en todos los servidores, y terminan con tres botones: **Open** para sus reportes,
-**Teleport** para ir de servicio con `/tpstaff`, y **▶ Replay**, que ejecuta `/reports replay <id>`.
+| Pantalla | Clics |
+|---|---|
+| Lista (**REPORTES**) | Izquierdo: los reportes de ese jugador. Shift + izquierdo: ver la replay. Derecho: resolver. Shift + derecho: descartar. |
+| Reportes de un jugador | Izquierdo: teletransportarte, siguiéndolo hasta su servidor. Shift + izquierdo: ir en servicio. Derecho: resolver. Shift + derecho: descartar. Central: todo lo presentado contra él. Soltar (Q): ver la replay. |
 
-| Pantalla | Filas | Clics |
-|---|---|---|
-| Lista | Una cabeza por reporte abierto, en el orden elegido | Izquierdo: los reportes del jugador. Shift izquierdo: ver la repetición. Derecho: resolver. Shift derecho: descartar. |
-| Jugador | Todos los reportes abiertos contra él | Izquierdo: teletransportarse, siguiéndolo a su servidor. Shift izquierdo: teletransportarse de servicio. Derecho: resolver. Shift derecho: descartar. Central: todo lo que se ha presentado contra él. Q: ver la repetición. |
+La lista también tiene **Filtro** (escribe un nombre), **Historial** (escribe un nombre), **Resolver todo**, **Descartar todo** y **Orden**: clic izquierdo para el siguiente orden, clic derecho para el anterior. Los órdenes son prioridad, más recientes, más antiguos y más reportados (agrupa los reportes de un mismo jugador). Cada miembro del staff conserva el suyo, prioridad hasta que lo cambie. La pantalla del jugador tiene un botón **Replays** con toda la lista de replays de ese jugador.
 
-La lista también tiene **Resolve all** (resolver todos) y **Dismiss all** (descartar todos), un
-catalejo que pide un nombre, y un botón **Order**: clic izquierdo para el orden siguiente, clic
-derecho para el anterior. Los órdenes son prioridad, más recientes, más antiguos y más reportados, que
-agrupa los reportes sobre un mismo jugador; cada miembro del staff conserva el suyo, prioridad hasta
-que lo cambie. La pantalla del jugador tiene un botón **Replays** con toda la lista de repeticiones de
-ese jugador.
+### Repeticiones
 
-## Repeticiones
+Con el módulo de [repeticiones](/docs/exyliastaff/repeticiones) activo, el minuto anterior a un reporte se guarda en el momento de enviarlo, si el jugador reportado está en el servidor de quien reporta. Cada botón de replay abre esa; si no hay (no se grabó o aún se está escribiendo) abre la lista de replays del jugador. Verla exige también `exyliastaff.replay`.
 
-Con el módulo de [repeticiones](/docs/exyliastaff/repeticiones) activado, el minuto anterior a un
-reporte se guarda en el momento en que se presenta, cuando el jugador reportado está en el servidor de
-quien reporta. Cada botón de repetición abre esa; cuando falta, porque no se le grabó o todavía se está
-escribiendo, el botón abre en su lugar la lista de repeticiones del jugador. Para verlas también hace
-falta `exyliastaff.replay`. Resolver y descartar cierran ambos el reporte, registrando quién lo hizo;
-solo difieren en el estado que se conserva para el historial. No hay paso de reclamación, y a quien
-reportó no se le avisa cuando su reporte se cierra. Las filas cerradas se quedan en `staff_reports`
-para siempre.
+### Qué pasa con los reportes antiguos
 
-## Configuración
+No hay paso de reclamar, y a quien reportó no se le avisa cuando se cierra su reporte. Un reporte que nadie atendió se cierra solo tras `expire-days` (3 por defecto): sale de la cola pero queda en el historial del jugador, así que un reincidente lo sigue mostrando. `0` mantiene los reportes abiertos para siempre. Las filas cerradas se conservan en la base de datos.
+
+## Comandos y permisos
+
+<Commands group="reports" />
+
+<Permissions group="reports" />
+
+<Details title="Configuración y mensajes">
 
 ```yaml title="plugins/ExyliaStaff/modules/reports/config.yml"
 reasons:
@@ -117,6 +128,7 @@ reasons:
 cooldown-seconds: 60
 allow-report-staff: false
 max-open-per-reporter: 3
+expire-days: 3
 alert:
   sound:
     name: BLOCK_NOTE_BLOCK_PLING
@@ -130,29 +142,22 @@ alert-urgent:
 | Clave | Por defecto | Qué hace |
 |---|---|---|
 | `reasons.<id>.name` | | Se muestra en el menú y se guarda en el reporte. Texto plano. |
-| `reasons.<id>.weight` | | La puntuación base. |
-| `reasons.<id>.punish-reasons` | | Ids de motivo de [sanción](/docs/exyliastaff/sanciones) que la web sugiere al actuar sobre un reporte con este motivo, el más adecuado primero. Vacío no sugiere ninguno. |
-| `cooldown-seconds` | `60` | Entre dos reportes del mismo jugador. Por debajo de cinco minutos no se conserva tras un reinicio. Un rango tiene la suya propia con `exyliastaff.report.cooldown.<seconds>`; gana la más baja que tenga. |
-| `allow-report-staff` | `false` | Permite a los jugadores reportar a alguien con `exyliastaff.staff`. |
+| `reasons.<id>.weight` | | La puntuación base, de 1 a 5. |
+| `reasons.<id>.punish-reasons` | | Ids de motivos de sanción que sugiere la web, el mejor primero. Vacío no sugiere ninguno. |
+| `cooldown-seconds` | `60` | Espera entre dos reportes de un mismo jugador. Por debajo de cinco minutos no se conserva tras un reinicio. |
+| `allow-report-staff` | `false` | Permite reportar a alguien con `exyliastaff.staff`. |
 | `max-open-per-reporter` | `3` | Reportes abiertos que puede tener un jugador. `0` para no limitar. |
-| `alert`, `alert-urgent` | | Efectos de la librería para el staff, en todos los servidores. |
+| `expire-days` | `3` | Días antes de que un reporte desatendido se cierre solo. `0` nunca. |
+| `alert`, `alert-urgent` | | Efectos que oye el staff de todos los servidores. |
 
-## Mensajes
+La pantalla de reporte para clientes con menús de pantalla es `screens/report_reasons.html` en la carpeta del plugin; sus textos están en `lang/<idioma>/screens/report_reasons.yml`, su aspecto en `theme.css` y tus propias reglas van en `custom.css` (mira las [pantallas de ExyliaLib](/docs/exylialib/pantallas)). Lee los motivos de esta config, así que no necesita cambios propios.
 
-`lang/<language>/modules/reports/messages.yml`: `submitted`, `self`, `staff-protected`, `cooldown` con `%time%`,
-`too-many-open` con `%count%`; `alert-header`, `alert-line` y `alert-actions` con `%id%`,
-`%reporter%`, `%target%`, `%reason%`, `%server%`, `%priority%` y `%priority_score%`, el último una
-fila clicable que puedes dejar vacía; `resolved` y `dismissed` con `%id%`; `closed-all`; `not-found`;
-`target-offline`, `teleported`, `following`; `filter-prompt`, `history-prompt`; `no-reports`,
-`no-history`; `no-permission-for-player`; `no-handler`, quién cerró un reporte cuando nadie lo hizo;
-`no-replay`, que se envía cuando no se puede abrir ninguna repetición; y `sorts`, los nombres de los
-cuatro órdenes, `priority`, `newest`, `oldest` y `most-reported`.
+Los mensajes están en `lang/<idioma>/modules/reports/messages.yml`: `submitted`, `self`, `staff-protected`, `cooldown` (`%time%`), `too-many-open` (`%count%`); `alert-header`, `alert-line` y `alert-actions` (`%id%`, `%reporter%`, `%target%`, `%reason%`, `%server%`, `%priority%`, `%priority_score%`; la última es una fila clicable que puedes vaciar); `resolved` y `dismissed` (`%id%`); `closed-all`; `not-found`; `target-offline`, `teleported`, `following`; `filter-prompt`, `history-prompt`; `no-reports`, `no-history`; `no-permission-for-player`; `no-handler`; `no-replay`; y `sorts`, los nombres de los cuatro órdenes. Mira los [mensajes de ExyliaLib](/docs/exylialib/mensajes-e-idiomas), los [menús](/docs/exylialib/menus) y los [colores](/docs/exylialib/colores). Otros plugins pueden crear o rechazar reportes; mira la [API](/docs/exyliastaff/api#reportes).
 
-Otros plugins pueden presentar reportes y rechazarlos antes de que se guarden; consulta la
-[API](/docs/exyliastaff/api#reportes).
+<Placeholders group="reports" />
 
-## Placeholders
+</Details>
 
-| Placeholder | Valor |
-|---|---|
-| `%staff_reports_open%` | Reportes abiertos en la red. |
+<Cards>
+  <Card title="Siguiente: Atiende las peticiones de ayuda" href="/docs/exyliastaff/helpop">La otra cola: jugadores que piden ayuda.</Card>
+</Cards>

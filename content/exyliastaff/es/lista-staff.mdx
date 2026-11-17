@@ -1,49 +1,78 @@
 ---
 title: "Muestra quién está de servicio"
-description: "Lista el staff conectado en toda la red, agrupado por servidor, con marcas de vanish y modo staff para quien pueda verlas."
+description: "Lista el staff conectado en toda la red, agrupado por servidor, con marcas de vanish y modo staff para quien puede verlas."
 questions:
   - "¿Cómo veo qué staff está conectado?"
   - "¿La lista de staff muestra al staff en vanish?"
   - "¿La lista de staff puede mostrar otros servidores?"
+  - "¿Cómo aviso cuando el staff entra o sale?"
 updated: "1.8.0"
 ---
 
-`/stafflist`, o `/slist`, con `exyliastaff.stafflist`, imprime a todos los jugadores conectados con
-`exyliastaff.staff` en todos los servidores, un bloque por servidor en orden alfabético. La cabeza de
-la hotbar lo ejecuta, y la consola también puede.
+`/stafflist` muestra a todo el staff conectado en todos los servidores de tu red, un bloque por servidor en orden alfabético. El staff también recibe una línea corta cuando un compañero se conecta, se desconecta o cambia de servidor.
 
-Id de módulo `stafflist`, interruptor `modules.staff-list`, archivos en `modules/stafflist/`.
+## Antes de empezar
 
-## Presencia
+- Da al rango `exyliastaff.stafflist` para ver la lista. Un jugador sale en ella cuando tiene `exyliastaff.staff`; es lo único que lo hace "staff" aquí.
+- El interruptor del módulo es `modules.staff-list` en `plugins/ExyliaStaff/config.yml`. Los servidores comparten la lista por Redis, como el resto de funciones de red.
 
-Aparecer en la lista significa estar conectado con `exyliastaff.staff`. Nada más: el AFK no se
-controla aquí. Cada servidor publica su lista en el canal `presence` cuando un miembro del staff entra
-o sale y cada `heartbeat-seconds`; un servidor del que no se sabe nada durante `expire-seconds` se
-descarta. La desactivación del módulo envía una lista vacía para que los demás descarten el servidor
-al momento.
+## Pasos
 
-## Qué ve quien mira
+<Steps>
+  <Step title="Abre la lista">
+    Ejecuta `/stafflist` (alias `/slist`), o haz clic en tu propia cabeza, **STAFF EN LÍNEA** (casilla 34), en la barra del [modo staff](/docs/exyliastaff/modo-staff). La consola también puede ejecutarlo.
+  </Step>
+  <Step title="Léela">
+    El encabezado indica cuántos miembros del staff ves y debajo sale cada servidor con sus miembros. El staff ve `[V]` tras el nombre de un miembro en [vanish](/docs/exyliastaff/vanish) y `[S]` tras uno en [modo staff](/docs/exyliastaff/modo-staff).
+  </Step>
+</Steps>
 
-Un miembro en vanish solo se muestra a quien tenga `exyliastaff.staff` y cuyo nivel de vanish sea al
-menos el del miembro; la consola ve a todos. Quienes miran desde el staff reciben las marcas, `[V]`
-para vanish y `[S]` para modo staff, tras el nombre; el resto recibe nombres a secas y ningún miembro
-en vanish. La cabecera cuenta lo que quien mira puede ver.
+## Comprueba que funciona
 
-## Configuración
+Haz que otro miembro del staff entre en otro servidor y ejecuta `/stafflist`: su servidor aparece con su nombre debajo. El staff conectado también ve una línea como "Nombre » se conectó (servidor)" cuando alguien entra.
+
+## Ir más allá
+
+### Quién ve al staff en vanish
+
+Un miembro en vanish solo se muestra a quien tiene `exyliastaff.staff` **y** un nivel de vanish igual o mayor que el suyo. La consola ve a todos. Los demás ven nombres sin marcas y sin miembros en vanish, y el encabezado cuenta solo lo que ese espectador puede ver. Es a propósito: una lista que nombrara a quien está oculto desharía el vanish.
+
+### Líneas de entrada, salida y cambio de servidor
+
+El staff con `exyliastaff.staff` recibe una línea cuando un compañero se conecta, se desconecta o pasa a otro servidor de la red. Un cambio de servidor son dos avisos (un servidor pierde al miembro y otro lo gana), así que la desconexión se retiene `switch-grace-seconds` (5 por defecto); si el miembro aparece en otro servidor en ese tiempo, se anuncia como cambio y no como salida. Un miembro en vanish solo se anuncia al staff que podría verlo en la lista. Nunca recibes una línea sobre ti. Vacía el mensaje `announce-join`, `announce-quit` o `announce-switch` para apagar esa línea.
+
+### Cómo se sincronizan los servidores
+
+Cada servidor publica su staff en el canal `presence` cuando un miembro entra o sale y cada `heartbeat-seconds`. Un servidor sin noticias durante `expire-seconds` se quita de la lista. Al desactivar el módulo se envía una lista vacía para que los demás lo quiten al instante. Aquí no se registra el AFK.
+
+## Comandos y permisos
+
+<Commands group="staff list" />
+
+<Permissions group="staff list" />
+
+<Details title="Configuración y mensajes">
 
 ```yaml title="plugins/ExyliaStaff/modules/stafflist/config.yml"
 heartbeat-seconds: 30
 expire-seconds: 90
+switch-grace-seconds: 5
 ```
 
-## Mensajes
+| Clave | Por defecto | Qué hace |
+|---|---|---|
+| `heartbeat-seconds` | `30` | Segundos entre avisos de presencia a los demás servidores. |
+| `expire-seconds` | `90` | Segundos sin aviso antes de que un servidor salga de la lista. Mantenlo por encima de `heartbeat-seconds`. |
+| `switch-grace-seconds` | `5` | Tiempo que tiene un miembro que salió de un servidor para aparecer en otro antes de contar como desconexión. |
 
-`lang/<language>/modules/stafflist/messages.yml`: `header` con `%total%`, `server` con `%server%`, `entry` con
-`%player%` y `%markers%`, `vanished-marker`, `staff-mode-marker`, `empty`, `footer`.
+Los mensajes están en `lang/<idioma>/modules/stafflist/messages.yml`: `header` (`%total%`), `server` (`%server%`), `entry` (`%player%`, `%markers%`), `vanished-marker`, `staff-mode-marker`, `empty`, `footer`, y los tres avisos `announce-join`, `announce-quit` (`%player%`, `%server%`) y `announce-switch` (`%player%`, `%from%`, `%to%`). Mira los [mensajes de ExyliaLib](/docs/exylialib/mensajes-e-idiomas) y los [colores](/docs/exylialib/colores).
 
-## Placeholders
+<Placeholders group="staff list" />
 
-| Placeholder | Valor |
-|---|---|
-| `%staff_stafflist_total%` | Staff conectado en todos los servidores, vanish incluidos. |
-| `%staff_online%` | Jugadores con `exyliastaff.staff` en este servidor, desde el núcleo. |
+`%staff_online%` (jugadores con `exyliastaff.staff` en este servidor) está en [Placeholders](/docs/exyliastaff/placeholders).
+
+</Details>
+
+<Cards>
+  <Card title="Siguiente: Gestiona los reportes" href="/docs/exyliastaff/reportes">Deja que los jugadores se reporten y revisa la cola.</Card>
+</Cards>

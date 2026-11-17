@@ -1,34 +1,56 @@
 ---
 title: "Handle player reports"
-description: "Let players report each other, then review, claim and close reports from the queue with priorities."
+description: "Let players report each other, then review, resolve and dismiss reports from a queue ordered by priority."
 questions:
   - "How do players report someone?"
   - "How do staff answer reports?"
   - "How do I limit how often players can report?"
+  - "How do I add or change a report reason?"
 updated: "1.8.0"
 ---
 
-A player reports another with `/report`, picking a reason from a menu or writing one. Staff on every
-server get a clickable alert, and `/reports` lists what is open by priority, highest first.
+A player runs `/report <player>` and picks a reason from a screen. Staff on every server get a clickable alert, and `/reports` lists what is open, highest priority first, so the worst case is never at the bottom.
 
-Module id `reports`, switch `modules.reports`, files under `modules/reports/`.
+## Before you start
 
-## Reporting
+- Players need `exyliastaff.report`. Staff who review need `exyliastaff.reports.manage`.
+- The module switch is `modules.reports` in `plugins/ExyliaStaff/config.yml`.
+- Optional: the [replay](/docs/exyliastaff/replays) module attaches the last minute of the reported player to each report.
 
-| Command | Permission | What it does |
-|---|---|---|
-| `/report <player>` | `exyliastaff.report` | Opens the reasons menu; clients with screen menus get it as a screen (`screens/report_reasons.html`) with the same reasons, the chest menu otherwise. |
-| `/report <player> <reason>` | `exyliastaff.report` | Sends it. A reason id such as `cheating` becomes that reason; any other text is kept as written, without colours. |
+## Steps
 
-Only online players can be reported. A report is refused, in this order, when the reporter names
-themself, the target holds `exyliastaff.staff` and `allow-report-staff` is off, the reporter is still
-in the `cooldown-seconds` from their last report, or they already have `max-open-per-reporter` open
-reports. Nothing stops the same player from reporting the same target twice.
+<Steps>
+  <Step title="A player reports">
+    The player runs `/report <player>`. A menu titled "Report" followed by the player's name opens with one card per reason (Cheating, Exploiting, Griefing, Toxicity, Other by default), each with an icon and a line of description. Clicking a card files the report. Players on clients with screen menus get the same reasons as a screen instead of a chest menu. To skip the menu, write the reason: `/report <player> cheating`. Any other text is kept as written, without colours.
+  </Step>
+  <Step title="Staff are alerted">
+    Every online staff member with `exyliastaff.reports.manage`, on any server, gets a message with three buttons: **[ ✦ Open ]** (that player's reports), **[ ➥ Teleport ]** (on duty, like `/tpstaff`) and **[ ▶ Replay ]**. Urgent reports play a different sound.
+  </Step>
+  <Step title="Review the queue">
+    Run `/reports`, or click the blaze powder **REPORTS** (slot 12) in the [staff mode](/docs/exyliastaff/staff-mode) hotbar. `/reports <player>` opens that player's open reports, online or not.
+  </Step>
+  <Step title="Close each report">
+    Right click a report to **resolve** it, shift right click to **dismiss** it. Both remove it from the queue and record who did it.
+  </Step>
+</Steps>
 
-## Priority
+## Check that it works
 
-Every reason has a `weight`. A report's score is that weight, plus one per other open report on the
-same target, up to three. Free text weighs 1.
+As a player run `/report <someone online>` and pick **Toxicity**. As staff you should see the alert, and `/reports` should list one head named after the reported player with the reason, priority and age on it.
+
+## Going further
+
+### Who can be reported, and how often
+
+Only online players can be reported. A report is refused, in this order, when the reporter names themself, the target holds `exyliastaff.staff` and `allow-report-staff` is off, the reporter is still inside `cooldown-seconds` from their last report, or they already have `max-open-per-reporter` open reports. Nothing stops two players reporting the same target. A rank gets its own wait with `exyliastaff.report.cooldown.<seconds>`; the lowest one held wins.
+
+### Add or change a reason
+
+Reasons are `reasons.<id>` in `modules/reports/config.yml`: a `name`, a `description`, an `icon` (a material) and a `weight` from 1 to 5. Add a block, reload, and it appears as a card in the report screen. The `punish-reasons` list names [punishment](/docs/exyliastaff/punishments) reason ids that [Exylia Staff Web](/docs/exyliastaff/staff-web) suggests when a report with this reason is acted on.
+
+### How priority is worked out
+
+A report's score is its reason's `weight` plus one per other open report on the same target, up to three extra. Free text weighs 1. The score is read when shown, never stored, so changing a weight reorders the queue at once.
 
 | Score | Level |
 |---|---|
@@ -37,39 +59,32 @@ same target, up to three. Free text weighs 1.
 | 3 or 4 | `NORMAL` |
 | below 3 | `LOW` |
 
-The score is computed when it is read, never stored, so changing a weight reorders the open reports.
-`HIGH` and `CRITICAL` alerts play `alert-urgent` instead of `alert`.
+`HIGH` and `CRITICAL` reports play `alert-urgent` instead of `alert`.
 
-## Reviewing
+### Clicks in the menus
 
-`/reports`, with `exyliastaff.reports.manage`, opens the list; `/reports <player>` opens that player's
-open reports, whether they are online, on another server or gone. The blaze powder in the hotbar
-opens the list. Alerts reach every online staff member with the same permission on every server, and
-end with three buttons: **Open** their reports, **Teleport** on duty with `/tpstaff`, and **▶ Replay**,
-which runs `/reports replay <id>`.
+| Screen | Clicks |
+|---|---|
+| Report list (**REPORTS**) | Left: that player's reports. Shift left: watch the replay. Right: resolve. Shift right: dismiss. |
+| Player reports | Left: teleport, following them to their server. Shift left: teleport on duty. Right: resolve. Shift right: dismiss. Middle: everything ever filed against them. Drop (Q): watch the replay. |
 
-| Screen | Rows | Clicks |
-|---|---|---|
-| List | One head per open report, in the chosen order | Left: the player's reports. Shift left: watch the replay. Right: resolve. Shift right: dismiss. |
-| Player | Every open report against them | Left: teleport, following them to their server. Shift left: teleport on duty. Right: resolve. Shift right: dismiss. Middle: everything ever filed against them. Q: watch the replay. |
+The list also has **Filter** (type a name), **History** (type a name), **Resolve all**, **Dismiss all** and **Order**: left click for the next order, right click for the previous one. Orders are priority, newest, oldest and most reported (which groups reports on one player). Each staff member keeps their own, priority until they change it. The player screen has a **Replays** button for that player's whole replay list.
 
-The list also has **Resolve all** and **Dismiss all**, a spyglass that asks for a name, and an
-**Order** button: left click for the next order, right click for the previous one. The orders are
-priority, newest, oldest and most reported, which groups the reports on one player together; each
-staff member keeps their own, priority until they change it. The player screen has a **Replays**
-button for that player's whole replay list.
+### Replays
 
-## Replays
+With the [replay](/docs/exyliastaff/replays) module on, the minute before a report is saved when it is filed, if the reported player is on the reporter's server. Every replay button opens that one; if there is none (not recorded, or still being written) it opens the player's replay list instead. Watching needs `exyliastaff.replay` too.
 
-With the [replay](/docs/exyliastaff/replays) module on, the minute before a report is saved the moment
-it is filed, when the reported player is on the reporter's server. Every replay button opens that one;
-when it is missing, because they were not recorded or it is still being written, the button opens the
-player's replay list instead. Watching needs `exyliastaff.replay` as well. Resolving
-and dismissing both close the report, recording who did it; they differ only in the status kept for
-history. There is no claim step, and the reporter is not told when their report is closed. Closed rows
-stay in `staff_reports` forever.
+### What happens to old reports
 
-## Configuration
+There is no claim step, and the reporter is not told when their report is closed. A report nobody handled closes itself after `expire-days` (default 3): it leaves the queue but stays in the player's history, so a repeat offender still shows it. `0` keeps reports open forever. Closed rows stay in the database.
+
+## Commands and permissions
+
+<Commands group="reports" />
+
+<Permissions group="reports" />
+
+<Details title="Configuration and messages">
 
 ```yaml title="plugins/ExyliaStaff/modules/reports/config.yml"
 reasons:
@@ -113,6 +128,7 @@ reasons:
 cooldown-seconds: 60
 allow-report-staff: false
 max-open-per-reporter: 3
+expire-days: 3
 alert:
   sound:
     name: BLOCK_NOTE_BLOCK_PLING
@@ -126,29 +142,22 @@ alert-urgent:
 | Key | Default | What it does |
 |---|---|---|
 | `reasons.<id>.name` | | Shown in the menu and stored on the report. Plain text. |
-| `reasons.<id>.weight` | | The base score. |
-| `reasons.<id>.punish-reasons` | | [Punishment](/docs/exyliastaff/punishments) reason ids the web suggests when a report with this reason is acted on, best match first. Empty suggests none. |
-| `cooldown-seconds` | `60` | Between two reports by the same player. Under five minutes it is not kept across a restart. A rank gets its own with `exyliastaff.report.cooldown.<seconds>`; the lowest held wins. |
+| `reasons.<id>.weight` | | The base score, 1 to 5. |
+| `reasons.<id>.punish-reasons` | | Punishment reason ids suggested on the web, best match first. Empty suggests none. |
+| `cooldown-seconds` | `60` | Wait between two reports by one player. Under five minutes it is not kept across a restart. |
 | `allow-report-staff` | `false` | Let players report somebody with `exyliastaff.staff`. |
 | `max-open-per-reporter` | `3` | Open reports one player may have. `0` for no limit. |
-| `alert`, `alert-urgent` | | Library effects for staff, on every server. |
+| `expire-days` | `3` | Days before an unattended report closes itself. `0` never. |
+| `alert`, `alert-urgent` | | Effects played for staff on every server. |
 
-## Messages
+The report screen for clients with screen menus is `screens/report_reasons.html` in the plugin folder; its words are in `lang/<language>/screens/report_reasons.yml`, its look in `theme.css`, and your own rules go in `custom.css` (see [ExyliaLib screens](/docs/exylialib/screens)). It reads the reasons from this config, so it needs no edits of its own.
 
-`lang/<language>/modules/reports/messages.yml`: `submitted`, `self`, `staff-protected`, `cooldown` with `%time%`,
-`too-many-open` with `%count%`; `alert-header`, `alert-line` and `alert-actions` with `%id%`,
-`%reporter%`, `%target%`, `%reason%`, `%server%`, `%priority%` and `%priority_score%`, the last one
-a clickable row you may empty; `resolved` and `dismissed` with `%id%`; `closed-all`; `not-found`;
-`target-offline`, `teleported`, `following`; `filter-prompt`, `history-prompt`; `no-reports`,
-`no-history`; `no-permission-for-player`; `no-handler`, who closed a report when nobody did;
-`no-replay`, sent when no replay can be opened; and `sorts`, the names of the four orders, `priority`,
-`newest`, `oldest` and `most-reported`.
+Messages are in `lang/<language>/modules/reports/messages.yml`: `submitted`, `self`, `staff-protected`, `cooldown` (`%time%`), `too-many-open` (`%count%`); `alert-header`, `alert-line` and `alert-actions` (`%id%`, `%reporter%`, `%target%`, `%reason%`, `%server%`, `%priority%`, `%priority_score%`; the last is a clickable row you may empty); `resolved` and `dismissed` (`%id%`); `closed-all`; `not-found`; `target-offline`, `teleported`, `following`; `filter-prompt`, `history-prompt`; `no-reports`, `no-history`; `no-permission-for-player`; `no-handler`; `no-replay`; and `sorts`, the names of the four orders. See [ExyliaLib messages](/docs/exylialib/messages-and-languages), [menus](/docs/exylialib/menus) and [colours](/docs/exylialib/colours). Other plugins can file or refuse reports; see the [API](/docs/exyliastaff/api#reports).
 
-Other plugins can file reports and refuse them before they are stored; see the
-[API](/docs/exyliastaff/api#reports).
+<Placeholders group="reports" />
 
-## Placeholders
+</Details>
 
-| Placeholder | Value |
-|---|---|
-| `%staff_reports_open%` | Open reports on the network. |
+<Cards>
+  <Card title="Next: Answer help requests" href="/docs/exyliastaff/helpop">The other queue: players asking for help.</Card>
+</Cards>

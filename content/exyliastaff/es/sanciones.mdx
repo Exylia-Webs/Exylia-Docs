@@ -5,158 +5,116 @@ questions:
   - "¿Cómo sanciono a un jugador?"
   - "¿Cómo uso LiteBans con ExyliaStaff?"
   - "¿Cómo hago que una sanción necesite aprobación?"
+  - "¿Cómo funciona un baneo de IP?"
 updated: "1.8.0"
 ---
 
-El módulo de sanciones guarda los motivos y, para cada uno, una escalera: primera falta, segunda falta,
-y así sucesivamente. Cuando un miembro del staff elige un motivo, el módulo cuenta cuántas veces ese
-jugador fue sancionado antes por él y toma el peldaño correspondiente. Quién aplica ese peldaño lo
-decides tú: el propio plugin, con sus pantallas de acceso, silencios y advertencias
-(`engine: exylia`), o el comando que configuraste para el tipo del peldaño, al que responde LiteBans,
-AdvancedBan o cualquier otro con un `/ban` (`engine: commands`, el valor por defecto).
+Las sanciones de ExyliaStaff son un menú de motivos, cada uno con una **escalera**: primera falta, segunda falta, y así sucesivamente. El staff elige un motivo, el plugin cuenta cuántas veces sancionaron a ese jugador por él y aplica el paso que toca. Tú decides quién lo ejecuta: el propio plugin o tu plugin de baneos.
 
-Id de módulo `punishments`, interruptor `modules.punishments`, archivos en `modules/punishments/`.
+## Antes de empezar
 
-## Comandos
+- Da `exyliastaff.punish` al staff, y `exyliastaff.punish.history` para `/history`. Para que un rango no use los pasos duros, mira [Aprobaciones](#aprobaciones).
+- El interruptor del módulo es `modules.punishments` en `plugins/ExyliaStaff/config.yml`.
+- Elige el motor en `modules/punishments/config.yml`: `engine: commands` (por defecto) ejecuta los comandos de tu plugin de baneos (LiteBans, AdvancedBan, vanilla); `engine: exylia` lo aplica de forma nativa y no necesita otro plugin. Mira [Motores](#motores).
 
-| Comando | Permiso | Qué hace |
-|---|---|---|
-| `/punish <player>` | `exyliastaff.punish` | Abre el menú de categorías. El jugador puede estar desconectado si el servidor lo ha visto. |
-| `/punish <player> <reason-id>` | `exyliastaff.punish` | Ejecuta al instante, sin pantalla de confirmación. |
-| `/history <player>` | `exyliastaff.punish.history` | Sus sanciones, la más reciente primero. `/phistory` es un alias. |
-| `/punish requests` | `exyliastaff.punish` | Las diez [solicitudes](#aprobaciones) pendientes más recientes, cada una con botones para aprobar y denegar. |
-| `/punish approve <id>` | `exyliastaff.punish` | Aplica una solicitud, contigo como miembro del staff. |
-| `/punish deny <id>` | `exyliastaff.punish` | Deniega una solicitud. |
-| `/staffadmin import <plugin>` | `exyliastaff.admin` | Importa una vez el historial de un plugin de baneos. Ver [Importar un plugin de baneos](#importar-un-plugin-de-baneos). |
-| `/staffadmin history clear <player> [reason-id] [confirm]` | `exyliastaff.admin.history.clear` | Borra el historial de un jugador, o el de un motivo. Un baneo activo no se levanta. |
-
-El hacha de netherite de la hotbar abre el menú sobre el jugador al que miras. Un jugador no puede
-sancionarse a sí mismo.
-
-## El menú
-
-Categorías, luego motivos. Cada motivo muestra su escalera con los peldaños ya usados, el actual
-marcado, y el peldaño que se aplicará ahora. Su última línea dice si un clic sanciona o envía el peldaño
-a [aprobación](#aprobaciones). Al hacer clic se abre una pantalla de confirmación cuando
-`require-confirmation` está activado; si no, ejecuta. Cancelar vuelve a los motivos.
-
-## La escalera
-
-Una línea de la escalera es `TYPE duration`, o solo `TYPE`, con los tipos `BAN`, `TEMPBAN`, `MUTE`, `TEMPMUTE`,
-`KICK`, `WARN` e `IPBAN`. El peldaño es el número de sanciones anteriores de ese jugador con el
-**mismo id de motivo** dentro de `ladder-reset-days`; cuando la escalera se acaba, el último peldaño se
-repite. Motivos distintos no se hacen avanzar entre sí, y `ladder-reset-days: 0` cuenta todo lo que haya
-habido nunca.
-
-<Callout type="warning" title="Solo cuenta lo que emitió este plugin">
-El historial es `staff_punishments`. Con `observe` activado, un baneo escrito directamente en LiteBans
-también se registra ahí, pero con el nombre del plugin de baneos como motivo (`litebans`), así que no es
-un peldaño de ninguna escalera. Sanciona a través del menú y la escalera siempre estará bien.
-</Callout>
-
-## Motores
-
-`engine` decide quién aplica un peldaño.
-
-| Motor | Quién lo aplica | Qué necesita |
-|---|---|---|
-| `commands` | Tu plugin de baneos, mediante la plantilla del tipo del peldaño en `commands`. | Un plugin de baneos, o vanilla. |
-| `exylia` | Este plugin: la fila de `staff_punishments` es la sanción. | Nada más. Redis y [ExyliaProxyUtils](/docs/exyliaproxyutils/baneos-al-entrar) rechazan los baneos en el proxy. |
-
-### El motor nativo
-
-Con `engine: exylia`, `commands` y `revoke-commands` no se usan.
-
-- Los **baneos**, `BAN`, `TEMPBAN` e `IPBAN`, se rechazan al entrar en cada backend, desde la base de
-  datos, con la pantalla `screen-ban`. Cada baneo activo se refleja además en Redis, donde
-  ExyliaProxyUtils lo rechaza en el proxy antes de llegar a un backend; el reflejo se vuelve a escribir
-  en cada arranque y recarga, así que un Redis vaciado se recupera solo. Si la base de datos no se puede
-  leer al entrar, se deja pasar al jugador en lugar de dejar fuera a todo el mundo.
-- Los **baneos de IP** retienen las direcciones en las que se vio al jugador baneado, cada una durante
-  `ip-ban-hold-days` desde la última vez que la usó (más si la había usado durante más tiempo, así una línea
-  fija de casa sigue retenida y una dinámica se libera). Uno emitido mientras estaba desconectado aprende la
-  dirección en su siguiente intento de entrar. Solo se rechazan ahí las cuentas que parecen suyas: nuevas
-  desde el baneo, o que ya usaban la dirección antes. Los jugadores veteranos a quienes el proveedor asignó
-  la dirección, y las direcciones concurridas (móvil, CGNAT, wifi), entran. El reflejo en el proxy lleva
-  por tanto solo baneos de cuenta.
-- Las **expulsiones** muestran `screen-kick`. A un jugador en otro servidor se le expulsa a través del
-  proxy.
-- Los **silencios**, `MUTE` y `TEMPMUTE`, cancelan cada línea de chat y cada comando de
-  `mute-blocked-commands`, con las líneas `muted` como respuesta.
-- Las **advertencias** muestran las líneas `warned` al momento, o en la siguiente entrada del jugador
-  en cualquier servidor, y una sola vez.
-
-Un baneo o silencio levantado o editado desde [Exylia Staff Web](/docs/exyliastaff/staff-web) llega al
-servidor del jugador y al reflejo al instante.
-
-### Ejecución mediante comandos
-
-Con `engine: commands`, la plantilla del tipo del peldaño en `commands` se ejecuta con `%player%`, `%duration%`, `%reason%` y
-`%staff%`. La duración se pasa **tal como está escrita** en la escalera, `7d` o `1h30m`, así que
-escríbela como la lee tu plugin de baneos; un tipo sin duración pasa `perm`. `console:` se ejecuta
-aquí, `console-proxy:` en el proxy a través del puente de la librería. Un tipo de peldaño sin plantilla
-se rechaza con "no command for TEMPBAN" y no se registra nada.
-
-En ambos casos, la fila se registra, se avisa a quien la emitió y la sanción se publica en el canal
-`punishments`: cada servidor la anuncia al staff con `exyliastaff.punish`, o a todo el mundo cuando
-`broadcast.to-staff-only` está desactivado.
-
-## Pruebas y apelaciones
-
-Cada sanción guarda el chat que llevó a ella: la ventana que fija la web o, si no había ninguna, las
-últimas `evidence-lines` líneas del objetivo. Las pantallas lo muestran como `%evidence%`, una
-`evidence-line` por línea, sin ningún formato que el jugador escribiera.
-
-`appeal-url` es el enlace de apelación de las pantallas, con `%id%` como id de la sanción. `auto` lo
-construye a partir de la web vinculada (`<web>/p/<workspace>/appeal?id=%id%`) y no muestra nada
-mientras la red no está vinculada; vacío no muestra nunca ninguno.
-
-## Aprobaciones
-
-`exyliastaff.punish` permite sancionar. Los [nodos de límite de sanciones](/docs/exyliastaff/permisos#límites-de-las-sanciones)
-lo acotan por tipo, pasos permanentes, categoría y motivo; cada uno está permitido salvo que se ponga
-en `false`. Un peldaño que uno de ellos bloquea no se rechaza: se convierte en una solicitud.
+## Pasos
 
 <Steps>
-  <Step title="La solicitud">
-    Al miembro del staff se le dice que el peldaño necesita la aprobación de un superior y recibe su
-    número. Todo el staff conectado con `exyliastaff.punish`, en cualquier servidor, para quien el mismo
-    peldaño no esté bloqueado, recibe `request-alert` con botones clicables para aprobar y denegar. La
-    web también se entera.
+  <Step title="Abre el menú">
+    Ejecuta `/punish <jugador>`, o pulsa el hacha de netherita **SANCIONAR** (apunta al jugador que miras) en la hotbar del [modo staff](/docs/exyliastaff/modo-staff). El jugador puede estar desconectado si el servidor ya lo ha visto. Nadie puede sancionarse a sí mismo.
   </Step>
-  <Step title="La aprobación">
-    `/punish approve <id>`, o el botón. El peldaño se vuelve a calcular en ese momento, así que se
-    respeta una escalera que haya avanzado entretanto, y se aplica con quien aprueba como miembro del
-    staff y `Requested by <name>` como nota. Nadie puede resolver su propia solicitud, y a quien aprueba
-    con el peldaño bloqueado se le rechaza indicando los nodos que lo bloquean.
+  <Step title="Elige categoría y motivo">
+    Primero las categorías (Cheats, Chat, Grifeo y Otros por defecto) y luego los motivos. Cada motivo muestra su escalera con los pasos ya usados, el actual marcado y el que se aplicará ahora. La última línea dice si el clic sanciona al momento o envía el paso a [aprobación](#aprobaciones).
   </Step>
-  <Step title="La respuesta">
-    A quien pidió se le dice quién la aprobó o denegó, esté en el servidor que esté.
+  <Step title="Confirma">
+    Con `require-confirmation` activo (por defecto) se abre una pantalla de confirmación: pulsa **Confirmar**, o **Cancelar** para volver a los motivos. Con él desactivado, el clic ejecuta.
   </Step>
 </Steps>
 
-La consola nunca está bloqueada. Una sanción desde la web se comprueba contra los nodos de LuckPerms
-del miembro del staff.
+Para saltarte el menú, ejecuta `/punish <jugador> <id-del-motivo>` (por ejemplo `/punish Steve hacks`): se ejecuta al momento, sin confirmación.
 
-## Observar otros plugins de baneos
+## Comprueba que funciona
 
-Con `observe` activado, las sanciones hechas con LiteBans, LibertyBans, AdvancedBan o BanManager se
-registran en el historial, incluso un `/ban` normal que nunca pasó por este plugin, junto con sus
-levantamientos. Se leen en cualquier backend donde esté instalado el plugin de baneos y, con
-ExyliaProxyUtils, en el proxy. En una red cada entrada pasa por un único stream de Redis que cada
-servidor lee en el mismo grupo, así que se registra una sola vez. Con `engine: commands`, la copia que
-el plugin de baneos hace de una sanción que este plugin acaba de emitir se enlaza a ella en lugar de
-registrarse dos veces. Las sanciones de IP que no nombran a ningún jugador se omiten.
+Sanciona una cuenta de prueba con el primer paso de una escalera (por ejemplo **Spam**, primer paso `MUTE 1h`). Se avisa a quien sanciona, el staff con `exyliastaff.punish` recibe un aviso en todos los servidores y `/history <jugador>` (alias `/phistory`) la lista, la más reciente primero.
 
-## Importar un plugin de baneos
+## Ir más allá
 
-`/staffadmin import <litebans|libertybans|advancedban|banmanager>` lee una vez todo el historial de ese
-plugin: mediante su API si está instalado en este servidor, o si no mediante el `punish-import` del
-proxy (ver [ExyliaProxyUtils](/docs/exyliaproxyutils/sanciones)). Las filas llegan igual que las
-observadas, y llegan a la web a medida que se leen. Funciona con `observe` desactivado. De LiteBans lee
-baneos, muteos, avisos y kicks. "is installed neither here nor on the proxy" significa que ninguno de los dos pudo ejecutarlo.
+### La escalera
 
-## Configuración
+Una línea de la escalera es `TIPO duración`, o solo `TIPO`. Los tipos son `BAN`, `TEMPBAN`, `MUTE`, `TEMPMUTE`, `KICK`, `WARN` e `IPBAN`; la duración es `1h`, `7d`, `1h30m` o `perm`. El paso es el número de sanciones anteriores de ese jugador con el **mismo id de motivo** dentro de `ladder-reset-days` (30 por defecto): la primera falta usa la primera línea y, al acabarse la escalera, se repite la última. Motivos distintos no se avanzan entre sí y `ladder-reset-days: 0` cuenta todo el historial.
+
+<Callout type="warning" title="Solo cuenta lo que emitió este plugin">
+El historial es el del plugin. Con `observe` activo, un baneo escrito directamente en LiteBans también se registra, pero con el nombre del plugin de baneos como motivo (`litebans`), así que no es un paso de ninguna escalera. Sanciona desde el menú y la escalera siempre será correcta.
+</Callout>
+
+### Motores
+
+`engine` decide quién ejecuta un paso.
+
+| Motor | Quién ejecuta | Qué necesita |
+|---|---|---|
+| `commands` | Tu plugin de baneos, mediante la plantilla del tipo del paso en `commands`. | Un plugin de baneos, o vanilla. |
+| `exylia` | Este plugin: la fila guardada es la sanción. | Nada más. Redis y [ExyliaProxyUtils](/docs/exyliaproxyutils/baneos-al-entrar) rechazan los baneos en el proxy. |
+
+**Ejecución mediante comandos.** Con `engine: commands` se ejecuta la plantilla del tipo del paso con `%player%`, `%duration%`, `%reason%` y `%staff%`. La duración se pasa **tal como está escrita** en la escalera, `7d` o `1h30m`, así que escríbela como la lee tu plugin de baneos; un tipo sin duración pasa `perm`. `console:` se ejecuta aquí y `console-proxy:` en el proxy mediante el puente de la librería. Un tipo de paso sin plantilla se rechaza con "no command for TEMPBAN" y no se registra nada.
+
+**El motor nativo.** Con `engine: exylia`, `commands` y `revoke-commands` no se usan.
+
+- **Baneos** (`BAN`, `TEMPBAN`, `IPBAN`): se rechazan al entrar en cada backend, leyendo la base de datos, con la pantalla `screen-ban`. Cada baneo activo se refleja también en Redis para que ExyliaProxyUtils lo rechace en el proxy antes de llegar a un backend; el reflejo se reescribe en cada arranque y recarga. Si la base de datos no se puede leer al entrar, el jugador pasa en vez de dejar fuera a todos.
+- **Expulsiones** muestran `screen-kick`. Si el jugador está en otro servidor, se expulsa a través del proxy.
+- **Silencios** (`MUTE`, `TEMPMUTE`) cancelan cada línea de chat y cada comando de `mute-blocked-commands`, respondiendo con las líneas de `muted`.
+- **Avisos** muestran las líneas de `warned` al momento, o en la siguiente entrada del jugador en cualquier servidor, y solo una vez.
+
+Un baneo o silencio levantado o editado desde [Exylia Staff Web](/docs/exyliastaff/staff-web) llega al servidor del jugador y al reflejo de inmediato. Ambos motores registran la fila, avisan a quien sanciona y publican la sanción: cada servidor la anuncia al staff con `exyliastaff.punish`, o a todos si `broadcast.to-staff-only` está desactivado.
+
+### Baneos de IP
+
+Un paso `IPBAN` con `engine: exylia` banea las direcciones desde las que se vio al jugador, pero no a ciegas: una IP doméstica se reasigna y una móvil la comparten desconocidos.
+
+- Cada dirección se retiene `ip-ban-hold-days` días (14 por defecto) desde la última vez que el baneado la usó, o todo el tiempo que la hubiera usado si es más. Una línea fija se mantiene retenida; una dirección dinámica se libera cuando cambia. Un valor de 0 se comporta como 1 día.
+- Desde donde el baneado intente entrar queda retenido a partir de ese momento. Un baneo de IP hecho con el jugador desconectado aprende la dirección en su siguiente intento de entrada.
+- En una dirección retenida solo se rechazan cuentas que parecen suyas: cuentas creadas después del baneo y cuentas que ya usaban esa dirección antes. Los jugadores establecidos a quienes el proveedor asignó la dirección pasan, igual que cualquier cuenta en una dirección muy compartida (móvil, CGNAT, wifi público).
+- Las direcciones locales (el proxy, una LAN, loopback) nunca se retienen. El reflejo del proxy solo lleva baneos de cuenta, así que los baneos de IP los aplica el backend al entrar.
+
+### Pruebas y apelaciones
+
+Cada sanción guarda el chat que la motivó: la ventana que fije la web o, si no hubo, las últimas `evidence-lines` líneas del objetivo (1 por defecto). Las pantallas lo muestran como `%evidence%`, sin el formato que escribió el jugador. `appeal-url` es el enlace de apelación de las pantallas, siendo `%id%` la sanción: `auto` lo construye desde la web enlazada y no muestra nada mientras la red no esté enlazada; vacío nunca lo muestra.
+
+### Aprobaciones
+
+`exyliastaff.punish` permite sancionar. Los [nodos de límite](/docs/exyliastaff/permisos#límites-de-las-sanciones) la acotan por tipo, pasos permanentes, categoría y motivo; cada uno está permitido salvo que se ponga a `false`. Un paso que uno de ellos bloquea no se rechaza: se convierte en una solicitud.
+
+<Steps>
+  <Step title="La solicitud">
+    Se avisa al miembro del staff de que el paso necesita la aprobación de un superior y recibe su número. Cada miembro del staff conectado con `exyliastaff.punish`, en cualquier servidor, para quien el mismo paso no esté bloqueado, recibe `request-alert` con botones clicables para aprobar y denegar. También se avisa a la web. `/punish requests` lista las diez pendientes más recientes.
+  </Step>
+  <Step title="Aprobación">
+    `/punish approve <id>`, o el botón. El paso se calcula de nuevo en ese momento, así que se respeta una escalera que haya avanzado, y se aplica con el aprobador como staff y `Requested by <nombre>` como nota. Nadie puede resolver su propia solicitud, y a un aprobador para quien el paso esté bloqueado se le rechaza indicando los nodos que lo bloquean.
+  </Step>
+  <Step title="La respuesta">
+    `/punish deny <id>` la rechaza. Se avisa al solicitante de quién la aprobó o denegó, en el servidor en que esté.
+  </Step>
+</Steps>
+
+La consola nunca está bloqueada. Una sanción desde la web se comprueba con los nodos de LuckPerms del miembro del staff.
+
+### Observar otros plugins de baneos
+
+Con `observe` activo (por defecto), las sanciones hechas con LiteBans, LibertyBans, AdvancedBan o BanManager se registran en el historial, incluso un simple `/ban` que nunca pasó por este plugin, con sus levantamientos. Se leen en cualquier backend donde esté instalado el plugin de baneos y, con ExyliaProxyUtils, en el proxy. En una red cada entrada pasa por un único stream de Redis leído en el mismo grupo, así que se registra una sola vez. Con `engine: commands`, la copia que el plugin de baneos guarda de una sanción que este plugin acaba de emitir se enlaza con ella en vez de registrarse dos veces. Las sanciones por IP que no nombran a ningún jugador se omiten.
+
+### Importar un plugin de baneos
+
+`/staffadmin import <litebans|libertybans|advancedban|banmanager>` (requiere `exyliastaff.admin`) lee una vez todo el historial de ese plugin: por su API si está instalado en este servidor, o si no mediante `punish-import` del proxy (mira [ExyliaProxyUtils](/docs/exyliaproxyutils/sanciones)). Las filas llegan como las observadas y pasan a la web según se leen; funciona con `observe` desactivado. De LiteBans lee baneos, silencios, avisos y expulsiones.
+
+Para borrar el historial de un jugador, o el de un motivo, ejecuta `/staffadmin history clear <jugador> [id-del-motivo] [confirm]` (requiere `exyliastaff.admin.history.clear`). Un baneo activo no se levanta. Mira [Comandos](/docs/exyliastaff/comandos).
+
+## Comandos y permisos
+
+<Commands group="punishments" />
+
+<Permissions group="punishments" />
+
+<Details title="Configuración y mensajes">
 
 ```yaml title="plugins/ExyliaStaff/modules/punishments/config.yml"
 categories:
@@ -276,41 +234,27 @@ ip-ban-hold-days: 14
 
 | Clave | Por defecto | Qué hace |
 |---|---|---|
-| `engine` | `commands` | `commands` ejecuta las plantillas; `exylia` aplica las sanciones de forma nativa. |
-| `appeal-url` | `auto` | El enlace de apelación, con `%id%` como la sanción. `auto` desde la web vinculada, vacío para ninguno. |
-| `mute-blocked-commands` | `msg`, `tell`, `w`, `whisper`, `r`, `reply`, `me`, `say`, `mail` | Comandos que un jugador silenciado no puede ejecutar, sin la barra, comparados por la etiqueta sola (`minecraft:msg` cuenta como `msg`). Solo con `engine: exylia`. |
-| `evidence-lines` | `1` | Cuántas de las últimas líneas de chat del objetivo se guardan cuando la web no adjuntó ninguna. |
+| `categories.<id>.reasons.<id>` | ver arriba | Un motivo: `name`, líneas de `description`, `icon` y su `ladder`. Los ids de motivo deben ser únicos entre categorías; los menús los listan en el orden del archivo. |
+| `commands` | ver arriba | Plantilla por tipo de paso para `engine: commands`. `%reason%` es el nombre visible del motivo, no su id. |
+| `revoke-commands` | ver arriba | Cómo se deshace, por tipo, una sanción revocada desde [Exylia Staff Web](/docs/exyliastaff/staff-web). `KICK` y `WARN` no tienen. |
+| `ladder-reset-days` | `30` | Las sanciones más antiguas dejan de avanzar la escalera. `0` cuenta todo. |
+| `require-confirmation` | `true` | Mostrar la pantalla de confirmación. |
+| `broadcast.enabled`, `broadcast.to-staff-only` | `true`, `true` | Anunciar las sanciones y a quién (`false` anuncia a todos). |
+| `engine` | `commands` | `commands` ejecuta las plantillas; `exylia` aplica de forma nativa. |
+| `appeal-url` | `auto` | El enlace de apelación, siendo `%id%` la sanción. `auto` desde la web enlazada, vacío para ninguno. |
+| `mute-blocked-commands` | `msg`, `tell`, `w`, `whisper`, `r`, `reply`, `me`, `say`, `mail` | Comandos que un jugador silenciado no puede usar, sin la barra, comparados con la etiqueta sin prefijo (`minecraft:msg` cuenta como `msg`). Solo con `engine: exylia`. |
+| `evidence-lines` | `1` | Últimas líneas de chat guardadas si la web no adjuntó ninguna. De 0 a 20. |
 | `observe` | `true` | Registrar lo que hacen LiteBans, LibertyBans, AdvancedBan y BanManager. |
-| `ip-ban-hold-days` | `14` | Días que un baneo de IP sigue reteniendo una dirección desde la última vez que la usó el jugador baneado. Solo con `engine: exylia`. |
+| `ip-ban-hold-days` | `14` | Días que un baneo de IP retiene una dirección desde la última vez que el baneado la usó. Solo con `engine: exylia`. |
 
-Los ids de motivo deben ser únicos entre categorías; los menús listan las categorías y los motivos en
-el orden del archivo. `%reason%` en una plantilla es el nombre visible del motivo, no su id. `revoke-commands` es
-cómo se deshace una sanción revocada desde [Exylia Staff Web](/docs/exyliastaff/staff-web), por tipo,
-con los mismos placeholders; un tipo sin nada que deshacer, como `KICK` o `WARN`, no tiene entrada.
 `alert` es un efecto de la librería que se reproduce al staff en cada anuncio; está vacío por defecto.
 
-## Mensajes
+Los mensajes están en `lang/<idioma>/modules/punishments/messages.yml`: `executed` (`%type%`, `%target%`, `%reason%`); `alert` y `broadcast` (`%staff%`, `%target%`, `%type%`, `%duration%`, `%server%`, `%reason%`); `never-played`, `unknown-reason`, `command-failed` (`%detail%`), `history-empty`, `self`, `no-target`; las líneas de la escalera `ladder-current`, `ladder-step` y `ladder-done` (`%index%`, `%type%`, `%duration%`); `duration-permanent`. Aprobaciones: `request-sent`, `request-alert`, `requests-header`, `requests-line`, `requests-empty`, `request-approved`, `request-denied`, `request-approved-notice`, `request-denied-notice`, `request-missing`, `request-own`, `request-blocked` (`%nodes%`); la última línea de un motivo en el menú es `reason-click` o `reason-click-approval`. Motor nativo: `screen-ban` y `screen-kick`, `muted` y `warned`, todos con `%reason%`, `%staff%`, `%date%`, `%expires%`, `%remaining%`, `%id%`, `%evidence%`, `%appeal%` y `%appeal_url%`; `evidence-line` (`%message%`), `evidence-none`, `appeal-line`, `expires-never`. Importación: `import-usage`, `import-started`, `import-proxy`, `import-unsupported` (`%origin%`). Mira [mensajes de ExyliaLib](/docs/exylialib/mensajes-e-idiomas), [menús](/docs/exylialib/menus) y [colores](/docs/exylialib/colores).
 
-`lang/<language>/modules/punishments/messages.yml`: `executed` con `%type%`, `%target%` y `%reason%`; `alert` y
-`broadcast` con `%staff%`, `%target%`, `%type%`, `%duration%`, `%server%` y `%reason%`;
-`never-played`, `unknown-reason`, `command-failed` con `%detail%`, `history-empty`, `self`,
-`no-target`; las tres líneas de la escalera `ladder-current`, `ladder-step` y `ladder-done` con `%index%`,
-`%type%` y `%duration%`; `duration-permanent`.
+<Placeholders group="punishments" />
 
-Aprobaciones: `request-sent`, `request-alert`, `requests-header`, `requests-line`, `requests-empty`,
-`request-approved`, `request-denied`, los avisos a quien pidió `request-approved-notice` y
-`request-denied-notice`, `request-missing`, `request-own`, y `request-blocked` con `%nodes%`; la última
-línea de un motivo en el menú es `reason-click` o `reason-click-approval`.
+</Details>
 
-El motor nativo: `screen-ban` y `screen-kick`, y las líneas `muted` y `warned`, todas listas que
-aceptan `%reason%`, `%staff%`, `%date%`, `%expires%`, `%remaining%`, `%id%`, `%evidence%`, `%appeal%` y
-`%appeal_url%`; `evidence-line` con `%message%`, `evidence-none`, `appeal-line` con `%appeal_url%`, y
-`expires-never`. La importación: `import-usage`, `import-started`, `import-proxy` e
-`import-unsupported` con `%origin%`.
-
-## Placeholders
-
-| Placeholder | Valor |
-|---|---|
-| `%staff_punishments_total%` | Sanciones que ha emitido quien lo ve. |
-| `%staff_punishments_today%` | De esas, las emitidas hoy. |
+<Cards>
+  <Card title="Siguiente: Teletranspórtate por la red" href="/docs/exyliastaff/teletransporte">Ve hasta el jugador que vas a sancionar.</Card>
+</Cards>

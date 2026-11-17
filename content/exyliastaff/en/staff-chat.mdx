@@ -5,96 +5,95 @@ questions:
   - "How do I talk in staff chat?"
   - "How do I read every chat as staff?"
   - "Does staff chat work across servers?"
+  - "How do I read the chat of other servers?"
 updated: "1.8.0"
 ---
 
-Two modules about who reads what. **Staff chat** is a channel of its own: what a staff member says
-there reaches every staff member on the network and nobody else. **Global chat** is the opposite: it
-lets a staff member read every chat on the server, past the isolation of matches, arenas and events,
-and, one step further, every server's chat.
+ExyliaStaff has two chat tools. **Staff chat** is a private channel: what a staff member writes there reaches every staff member on the network and nobody else. **Global chat** lets a staff member read every chat on the server, even the ones other plugins keep isolated (matches, arenas, events), and optionally every other server's chat too.
 
-## Staff chat
+## Before you start
 
-Module id `staffchat`, switch `modules.staff-chat`, files under `modules/staffchat/`.
+- Give staff chat to the rank: `exyliastaff.staffchat`. For global chat give `exyliastaff.globalchat`.
+- The module switches are `modules.staff-chat` and `modules.global-chat` in `plugins/ExyliaStaff/config.yml`.
+- Across servers it needs the same database and Redis on every server, like the rest of ExyliaStaff. With one server and no Redis it works the same.
 
-| Command | Permission | What it does |
+## Steps
+
+<Steps>
+  <Step title="Talk in staff chat">
+    Run `/sc` (alias `/staffchat`) to switch it on: everything you type now goes to staff, not to public chat. Run `/sc` again to go back. Or click the **STAFF CHAT** writable book (slot 28) in the [staff mode](/docs/exyliastaff/staff-mode) hotbar.
+  </Step>
+  <Step title="Send a single line">
+    Run `/sc <message>` to send one line without changing the switch. The console can do this too.
+  </Step>
+  <Step title="Read every chat on the server">
+    Run `/globalchat` (alias `/chatbypass`), or click the **GLOBAL CHAT** bell (slot 30). It cycles three modes: off, global, network.
+  </Step>
+</Steps>
+
+## Check that it works
+
+Switch staff chat on with `/sc`, type a line, and have another staff member (on any server) confirm they see it as `[SC] <server> » <you> » <message>` while a normal player sees nothing. Run `/sc` again and confirm your next line shows in public chat.
+
+## Going further
+
+### How staff chat behaves
+
+There is no prefix character such as `@`: the switch and the command are the two ways in. The switch is saved, so it survives a relog and follows the player to other servers. It turns off when the player leaves staff mode or loses `exyliastaff.staffchat`.
+
+While it is on, what the staff member types is taken out of public chat before any other plugin reads it, a Discord bridge included. Lines are delivered to every online player holding `exyliastaff.staffchat`, and also printed to the console while `console` is on.
+
+### The three global chat modes
+
+| Mode | What you read | Who reads you |
 |---|---|---|
-| `/sc` | `exyliastaff.staffchat` | Toggles: everything you type goes to staff until you toggle again. `/staffchat` is an alias. |
-| `/sc <message>` | `exyliastaff.staffchat` | Sends one line without changing the toggle. Also from the console. |
+| Off | The chat around you, like any player. | Like any player. |
+| Global | Every chat on this server, whatever another plugin isolates. | Everyone on the server, past every rule. |
+| Network | The same, plus every other server's public chat. | Only your server. What you say never leaves it. |
 
-There is no prefix character: the toggle and the command are the two ways in. The writable book in
-the hotbar toggles it. The toggle is stored in `staff_prefs`, so it survives a relog and follows the
-player across servers; leaving staff mode turns it off, and so does losing the permission.
+The mode is saved and restored on join. Unlike staff chat it is **not** turned off when you leave staff mode; losing `exyliastaff.globalchat` resets it to off. Only reading crosses servers. Lines another plugin cancelled (a mute, or staff chat itself) are never relayed.
 
-With the toggle on, what the staff member types in public chat is taken out of it before anything
-else reads it, a Discord bridge included, and goes to staff chat instead.
+To keep one server out of the others' network view, set `relay: false` in its globalchat config. Its own staff still read the other servers.
 
-Every line goes through the `staffchat` channel and comes back, the local ones too, so one server
-with no Redis works the same as ten with it. Received lines are delivered to every online player with
-`exyliastaff.staffchat` and, when `console` is on, printed to the console.
+### On the SurvivalCore client
 
-### In the SurvivalCore chat panel
+A player on the SurvivalCore client mod gets a red **Staff** tab in the chat panel while they hold `exyliastaff.staffchat`. Every staff chat line from every server shows there, and a line typed into the tab goes to staff chat like `/sc`. Other clients are unaffected.
 
-A player on the SurvivalCore client mod gets a red **Staff** tab in its chat panel when they hold
-`exyliastaff.staffchat`, and loses it with the permission. Every staff chat line shows there, from
-every server, and a line typed into the tab is sent to staff chat exactly like `/sc`. Players on any
-other client are not affected.
+## Commands and permissions
+
+<Commands group="chat" />
+
+<Permissions group="chat" />
+
+<Details title="Configuration and messages">
 
 ```yaml title="plugins/ExyliaStaff/modules/staffchat/config.yml"
 console: true
 ```
 
-The line's look is text, so it is in `lang/<language>/modules/staffchat/messages.yml`:
+```yaml title="plugins/ExyliaStaff/modules/globalchat/config.yml"
+relay: true
+```
+
+| Key | Default | What it does |
+|---|---|---|
+| `console` (staffchat) | `true` | Also print staff chat lines to this server's console. |
+| `relay` (globalchat) | `true` | Publish this server's public chat so staff in network mode elsewhere can read it. |
+
+How a line looks is text, so it lives in `lang/<language>/modules/<module>/messages.yml`, not in the config. Both files have a `format` with `%server%`, `%player%` and `%message%`:
 
 ```yaml
 format: '{letters_black}[{primary}SC{letters_black}] {muted}%server% {letters_black}» {highlight}%player% {letters_black}» {letters}%message%'
 ```
 
-`%server%` is the sender's server id from `database.yml`. The other messages: `toggled-on`,
-`toggled-off`, `permission-lost`, `console-needs-message`, `status-on`, `status-off`.
+`%server%` is the sender's server id from `database.yml`. Staff chat also has `toggled-on`, `toggled-off`, `permission-lost`, `console-needs-message`, `status-on` and `status-off`. Global chat has `toggled-on`, `toggled-network`, `toggled-off`, `permission-lost`, `status-on`, `status-network` and `status-off`, and its `format` uses `[NET]`. See [ExyliaLib messages](/docs/exylialib/messages-and-languages) and [colours](/docs/exylialib/colours).
 
-| Placeholder | Value |
-|---|---|
-| `%staff_staffchat_toggled%` | `status-on` or `status-off`. |
-| `%staff_staffchat_active%` | `true` while staff chat is on for the viewer, without the colour `toggled` carries. |
+<Placeholders group="chat" />
 
-## Global chat
+See also [Placeholders](/docs/exyliastaff/placeholders).
 
-Module id `globalchat`, switch `modules.global-chat`, files under `modules/globalchat/`.
+</Details>
 
-`/globalchat`, or `/chatbypass`, with `exyliastaff.globalchat`, cycles through three modes. The bell
-in the hotbar does the same.
-
-| Mode | What you read | Who reads you |
-|---|---|---|
-| `OFF` | The chat around you, as any player. | As any player. |
-| `GLOBAL` | Every chat on this server, whatever another plugin isolates. | Everyone on the server, past every rule. |
-| `NETWORK` | The same, plus every other server's public chat, in `format`. | Only your server. What you say never leaves it. |
-
-The bypass is the library's: an event whose players talk only to each other, an arena whose chat
-never leaves it, a frozen player's isolated chat, are all read. Only reading crosses servers. The mode
-is stored in `staff_prefs`, re-applied on join, and is **not** turned off by leaving staff mode;
-losing the permission resets it to off.
-
-Every public line on this server is published on the `globalchat` channel when `relay` is on; lines
-another plugin cancelled, staff chat and mutes among them, are never relayed. Turning `relay` off makes
-this server silent to the network while its own staff still read the others.
-
-```yaml title="plugins/ExyliaStaff/modules/globalchat/config.yml"
-relay: true
-```
-
-Messages, in `lang/<language>/modules/globalchat/messages.yml`: `format`, how another server's line
-looks, `toggled-on`, `toggled-network`, `toggled-off`, `permission-lost`, and the plain words
-`status-on`, `status-network`, `status-off`.
-
-```yaml
-format: '{letters_black}[{primary}NET{letters_black}] {muted}%server% {letters_black}» {highlight}%player% {letters_black}» {letters}%message%'
-```
-
-| Placeholder | Value |
-|---|---|
-| `%staff_globalchat_toggled%` | `status-off`, `status-on` or `status-network`. |
-| `%staff_globalchat_active%` | `true` in global or network mode. |
-| `%staff_globalchat_network%` | `true` in network mode. |
-| `%staff_globalchat_mode%` | `OFF`, `GLOBAL` or `NETWORK`. |
+<Cards>
+  <Card title="Next: Show who is on duty" href="/docs/exyliastaff/staff-list">See which staff are online on every server.</Card>
+</Cards>
