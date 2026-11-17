@@ -27,7 +27,7 @@ Follow WRITING.md. ExyliaFFA is the model. One row per plugin; mark done after r
 | `exyliajobs` | `ExyliaJobs` | done |
 | `exyliajourney` | `ExyliaJourney` | todo |
 | `exyliakillcam` | `ExyliaKillCam` | done (pages left on old text: see .rewrite-notes) |
-| `exylialobby` | `ExyliaLobby` | todo |
+| `exylialobby` | `ExyliaLobby` | done |
 | `exyliakilleffect` | `ExyliaKillEffect` | todo |
 | `exyliamarket` | `ExyliaMarket` | todo |
 | `exyliamines` | `ExyliaMines` | todo |
