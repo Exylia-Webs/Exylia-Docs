@@ -1,200 +1,109 @@
 ---
 title: "Frequently asked questions"
-description: "The questions that come up most."
+description: "Short answers about ExyliaAimTrainer: why a drill will not start, duels, ratings, leaderboards, resets, Bedrock and where the data lives."
+updated: "1.2.0"
+questions:
+  - "Why does ExyliaAimTrainer not start or say PacketEvents is missing?"
+  - "Why does it say No arena is ready?"
+  - "What is the difference between score and rating?"
+  - "Why is a player not on the leaderboard?"
+  - "How do I reset a player's aim trainer statistics?"
+  - "Can Bedrock players use ExyliaAimTrainer?"
 ---
+
+Quick answers to what owners and players ask most. For a step-by-step fix, see [Common problems](/docs/exyliaaimtrainer/troubleshooting).
 
 ## The plugin does not start
 
-`packetevents` is a hard dependency: without it the server never loads the plugin. `ExyliaLib` is listed
-as soft only so the loader can install it, but the plugin needs it to run. Check both are in `plugins/`.
+`packetevents` is a hard dependency: without it the server never loads the plugin. `ExyliaLib` is listed as soft only so the loader can install it, but the plugin needs it to run. Check both are in `plugins/`. See [Installation](/docs/exyliaaimtrainer/installation).
 
 ## "Targets need PacketEvents, which this server does not have."
 
-A target is a pair of packet entities the server never has, so without a loaded PacketEvents there is
-nothing to draw and every drill and every duel request is refused with that line. The console says so at
-startup: *"PacketEvents is missing: targets cannot be drawn and no drill can start"*.
+A target is a pair of packet entities the server never has, so without a loaded PacketEvents there is nothing to draw and every drill and duel request is refused with that line. The console says so at startup: *"PacketEvents is missing: targets cannot be drawn and no drill can start"*.
 
 ## "No arena is ready. Ask an administrator."
 
-Drills and duels both need an arena, and there is no training where the player stands. An arena is ready
-when it is **enabled**, has its **spawn** set, and that spawn is in a world that is loaded. Open
-`/aimtraineradmin`, Arenas: a row marked incomplete is missing one of those.
-
-The same line appears when every ready arena is full. `arena.max-players-per-arena` caps what one arena
-hosts, counting one per drill and two per duel; `0`, the default, is unlimited. Every drill and duel goes
-to the ready arena hosting the fewest players at that moment, so a second arena shares the load.
-
-Duels also cannot begin in the first moments after boot, before the arenas have been read from the
-database — the console prints `Loaded N arenas and M drills` once they have.
+Drills and duels both need an arena. An arena is ready when it is **enabled**, has its **spawn** set, and that spawn is in a loaded world; in `/aimtraineradmin`, **Arenas**, a row marked **[NO SPAWN]** is missing one of those. The same line appears when every ready arena is full (`arena.max-players-per-arena`, `0` is unlimited) or in the first moments after boot, before the arenas are read from the database. See [Arenas](/docs/exyliaaimtrainer/arenas).
 
 ## "Finish what you are doing first."
 
-The player is already in a drill or a duel (or, for a duel request, already in a duel: a drill does not
-stop them challenging). "You are busy in `<plugin>`" means another Exylia plugin holds
-them — an FFA arena, an event, a practice match — and "Not right now: `<reason>`" means nobody holds them
-but a plugin advises against it, in its own words.
+The player is already in a drill or a duel (a drill does not stop them challenging, a duel does). "You are busy in `<plugin>`" means another Exylia plugin holds them, such as an FFA arena, an event or a practice match, and "Not right now: `<reason>`" means a plugin advises against it in its own words.
 
 ## A player cannot duel somebody
 
-"`<name>` is busy right now" means another plugin, or this one, holds that player. "`<name>` is
-`<reason>`" means nobody holds them but a plugin advises against it — this plugin's own reason is
-"answering a duel request", given while a request sits open on either side of them. "`<name>` is waiting
-in a queue" means they are in an ExyliaPracticeCore queue: a queued player cannot duel, even while
-training. "Wait `<time>` before challenging again" is `match.duel-request-cooldown`, fifteen seconds by
-default, counted from the last request that reached somebody.
-
-A player can only have one request waiting for them; a newer challenge replaces the older one. Requests
-expire after `match.duel-request-expiry`, thirty seconds by default, and both sides are told.
+The refusal line says why: the target is busy, is `<reason>` (this plugin's own reason is "answering a duel request"), is waiting in an ExyliaPracticeCore queue, or you must "Wait `<time>` before challenging again" (`match.duel-request-cooldown`, fifteen seconds by default). A player has one request waiting at most, a newer one replaces the older, and requests expire after `match.duel-request-expiry` (thirty seconds). See [Duels](/docs/exyliaaimtrainer/duels).
 
 ## Hits feel off, or depend on ping
 
-The client does the aiming. Every target carries a hitbox the client tests with its own raycast, at its
-own frame rate, and reports the one it hit — the same test a PvP hit uses — so a target is hit where the
-player sees it. A swing that reports no hitbox is checked against the server's own ray through the
-crosshair before it is called a miss.
-
-Latency is accounted for where it would otherwise cost the player:
-
-- **Reaction** times have the player's ping subtracted: the light took half a round trip to reach them and
-  the click half a round trip to come back. The correction is capped at
-  `scoring.max-ping-correction-millis` (100 ms) and never more than half the time, because the client
-  controls its ping; a reaction still under `min-reaction-millis` (80 ms) is a false start.
-- **Moving targets** — strafing flicks, tracking and fights — are judged where the client drew them when
-  the click or the aim left it: the server keeps every position it sent and rewinds by the ping plus the two
-  ticks the client smooths a move over.
-- **Tracking** reads the aim from the rotation packets as they arrive and forgives half a tick either side
-  for jitter, not a wider target.
+The client does the aiming: every target has a hitbox the client tests with its own raycast, so a target is hit where the player sees it. Reaction times have the player's ping subtracted (capped at `scoring.max-ping-correction-millis`, 100 ms, and never more than half the time), and moving targets are judged where the client drew them by rewinding the ping plus two ticks. A reaction under `min-reaction-millis` (80 ms) is a false start. See [Scoring](/docs/exyliaaimtrainer/scoring).
 
 ## Why does spam clicking not help?
 
-Every swing that hits nothing is a miss. In a flick drill a miss costs `scoring.miss-penalty` points (4)
-against the `hit-points` (10) a hit earns, and it drags the accuracy down.
-
-In a fight, a hit on a target still red from the last one — ten ticks, as in the game — does nothing, in
-1.8 and 1.9 drills alike, so spamming a 1.8 fight lands no more hits than clean clicks. In a 1.9 drill
-(`attack-cooldown: true`) every swing, hit or miss, and every change of held slot starts the cooldown over,
-and a hit on a swing charged no more than 90% is **rushed** and counts as a miss.
-
-On a strafing flick target, which never leaves, two hits less than 250 ms apart count once, so holding the
-button on it scores nothing extra. A hit the client reports while the crosshair is nowhere near the target,
-or a fighter out of reach, is ignored.
+Every swing that hits nothing is a miss: `scoring.miss-penalty` (4) points against the `hit-points` (10) of a hit, and lower accuracy. In a fight, a hit on a target still red from the last one does nothing, and in a 1.9 drill (`attack-cooldown: true`) a swing charged no more than 90% is **rushed** and counts as a miss. See [Training](/docs/exyliaaimtrainer/training).
 
 ## What is the difference between score and rating?
 
-The **score** is the drill's own number: points per minute for flicks and fights, a reaction score for
-reaction drills, time on target for tracking. It decides duel rounds, where both sides play the same drill.
-
-The **rating** is the score times the **difficulty** of the settings it was played at: the drill's
-`weight`, times what a smaller target is worth, times what a farther one is worth, clamped between
-`scoring.min-difficulty` (0.25) and `max-difficulty` (6.0). The rating is what the boards rank by default
-and what the overall board adds up, so nobody climbs by making their targets easy. See
-[Scoring](/docs/exyliaaimtrainer/scoring).
+The **score** is the drill's own number (points per minute, a reaction score, or time on target) and decides duel rounds. The **rating** is the score times the **difficulty** of the settings it was played at, clamped between `scoring.min-difficulty` (0.25) and `max-difficulty` (6.0); the boards rank by it, so nobody climbs by making targets easy. See [Scoring](/docs/exyliaaimtrainer/scoring).
 
 ## Can players walk during a drill?
 
-No. Every player is frozen for the drill, since it measures their hands and not their legs. While in a
-drill or a duel they can only run the commands in `training.allowed-commands` — by default `aim`,
-`aimtrainer`, `at`, `msg`, `r`, `tell` and `w`. An ender pearl, a teleport from another plugin or leaving
-the arena's world takes them out of the session.
+No, every player is frozen during a drill because it measures their hands. They can only run the commands in `training.allowed-commands` (`aim`, `aimtrainer`, `at`, `msg`, `r`, `tell` and `w` by default), and an ender pearl, a teleport by another plugin or leaving the arena's world takes them out of the session.
 
 ## A player stays in the arena after the drill ends
 
-That is the rest: `training.rest-seconds`, five by default. The summary is on screen, **Play again** on
-the summary or the hotbar replays the drill with whatever settings the player has now, **Change drill**
-picks another, and the time running out sends an idle player home. A player who opened the settings or
-the drill list is still deciding, and the wait starts over. Set it to `0` to send players home the moment
-a drill ends.
+That is the rest: `training.rest-seconds`, five by default. **Play again** replays the drill, **Change drill** picks another, and the time running out sends an idle player home; a player with a settings or drill screen open keeps waiting. Set it to `0` to send players home as soon as a drill ends.
 
 ## How do I add a drill?
 
-Write a new block under `drills` in `config.yml` and run `/aimtraineradmin reload`. A drill is a `kind` —
-`FLICK`, `REACTION`, `TRACK` or `COMBO` — and a set of numbers; nothing in the code knows the shipped ones
-by name, so a new one gets the same menus, records and boards. See [Drills](/docs/exyliaaimtrainer/drills).
-
-Records and boards are keyed by the drill's id. Renaming a key starts that drill over with empty boards,
-and a removed drill's history rows show its id where the name used to be.
+Write a new block under `drills` in `config.yml` and run `/aimtraineradmin reload`. A drill is a `kind` (`FLICK`, `REACTION`, `TRACK` or `COMBO`) and a set of numbers, so a new one gets the same menus, records and boards. Renaming a key starts that drill over with empty boards. See [Tune and add drills](/docs/exyliaaimtrainer/drills).
 
 ## Duels feel unfair when players use different settings
 
-They do not use them, by default. With `match.use-preferences: false` both sides play the drill as written,
-and both share one seed, so the same targets appear in the same places in the same order on both screens.
-Turning it on applies the challenger's size and distance to both players.
+By default they do not use them: with `match.use-preferences: false` both sides play the drill as written and share one seed, so the same targets appear in the same places in the same order. Turning it on applies the challenger's size and distance to both. See [Duels](/docs/exyliaaimtrainer/duels).
 
 ## What is a draw, and why was a duel cancelled?
 
-A round goes to the higher score, then the better accuracy, then more hits. Level on all three is a draw:
-nobody scores, and the round is replayed under the same number. Three draws in a row means neither side is
-shooting, and the duel is cancelled with nothing stored.
+A round goes to the higher score, then the better accuracy, then more hits; level on all three is a draw and the round is replayed. Three draws in a row mean neither side is shooting, and the duel is cancelled with nothing stored.
 
 ## Can I offer a best-of-2 or best-of-4?
 
-List the length in `match.formats` and set `match.allow-even-formats: true`. An even series can end level
-once every round has been played; when it does, the winner of the last round takes the duel.
+List the length in `match.formats` and set `match.allow-even-formats: true`. An even series can end level once every round has been played; the winner of the last round then takes the duel.
 
 ## A player is not on the leaderboard
 
-A board never places a zero, and there is one row per player. An accuracy only counts from sessions of at
-least `leaderboard.accuracy-min-shots` shots, twenty by default. Duels set no records at all: only drill
-sessions that ran their course reach the boards and the overall rating; a run cut short is not stored.
-Java and Bedrock have separate boards, and a board opens on the viewer's own edition: a Bedrock player is
-on the Bedrock boards, reached with the edition button.
-
-The board is cached for `leaderboard.cache-seconds`, five minutes by default. Beating a best rating drops
-the cache at once, so a player who just set one sees themselves; a better accuracy or streak without a
-better rating waits for the cache to expire.
+A board never places a zero and has one row per player. An accuracy only counts from sessions of at least `leaderboard.accuracy-min-shots` shots (twenty), and only drill sessions that ran their course reach the boards; duels set no records. Java and Bedrock have separate boards, and a board is cached for `leaderboard.cache-seconds` (five minutes) unless the player beat their best rating. See [Statistics](/docs/exyliaaimtrainer/stats).
 
 ## How do I reset a player's statistics?
 
-`/aimtraineradmin`, Players, then the player and the reset button. The list shows online players only.
-
-Resetting a player goes through ExyliaLib's player reset, narrowed to this plugin. It asks first, then kicks the player and locks them out while it runs (the staff member needs `exylialib.admin.wipe`). It deletes the player's progress rows: the profile (lifetime numbers, duel record, overall rating and the player's settings) and every drill record, so they leave every board. Session and duel history rows are removed only when the staff member adds history to the reset; otherwise they stay until retention removes them.
+Open `/aimtraineradmin`, **Players**, pick the player and use the reset button; the list shows online players only. It goes through ExyliaLib's player reset: it asks first, kicks the player while it runs (the staff member needs `exylialib.admin.wipe`) and deletes their profile, settings and every drill record. Session and duel history stays unless the staff member adds history to the reset. See [Statistics](/docs/exyliaaimtrainer/stats#resetting-a-player).
 
 ## Can queued ExyliaPracticeCore players train?
 
-Yes, with `practice.train-while-queued` on, the default. The player keeps their place in the queue, and
-the moment a match is found the drill ends and they go to it. `practice.queue-prompt` offers the drills in
-chat when somebody joins a queue, and `practice.ranked-only` limits that prompt to ranked queues. See
-[Compatibility](/docs/exyliaaimtrainer/compatibility).
+Yes, with `practice.train-while-queued` on (the default). They keep their place in the queue and go to the match the moment it is found. See [Compatibility](/docs/exyliaaimtrainer/compatibility).
 
 ## Players in a drill cannot see the server chat
 
-That is `chat.isolation`, on by default: whoever is in a drill or a duel reads that one and nothing else,
-and the rest of the server reads none of it. Set it to `false` to leave chat as the server's chat plugin
-delivers it.
+That is `chat.isolation`, on by default: whoever is in a drill or a duel reads only that one. Set it to `false` to leave chat as your chat plugin delivers it.
 
 ## My edits to a menu or a message do not show
 
-Menus, messages and sidebars live under `lang/<code>/`, one folder per language, and the plugin reads the
-folder of the language `config.yml` names: `language: default` follows ExyliaLib's language. Edit the
-files of the language in use, or set `language` to the one you edited. A server updated from a version
-before languages has its old files in `lang/custom/` and `language: custom`. The player menus and the
-hotbar keep your edits across updates; `menus/admin/` is rewritten on every start and reload. See
-[Configuration · language](/docs/exyliaaimtrainer/configuration#language) and
-[Menus](/docs/exyliaaimtrainer/menus).
+The plugin reads the `lang/<code>/` folder of the language `config.yml` names (`default` follows ExyliaLib), so edit the files of the language in use. A server updated from before languages has its old files in `lang/custom/`. See [Configuration · language](/docs/exyliaaimtrainer/configuration#language), [Menus](/docs/exyliaaimtrainer/menus) and [Edit menus](/docs/exylialib/edit-menus).
 
 ## Can Bedrock players play?
 
-Yes, through Geyser and Floodgate. Their targets are drawn as slimes, which Bedrock can show, and they are
-ranked on Bedrock boards of their own: touch and controller aim is not the same contest as a mouse. See
-[Compatibility](/docs/exyliaaimtrainer/compatibility#bedrock-players).
+Yes, through Geyser and Floodgate. Their targets are drawn as slimes and they are ranked on Bedrock boards of their own, since touch and controller aim is not the same contest as a mouse. See [Compatibility](/docs/exyliaaimtrainer/compatibility#bedrock-players).
 
 ## My PlaceholderAPI placeholders show up unresolved
 
-Every placeholder is the plugin name followed by its own name, `%exyliaaimtrainer_wins%`, through
-PlaceholderAPI and inside the plugin's own files alike. The older `%exyliaaimtrainer_aim_wins%` and
-`%aim_wins%` no longer resolve. See [Placeholders](/docs/exyliaaimtrainer/placeholders).
+Every placeholder is `%exyliaaimtrainer_<name>%`, for example `%exyliaaimtrainer_wins%`. The older `%exyliaaimtrainer_aim_wins%` and `%aim_wins%` no longer resolve. See [Placeholders](/docs/exyliaaimtrainer/placeholders).
 
 ## Where are the arenas and the statistics?
 
-In the database, not in YAML: `aim_arenas`, `aim_profiles`, `aim_records`, `aim_sessions` and
-`aim_matches`. H2 by default; point `database.yml` at MySQL, MariaDB, PostgreSQL or MongoDB to share them
-between servers. Session and duel history rows older than `history.retention-days` (30) are deleted every
-`prune-interval-minutes` (60); `0` days keeps everything. Reload does not touch any of it.
+In the database, not in YAML: `aim_arenas`, `aim_profiles`, `aim_records`, `aim_sessions` and `aim_matches`. H2 by default; point `database.yml` at MySQL, MariaDB, PostgreSQL or MongoDB to share them between servers (see [Database](/docs/exylialib/database)). History rows older than `history.retention-days` (30) are deleted, and a reload does not touch any of it.
 
 ## Does it work on Folia?
 
-Yes, it declares Folia support, and every event it fires runs on the thread that owns the player or the
-arena it is about.
+Yes, it declares Folia support, and every event it fires runs on the thread that owns the player or the arena it is about.
 
 ## Where do I get support?
 
