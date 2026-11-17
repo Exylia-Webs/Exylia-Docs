@@ -1,131 +1,128 @@
 ---
 title: "Cambia los objetos y las rarezas"
+description: "Edita el pool de objetos de items.yml, añade un objeto o una categoría, y fija lo rara que es cada rareza y cuánto puede llevar una vida."
 questions:
   - "¿Cómo cambio lo que reciben los jugadores en una vida?"
-  - "¿Cómo añado un objeto al conjunto?"
+  - "¿Cómo añado un objeto al pool?"
   - "¿Cómo funcionan las rarezas?"
   - "¿Qué es la protección contra la mala suerte?"
   - "¿Cómo hago más raros los objetos legendarios?"
+  - "¿Qué es el presupuesto de items.yml?"
+badge: "guide"
 updated: "1.0.0"
-description: "El conjunto de objetos de items.yml: categorías, líneas de objeto, rarezas de encantamientos, cómo se tira una vida, la rareza de una vida, rarities.yml y la protección contra la mala suerte."
 ---
 
-No hay kits que construir. El servidor guarda un **conjunto de objetos**, `items.yml`, y en cada vida el plugin
-tira cada una de sus **categorías** pieza a pieza: armadura, armas, comida, pociones, utilidades. Cada objeto y
-cada nivel de encantamiento sacan su propia rareza, así que un casco de cuero con Protección IV y uno de
-netherita con Protección contra explosiones II son posibles.
+No hay kits que construir. El servidor tiene un **pool de objetos**, `items.yml`, y en cada vida el plugin tira cada una de sus **categorías** pieza a pieza: espada, armadura, bloques, perlas, comida, pociones. Al terminar esta página sabrás añadir un objeto, hacer más rara una categoría y cambiar la frecuencia de cada rareza.
 
-`items.yml` viene con un conjunto equilibrado. Edítalo en disco y aplícalo con `/rkadmin reload`, o en el
-[editor web](/docs/exyliarandomkits/editor-web-e-importacion) (`/rkadmin` → **Objetos** da el enlace). Se lee
-en cada tirada. Todo ello necesita `exyliarandomkits.admin`.
+## Antes de empezar
+
+Necesitas `exyliarandomkits.admin`. `items.yml` y `rarities.yml` están en la carpeta del plugin y vienen con un pool equilibrado, así que déjalos como están hasta que quieras cambiar algo. Puedes editarlos en disco o en el [editor web](/docs/exyliarandomkits/editor-web-e-importacion): `/rkadmin` → **Objetos** da el enlace. Aplica una edición en disco con `/rkadmin reload` (o el botón **Recargar** de `/rkadmin`). Los jugadores ven el cambio en su siguiente tirada.
+
+## Pasos
+
+<Steps>
+  <Step title="Abre el pool">
+    Abre `plugins/ExyliaRandomKitsCore/items.yml`. `/rkadmin` → **Objetos** muestra cuántas categorías y objetos tiene y enlaza al editor web.
+  </Step>
+  <Step title="Añade un objeto a una categoría">
+    En `categories`, busca la categoría, por ejemplo `swords`, y añade una línea a su lista `items`: `<objeto> <rareza>`. Por ejemplo `DIAMOND_SWORD epic`. La rareza es una de `rarities.yml`: `common`, `rare`, `epic`, `legendary` o `mythic` (Común, Raro, Épico, Legendario, Mítico).
+  </Step>
+  <Step title="Hazlo más o menos probable">
+    Añade `weight=N` a la línea: su parte frente a los demás objetos de la misma rareza en la categoría (`1` por defecto). `IRON_SWORD common weight=3` sale tres veces más que una línea común sin peso.
+  </Step>
+  <Step title="Recarga">
+    Ejecuta `/rkadmin reload`.
+  </Step>
+</Steps>
+
+## Comprueba que funciona
+
+Ejecuta `/rkadmin give <jugador>` para un jugador que esté en la arena, o muere tú unas cuantas veces. El objeto nuevo debe salir en algunas vidas, con la rareza que le diste. Usa `/rk reroll` justo tras aparecer para tirar de nuevo rápido, si tienes un cambio.
 
 ## Cómo se tira una vida
 
-Una vida recorre en orden las categorías de `items.yml`:
-
-1. Una categoría aparece según su `chance` (`100` siempre), y solo después de la categoría que `requires`, si
-   la tiene: las flechas necesitan un arco.
-2. Da `picks` objetos (`1`, o un rango como `1-3`), sin repetir la misma línea mientras queden otras.
-3. Cada objeto saca una **rareza** según los pesos de `rarities.yml`, desplazados por la
-   [suerte](/docs/exyliarandomkits/progresion#mejoras-de-cuenta) del jugador, y luego una de las líneas de la
-   categoría de esa rareza según su `weight`. Una categoría sin líneas de esa rareza toma la más cercana más
-   común y, si no hay, la más cercana más rara.
-4. Cada objeto tira `enchant-rolls` encantamientos (`0`, `1` o un rango como `0-2`): uno que el objeto acepte y
-   que no entre en conflicto con lo que ya tiene (las reglas del propio servidor), con un nivel sacado por
-   rareza: el nivel más alto cuya rareza es la sacada o una más común. Si la tirada queda por debajo de todos
-   los niveles, no da nada.
+1. La vida saca primero su **rareza** según los pesos de `rarities.yml`, desplazados por la [suerte](/docs/exyliarandomkits/progresion#mejoras-de-cuenta) del jugador.
+2. Esa rareza tiene un **presupuesto** en `items.yml` (`budget`: common 3, rare 6, epic 10, legendary 15, mythic 22). Cada pieza cuesta `2^rango - 1` (común 0, raro 1, épico 3, legendario 7, mítico 15). Los encantamientos son gratis.
+3. Las categorías se tiran en orden aleatorio, cada una seguida de las que la `requires` (las flechas necesitan un arma a distancia). Una categoría aparece según su `chance` y da `picks` objetos. Cada objeto saca una rareza y luego una de las líneas de la categoría de esa rareza según `weight`; si la categoría no tiene ninguna, toma la rareza más común más cercana, y si no, la más rara más cercana. Un objeto que la vida ya no puede pagar no se toma.
+4. Lo que las tiradas dejan sin gastar se invierte en mejoras: una pieza al azar sube una rareza cada vez. Así una pieza fuerte la pagan otras más flojas, y una vida vale lo que dice su rareza.
+5. Cada objeto tira `enchant-rolls` encantamientos (`0`, `1` o un rango como `0-2`), uno que el objeto acepte y que no choque con lo que ya tiene, al nivel más alto cuya rareza sea la sacada o una más común.
 
 ### La rareza de una vida
 
-La rareza que se anuncia, se muestra en `%exyliarandomkits_rarity%` y cuentan las misiones por rareza, los
-perks y la protección contra la mala suerte es la de la **segunda pieza más rara** de la vida (si solo tiene
-una pieza, la suya): un objeto con suerte no es una vida con suerte, dos sí.
+La rareza que se anuncia, que muestra `%exyliarandomkits_rarity%` y que cuentan las misiones de rareza, las ventajas y la protección contra la mala suerte es la **más común cuyo presupuesto cubre lo que lleva la vida**. Sin `budget` en `items.yml`, es en cambio la posición de la vida frente a todas las vidas que el pool puede tirar.
 
-## `items.yml`
+### Protección contra la mala suerte
 
+`roll.pity` en `config.yml` asocia un id de rareza con un número de vidas: tras ese número de vidas seguidas por debajo de la rareza, la siguiente es al menos de esa rareza. El plugin lo consigue volviendo a tirar piezas hasta que la vida alcanza la rareza que toca. Por defecto 10 para `epic` y 40 para `legendary`; `0` desactiva una regla. La mejora `luck` encoge esos umbrales. Mira [Progresión](/docs/exyliarandomkits/progresion#mejoras-de-cuenta).
+
+## Rarezas
+
+`rarities.yml` lista las rarezas de la más común a la más rara. La posición de una rareza es su rango: "más rara" en misiones, ventajas y protección contra la mala suerte significa más abajo en la lista.
+
+| Rareza | Peso | Anuncio |
+|---|---|---|
+| `common` (Común) | 60 | `SELF` |
+| `rare` (Raro) | 25 | `SELF` |
+| `epic` (Épico) | 10 | `ARENA` |
+| `legendary` (Legendario) | 4 | `SERVER` |
+| `mythic` (Mítico) | 1 | `SERVER` |
+
+Para hacer más raros los objetos legendarios, baja el peso de `legendary` en `rarities.yml` y ejecuta `/rkadmin reload`. La parte de una rareza es su peso dividido entre la suma de todos los pesos. `announce` decide quién se entera de una tirada: `NONE`, `SELF` (solo el título), `ARENA` (también se avisa a la arena) o `SERVER` (a todos).
+
+`/rkadmin` → **Rarezas** muestra el peso de cada rareza, su parte de un sorteo, cuántos objetos tiene y cómo se anuncia. Solo las muestra; edítalas en disco o en el editor web. Los nombres que leen los jugadores ("Común", "Épico"...) salen de `rarities.<id>` en `lang/<idioma>/content.yml`, mira [Mensajes e idiomas](/docs/exylialib/mensajes-e-idiomas), y los colores de [Colores](/docs/exylialib/colores). Cada vida ejecuta además el disparador `on-roll-<rareza>`, como `on-roll-legendary`.
+
+## Para ir más lejos
+
+- **Añade una categoría nueva**: copia un bloque de categoría en `categories` con un id nuevo. Su id en mayúsculas pasa a ser un rol que los jugadores pueden colocar en su [distribución de la barra](/docs/exyliarandomkits/jugar#los-objetos-en-el-cuerpo).
+- **Que toda vida sea jugable**: deja un arma común, comida, bloques y agua con `chance: 100`.
+- **Parejas**: el pool por defecto tira una categoría cara junto a una gratuita que la requiere, como `end_crystals` con `obsidian`: las dos o ninguna.
+
+<Details title="Campos de categorías y líneas de objeto">
 | Clave | Por defecto | Qué hace |
 |---|---|---|
-| `categories.<id>` | trece categorías | Una lista de objetos. Su id, en mayúsculas, es también su rol en la [distribución](/docs/exyliarandomkits/jugar#los-objetos-en-el-cuerpo). |
-| `chance` | `100` | Porcentaje de probabilidad de que la categoría aparezca en una vida. |
+| `categories.<id>` | el pool por defecto | Una lista de objetos. Su id en mayúsculas es también su rol de distribución. |
+| `chance` | `100` | Porcentaje de que la categoría aparezca en una vida. |
 | `picks` | `1` | Cuántos objetos da: `1` o un rango como `1-3`. |
-| `slot` | `-1` | Dónde cae si la distribución del jugador no dice otra cosa: `0-8` barra, `9-35` inventario, `36` botas, `37` pantalones, `38` peto, `39` casco, `40` mano secundaria, `-1` el primer hueco libre. |
+| `slot` | `-1` | Dónde cae salvo que la distribución del jugador diga otra cosa: `0-8` barra, `9-35` inventario, `36` botas, `37` pantalones, `38` peto, `39` casco, `40` mano secundaria, `-1` el primer hueco libre. |
 | `enchant-rolls` | `0` | Encantamientos que intenta conseguir cada objeto. |
-| `requires` | `""` | Otro id de categoría; esta solo se tira en las vidas que obtuvieron aquella. |
+| `requires` | `""` | Otro id de categoría; esta solo se tira en las vidas que sacaron aquella. |
 | `items` | | Una línea por objeto. |
 | `enchantments.<nombre>` | | La rareza de cada nivel de un encantamiento, desde el nivel 1. |
 
-Las categorías por defecto son `helmets`, `chestplates`, `leggings`, `boots`, `swords`, `axes`, `ranged`,
-`arrows` (requiere `ranged`), `offhand`, `tools`, `food`, `potions` y `utilities`.
-
-Una línea de objeto es `<objeto> <rareza> [cantidad] [potion=TIPO] [weight=N]`:
-
-| Parte | Qué es |
-|---|---|
-| `<objeto>` | Un material, o cualquier fuente de objetos de ExyliaLib (`bytes:...`, `nexo:...`). |
-| `<rareza>` | Un id de `rarities.yml`. |
-| `cantidad` | `1`, o un rango como `8-16`, elegido en cada tirada. |
-| `potion=TIPO` | El tipo de poción, para los objetos que son pociones. |
-| `weight=N` | Su parte frente a los demás objetos de su rareza en la categoría (`1` por defecto). |
+Una línea de objeto es `<objeto> <rareza> [cantidad] [potion=TIPO] [weight=N]`: `<objeto>` es un material o cualquier fuente de objetos de ExyliaLib (`bytes:...`, `nexo:...`); `cantidad` es `1` o un rango como `8-16`; `potion=TIPO` es para pociones y flechas con efecto.
 
 ```yaml
 categories:
-  helmets:
+  swords:
     chance: 100.0
     picks: '1'
-    slot: 39
+    slot: 0
     enchant-rolls: 0-2
     requires: ''
     items:
-    - LEATHER_HELMET common
-    - DIAMOND_HELMET epic
-    - NETHERITE_HELMET legendary
-  potions:
-    chance: 70.0
-    picks: 1-2
-    slot: 4
-    enchant-rolls: '0'
-    items:
-    - SPLASH_POTION rare 2-4 potion=STRONG_HEALING
-    - POTION epic 1 potion=STRENGTH
+    - STONE_SWORD common
+    - DIAMOND_SWORD rare
+    - NETHERITE_SWORD legendary
 enchantments:
   protection: [common, rare, epic, legendary]
   sharpness: [common, rare, rare, epic, legendary]
 ```
 
-Aquí Protección I es común, II rara, III épica y IV legendaria. Una tirada que saca `epic` da Protección III;
-una que saca `rare` da II.
+Aquí Protección I es común, II rara, III épica y IV legendaria. Una tirada que saca `epic` da Protección III.
+</Details>
 
-`/rkadmin` → **Objetos** muestra cuántas categorías y objetos tiene el conjunto.
-
-## Rarezas
-
-`rarities.yml` lista las rarezas de la más común a la más rara. La posición de una rareza es su rango: "más
-rara" en misiones, perks y protección contra la mala suerte significa más abajo en la lista.
-
-| Rareza | Texto | Peso | Anuncio |
-|---|---|---|---|
-| `common` | `{letters_black}&lCOMMON` | 60 | `SELF` |
-| `rare` | `{info}&lRARE` | 25 | `SELF` |
-| `epic` | `{accent}&lEPIC` | 10 | `ARENA` |
-| `legendary` | `{highlight}&lLEGENDARY` | 4 | `SERVER` |
-| `mythic` | `{primary}&lMYTHIC` | 1 | `SERVER` |
-
+<Details title="Campos de las rarezas">
 | Clave | Qué hace |
 |---|---|
-| `id` | Con qué la nombran `items.yml`, las reglas de pity y los eventos. |
-| `display` | Cómo se escribe en mensajes y títulos. |
+| `id` | Con lo que la nombran `items.yml`, las reglas de pity y los eventos. |
+| `display` | Cómo se escribe en mensajes y títulos; `%name%` es su nombre en el idioma del servidor. |
 | `weight` | Su probabilidad cada vez que una pieza o un nivel de encantamiento saca una rareza. |
-| `announce` | `NONE`, `SELF` (solo el título), `ARENA` (también se avisa a la arena) o `SERVER` (a todos). |
-| `feedback` | Líneas de secuencia de ExyliaLib que oye y ve quien la tiró (sonidos, anillos, rayos); se rellenan `%kit%` (el objeto más raro) y `%rarity%`. |
+| `announce` | `NONE`, `SELF`, `ARENA` o `SERVER`. |
+| `feedback` | Líneas de secuencia de ExyliaLib para quien la sacó (sonidos, anillos, rayos); se rellenan `%kit%` y `%rarity%`. |
+</Details>
 
-`/rkadmin` → **Rarezas** muestra el peso de cada rareza, su parte de cada tirada, cuántos objetos tiene y cómo
-se anuncia. Las rarezas se editan en `rarities.yml` y se aplican con `/rkadmin reload` (o en el editor web).
-Cada vida también ejecuta el trigger `on-roll-<rareza>`, como `on-roll-legendary`.
-
-### Protección contra la mala suerte
-
-`roll.pity` en `config.yml` asocia el id de una rareza con un número de vidas: tras esas vidas seguidas por
-debajo de la rareza, la siguiente vida es al menos de esa rareza. El plugin lo consigue volviendo a tirar
-piezas, primero el equipo, hasta que la vida alcanza la rareza que toca. Por defecto 10 para `epic` y 40 para
-`legendary`; `0` desactiva una regla. La mejora `luck` hace que esos umbrales se reduzcan. Mira
-[Progresión](/docs/exyliarandomkits/progresion#mejoras-de-cuenta).
+<Cards>
+  <Card title="Juega una ronda" href="/docs/exyliarandomkits/jugar">Cambios de kit, drafts y distribuciones.</Card>
+  <Card title="Progresión" href="/docs/exyliarandomkits/progresion">La suerte y las demás mejoras que inclinan las probabilidades.</Card>
+  <Card title="Editor web" href="/docs/exyliarandomkits/editor-web-e-importacion">Edita el pool en el navegador.</Card>
+</Cards>

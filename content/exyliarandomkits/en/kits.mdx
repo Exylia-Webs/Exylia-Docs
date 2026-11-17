@@ -1,50 +1,86 @@
 ---
 title: "Change the items and rarities"
+description: "Edit the item pool in items.yml, add an item or a category, set how rare each rarity is and how much a life can hold."
 questions:
   - "How do I change what players get in a life?"
   - "How do I add an item to the pool?"
   - "How do rarities work?"
   - "What is bad luck protection?"
   - "How do I make legendary items rarer?"
+  - "What is the budget in items.yml?"
+badge: "guide"
 updated: "1.0.0"
-description: "The item pool in items.yml: categories, item lines, enchantment rarities, how a life is rolled, a life's rarity, rarities.yml and bad luck protection."
 ---
 
-There are no kits to build. The server keeps one **item pool**, `items.yml`, and on every life the plugin
-rolls each of its **categories** piece by piece: armour, weapons, food, potions, utilities. Every item and
-every enchantment level draws its own rarity, so a leather helmet with Protection IV and a netherite one
-with Blast Protection II are both possible.
+There are no kits to build. The server keeps one **item pool**, `items.yml`, and on every life the plugin rolls each of its **categories** piece by piece: sword, armour, blocks, pearls, food, potions. At the end of this page you can add an item, make a category rarer and change how often each rarity appears.
 
-`items.yml` ships with a balanced pool. Edit it on disk and apply it with `/rkadmin reload`, or edit it in the
-[web editor](/docs/exyliarandomkits/web-editor-and-import) (`/rkadmin` → **Items** gives the link). It is read
-on every roll. All of it needs `exyliarandomkits.admin`.
+## Before you start
+
+You need `exyliarandomkits.admin`. `items.yml` and `rarities.yml` are in the plugin folder and ship with a balanced pool, so leave them as they are until you want to change something. You can edit them on disk, or in the [web editor](/docs/exyliarandomkits/web-editor-and-import): `/rkadmin` → **Items** links to it. Apply a disk edit with `/rkadmin reload` (or the **Reload** button of `/rkadmin`). Players see the change on their next roll.
+
+## Steps
+
+<Steps>
+  <Step title="Open the pool">
+    Open `plugins/ExyliaRandomKitsCore/items.yml`. `/rkadmin` → **Items** shows how many categories and items it holds and links to the web editor.
+  </Step>
+  <Step title="Add an item to a category">
+    Under `categories`, find the category, such as `swords`, and add a line to its `items` list: `<item> <rarity>`. For example `DIAMOND_SWORD epic`. The rarity is one of `rarities.yml`: `common`, `rare`, `epic`, `legendary` or `mythic`.
+  </Step>
+  <Step title="Make it more or less likely">
+    Add `weight=N` to the line: its share against the other items of the same rarity in the category (`1` by default). `IRON_SWORD common weight=3` is picked three times as often as a common line without a weight.
+  </Step>
+  <Step title="Reload">
+    Run `/rkadmin reload`.
+  </Step>
+</Steps>
+
+## Check that it works
+
+Run `/rkadmin give <player>` for a player who is in the arena, or die a few times yourself. The new item should show up in some lives, in the rarity you gave it. Use `/rk reroll` right after spawning to roll again quickly if you have a reroll.
 
 ## How a life is rolled
 
-A life walks the categories of `items.yml` in order:
-
-1. A category appears on its `chance` (`100` always), and only after the category it `requires`, if any:
-   arrows need a bow.
-2. It gives `picks` items (`1`, or a range such as `1-3`), never the same line twice while others are left.
-3. Each item draws a **rarity** from the weights in `rarities.yml`, shifted by the player's
-   [luck](/docs/exyliarandomkits/progression#account-upgrades), then one of the category's lines of that
-   rarity by `weight`. A category with no line of that rarity takes the nearest commoner one, else the nearest
-   rarer one.
-4. Each item rolls `enchant-rolls` enchantments (`0`, `1` or a range such as `0-2`): one the item accepts and
-   that does not conflict with what it already has (the server's own rules), at a level drawn by rarity:
-   the highest level whose rarity is the one drawn or a commoner one. A draw below every level gives nothing.
+1. The life first draws its **rarity** from the weights in `rarities.yml`, shifted by the player's [luck](/docs/exyliarandomkits/progression#account-upgrades).
+2. That rarity has a **budget** in `items.yml` (`budget`: common 3, rare 6, epic 10, legendary 15, mythic 22). Each piece costs `2^rank - 1` (common 0, rare 1, epic 3, legendary 7, mythic 15). Enchantments are free.
+3. Categories are rolled in a random order, each followed by the categories that `requires` it (arrows need a ranged weapon). A category appears on its `chance` and gives `picks` items. Each item draws a rarity, then one of the category's lines of that rarity by `weight`; if the category has none, it takes the nearest commoner rarity, else the nearest rarer one. An item the life can no longer pay for is not taken.
+4. What the draws leave unspent goes on upgrades, one random piece one rarity up at a time. So a strong piece is paid for by weaker ones elsewhere, and a life is worth what its rarity says.
+5. Each item rolls `enchant-rolls` enchantments (`0`, `1` or a range such as `0-2`), one the item accepts and that does not conflict with what it has, at the highest level whose rarity is the one drawn or a commoner one.
 
 ### A life's rarity
 
-The rarity that is announced, shown in `%exyliarandomkits_rarity%` and counted by rarity missions, perks and
-bad luck protection is that of the life's **second-rarest piece** (a life with one piece is its own): one
-lucky item is not a lucky life, two are.
+The rarity that is announced, shown in `%exyliarandomkits_rarity%` and counted by rarity missions, perks and bad luck protection is the **commonest rarity whose budget covers what the life holds**. Without a `budget` in `items.yml` it is instead how the life ranks against every life the pool can roll.
 
-## `items.yml`
+### Bad luck protection
 
+`roll.pity` in `config.yml` maps a rarity id to a number of lives: after that many lives in a row below the rarity, the next life is at least that rarity. The plugin gets there by rolling pieces again until the life reaches the rarity that is due. By default 10 for `epic` and 40 for `legendary`; `0` turns a rule off. The `luck` upgrade makes those thresholds shrink. See [Progression](/docs/exyliarandomkits/progression#account-upgrades).
+
+## Rarities
+
+`rarities.yml` lists the rarities from the most common to the rarest. A rarity's position is its rank: "rarer" in missions, perks and bad luck protection means further down the list.
+
+| Rarity | Weight | Announce |
+|---|---|---|
+| `common` | 60 | `SELF` |
+| `rare` | 25 | `SELF` |
+| `epic` | 10 | `ARENA` |
+| `legendary` | 4 | `SERVER` |
+| `mythic` | 1 | `SERVER` |
+
+To make legendary items rarer, lower the weight of `legendary` in `rarities.yml`, then `/rkadmin reload`. The share of a rarity is its weight divided by the sum of all weights. `announce` decides who hears about a roll: `NONE`, `SELF` (the title only), `ARENA` (also told to the arena) or `SERVER` (to everyone).
+
+`/rkadmin` → **Rarities** shows each rarity's weight, its share of a draw, how many items it has and how it is announced. It only shows them; edit them on disk or in the web editor. The names players read ("Common", "Épico"...) come from `rarities.<id>` in `lang/<language>/content.yml`, see [Messages and languages](/docs/exylialib/messages-and-languages), and the colours from [Colours](/docs/exylialib/colours). Every life also runs the `on-roll-<rarity>` trigger, such as `on-roll-legendary`.
+
+## Going further
+
+- **Add a new category**: copy a category block under `categories` with a new id. Its id in upper case becomes a role players can place on their [hotbar layout](/docs/exyliarandomkits/playing#the-items-on-the-body).
+- **Keep every life playable**: keep a common weapon, food, blocks and water at `chance: 100`.
+- **Pairs**: the default pool rolls a costly category with a free one that requires it, such as `end_crystals` with `obsidian`: both or neither.
+
+<Details title="Category and item line fields">
 | Key | Default | What it does |
 |---|---|---|
-| `categories.<id>` | thirteen categories | One list of items. Its id, in upper case, is also its [layout](/docs/exyliarandomkits/playing#the-items-on-the-body) role. |
+| `categories.<id>` | the default pool | One list of items. Its id in upper case is also its layout role. |
 | `chance` | `100` | Percent chance the category appears in a life. |
 | `picks` | `1` | How many items it gives: `1` or a range like `1-3`. |
 | `slot` | `-1` | Where it lands unless the player's layout says otherwise: `0-8` hotbar, `9-35` inventory, `36` boots, `37` leggings, `38` chestplate, `39` helmet, `40` off hand, `-1` the first free slot. |
@@ -53,78 +89,40 @@ lucky item is not a lucky life, two are.
 | `items` | | One line per item. |
 | `enchantments.<name>` | | The rarity of each level of an enchantment, from level 1 up. |
 
-The default categories are `helmets`, `chestplates`, `leggings`, `boots`, `swords`, `axes`, `ranged`, `arrows`
-(requires `ranged`), `offhand`, `tools`, `food`, `potions` and `utilities`.
-
-An item line is `<item> <rarity> [amount] [potion=TYPE] [weight=N]`:
-
-| Part | What it is |
-|---|---|
-| `<item>` | A material, or any ExyliaLib item source (`bytes:...`, `nexo:...`). |
-| `<rarity>` | An id of `rarities.yml`. |
-| `amount` | `1`, or a range such as `8-16`, picked on every roll. |
-| `potion=TYPE` | The potion type, for potion items. |
-| `weight=N` | Its share against the other items of its rarity in the category (`1` by default). |
+An item line is `<item> <rarity> [amount] [potion=TYPE] [weight=N]`: `<item>` is a material or any ExyliaLib item source (`bytes:...`, `nexo:...`); `amount` is `1` or a range such as `8-16`; `potion=TYPE` is for potion and tipped arrow items.
 
 ```yaml
 categories:
-  helmets:
+  swords:
     chance: 100.0
     picks: '1'
-    slot: 39
+    slot: 0
     enchant-rolls: 0-2
     requires: ''
     items:
-    - LEATHER_HELMET common
-    - DIAMOND_HELMET epic
-    - NETHERITE_HELMET legendary
-  potions:
-    chance: 70.0
-    picks: 1-2
-    slot: 4
-    enchant-rolls: '0'
-    items:
-    - SPLASH_POTION rare 2-4 potion=STRONG_HEALING
-    - POTION epic 1 potion=STRENGTH
+    - STONE_SWORD common
+    - DIAMOND_SWORD rare
+    - NETHERITE_SWORD legendary
 enchantments:
   protection: [common, rare, epic, legendary]
   sharpness: [common, rare, rare, epic, legendary]
 ```
 
-Here Protection I is common, II rare, III epic and IV legendary. A roll that draws `epic` gives Protection III;
-one that draws `rare` gives II.
+Here Protection I is common, II rare, III epic and IV legendary. A roll that draws `epic` gives Protection III.
+</Details>
 
-`/rkadmin` → **Items** shows how many categories and items the pool holds.
-
-## Rarities
-
-`rarities.yml` lists the rarities from the most common to the rarest. A rarity's position is its rank:
-"rarer" in missions, perks and bad luck protection means further down the list.
-
-| Rarity | Display | Weight | Announce |
-|---|---|---|---|
-| `common` | `{letters_black}&lCOMMON` | 60 | `SELF` |
-| `rare` | `{info}&lRARE` | 25 | `SELF` |
-| `epic` | `{accent}&lEPIC` | 10 | `ARENA` |
-| `legendary` | `{highlight}&lLEGENDARY` | 4 | `SERVER` |
-| `mythic` | `{primary}&lMYTHIC` | 1 | `SERVER` |
-
+<Details title="Rarity fields">
 | Key | What it does |
 |---|---|
 | `id` | What `items.yml`, pity rules and events refer to it by. |
-| `display` | How it is written in messages and titles. |
+| `display` | How it is written in messages and titles; `%name%` is its name in the server's language. |
 | `weight` | Its chance every time a piece or an enchantment level draws a rarity. |
-| `announce` | `NONE`, `SELF` (the title only), `ARENA` (also told to the arena) or `SERVER` (to everyone). |
-| `feedback` | ExyliaLib sequence lines played for the player who rolled it (sounds, rings, beams); `%kit%` (the rarest item) and `%rarity%` are filled in. |
+| `announce` | `NONE`, `SELF`, `ARENA` or `SERVER`. |
+| `feedback` | ExyliaLib sequence lines played for the player who rolled it (sounds, rings, beams); `%kit%` and `%rarity%` are filled in. |
+</Details>
 
-`/rkadmin` → **Rarities** shows each rarity's weight, its share of a draw, how many items it has and how it
-is announced. Rarities are edited in `rarities.yml` and applied with `/rkadmin reload` (or the web editor).
-Every life also runs the `on-roll-<rarity>` trigger, such as `on-roll-legendary`.
-
-### Bad luck protection
-
-`roll.pity` in `config.yml` maps a rarity id to a number of lives: after that many lives in a row below the
-rarity, the next life is at least that rarity. The plugin gets there by rolling pieces again, gear first,
-until the life reaches the rarity that is due. By default 10 for `epic` and 40 for `legendary`; `0` turns a
-rule off. The `luck` upgrade makes those thresholds shrink. See
-[Progression](/docs/exyliarandomkits/progression#account-upgrades).
+<Cards>
+  <Card title="Play a round" href="/docs/exyliarandomkits/playing">Rerolls, drafts and layouts.</Card>
+  <Card title="Progression" href="/docs/exyliarandomkits/progression">Luck and the other upgrades that tilt the odds.</Card>
+  <Card title="Web editor" href="/docs/exyliarandomkits/web-editor-and-import">Edit the pool in a browser.</Card>
+</Cards>
