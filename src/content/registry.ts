@@ -1819,25 +1819,23 @@ const JOBS_NAV: NavGroup[] = [
     ],
   },
   {
-    label: { en: "Jobs", es: "Trabajos" },
+    label: { en: "Guides", es: "Guías" },
     pages: [
       page("jobs-and-actions", "jobs-and-actions", "trabajos-y-acciones"),
-      page("payout", "payout", "pago"),
-      page("economy-guard", "economy-guard", "guardia-economica"),
-      page("anti-exploit", "anti-exploit", "anti-exploit"),
       page("levels-and-slots", "levels-and-slots", "niveles-y-ranuras"),
       page("perks-and-prestige", "perks-and-prestige", "mejoras-y-prestigio"),
       page("work-orders", "work-orders", "ordenes-de-trabajo"),
-    ],
-  },
-  {
-    label: { en: "Server", es: "Servidor" },
-    pages: [
+      page("economy-guard", "economy-guard", "guardia-economica"),
+      page("anti-exploit", "anti-exploit", "anti-exploit"),
       page("editors", "editors", "editores"),
       page("migration", "migration", "migracion"),
       page("integrations", "integrations", "integraciones"),
       page("network", "network", "red"),
     ],
+  },
+  {
+    label: { en: "How it works", es: "Cómo funciona" },
+    pages: [page("payout", "payout", "pago")],
   },
   {
     label: { en: "Reference", es: "Referencia" },
@@ -1847,6 +1845,12 @@ const JOBS_NAV: NavGroup[] = [
       page("placeholders", "placeholders", "placeholders"),
       page("configuration", "configuration", "configuracion"),
       page("api", "api", "api"),
+    ],
+  },
+  {
+    label: { en: "Help", es: "Ayuda" },
+    pages: [
+      page("troubleshooting", "troubleshooting", "problemas-comunes"),
       page("faq", "faq", "faq"),
     ],
   },
