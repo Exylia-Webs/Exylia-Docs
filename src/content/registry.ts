@@ -1623,12 +1623,18 @@ const KILLCAM_NAV: NavGroup[] = [
     ],
   },
   {
-    label: { en: "Killcam", es: "Killcam" },
+    label: { en: "Guides", es: "Guías" },
     pages: [
-      page("killcam", "killcam", "killcam"),
       page("modes", "modes", "modos"),
+      page("playback", "playback", "reproduccion"),
+      page("who-gets-one", "who-gets-one", "quien-la-recibe"),
       page("compatibility", "compatibility", "compatibilidad"),
+      page("messages", "messages", "mensajes"),
     ],
+  },
+  {
+    label: { en: "How it works", es: "Cómo funciona" },
+    pages: [page("killcam", "killcam", "killcam")],
   },
   {
     label: { en: "Reference", es: "Referencia" },
@@ -1636,6 +1642,12 @@ const KILLCAM_NAV: NavGroup[] = [
       page("commands", "commands", "comandos"),
       page("permissions", "permissions", "permisos"),
       page("configuration", "configuration", "configuracion"),
+    ],
+  },
+  {
+    label: { en: "Help", es: "Ayuda" },
+    pages: [
+      page("troubleshooting", "troubleshooting", "problemas-comunes"),
       page("faq", "faq", "faq"),
     ],
   },
