@@ -22,7 +22,7 @@ Follow WRITING.md. ExyliaFFA is the model. One row per plugin; mark done after r
 | `exyliaemotes` | `ExyliaEmotes` | done (configuration leftover) |
 | `exyliaevents` | `ExyliaEvents` | done (introduction, installation bodies; configuration, api, faq tables leftovers) |
 | `exyliaffa` | `ExyliaFFA` | done |
-| `exyliagraves` | `ExyliaGraves` | done (staff, network, configuration, faq, installation on old text) |
+| `exyliagraves` | `ExyliaGraves` | done |
 | `exyliahiteffect` | `ExyliaHitEffect` | done (configuration, api, faq leftovers) |
 | `exyliajobs` | `ExyliaJobs` | done |
 | `exyliajourney` | `ExyliaJourney` | done (configuration, api, faq pending cleanup) |
