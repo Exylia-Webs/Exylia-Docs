@@ -772,6 +772,48 @@ function effectsNav(extra: DocRef[] = []): NavGroup[] {
   ];
 }
 
+const HITEFFECT_NAV: NavGroup[] = [
+  {
+    label: { en: "Getting started", es: "Empezar" },
+    pages: [
+      page("introduction", "introduction", "introduccion"),
+      page("installation", "installation", "instalacion"),
+      page("first-steps", "first-steps", "primeros-pasos"),
+    ],
+  },
+  {
+    label: { en: "Guides", es: "Guías" },
+    pages: [
+      page("effects", "effects", "efectos"),
+      page("modes-and-tokens", "modes-and-tokens", "modos-y-fichas"),
+      page("menu", "menu", "menu"),
+      page("crate", "crate", "caja"),
+      page("create-with-ai", "create-with-ai", "crear-con-ia"),
+    ],
+  },
+  {
+    label: { en: "How it works", es: "Cómo funciona" },
+    pages: [page("sequences", "sequences", "secuencias")],
+  },
+  {
+    label: { en: "Reference", es: "Referencia" },
+    pages: [
+      page("commands", "commands", "comandos"),
+      page("permissions", "permissions", "permisos"),
+      page("placeholders", "placeholders", "placeholders"),
+      page("configuration", "configuration", "configuracion"),
+      page("api", "api", "api"),
+    ],
+  },
+  {
+    label: { en: "Help", es: "Ayuda" },
+    pages: [
+      page("troubleshooting", "troubleshooting", "problemas-comunes"),
+      page("faq", "faq", "faq"),
+    ],
+  },
+];
+
 const ARROWS_NAV: NavGroup[] = [
   {
     label: { en: "Getting started", es: "Empezar" },
@@ -2213,7 +2255,7 @@ export const plugins: Plugin[] = [
       { en: "Combat", es: "Combate" },
       { en: "Folia", es: "Folia" },
     ],
-    nav: effectsNav([page("crate", "crate", "caja")]),
+    nav: HITEFFECT_NAV,
   },
   {
     id: "exyliaemotes",
