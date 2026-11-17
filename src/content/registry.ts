@@ -1195,7 +1195,11 @@ const CASINO_NAV: NavGroup[] = [
   },
   {
     label: { en: "Games", es: "Juegos" },
-    pages: [page("games", "games", "juegos")],
+    pages: [
+      page("games", "games", "juegos"),
+      page("tables", "tables", "mesas"),
+      page("live-stations", "live-stations", "estaciones-en-vivo"),
+    ],
   },
   {
     label: { en: "Reference", es: "Referencia" },
@@ -2381,7 +2385,7 @@ export const plugins: Plugin[] = [
   {
     id: "exyliacasino",
     name: "ExyliaCasino",
-    tagline: { en: "Seventeen casino games against the house, drawn in 3D", es: "Diecisiete juegos de casino contra la casa, dibujados en 3D" },
+    tagline: { en: "Nineteen casino games against the house, drawn in 3D", es: "Diecinueve juegos de casino contra la casa, dibujados en 3D" },
     summary: {
       en: "Nineteen games against the house, from Mines and Crash to Blackjack, Sic Bo and live roulette, played in the server's currencies on 3D tables or screens, with placed tables, live stations, a house bank, per-game permissions, each game's RTP shown and every stake held by an escrow that survives a restart.",
       es: "Diecinueve juegos contra la casa, de Mines y Crash a Blackjack, Sic Bo y ruleta en vivo, jugados con las monedas del servidor en mesas 3D o pantallas, con mesas colocadas, estaciones en vivo, banco de la casa, permisos por juego, el RTP de cada juego a la vista y cada apuesta retenida por un depósito que sobrevive a un reinicio.",
