@@ -1203,8 +1203,15 @@ const DISPLAYS_NAV: NavGroup[] = [
     pages: [
       page("commands", "commands", "comandos"),
       page("permissions", "permissions", "permisos"),
+      page("placeholders", "placeholders", "placeholders"),
       page("configuration", "configuration", "configuracion"),
       page("file-reference", "file-reference", "referencia-de-archivos"),
+    ],
+  },
+  {
+    label: { en: "Help", es: "Ayuda" },
+    pages: [
+      page("troubleshooting", "troubleshooting", "problemas-comunes"),
       page("faq", "faq", "faq"),
     ],
   },
