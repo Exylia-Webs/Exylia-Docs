@@ -1309,13 +1309,17 @@ const DUELS_NAV: NavGroup[] = [
     pages: [
       page("introduction", "introduction", "introduccion"),
       page("installation", "installation", "instalacion"),
+      page("first-steps", "first-steps", "primeros-pasos"),
     ],
   },
   {
-    label: { en: "Duels", es: "Duelos" },
+    label: { en: "Guides", es: "Guías" },
     pages: [
       page("dueling", "dueling", "duelos"),
       page("arenas-and-kits", "arenas-and-kits", "arenas-y-kits"),
+      page("kit-rules", "kit-rules", "reglas-de-kit"),
+      page("bets", "bets", "apuestas"),
+      page("history", "history", "historial"),
       page("network", "network", "red"),
     ],
   },
@@ -1326,6 +1330,12 @@ const DUELS_NAV: NavGroup[] = [
       page("permissions", "permissions", "permisos"),
       page("placeholders", "placeholders", "placeholders"),
       page("configuration", "configuration", "configuracion"),
+    ],
+  },
+  {
+    label: { en: "Help", es: "Ayuda" },
+    pages: [
+      page("troubleshooting", "troubleshooting", "problemas-comunes"),
       page("faq", "faq", "faq"),
     ],
   },
