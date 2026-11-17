@@ -1,64 +1,64 @@
 ---
-title: "Primeros pasos"
-description: "Comprobar desde un backend que el puente funciona, un primer comando en el proxy, un teletransporte entre servidores y qué revisar cuando nada responde."
+title: "Conecta tu red"
+description: "Comprueba que un servidor oye al proxy, ejecuta un primer comando en el proxy y prueba un teletransporte entre servidores. Unos diez minutos."
+questions:
+  - "¿Cómo sé que el proxy está conectado?"
+  - "¿Cómo pruebo ExyliaProxyUtils?"
+  - "¿Cómo ejecuto un comando del proxy desde un servidor?"
+  - "¿Cómo pruebo un teletransporte entre servidores?"
+  - "¿Qué significa 'No proxy bridge answered'?"
+updated: "2.4.0"
 ---
 
-Con el proxy arrancado y la línea `ready on Redis` en su consola, comprueba el otro lado.
+Al final de esta página habrás visto a un servidor hablar con el proxy y ejecutar un comando en él.
 
-## 1. ¿Un backend oye al proxy?
+## Antes de empezar
 
-ExyliaLib abre el puente un segundo después de arrancar el backend y hace ping al proxy, y repite cada
-diez segundos hasta recibir respuesta. En la consola de un backend busca:
+El proxy ejecuta ExyliaProxyUtils y muestra la línea `ready on Redis` ([Instala ExyliaProxyUtils](/docs/exyliaproxyutils/instalacion)). Tus servidores tienen ExyliaLib 1.106.0 o superior con Redis activado.
 
-```text
-Proxy bridge listening on Redis 10.0.0.6:6379 as "survival-1" (settings from ExyliaLib/database.yml).
-```
+## Pasos
 
-y ejecuta `/exylialib status`: manda un ping nuevo y muestra qué respondió, por ejemplo
-`ExyliaProxyUtils 2.4.0 on Velocity`.
+<Steps>
+  <Step title="Mira la consola de un servidor">
+    Aproximadamente un segundo después de arrancar, ExyliaLib hace ping al proxy, y repite cada diez segundos hasta recibir respuesta. Busca:
 
-Si el proxy no responde nunca, el backend lo dice una vez:
+    ```text
+    Proxy bridge listening on Redis 10.0.0.6:6379 as "survival-1" (settings from ExyliaLib/database.yml).
+    ```
+  </Step>
+  <Step title="Pide una respuesta al proxy">
+    En ese servidor ejecuta `/exylialib status`. Envía un ping nuevo y muestra quién respondió, por ejemplo `ExyliaProxyUtils 2.4.0 on Velocity`.
+  </Step>
+  <Step title="Ejecuta un comando en el proxy">
+    En cualquier lista de comandos de Exylia (una recompensa, una acción de menú) añade una línea que empiece por `player-proxy:` o `console-proxy:`:
+
+    ```yaml
+    commands:
+      - "player-proxy:server lobby"                    # como el jugador
+      - "console-proxy:alert ¡Empieza un evento!"      # como la consola del proxy
+    ```
+
+    Actívala. El jugador pasa a `lobby` y el log del proxy muestra `[survival-1] console: /alert ¡Empieza un evento! (for Steve)`. Más en [Ejecuta comandos del proxy desde un servidor](/docs/exyliaproxyutils/comandos).
+  </Step>
+  <Step title="Prueba un teletransporte entre servidores">
+    Con un plugin que lo ofrezca (el `/tp` de ExyliaStaff, el TPA entre servidores o `/back` de ExyliaSurvivalCore), teletranspórtate a alguien de otro servidor. El servidor encuentra al objetivo a través del proxy, el proxy mueve al jugador y el servidor de destino lo deja junto al objetivo.
+  </Step>
+</Steps>
+
+## Comprueba que funciona
+
+`/exylialib status` nombra a ExyliaProxyUtils, la línea `player-proxy:server` mueve al jugador y el teletransporte te deja junto al objetivo en lugar de en el spawn. Si un movimiento se rechaza, el motivo vuelve al servidor: un servidor desconocido, una conexión ya en curso, un plugin del proxy que la canceló o el destino rechazando al jugador.
+
+Si el proxy no responde nunca, el servidor lo dice una vez:
 
 ```text
 No proxy bridge answered on Redis channel "exylia:bridge:proxy". Install ExyliaProxyUtils on the proxy with the same Redis and key-prefix, or player-proxy: and console-proxy: commands and cross-server teleports will not run.
 ```
 
-Casi siempre significa un Redis distinto, una `database` distinta o un `key-prefix` distinto a cada
-lado.
+Casi siempre significa un Redis distinto, un número de `database` distinto o un `key-prefix` distinto en los dos lados. Mira [Problemas comunes](/docs/exyliaproxyutils/problemas-comunes).
 
-## 2. Ejecuta algo en el proxy
-
-Todo plugin de Exylia que ejecuta listas de comandos acepta dos prefijos que llegan aquí:
-
-```yaml
-commands:
-  - "player-proxy:server lobby"     # como el jugador, con sus permisos en el proxy
-  - "console-proxy:alert An event is starting!"   # como la consola del proxy
-```
-
-Un comando `console-proxy:` se escribe en el log del proxy con el servidor que lo envió:
-
-```text
-[survival-1] console: /alert An event is starting! (for Steve)
-```
-
-Un comando que el proxy no tiene vuelve como un rechazo que el backend registra:
-`the proxy did not run "/alert"`. Ver [Comandos](/docs/exyliaproxyutils/comandos).
-
-## 3. Un teletransporte entre servidores
-
-Teletransporta a un jugador hasta alguien de otro servidor con el plugin que lo ofrezca (el `/tp` de
-ExyliaStaff, el TPA entre servidores o `/back` de ExyliaSurvivalCore). El backend encuentra al objetivo
-a través del proxy, le pide que mueva al jugador, y el servidor de destino recibe dónde colocarlo cuando
-llegue. Si el movimiento se rechaza, vuelve el motivo: un servidor desconocido, una conexión ya en
-curso, un plugin del proxy que la canceló o el destino que rechazó al jugador.
-
-## Cuando nada responde
-
-| Síntoma | Revisa |
-|---|---|
-| `could not start` en el proxy | Host, puerto, contraseña o base de datos de Redis en `config.properties`. |
-| El backend dice que ningún puente respondió | Mismo Redis, misma `database`, mismo `key-prefix` a ambos lados. |
-| `no server "<nombre>"` en los teletransportes | Los nombres de servidor del proxy no son los `server-id` de los backends. |
-| Las respuestas caducan a los cinco segundos | El proxy arrancó antes de que Redis estuviera listo: reinícialo. |
-| `UNKNOWN_MODULE` | Un backend pide un módulo que esta versión del proxy no tiene: actualiza el proxy. |
+<Cards>
+  <Card title="Ejecuta comandos del proxy desde un servidor" href="/docs/exyliaproxyutils/comandos">Los dos prefijos en detalle.</Card>
+  <Card title="Envía los baneos del proxy a ExyliaStaff" href="/docs/exyliaproxyutils/sanciones">Si usas LiteBans, LibertyBans, AdvancedBan o BanManager en el proxy.</Card>
+  <Card title="Bloquea a los baneados al entrar" href="/docs/exyliaproxyutils/baneos-al-entrar">Recházalos antes de que lleguen a un servidor.</Card>
+</Cards>

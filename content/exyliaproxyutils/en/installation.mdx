@@ -1,87 +1,70 @@
 ---
-title: "Installation"
-description: "Downloading the jar, installing it on Velocity or BungeeCord, pointing it at the network's Redis, and what the console says."
+title: "Install ExyliaProxyUtils"
+description: "Put the jar on Velocity or BungeeCord, point it at your network's Redis, and read what the console tells you."
+questions:
+  - "How do I install ExyliaProxyUtils?"
+  - "Where is config.properties?"
+  - "What must the server names on the proxy be?"
+  - "Do I need to restart after editing the config?"
+  - "What does 'could not start' mean?"
+updated: "2.4.0"
 ---
 
-## Downloading
-
-Every release is published on
-[GitHub](https://github.com/Exylia-Plugins/ExyliaProxyUtils/releases) with two copies of the same jar:
-`ExyliaProxyUtils-<version>.jar` and `ExyliaProxyUtils.jar`. Prefer the second: the proxy
-[updates itself](/docs/exyliaproxyutils/updates) by writing the new release over the jar it is running,
-under the same file name, so a versioned name stops telling the truth after the first update.
-
-The same file works on both proxies. Velocity reads `velocity-plugin.json` and BungeeCord reads
-`bungee.yml`; each loads only the main class written for it.
+At the end of this page the proxy is running ExyliaProxyUtils and connected to the same Redis as your servers.
 
 ## Before you start
 
-Every backend that should reach the proxy needs:
+Every server that should reach the proxy needs:
 
-| On each backend | Why |
+| On each server | Why |
 |---|---|
 | ExyliaLib 1.106.0 or newer | It is the side that asks. |
-| `database.redis.enabled: true` in a `database.yml` | ExyliaLib rides the first Redis it finds: its own `plugins/ExyliaLib/database.yml` first, otherwise the first plugin whose `database.yml` has Redis on. |
-| A unique `server-id` under `database.redis` | It is the address answers go back to. |
+| `database.redis.enabled: true` in a `database.yml` | ExyliaLib uses the first Redis it finds: its own `plugins/ExyliaLib/database.yml` first, otherwise the first plugin whose `database.yml` has Redis on. |
+| A unique `server-id` under `database.redis` | It is the address the answers go back to. |
 | The same `key-prefix` as the proxy | Two networks on one Redis must not answer each other. |
 
 <Callout type="danger" title="Server names on the proxy must equal the server-ids">
-The name a server has in `velocity.toml` (or BungeeCord's `config.yml`) has to be exactly the
-`server-id` that backend has in its `database.yml`. An answer is published to
-`<prefix>:bridge:<server-id>`, a `connect` moves a player to the proxy server by that name, and a
-`connect` with no server named means "the server that asked", looked up by its `server-id`. With
-different names, teleports fail with `no server "<name>"`.
+The name a server has in `velocity.toml` (or BungeeCord's `config.yml`) has to be exactly the `server-id` that server has in its `database.yml`. With different names, teleports fail with `no server "<name>"`.
 </Callout>
 
-## Installing
+## Steps
 
 <Steps>
-  <Step title="Drop in the jar">
-    Copy `ExyliaProxyUtils.jar` into the proxy's `plugins/`, next to any ban plugin you run there.
+  <Step title="Download the jar">
+    On the [GitHub releases](https://github.com/Exylia-Plugins/ExyliaProxyUtils/releases) page, download `ExyliaProxyUtils.jar`. Prefer it to `ExyliaProxyUtils-<version>.jar`: the proxy [updates itself](/docs/exyliaproxyutils/updates) over the file it runs, so a versioned name stops being true after the first update. The same file works on both proxies.
+  </Step>
+  <Step title="Drop it in the proxy">
+    Copy it into the proxy's `plugins/`, next to any ban plugin you run there.
   </Step>
   <Step title="Start the proxy once">
-    The first start writes `plugins/ExyliaProxyUtils/config.properties` (`plugins/exyliaproxyutils/`
-    on Velocity, which names the folder after the plugin id). With the default `localhost`, it starts
-    only if Redis happens to run on the proxy machine.
+    This writes `plugins/ExyliaProxyUtils/config.properties` (`plugins/exyliaproxyutils/` on Velocity, which names the folder after the plugin id). With the default `localhost`, it starts only if Redis runs on the proxy machine.
   </Step>
-  <Step title="Point it at the network's Redis">
-    Fill in the same host, port, password, database and key prefix every backend has under
-    `database.redis`. See [Configuration](/docs/exyliaproxyutils/configuration).
+  <Step title="Point it at your Redis">
+    Fill in the same host, port, password, database and key prefix every server has under `database.redis`. Every key is explained in [Configuration](/docs/exyliaproxyutils/configuration).
   </Step>
   <Step title="Restart the proxy">
     There is no reload: the file is read once, at startup.
   </Step>
 </Steps>
 
-## What the console says
+## Check that it works
 
-On a good start:
+The console shows:
 
 ```text
 ExyliaProxyUtils 2.4.0 ready on Redis 10.0.0.6:6379; modules: [chat-hold, commands, connect, kick, ping, player, players, punish-import, punish-sources, servers]
 ```
 
-preceded by one `Recording <ORIGIN> punishments made on this proxy.` line for each ban plugin it hooked
-(see [Punishments](/docs/exyliaproxyutils/punishments)).
-
-If Redis cannot be reached, or the file cannot be read:
-
-```text
-ExyliaProxyUtils could not start; check plugins/ExyliaProxyUtils/config.properties: <reason>
-```
+You also see one `Recording <ORIGIN> punishments made on this proxy.` line for each ban plugin it found (see [Punishments](/docs/exyliaproxyutils/punishments)). If you see `ExyliaProxyUtils could not start; check plugins/ExyliaProxyUtils/config.properties: <reason>`, see [Common problems](/docs/exyliaproxyutils/troubleshooting).
 
 <Callout type="warning" title="A failed start stays failed">
-The connection is tested once, when the proxy starts. If Redis is down at that moment the plugin stays
-loaded but does nothing until the proxy restarts: no bridge, no ban hooks, no login check. Only a
-connection that drops **after** a good start is retried, every two seconds, with a
-`Redis subscription dropped (...); retrying in 2000ms.` warning. The update check still runs.
+The connection is tested once, when the proxy starts. If Redis is down at that moment the plugin stays loaded but does nothing until you restart the proxy. A connection that drops after a good start is retried every two seconds.
 </Callout>
 
-## Generated files
+## Files it creates
 
-| File | Contents |
-|---|---|
-| `config.properties` | The Redis connection, the key prefix and the update switch. Written once, never overwritten. |
+`config.properties` is the only file. It is written once and never overwritten. The plugin keeps no data of its own: everything it hears goes straight back out over Redis.
 
-That is the only file. The plugin keeps no data of its own: everything it hears from the backends or
-from the ban plugins goes straight back out over Redis.
+<Cards>
+  <Card title="Next: Connect your network" href="/docs/exyliaproxyutils/first-steps">See a server answer the proxy.</Card>
+</Cards>

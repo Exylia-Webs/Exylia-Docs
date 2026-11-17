@@ -1057,22 +1057,34 @@ const PROXYUTILS_NAV: NavGroup[] = [
     ],
   },
   {
-    label: { en: "Features", es: "Funciones" },
+    label: { en: "Guides", es: "Guías" },
     pages: [
-      page("modules", "modules", "modulos"),
+      page("commands", "commands", "comandos"),
       page("punishments", "punishments", "sanciones"),
       page("login-bans", "login-bans", "baneos-al-entrar"),
       page("updates", "updates", "actualizaciones"),
+      page("without-redis", "without-redis", "sin-redis"),
+    ],
+  },
+  {
+    label: { en: "How it works", es: "Cómo funciona" },
+    pages: [
+      page("modules", "modules", "modulos"),
+      page("protocol", "protocol", "protocolo"),
     ],
   },
   {
     label: { en: "Reference", es: "Referencia" },
     pages: [
-      page("commands", "commands", "comandos"),
       page("permissions", "permissions", "permisos"),
       page("configuration", "configuration", "configuracion"),
-      page("protocol", "protocol", "protocolo"),
       page("api", "api", "api"),
+    ],
+  },
+  {
+    label: { en: "Help", es: "Ayuda" },
+    pages: [
+      page("troubleshooting", "troubleshooting", "problemas-comunes"),
       page("faq", "faq", "faq"),
     ],
   },
@@ -2672,6 +2684,7 @@ export const plugins: Plugin[] = [
       { en: "Redis", es: "Redis" },
     ],
     nav: PROXYUTILS_NAV,
+    standalone: true,
   },
   {
     id: "exyliaeconomy",
