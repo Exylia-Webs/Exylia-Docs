@@ -407,6 +407,12 @@ const PRACTICEBOT_NAV: NavGroup[] = [
       page("permissions", "permissions", "permisos"),
       page("configuration", "configuration", "configuracion"),
       page("api", "api", "api"),
+    ],
+  },
+  {
+    label: { en: "Help", es: "Ayuda" },
+    pages: [
+      page("troubleshooting", "troubleshooting", "problemas-comunes"),
       page("faq", "faq", "faq"),
     ],
   },
