@@ -1,123 +1,86 @@
 ---
 title: "Channels"
-description: "channels.yml: the three kinds of channel, who may talk and read, prefixes, per-channel formats, and what travels between servers."
+description: "Give your server global, nearby and permission-only chat channels, and let players switch with /channel or a prefix."
+questions:
+  - "How do I add a staff chat channel?"
+  - "How do I make a local chat limited by distance?"
+  - "How do players switch channel?"
+  - "Can chat travel between my servers?"
+  - "Why can a player not see a channel?"
+updated: "1.3.0"
 ---
 
-A channel is where a message goes. They live in `chat/channels.yml`, read by hand the way the cosmetic
-catalogues are: you add entries and comments, and one bad entry costs that entry only.
+A channel is where a message goes. Out of the box there is one: global, where everybody reads everybody. You can add a channel for nearby chat or one only some players can read.
 
-```yaml title="plugins/ExyliaChatCosmetics/chat/channels.yml"
-channels:
-  global:
-    type: GLOBAL
-    name: '{letters}Global'
-    prefix: '!'
-    cross-server: true
-  local:
-    enabled: false
-    type: LOCAL
-    name: '{info}Local'
-    prefix: '.'
-    radius: 100
-```
+## Before you start
 
-## The keys
+The built-in chat must be on (`modules.chat: true`, see [The chat module](/docs/exyliachatcosmetics/chat)). Channels live in `plugins/ExyliaChatCosmetics/lang/<language>/chat/channels.yml`, for example `lang/en/chat/channels.yml`.
 
-| Key | Default | Meaning |
-|---|---|---|
-| `type` | `CUSTOM` | `GLOBAL`, `LOCAL` or `CUSTOM` — see below |
-| `name` | the entry's own id | What messages and menus call it; palette tokens and colours work |
-| `permission` | empty | Needed to talk **and** to read. Empty means everybody |
-| `prefix` | none | One character typed in front of a message to send that one message here |
-| `radius` | `100` | Blocks, `LOCAL` only; every other type ignores it |
-| `format` | empty | A file from `chat/formats/` this channel always uses |
-| `cross-server` | `true`, or `false` for `LOCAL` | Whether messages travel to the other servers |
-| `enabled` | `true` | `false` keeps the channel out entirely |
-
-Ids are normalised to `a-z 0-9 _ -` in lower case, so `Global` and `global` are the same channel.
-
-<Callout type="note" title="There is always a global">
-A message has to go somewhere. If `channels.yml` has no `global` entry, or the section is missing
-altogether, a built-in `GLOBAL` channel is used and the problem is logged. Deleting `global` does not
-turn global chat off; it only takes your settings for it away.
-</Callout>
-
-## The three types
-
-| Type | Who reads it |
-|---|---|
-| `GLOBAL` | Everybody online |
-| `CUSTOM` | Everybody holding the channel's `permission` |
-| `LOCAL` | Everybody in the sender's world within `radius` blocks, plus the sender |
-
-`LOCAL` measures the distance from where the sender stood when the message arrived, which is what
-every proximity chat does. The sender always reads their own message, whatever the type.
-
-`permission` is one permission for two things: a channel behind one is written **and** read by its
-holders only. There is no separate read node, so a player who cannot talk in a channel does not see it
-either.
-
-<Callout type="note" title="`type: STAFF` still loads">
-An earlier version had a fourth type. A file written for it is read as `CUSTOM`, which is what `STAFF`
-always meant: a channel its permission holders read. Nothing to change on upgrade.
-</Callout>
-
-## Which channel a line goes to
-
-A typed line is resolved in this order.
+## Add a staff channel
 
 <Steps>
-  <Step title="A prefix character">
-    If the first character is a channel's `prefix`, the player may use that channel, and there is
-    something after it, the message goes there once and the character is stripped. A prefix for a
-    channel they may not use is left in the text — they meant to type it.
+  <Step title="Open the file">
+    Edit `lang/en/chat/channels.yml` (your language folder).
   </Step>
-  <Step title="The channel they switched to">
-    `/channel <id>` (or `/ch`) moves a player's plain messages. If their channel was deleted from the
-    file, or they lost the permission for it, they fall back to global rather than to nothing.
+  <Step title="Add the channel">
+    Under `channels:` add:
+
+    ```yaml
+      staff:
+        type: CUSTOM
+        name: '{warning}Staff'
+        permission: exyliachatcosmetics.chat.channel.staff
+        prefix: '@'
+    ```
   </Step>
-  <Step title="Global">
-    Everything else.
+  <Step title="Give the permission">
+    Give `exyliachatcosmetics.chat.channel.staff` to your staff group in your permissions plugin, see [Permissions](/docs/exyliachatcosmetics/permissions).
+  </Step>
+  <Step title="Reload">
+    Run `/cca chat reload`.
   </Step>
 </Steps>
 
-Switching fires `ChannelSwitchEvent`, and a listener that cancels it leaves the player where they
-were. Only a non-global channel is stored, so a player who never picked one, and a player who picked
-global, are the same row.
+The node name is yours to choose: a channel's `permission` is any node you write. A channel behind a permission is written and read only by its holders.
 
-A `prefix` longer than one character is trimmed to its first, with a warning: one character is what a
-player types without thinking, and a two-character prefix is a command with extra steps.
+## Check that it works
 
-## Cross-server
+As a staff member, type `@hello`: the message goes to the staff channel only, once, and the `@` is removed. Run `/channel staff` (or `/ch staff`) to move all your messages there, and `/channel global` to go back. A player without the permission who types `@hello` simply sends it to global with the `@` left in.
 
-With `cross-server.enabled: true` in `chat/config.yml` and Redis configured in ExyliaLib's
-`database.yml`, the module publishes on the library's `chat` channel. A message from a channel marked
-`cross-server: true` travels; one from a channel marked `false` stays here.
+## Turn on nearby chat
 
-What travels is the **already rendered line**, along with the channel id and the sender's name and
-UUID. The receiving server never re-runs the pipeline: the filter, the cosmetics, the format and every
-transform already happened where the message was typed. All the other side decides is who reads it —
-the channel's permission for a `CUSTOM` channel, everybody for a `GLOBAL` one, and nobody for a
-`LOCAL` one, since a radius means nothing across servers — minus anybody ignoring the sender. The
-console reads it too.
+Two channels ship: `global` with prefix `!`, and `local`, which is off. In `channels.yml`, delete `enabled: false` from `local` (or set it to `true`) and run `/cca chat reload`. Players in the same world within `radius` blocks (100 by default) read it, plus the sender. Type `.hello` to speak there once, or `/channel local` to stay in it. A player who never picked a channel talks in global.
 
-Without Redis nothing is published and nothing arrives; the module runs as a single-server chat and
-`cross-server` on a channel means nothing.
+<Callout type="note" title="Deleting global does not turn global chat off">
+A message has to go somewhere. If `global` is missing, a built-in global channel is used and the problem is logged.
+</Callout>
 
-Whispers, the chat mute, `/clearchat` and `/broadcast` travel over the same wire. See
-[Chat features](/docs/exyliachatcosmetics/chat-features).
+## Chat between several servers
 
-## Related
+Set `cross-server: enabled: true` in `chat/config.yml` and configure Redis in ExyliaLib's `database.yml`, see [Database](/docs/exylialib/database). A channel with `cross-server: true` then sends its messages to your other servers; the other side only decides who reads them. `local` never crosses servers. Without Redis nothing is sent. Whispers, the chat mute, `/clearchat` and `/broadcast` travel the same way, see [Chat features](/docs/exyliachatcosmetics/chat-features).
+
+## Give a channel its own look
+
+Add `format: vip` to a channel to always draw its messages with `formats/vip.yml`, see [Formats](/docs/exyliachatcosmetics/formats).
+
+<Details title="Channel keys">
+| Key | Default | Meaning |
+|---|---|---|
+| `type` | `CUSTOM` | `GLOBAL` (everybody), `LOCAL` (same world within `radius`, plus the sender) or `CUSTOM` (holders of `permission`) |
+| `name` | the id | What messages and menus call it; colours work. See [Colours](/docs/exylialib/colours) |
+| `permission` | empty | Needed to talk and to read. Empty means everybody |
+| `prefix` | none | One character typed before a message to send that one message here. Longer prefixes are cut to the first character, with a warning |
+| `radius` | `100` | Blocks, `LOCAL` only |
+| `format` | empty | A file from `formats/` this channel always uses |
+| `cross-server` | `true` (`false` for `LOCAL`) | Whether messages travel to other servers |
+| `enabled` | `true` | `false` keeps the channel out |
+
+Ids are lowercase `a-z 0-9 _ -`. A line is sent to: the channel named by a usable prefix, else the one the player switched to, else global. If the player's channel was deleted or they lost its permission, they fall back to global. Only a non-global channel is stored per player. `type: STAFF` from an older version is read as `CUSTOM`. A cancelled `ChannelSwitchEvent` keeps the player where they were.
+
+Across servers the already rendered line travels, with the channel id and the sender. The other server does not re-run the filter or the cosmetics.
+</Details>
 
 <Cards>
-  <Card title="Formats" href="/docs/exyliachatcosmetics/formats">
-    What a channel's `format` points at, and how a format is picked when it points at nothing.
-  </Card>
-  <Card title="The chat module" href="/docs/exyliachatcosmetics/chat">
-    The pipeline a message walks before it reaches the channel's readers.
-  </Card>
+  <Card title="Formats" href="/docs/exyliachatcosmetics/formats">Change how each channel's line looks.</Card>
+  <Card title="The chat module" href="/docs/exyliachatcosmetics/chat">The path a message walks before it reaches readers.</Card>
 </Cards>
-
-`/channel` and the permission that gates it are listed on
-[Commands](/docs/exyliachatcosmetics/commands) and
-[Permissions](/docs/exyliachatcosmetics/permissions).

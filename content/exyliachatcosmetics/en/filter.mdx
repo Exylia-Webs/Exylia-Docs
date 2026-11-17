@@ -1,264 +1,108 @@
 ---
 title: "The filter"
-description: "chat/filter/: the generated switches, the word rules and how they are compiled, the whitelist, and how points turn into punishments."
+description: "Block insults, ads, spam and caps in chat, allow the words you want, and turn repeat offences into warnings, mutes and bans."
+questions:
+  - "How do I block a word in chat?"
+  - "How do I allow a word the filter blocks?"
+  - "How do I stop players posting IPs and links?"
+  - "How do I mute or ban players who keep swearing?"
+  - "How do I see what the filter caught?"
+  - "Why does the filter block a word that is not an insult?"
+updated: "1.3.0"
 ---
 
-The filter is five files in `chat/filter/`. One is generated and holds switches; the other four are
-curated by hand and hold the content.
+The filter reads every message before it reaches chat. It blocks or masks insults, IPs, links, phone numbers, repeated messages, floods and shouting in capitals, and it adds up points that turn into warnings, mutes or bans. It works in English and Spanish out of the box.
 
-| File | Holds |
-|---|---|
-| `config.yml` | Every switch and threshold. Written on the first start with the defaults below |
-| `rules.yml` | The word lists and the hand-written patterns, with the points each costs |
-| `leet.yml` | What may stand in for each letter |
-| `whitelist.yml` | What the filter must leave alone |
-| `punishments.yml` | What happens at how many points |
+## Before you start
 
-Everything the checks read is one immutable snapshot, swapped whole on `/cca chat reload`, so a
-message in flight on the chat thread never sees half a rule set.
+The built-in chat must be on, see [The chat module](/docs/exyliachatcosmetics/chat). Staff and anyone with a `bypass` permission skip the check named by it, for example `exyliachatcosmetics.chat.bypass.filter`, see [Permissions](/docs/exyliachatcosmetics/permissions).
 
-## `config.yml`
-
-| Section | Keys and defaults |
-|---|---|
-| `similarity` | `enabled` `true`, `threshold` `0.9` (0–1, Jaro-Winkler), `cache-seconds` `8.0` |
-| `flood` | `enabled` `true`, `max-length` `120`, `max-repeated` `5`, `alert-staff` `true` |
-| `caps` | `enabled` `true`, `max-caps` `8`, `lowercase` `true` |
-| `cooldown` | `enabled` `true`, `seconds` `1.5` |
-| `ip` `url` `domain` `phone` | `enabled` `true`, `replace-with` `*`, `cancel` `true`, `alert-staff` `true`, `points` `5` |
-| `unicode` | the same, but `enabled` `false` |
-| `rules` | `enabled` `true`, `replace-with` `*`, `cancel` `true`, `alert-staff` `true` |
-| `punishments` | `enabled` `true`, `reset` `true`, `reset-after-minutes` `60` |
-
-A few of those are worth a sentence each.
-
-- **`similarity`** compares a message with the sender's last one and refuses a repeat. The last
-  message is only remembered for `cache-seconds`, so saying the same thing ten minutes later is fine.
-  `/cca chat similar <a> <b>` prints the score of two lines, which is how you tune `threshold`
-  without guessing.
-- **`caps`** with `lowercase: true` rewrites the message instead of blocking it — everything
-  lowercase but the first character, a sentence rather than a whisper.
-- **`cooldown`** is charged at the very end of the pipeline, so only a message that actually went out
-  starts the wait. A message the filter blocked does not cost the player their next second and a half.
-  The wait is told with `filter.cooldown` in `lang/<language>/chat/messages.yml`: `%time_left%` is the time left with
-  its unit (`1.5s`), `%time%` the bare number (`1.5`) for a line that writes its own unit.
-- **`unicode`** is off by default: accents and symbols are normal chat, and turning it on without
-  filling in `whitelist.yml → unicodes` blocks a Spanish server's own language.
-- **`cancel: false`** on any check sends the message with the match masked by `replace-with` instead
-  of blocking it. `replace-with` is repeated to the length of the match, so it never moves the offsets
-  of anything else; an empty `replace-with` deletes the match.
-
-The five pattern checks run in a fixed order — `ip`, `url`, `domain`, `phone`, `unicode` — so a URL is
-found before its domain would be, and each contributes its own `points`.
-
-## `rules.yml`
-
-```yaml title="plugins/ExyliaChatCosmetics/chat/filter/rules.yml"
-rules:
-  swearing-en:
-    points: 2
-    words:
-      - fuck*
-      - shit*
-      - bitch
-
-advanced:
-  hate-symbols:
-    points: 15
-    regexes:
-      - "[卐卍]"
-```
-
-`rules.<name>` takes plain words; `advanced.<name>` takes regexes written by somebody who knows what
-they are doing. Both carry `points` (default `1`) and both use their name in the staff alert. A rule
-that lists nothing is skipped and reported, and a regex that does not compile is reported by name
-rather than taking the file down with it.
-
-### What a word catches
-
-Each word is compiled into a pattern that also catches the ways people hide it:
-
-- **leet spelling**, from `leet.yml` — `f4ck`, `pµta`
-- **spaced-out letters** — `f.u.c.k`, `F U C K`. Up to four characters that are neither letter nor
-  digit are allowed between two letters; bounded rather than unlimited, because an unbounded run
-  between every pair of letters is what turns a long line into a pattern that never finishes
-- **repeated letters** — `fuuuck`
-
-`/cca chat regex <word>` prints exactly what a word compiles to, which is also how you write an
-`advanced` pattern by hand: start from what the compiler produces and edit it.
-
-### Where a word may sit
-
-A word is a **whole word** by default, with a common ending allowed.
-
-| Written | Catches |
-|---|---|
-| `puta` | puta, putas, putita, putazo — never inside `disputa`, `reputación` or `computadora` |
-| `puta*` | the word and anything after it |
-| `*puta` | anything before it, then the word |
-| `*puta*` | anywhere, which is the right shape only for strings nothing innocent contains |
-
-Spanish is full of ordinary words carrying an insult inside them, and a filter that scored every one
-of those made the whitelist a second dictionary nobody could finish. The endings the default shape
-allows are the productive Spanish and English ones — `s`, `es`, `ita`, `azo`, `on`, `ing`, `er` and
-their kin. An ending that drops the root's last vowel, `culito` for `culo`, cannot be reached this
-way and is listed as a word of its own.
-
-### Accents, and the `ñ`
-
-Accents are folded before a rule reads the line, on both sides: `maricon` and `maricón` are one word
-and one rule. The fold is one character in, one character out, because the scan runs on the folded
-copy and the masking lands on the real text at the offsets the scan found.
-
-`ñ` is deliberately **not** folded. It is a letter of its own, not an accented `n`, and folding it
-would turn `año` into a word nobody wrote. It does stand for `n` in the leet map, though, so `coño` is
-caught written `cono` as well — which is why the ice-cream cone and the geometric one are back in
-`whitelist.yml`.
-
-### What the shipped file covers
-
-English and Spanish, tiered:
-
-| Tier | Points |
-|---|---|
-| Everyday swearing, `swearing-en` and `swearing-es` | 2 |
-| An insult aimed at somebody, `insults-en`, `insults-es`, `abbreviations` | 4 |
-| Slurs, `slurs` | 12 |
-| Hate symbols, `hate-symbols` (an `advanced` rule) | 15 |
-
-Spanish is regional, and the file says so on purpose. Words that only *sound* like insults somewhere
-are **deliberately absent**: `wey` and `güey` in Mexico, `weon`, `weón`, `wn` and `weá` in Chile,
-`marica` used as "mate" in Colombia, `coger` and `concha` where they are ordinary words, `po`,
-`chaval` and `tío`. What is regional and insulting wherever it is said is in —
-`conchetumadre`, `culiao`, `hijueputa`, `ctm`, `qliao` and the rest.
-
-<Callout type="note" title="Tune it for your players, not for Spanish">
-There is no list that is right for every server. A word your players use innocently goes in
-`whitelist.yml`; a word your region does treat as an insult goes in `rules.yml`. The shipped file is
-the floor, not the answer.
-</Callout>
-
-## `leet.yml`
-
-```yaml
-map:
-  a: '@4^'
-  e: '3€'
-  s: '5$§'
-  n: 'ñ'
-  ñ: 'nñ'
-```
-
-`map.<letter>` lists what may stand in for that letter. The letter itself, in both cases, is always
-included, so a letter the file does not name still matches itself and a missing file still catches
-plain spelling.
-
-## `whitelist.yml`
-
-| Key | Holds |
-|---|---|
-| `words` | Words that are fine on their own even though a rule word hides inside them |
-| `domains` | Your own domains; a subdomain of a listed one counts too |
-| `urls` | Links that may be posted as written |
-| `ips` | Addresses that may be posted |
-| `unicodes` | The symbols allowed when the `unicode` check is on, written as runs of characters |
-
-The order matters. A whitelisted word is **shielded before the rules read the line**: every character
-of it is replaced, for the scan only, with a character no rule class contains and no player can type.
-So `cocktail` never trips `cock`, and no rule can rebuild a word across the shield either. The
-original text is what gets sent; the shield never reaches a reader.
-
-`words` are matched with accents folded, so writing `reputación` shields the word however a player
-spells it.
-
-`unicodes` is checked character by character rather than as a substring, so the order you type the
-symbols in does not change the answer.
-
-Because rule words are whole words by default, most of this list is a second net: it is what keeps a
-word written with a star — `fuck*`, `*puta*` — from taking an innocent word with it.
-
-## `punishments.yml`
-
-```yaml title="plugins/ExyliaChatCosmetics/chat/filter/punishments.yml"
-punishments:
-  warn:
-    points: 6
-    message: '%prefix%{warning}Mind the chat rules.'
-    commands: []
-  mute:
-    points: 15
-    message: '%prefix%{error}You were muted for breaking the chat rules.'
-    commands:
-      - 'console: mute %player_name% 1h Chat rules'
-  ban:
-    points: 40
-    message: ''
-    commands:
-      - 'console: tempban %player_name% 1d Chat rules'
-```
-
-`points` is the total that triggers the line; a punishment with `points` at zero or below is skipped
-and reported. `message` is sent to the player and may be empty. `commands` are ExyliaLib command
-lines: `console: …` runs from the console, a bare line runs as the player, and `%player_name%` is
-them. A command that cannot be compiled is reported by name and the rest of the punishment still
-works.
-
-With the shipped rules, three everyday swears warn, a slur mutes, and a player who keeps at it is
-banned. The commands assume a `mute` and a `tempban` exist on your server; change them to whatever
-your punishment plugin uses.
-
-### How points work
+## Block a word
 
 <Steps>
-  <Step title="A message earns them">
-    Every check that trips adds its points to the message: `points` from each pattern check, `points`
-    from each rule that matched. A message that several rules trip pays for all of them.
+  <Step title="Open the rules">
+    Edit `plugins/ExyliaChatCosmetics/chat/filter/rules.yml`, or run `/cca menu`, click **Filter**, then **Word rules**.
   </Step>
-  <Step title="They are booked whether or not the message went out">
-    A blocked message still costs its points. That is why the bookkeeper is a processor of its own at
-    the FORMAT stage and is also invoked by hand for messages the pipeline stopped — a blocked slur
-    counts.
+  <Step title="Add the word">
+    Add it to a group under `rules:`, or write a new group:
+
+    ```yaml
+    rules:
+      my-words:
+        points: 2
+        words:
+          - badword
+    ```
   </Step>
-  <Step title="They fade">
-    With `punishments.reset` on, a player who has been quiet for `reset-after-minutes` starts from
-    zero. Their stored total is not wiped; it simply stops counting.
-  </Step>
-  <Step title="The line they crossed is applied">
-    The highest punishment at or under the new total that was **above** the old one. A message that
-    takes a player from 4 to 20 applies the 15-point punishment once, not the 6-point one as well.
+  <Step title="Reload">
+    Run `/cca chat reload`.
   </Step>
 </Steps>
 
-`ChatInfractionEvent` fires before any of that is written, and a listener that cancels it leaves the
-message filtered but the points unbooked. See [API](/docs/exyliachatcosmetics/api).
+`points` is what each hit costs the player. The shipped file has everyday swearing at 2 points, insults at 4, slurs at 12 and hate symbols at 15, in English and Spanish.
 
-`/cca chat points <player>` reads a player's total; `/cca chat points <player> <number>` rewrites it,
-which is the way to forgive somebody without editing the database.
+A word is a whole word by default, with common endings allowed: `puta` catches puta, putas and putita, but not `disputa`. Add a star to widen it: `puta*` anything after, `*puta` anything before, `*puta*` anywhere. Leet spelling (`f4ck`), spaced letters (`f.u.c.k`) and repeated letters (`fuuuck`) are caught for you, and accents are ignored.
 
-## What staff read
+## Check that it works
 
-| Node | Reads |
+Write the word in chat. By default the message is blocked. Run `/cca chat history <player>` to see what the filter caught, and `/cca chat regex <word>` to see what a word compiles to. Staff with `exyliachatcosmetics.chat.staff.alerts` get an alert for every trip.
+
+## Allow a word the filter blocks
+
+Add it to `chat/filter/whitelist.yml` under `words:`. A whitelisted word is hidden from the rules before they read the line, so `cocktail` never trips `cock`. The same file takes `domains` (your own sites), `urls`, `ips`, and `unicodes` (symbols allowed when the odd-characters check is on).
+
+<Callout type="note" title="Tune it for your players">
+No list suits every server. Words that only sound like insults in some regions are left out on purpose. Put a word your players use innocently in `whitelist.yml`, and a word your region treats as an insult in `rules.yml`.
+</Callout>
+
+## Block or mask: spam, links and IPs
+
+Open `chat/filter/config.yml` (or `/cca menu`, **Filter**). Each check can be switched off, and the pattern checks (`ip`, `url`, `domain`, `phone`, `unicode`) can mask the match instead of blocking: set `cancel: false` and the match is replaced by `replace-with` (`*`). Defaults:
+
+| Check | Default |
 |---|---|
-| `exyliachatcosmetics.chat.staff.alerts` | Every trip: who, how many points, which rules, and the message as they typed it |
-| `exyliachatcosmetics.chat.staff.filtered` | Blocked messages as well, in full, marked with `filtered-marker` from `chat/config.yml` (default `{error}✖ `) |
+| `cooldown` | 1.5 seconds between messages |
+| `similarity` | Blocks a message 90% like the last one, remembered for 8 seconds |
+| `flood` | Blocks messages over 120 characters or with 5 repeated characters |
+| `caps` | More than 8 capitals: lowercased, not blocked |
+| `ip`, `url`, `domain`, `phone` | Blocked, 5 points each |
+| `unicode` | Off. Turning it on blocks accents and symbols unless you list them in `whitelist.yml` |
 
-`alert-staff` on a check decides whether that check raises an alert at all. Flood and length trips
-alert with zero points, since they cost none.
+The cooldown only starts when a message goes out, so a blocked message does not cost the next second and a half. To tune `similarity`, run `/cca chat similar <first> <second>` to see the score of two lines.
 
-The alert line itself is `staff.alert` in `lang/<language>/chat/messages.yml`, with `%player%`, `%points%`, `%rules%`
-and `%message%`.
+## Punish repeat offenders
 
-## Related
+Every hit adds points to the player, even when the message was blocked. In `lang/<language>/chat/filter/punishments.yml` each punishment starts at a total of points:
+
+| Name | At points | What it does |
+|---|---|---|
+| `warn` | 6 | Tells the player to mind the rules |
+| `mute` | 15 | Runs `console: mute %player_name% 1h Chat rules` |
+| `ban` | 40 | Runs `console: tempban %player_name% 1d Chat rules` |
+
+The `mute` and `tempban` commands are examples: change them to what your punishment plugin uses. A player who crosses several lines in one message gets only the highest. Points fade: a player quiet for 60 minutes starts from zero (`punishments.reset-after-minutes`). Run `/cca chat points <player>` to read a total, and `/cca chat points <player> <number>` to set it, which is how you forgive somebody.
+
+<Details title="config.yml keys and defaults">
+| Section | Keys and defaults |
+|---|---|
+| `similarity` | `enabled` true, `threshold` 0.9, `cache-seconds` 8.0 |
+| `flood` | `enabled` true, `max-length` 120, `max-repeated` 5, `alert-staff` true |
+| `caps` | `enabled` true, `max-caps` 8, `lowercase` true (rewrites the message instead of blocking it) |
+| `cooldown` | `enabled` true, `seconds` 1.5 |
+| `ip`, `url`, `domain`, `phone` | `enabled` true, `replace-with` `*`, `cancel` true, `alert-staff` true, `points` 5 |
+| `unicode` | the same, but `enabled` false |
+| `rules` | `enabled` true, `replace-with` `*`, `cancel` true, `alert-staff` true |
+| `punishments` | `enabled` true, `reset` true, `reset-after-minutes` 60 |
+| `history` | `enabled` true, `keep` 50: how many caught messages per player `/cca chat history` can show |
+
+The pattern checks run in the order `ip`, `url`, `domain`, `phone`, `unicode`. The cooldown message is `filter.cooldown` in `lang/<language>/chat/messages.yml` (`%time_left%`, `%time%`). The staff alert is `staff.alert` there, with `%player%`, `%points%`, `%rules%`, `%message%`.
+
+`rules.yml` also has `advanced:` for regexes written by hand, with their own `points`. A group that lists nothing, or a regex that does not compile, is reported by name and skipped. `leet.yml` maps each letter to what may stand in for it (`a: '@4^'`). `ñ` is not folded to `n`, but is a leet stand-in for `n`.
+
+Staff nodes: `exyliachatcosmetics.chat.staff.alerts` reads every trip; `exyliachatcosmetics.chat.staff.filtered` also sees the blocked messages, marked with `filtered-marker`. Plugins can cancel a punishment with `ChatInfractionEvent`, see [API](/docs/exyliachatcosmetics/api).
+</Details>
 
 <Cards>
-  <Card title="The chat module" href="/docs/exyliachatcosmetics/chat">
-    Where each of these checks sits in the pipeline, and what a cancel does to the message.
-  </Card>
-  <Card title="Chat features" href="/docs/exyliachatcosmetics/chat-features">
-    `filtered-marker` and the rest of `chat/config.yml`.
-  </Card>
+  <Card title="Chat features" href="/docs/exyliachatcosmetics/chat-features">Mute, clear and announce, and the rest of `chat/config.yml`.</Card>
+  <Card title="The chat module" href="/docs/exyliachatcosmetics/chat">Where each check sits in the pipeline.</Card>
 </Cards>
-
-The bypass nodes — `bypass.cooldown`, `.similarity`, `.flood`, `.caps`, `.filter` — are listed on
-[Permissions](/docs/exyliachatcosmetics/permissions), and the `/cca chat` tools on
-[Commands](/docs/exyliachatcosmetics/commands).

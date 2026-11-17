@@ -1,209 +1,90 @@
 ---
 title: "El módulo de chat"
-description: "Qué significa el chat integrado, cómo apagarlo, los archivos que le pertenecen, el pipeline que recorre un mensaje y cómo se entrega la línea."
+description: "Lleva el chat de tu servidor con ExyliaChatCosmetics, o apaga el chat integrado y conserva tu plugin de chat."
+questions:
+  - "¿ExyliaChatCosmetics reemplaza a mi plugin de chat?"
+  - "¿Cómo apago el chat integrado?"
+  - "¿Qué archivos controlan el chat?"
+  - "¿Cómo recargo solo el chat?"
+  - "¿Por qué la línea de chat no sale en versalitas?"
+  - "¿Cómo veo hasta dónde llega un hover de la línea de chat?"
+updated: "1.3.0"
 ---
 
-El módulo de chat viene encendido. Con él encendido, ExyliaChatCosmetics *es* el chat del servidor:
-canales, formatos, mensajes privados, el filtro, menciones, emojis, ítems mostrados y el anunciador.
-Los cosméticos entran en la línea directamente, sin pasar por un placeholder, porque el módulo
-construye la línea él mismo en vez de entregarle un texto al formato de otro plugin.
+Con el módulo de chat activado, ExyliaChatCosmetics es el chat de tu servidor: canales, formatos, mensajes privados, filtro de palabras, menciones, emojis, renders de objetos y anuncios, con las etiquetas y los nombres de color dibujados directamente en la línea. Esta página te enseña a activarlo o apagarlo y dónde se configura cada parte.
 
-## Encenderlo y apagarlo
+## Antes de empezar
 
-```yaml title="plugins/ExyliaChatCosmetics/config.yml"
-modules:
-  chat: true
-```
+El chat integrado necesita Paper. Los cosméticos solos también funcionan en Spigot. Folia está soportado.
 
-Viene en `true`. Un servidor que ya usa otro plugin de chat lo pone en `false` y se queda solo con los
-cosméticos. Un `config.yml` de una versión que aún escribía `chat.module.enabled` tiene el valor movido
-aquí en el primer arranque.
+## Pasos
 
-Mientras el módulo funciona, el `chat.hook` cosmético queda desinstalado. Los dos nunca pueden estar
-encendidos a la vez: el hook existe para pintar un mensaje que va a entregar otro plugin de chat, y el
-módulo pinta el cuerpo él mismo (`CosmeticsProcessor`) y dibuja la etiqueta y el nombre dentro del
-formato como `{tag}` y `{nick}`. Apaga el módulo y el hook vuelve a instalarse, con los cosméticos
-funcionando exactamente como antes.
+<Steps>
+  <Step title="Decide quién lleva el chat">
+    El módulo viene activado. Para conservar otro plugin de chat, abre `plugins/ExyliaChatCosmetics/config.yml` y pon `modules: chat: false`.
+  </Step>
+  <Step title="Aplícalo">
+    Ejecuta `/cca reload`. El módulo arranca o se detiene según el ajuste. Apagado, el plugin da estilo al cuerpo del mensaje y deja la entrega a tu plugin de chat; pon los placeholders en el formato de ese plugin, mira [Placeholders](/docs/exyliachatcosmetics/placeholders).
+  </Step>
+  <Step title="Activa o apaga partes sueltas">
+    Ejecuta `/cca menu`, pulsa **Ajustes** y luego **Comandos del chat** o **Funciones del chat**. O edita `chat/config.yml` y ejecuta `/cca chat reload`.
+  </Step>
+</Steps>
 
-Si un archivo del chat no se puede leer, el módulo se niega a arrancar, lo dice en la consola y el
-hook vuelve: una lista de palabras rota te cuesta el módulo, nunca los cosméticos.
+Si un archivo del chat no se puede leer, el módulo se niega a arrancar, lo dice en la consola y el plugin vuelve a solo dar estilo a los mensajes. Una lista de palabras rota te cuesta el módulo, nunca los cosméticos.
 
-<Callout type="note" title="Dos recargas, dos alcances">
-`/cca reload` relee todo y enciende o apaga el módulo según `modules.chat`. `/cca chat reload` relee solo
-los archivos del módulo — canales, formatos, el filtro, las tablas de emojis y gramática, los anuncios
-— y no toca los cosméticos. También reconstruye los comandos, así que un comando apagado en
-`chat/config.yml` deja de responder sin reiniciar.
-</Callout>
+## Comprueba que funciona
 
-## Los archivos
+Escribe un mensaje en el chat. Deberías ver tu rango, tu nombre y el mensaje en la línea que trae el plugin. Luego ejecuta `/cca chat line hola`: te envía tu propia línea de chat y escribe en la consola qué partes comparten hover y clic.
 
-Los ajustes y las tablas del módulo viven en `plugins/ExyliaChatCosmetics/chat/`, escritos la primera
-vez que arranca el módulo. Lo que lee un jugador vive con el idioma, en `lang/<idioma>/chat/`.
-
-```
-chat/
-  config.yml         los interruptores: comandos, menciones, emojis, ítems, enlaces, cross-server
-  channels.yml       adónde va un mensaje
-  formats/           un archivo por formato — vienen default.yml y msg.yml
-  filter/            config.yml, rules.yml, whitelist.yml, leet.yml, punishments.yml
-  text/              emojis.yml, grammar.yml — las tablas que reescriben lo que se escribió
-lang/<idioma>/chat/
-  messages.yml       cada línea que envía el módulo, con su propio prefijo
-  announcements.yml  la rotación
-```
-
-Una versión anterior dejaba siete de esos archivos sueltos en `chat/`. Un servidor que actualiza
-conserva sus ediciones: cada uno se mueve a su carpeta en el primer arranque, una sola vez, y un
-archivo que ya esté en el sitio nuevo se deja como está.
-
-| Estaba en | Ahora está en |
-|---|---|
-| `chat/filter.yml` | `chat/filter/config.yml` |
-| `chat/rules.yml` | `chat/filter/rules.yml` |
-| `chat/whitelist.yml` | `chat/filter/whitelist.yml` |
-| `chat/leet.yml` | `chat/filter/leet.yml` |
-| `chat/punishments.yml` | `chat/filter/punishments.yml` |
-| `chat/emojis.yml` | `chat/text/emojis.yml` |
-| `chat/grammar.yml` | `chat/text/grammar.yml` |
-
-## Qué necesita
-
-El módulo se monta sobre el `AsyncChatEvent` de Paper y su `ChatRenderer`, así que necesita Paper. La
-mitad cosmética funciona en Spigot a través del hook antiguo; el módulo no.
-
-Folia está soportado. Cada mensaje se decide en el hilo del chat a partir de instantáneas en memoria —
-las reglas, los formatos y los canales se cambian enteros al recargar, nunca se editan en su sitio — y
-todo lo que toca a un jugador, un sonido o una ventana, salta antes al hilo de ese jugador.
-
-## Las versalitas no se aplican a una línea de chat
-
-El `small-text` de ExyliaLib dibuja en versalitas cada línea que escribe el servidor: menús, mensajes,
-scoreboards. La línea de chat queda exenta, y no hay nada que configurar.
-
-El mensaje, la etiqueta, el nombre, el formato que los rodea, los susurros, la copia de la consola, el
-social spy y las piezas de mención, emoji, comando y `[item]` llegan a la pantalla con las letras con
-las que se escribieron. Un jugador que escribe WELCOME lee WELCOME. Los menús acompañan: la línea de
-ejemplo bajo SE VE ASÍ, la vista previa de TU CHAT y lo que una pantalla dice que llevas puesto se leen
-como los va a leer el chat, y una etiqueta que alguien se escribió conserva sus letras. El lore que las
-rodea — que lo escribió el servidor — se queda en versalitas, y también todo lo de
-`chat/messages.yml` y el anunciador.
-
-El motivo es una regla, no un gusto: una línea de chat no es el servidor hablando. Dibujar media línea
-en versalitas y media en letras normales se lee como dos voces, así que la línea entera se interpreta
-tal cual.
-
-## El pipeline
-
-Un mensaje es un `ChatMessage` recorrido por `ChatProcessor`s, ordenados por etapa y después por
-prioridad, de menor a mayor. Un procesador que cancela detiene el recorrido: nada después de una
-compuerta debería gastar tiempo en una línea que nadie va a leer.
-
-| Etapa | Procesador | Prioridad | Hace |
-|---|---|---|---|
-| GATE | `GateProcessor` | −100 | chat silenciado (`bypass.mute`), permiso del canal, mensaje vacío |
-| GATE | `CooldownProcessor` | −50 | `chat/filter/config.yml → cooldown` (`bypass.cooldown`) |
-| FILTER | `SimilarityProcessor` | −30 | demasiado parecido al mensaje anterior (`bypass.similarity`) |
-| FILTER | `FloodProcessor` | −20 | demasiado largo, demasiados caracteres repetidos (`bypass.flood`) |
-| FILTER | `CapsProcessor` | −10 | demasiadas mayúsculas: se pasa a minúsculas o se bloquea (`bypass.caps`) |
-| FILTER | `PatternProcessor` | 0 | ip, url, dominio, teléfono, unicode: enmascarado o bloqueado, puntos |
-| FILTER | `RulesProcessor` | 10 | `rules.yml`: enmascarado o bloqueado, puntos (`bypass.filter`) |
-| TRANSFORM | `GrammarProcessor` | −50 | correcciones de `grammar.yml` |
-| TRANSFORM | `EmojiProcessor` | −40 | los disparadores de `emojis.yml` se vuelven símbolos |
-| TRANSFORM | `RenderProcessor` | −35 | `[item]`, `[inv]`, `[ec]` se vuelven lo que nombran |
-| TRANSFORM | `CommandReplacer` | −30 | un `/comando` se vuelve una sugerencia clicable |
-| TRANSFORM | `LinkProcessor` | −20 | una URL se vuelve clicable, para quien tenga `chat.links` |
-| TRANSFORM | `MentionProcessor` | −10 | un nombre, con `@` o sin ella, se resalta — solo se puede mencionar a quien lee el mensaje |
-| COSMETICS | `CosmeticsProcessor` | 0 | fuente, modificadores y color sobre los tramos de texto |
-| FORMAT | `InfractionProcessor` | −100 | anota los puntos, aplica los castigos |
-| FORMAT | `FormatProcessor` | 0 | elige el formato, construye la línea |
-| DELIVERY | `ChatApi.events` | −1000 | lanza `ChatMessageEvent` |
-| DELIVERY | aviso de mención | 0 | el efecto de feedback para el mencionado — por defecto un sonido |
-| DELIVERY | `CooldownProcessor.Start` | 100 | arranca la espera, así solo la cobra un mensaje que salió |
-
-Un procesador que lanza una excepción se reporta como mucho una vez por minuto y se salta — salvo en
-GATE y FILTER, donde falla cerrado y el mensaje se cancela. Una lista de emojis rota no es motivo para
-perder una línea; un filtro de palabras roto sí.
-
-Otros plugins añaden sus propios procesadores por la API. Ver [API](/docs/exyliachatcosmetics/api).
-
-## Cómo se entrega la línea
-
-La entrega no es un procesador. `ChatDelivery` toma el evento de chat en `listener-priority`
-(`HIGHEST` por defecto, para que todos los demás plugins hayan hablado antes), ejecuta el pipeline y
-después hace dos cosas pequeñas:
-
-1. Recorta los viewers del evento a quienes leen el canal, menos todos los que `Chats.canHear` rechaza
-   y todos los que ignoran al emisor.
-2. Pone un renderer.
-
-Nunca cancela un mensaje que el pipeline dejó pasar y nunca envía la línea él mismo, así que el
-servidor la entrega exactamente como lo habría hecho — firmada, con el mismo hover y el mismo clic que
-ve cualquier otro plugin. Si otro plugin entregó el conjunto de viewers en modo de solo lectura, el
-recorte se pierde y se reporta; la línea se sigue pintando para todos.
-
-Un formato que se lee igual para todos se dibuja **una vez**, en la etapa FORMAT, y se le entrega a
-cada viewer. Un formato `per-viewer`, o que nombre un placeholder `%rel_…%`, se dibuja por lector
-dentro del renderer. La consola recibe su propia línea a partir de `console-format`.
-
-Un mensaje que el pipeline canceló hace que se cancele el evento, y si lo canceló el filtro de
-palabras se le sigue mostrando al staff con `exyliachatcosmetics.chat.staff.filtered`, marcado con
-`filtered-marker`. Un mensaje que falla de forma irrecuperable también se cancela y se le avisa al
-emisor: entregar una línea que quizá el filtro nunca leyó es peor que perderla.
-
-## Segmentos
-
-Después del recorrido el texto no es una cadena, sino una lista de *segmentos*: tramos de texto
-escrito, que los cosméticos pintan, y componentes que ya construyó otra función — un emoji, una
-mención, un enlace, un ítem mostrado — que llegan al lector exactamente como se hicieron. Nada
-repinta el componente de otro, y el color del texto que los rodea corre por el texto que hay entre
-ellos.
-
-Un mensaje que nadie transformó nunca construye la lista: se queda como una sola cadena hasta la etapa
-de cosméticos.
-
-## Rendimiento
-
-- El evento de chat es asíncrono y el pipeline entero corre sobre él, leyendo instantáneas inmutables.
-- Las expresiones regulares se compilan al cargar: una alternancia para todos los disparadores de
-  emojis, una por palabra de regla, una para todos los disparadores de ítems mostrados.
-- Los textos de un formato son plantillas de placeholders ya compiladas, y un formato que no depende
-  del lector se dibuja una vez por mensaje en lugar de una vez por lector.
-- Las instantáneas de ítems viven en una caché acotada que caduca. Hay un solo temporizador para el
-  anunciador y ninguna tarea por mensaje. Sonidos, títulos y ventanas saltan al hilo del jugador.
-
-## Ver dónde termina un hover
-
-`/cca chat line [mensaje]` dibuja tu propia línea de chat con el formato que te toca, te la envía y
-escribe en la consola esa misma línea partida en los tramos que comparten un hover y un clic.
-
-Esa es la herramienta para la única pregunta que una captura no responde: dónde termina el hover de
-una pieza. Un hover que se mete en la pieza de al lado aparece aquí como un tramo donde esperabas dos.
-
-```
-Format 'default' for Notch:
-  [Notch] hover INFORMATION, click /msg Notch
-  [ ➠ ] no hover
-  [hello] hover WARNING, click /report Notch offensive_language
-```
-
-## Adónde seguir
+## Edita el chat
 
 <Cards>
-  <Card title="Canales" href="/docs/exyliachatcosmetics/canales">
-    `channels.yml`, los tres tipos, permisos, prefijos y qué viaja entre servidores.
-  </Card>
-  <Card title="Formatos" href="/docs/exyliachatcosmetics/formatos">
-    Un archivo por formato, la lista de componentes, los tokens y la regla del relleno.
-  </Card>
-  <Card title="El filtro" href="/docs/exyliachatcosmetics/filtro">
-    Reglas de palabras, escritura leet, la lista blanca y cómo los puntos se vuelven castigos.
-  </Card>
-  <Card title="Funciones de chat" href="/docs/exyliachatcosmetics/funciones-de-chat">
-    Menciones, emojis, ítems mostrados, susurros, moderación, el anunciador y `chat/messages.yml`.
-  </Card>
+  <Card title="Canales" href="/docs/exyliachatcosmetics/canales">Canales globales, locales y con permiso, y qué cruza entre servidores.</Card>
+  <Card title="Formatos" href="/docs/exyliachatcosmetics/formatos">Cambia cómo se ve la línea de chat o dale otra a los VIP.</Card>
+  <Card title="El filtro" href="/docs/exyliachatcosmetics/filtro">Bloquea insultos, publicidad, spam y mayúsculas, y castiga a los reincidentes.</Card>
+  <Card title="Funciones de chat" href="/docs/exyliachatcosmetics/funciones-de-chat">Menciones, emojis, [item], susurros, moderación y anuncios.</Card>
 </Cards>
 
-Los comandos y permisos del módulo están completos en
-[Comandos](/docs/exyliachatcosmetics/comandos) y
-[Permisos](/docs/exyliachatcosmetics/permisos); los procesadores, eventos y servicios que expone están
-en [API](/docs/exyliachatcosmetics/api).
+## Dos recargas
+
+`/cca reload` relee todo y enciende o apaga el módulo según `modules.chat`. `/cca chat reload` relee solo los archivos del módulo y no toca los cosméticos. También vuelve a registrar los comandos de chat, así que un comando que apagaste en `chat/config.yml` deja de responder sin reiniciar.
+
+## La línea de chat va en letras normales
+
+Si tu servidor usa las versalitas de ExyliaLib, los menús y mensajes se dibujan con ellas, pero la línea de chat no: el mensaje, la etiqueta, el nombre, los susurros y las piezas con clic conservan las letras con que se escribieron. Quien escribe BIENVENIDO lee BIENVENIDO. Los anuncios son el servidor hablando, así que mantienen las versalitas. Mira [Mensajes](/docs/exylialib/messages-and-languages).
+
+<Details title="Archivos del módulo de chat">
+```
+chat/
+  config.yml         interruptores: comandos, menciones, emojis, renders, enlaces, cross-server
+  filter/            config.yml, rules.yml, whitelist.yml, leet.yml, punishments.yml
+  text/              emojis.yml, grammar.yml
+lang/<idioma>/chat/
+  channels.yml       adónde va un mensaje
+  formats/           vienen default.yml y msg.yml; cualquier otro .yml que añadas también se lee
+  messages.yml       cada línea que envía el módulo, con su propio prefijo
+  announcements.yml  la rotación de anuncios
+```
+
+`channels.yml`, `formats/`, `filter/punishments.yml` y `text/emojis.yml` contienen palabras que leen los jugadores, así que existen una vez por idioma, en `lang/<idioma>/chat/`. El resto es común a todos los idiomas.
+
+Una versión anterior guardaba estos archivos sueltos en `chat/` (`filter.yml`, `rules.yml`, `whitelist.yml`, `leet.yml`, `punishments.yml`, `emojis.yml`, `grammar.yml`). Cada uno se mueve a su carpeta en el primer arranque, conservando tus ediciones.
+</Details>
+
+<Details title="El recorrido de un mensaje">
+Los procesadores corren por etapas y luego por prioridad (menor primero). Uno que cancela detiene el recorrido. Un procesador que lanza error se salta, salvo en GATE y FILTER, donde el mensaje se cancela: una lista de emojis rota nunca pierde una línea, un filtro de palabras roto sí.
+
+| Etapa | Qué hace |
+|---|---|
+| GATE | Chat silenciado, permiso del canal, mensaje en blanco, cooldown |
+| FILTER | Demasiado parecido al anterior, flood, mayúsculas, ip/url/dominio/teléfono/unicode, reglas de palabras |
+| TRANSFORM | Gramática, emojis, renders `[item]`, sugerencias de `/comando`, enlaces, menciones |
+| COSMETICS | Fuente, modificadores y color del texto |
+| FORMAT | Apunta los puntos del filtro, elige el formato, construye la línea |
+| DELIVERY | Lanza `ChatMessageEvent`, aviso de mención, inicia el cooldown |
+
+La entrega toma el evento de chat en `listener-priority` (`HIGHEST` por defecto, así que los demás plugins ya han opinado). Recorta los lectores a los del canal, menos quienes ignoran al emisor, y fija un renderizador. Nunca cancela un mensaje que el recorrido dejó pasar, así que el servidor lo entrega firmado como siempre. Un mensaje bloqueado por el filtro de palabras se sigue mostrando al staff con `exyliachatcosmetics.chat.staff.filtered`, con el prefijo `filtered-marker`. Otros plugins pueden añadir procesadores, mira [API](/docs/exyliachatcosmetics/api).
+</Details>
+
+Los comandos y permisos del módulo están en [Comandos](/docs/exyliachatcosmetics/comandos) y [Permisos](/docs/exyliachatcosmetics/permisos).

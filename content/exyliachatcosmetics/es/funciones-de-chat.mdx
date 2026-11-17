@@ -1,299 +1,112 @@
 ---
 title: "Funciones de chat"
-description: "Todo lo de chat/config.yml que no es el filtro: menciones, emojis, ítems mostrados, susurros, moderación, el anunciador y los mensajes del módulo."
+description: "Activa menciones, emojis, mostrar [item], mensajes privados, moderación del chat y un anunciador rotativo, y cambia cómo se comporta cada uno."
+questions:
+  - "¿Cómo añado un emoji personalizado al chat?"
+  - "¿Cómo muestran los jugadores su objeto en el chat?"
+  - "¿Cómo configuro anuncios automáticos?"
+  - "¿Cómo silencio o limpio el chat?"
+  - "¿Cómo funcionan las menciones y puedo cambiar el sonido?"
+  - "¿Cómo funcionan los mensajes privados, ignorar y el social spy?"
+updated: "1.3.0"
 ---
 
-`chat/config.yml` guarda los interruptores y los disparadores del módulo. El filtro tiene su propio
-archivo; todo lo demás está aquí. Lo que lee un jugador — la línea del espía, el hover de los comandos,
-cómo se dibuja un ítem mostrado — está en `lang/<idioma>/chat/messages.yml`; un `chat/config.yml` de
-una versión anterior tiene esas líneas movidas allí en el primer arranque.
+El chat integrado trae menciones, emojis, mostrar objetos e inventario, mensajes privados, comandos de moderación y un anunciador. La mayoría funciona sin configurar; esta página muestra cómo cambiar lo que más se pregunta.
 
-| Sección | Claves |
-|---|---|
-| `listener-priority` | Dónde toma el módulo el evento de chat: `LOWEST`, `LOW`, `NORMAL`, `HIGH`, `HIGHEST`. Por defecto `HIGHEST` |
-| `commands` | Un booleano por comando de jugador: `msg`, `reply`, `ignore`, `ignoreall`, `spymsg`, `mutechat`, `clearchat`, `broadcast`, `channel` |
-| `msg` | `sound`, un efecto de ExyliaLib que suena para quien recibe un susurro |
-| `grammar` | `enabled` |
-| `emojis` | `enabled` |
-| `command-replacer` | `enabled`, `format` (`%command%`) |
-| `links` | `enabled` |
-| `mentions` | `enabled`, `format` (`%player%`), `max`, `cooldown-seconds`, `feedback` |
-| `renders` | `cache-seconds`, y después `item`, `inventory` y `enderchest`, cada uno con `enabled` y `triggers` |
-| `cross-server` | `enabled` |
-| `console-format` | `{channel}`, `{name}`, `{message}`. Por defecto `[{channel}] {name}: {message}` |
-| `filtered-marker` | Se pone delante de un mensaje bloqueado para el staff que aún puede leerlo. Por defecto `{error}✖ ` |
+## Antes de empezar
 
-`listener-priority` en `HIGHEST` deja que todos los demás plugins hablen antes de que el módulo tome el
-control. Un valor que no sea una prioridad de evento se reporta y se usa `HIGHEST`.
+El chat integrado debe estar activado, mira [El módulo de chat](/docs/exyliachatcosmetics/chat). Los interruptores y disparadores están en `plugins/ExyliaChatCosmetics/chat/config.yml`; ejecuta `/cca chat reload` tras editar. También puedes cambiarlos en el juego: ejecuta `/cca menu`, pulsa **Ajustes** y luego **Comandos del chat** o **Funciones del chat**.
 
-`commands` se lee en cada recarga, no solo al arrancar: un comando apagado deja de responder sin
-reiniciar. Un comando apagado no se registra siquiera, así que otro plugin puede reclamarlo.
+## Añade un emoji
+
+<Steps>
+  <Step title="Abre el archivo de emojis">
+    Edita `plugins/ExyliaChatCosmetics/lang/<idioma>/chat/text/emojis.yml`, por ejemplo `lang/es/chat/text/emojis.yml`.
+  </Step>
+  <Step title="Añade una línea">
+    Bajo `emojis:` escribe `'*star*': '{highlight}★'`. A la izquierda va lo que escriben los jugadores, a la derecha lo que ven. Los colores funcionan, mira [Colores](/docs/exylialib/colours).
+  </Step>
+  <Step title="Recarga">
+    Ejecuta `/cca chat reload`.
+  </Step>
+</Steps>
+
+Para que un emoji exija permiso, ponlo bajo `gated:` con un `trigger`, un `replacement` y un `permission` (por defecto `exyliachatcosmetics.chat.emoji.<nombre>`). Una sustitución puede llevar su propio hover y clic.
+
+## Comprueba que funciona
+
+Escribe el disparador en el chat: debería salir el símbolo. Para `[item]`, sostén algo y escribe `[item]` en un mensaje: se convierte en el nombre del objeto y un clic abre una copia de solo lectura.
+
+## Mostrar un objeto, el inventario o el cofre de Ender
+
+| Los jugadores escriben | Muestra | Permiso (por defecto) |
+|---|---|---|
+| `[item]`, `[i]` o `[hand]` | Lo que sostienen | `exyliachatcosmetics.chat.render.item` (todos) |
+| `[inv]` o `[inventory]` | Su inventario | `exyliachatcosmetics.chat.render.inv` (todos) |
+| `[ec]` o `[enderchest]` | Su cofre de Ender | `exyliachatcosmetics.chat.render.ec` (todos) |
+
+Un clic abre una copia de solo lectura, tomada cuando se escribió el mensaje. Caduca a los 60 segundos (`renders.cache-seconds`). Una mano vacía no muestra nada y le dice al emisor por qué. Cambia los disparadores o apaga uno bajo `renders` en `chat/config.yml`.
 
 ## Menciones
 
-```yaml
-mentions:
-  enabled: true
-  format: '{secondary}@%player%'
-  max: 3
-  cooldown-seconds: 5.0
-  feedback:
-    sound: { name: BLOCK_NOTE_BLOCK_PLING, volume: 1.0, pitch: 1.4 }
-```
+Un jugador nombrado en un mensaje recibe un sonido de bloque musical y su nombre sale resaltado. Escribir la `@` es opcional. Solo pueden mencionarse jugadores que puedan leer el mensaje, y como máximo 3 por mensaje (`mentions.max`). No se avisa dos veces al mismo jugador en 5 segundos. Para cambiar el sonido edita `mentions.feedback` en `chat/config.yml`: es un efecto de ExyliaLib, así que también admite un título o una action bar. Quien escribe necesita `exyliachatcosmetics.chat.mentions` (todos por defecto).
 
-Escribir la `@` es una cortesía, no un requisito: un nombre a secas es como habla la gente, y la
-reescritura vuelve a poner la `@`. Un nombre dentro de una palabra más larga no es una mención, así que
-`Notchy` es una palabra y no una mención de `Notch`.
+## Mensajes privados e ignorar
 
-Solo se puede mencionar a quien va a leer el mensaje de verdad — la mención se compara contra los
-viewers del mensaje, así que un nombre en un canal que alguien no puede leer no hace nada. Las
-menciones por encima de `max` en un mismo mensaje se quedan como texto plano, y el emisor no puede
-mencionarse a sí mismo.
+Los jugadores usan `/msg <jugador> <mensaje>`, `/reply`, `/ignore <jugador>` y `/ignoreall`. Un mensaje a alguien que cerró su bandeja o ignora al emisor lo dice, en vez de fingir que se entregó. El staff con `exyliachatcosmetics.chat.staff` no puede ser ignorado. `/spymsg` (op por defecto) deja al staff leer todos los susurros. Cómo se ve un susurro está en `formats/msg.yml`, mira [Formatos](/docs/exyliachatcosmetics/formatos).
 
-`feedback` es un efecto de ExyliaLib que se reproduce para el jugador mencionado, y viene solo como
-sonido: un pling de nota, no un título cruzando la pantalla, porque una mención es un toque en el
-hombro y un título es una interrupción. Si quieres uno, escribe un `title`, una `action-bar` o un
-fuego artificial dentro. `%mention%` dentro de él es el nombre del jugador que dijo el suyo. A un jugador no se le
-avisa dos veces dentro de `cooldown-seconds`, por muchas veces que lo nombren.
+## Modera el chat
 
-El resaltado ocurre en TRANSFORM y el aviso en DELIVERY, así que un mensaje que el filtro detuvo por el
-camino no avisa a nadie. El emisor necesita `exyliachatcosmetics.chat.mentions`.
+| Comando | Qué hace | No le afecta |
+|---|---|---|
+| `/mutechat` | Silencia o reactiva el chat público | `exyliachatcosmetics.chat.bypass.mute` |
+| `/clearchat` | Empuja 100 líneas en blanco en cada pantalla | `exyliachatcosmetics.chat.bypass.clearchat` |
+| `/broadcast <mensaje>` (`/bc`) | Envía una línea del servidor a todos | |
 
-## Emojis
+Son para el staff (op por defecto) y dicen quién lo hizo. El silencio solo vive en memoria, así que un reinicio lo quita. En el juego, `/cca menu` tiene los botones **Silenciar el chat**, **Reactivar el chat** y **Limpiar el chat**.
 
-`chat/text/emojis.yml` es la tabla; `emojis.enabled` es el interruptor.
+## Configura anuncios
 
-```yaml title="plugins/ExyliaChatCosmetics/chat/text/emojis.yml"
-emojis:
-  '<3': '{error}❤'
-  ':)': '{success}☺'
-  '*star*': '{highlight}★'
+<Steps>
+  <Step title="Abre el archivo">
+    Edita `lang/<idioma>/chat/announcements.yml`.
+  </Step>
+  <Step title="Enciéndelo">
+    Pon `enabled: true`. Viene apagado. `interval-seconds` (300 por defecto, mínimo 5) es la espera entre dos anuncios.
+  </Step>
+  <Step title="Escribe tus líneas">
+    Añade una entrada bajo `announcements:` con `lines` y, si quieres, `hover`, `click`, `sound` y `permission`. Las entradas `discord` y `cosmetics` que vienen son ejemplos para copiar.
+  </Step>
+  <Step title="Recarga y prueba">
+    Ejecuta `/cca chat reload` y luego `/cca chat announce <id>` para enviar uno ahora, o `/cca chat announce next` para enviar el siguiente que toque.
+  </Step>
+</Steps>
 
-gated:
-  discord:
-    trigger: '[discord]'
-    replacement: "<click:open_url:'https://discord.exylia.net'><hover:show_text:'{letters}Click to join'>{info}discord.exylia.net</hover></click>"
-    permission: exyliachatcosmetics.chat.emoji.discord
-```
+`random: true` elige uno cualquiera, `false` recorre la lista. Un `click` empieza por `RUN_COMMAND:`, `SUGGEST_COMMAND:`, `OPEN_URL:` o `COPY:`. Una pieza de `replacements` permite que una palabra de una línea lleve su propio hover y clic: escribe `{nombre}` en la línea.
 
-`emojis.<disparador>: reemplazo` es para todo el mundo. Cada `gated.<nombre>` nombra un `trigger`, un
-`replacement` y un `permission`, que por defecto es `exyliachatcosmetics.chat.emoji.<nombre>` si se
-deja fuera.
+El staff también puede editar la rotación en el juego: ejecuta `/cca menu` y pulsa **Anuncios**.
 
-Un reemplazo se escribe como cualquier línea de Exylia: tokens de paleta, MiniMessage, su propio hover
-y clic, y `%placeholders%` — aunque solo un reemplazo que nombre uno paga por resolverlo.
-
-Todos los disparadores se compilan en una sola alternancia, del más largo al más corto, para que `:))`
-no se lo coma `:)`.
-
-## Gramática
-
-`chat/text/grammar.yml` es la tabla; `grammar.enabled` es el interruptor.
-
-```yaml
-rules:
-  i: 'I'
-  im: "I'm"
-  dont: "don't"
-  alot: 'a lot'
-```
-
-`rules.<mal>: bien`. Solo palabras enteras, comparadas sin distinguir mayúsculas, sustituidas por
-exactamente lo que escribiste.
-
-## Reemplazo de comandos
-
-Un `/comando` escrito en el chat se convierte en algo que un lector puede clicar para escribirlo.
-`format` lo dibuja — `%command%` es el comando sin la barra — y `command-replacer.hover` del
-`messages.yml` del módulo es lo que dice. Al clicar se
-sugiere `/comando ` con un espacio al final, listo para los argumentos.
-
-Solo se reemplaza el nombre del comando; lo que el jugador escribiera después se queda como texto.
-
-## Enlaces
-
-Una URL se subraya y se vuelve clicable, pero solo para quien tenga
-`exyliachatcosmetics.chat.links`. Los enlaces de todos los demás ya los enmascaró o bloqueó la
-comprobación `url` del filtro antes de llegar aquí, así que un enlace que llegó sin enmascarar es de
-alguien que se salta el filtro de todas formas.
-
-## Ítems mostrados
-
-Tres cosas que un jugador puede enseñar en el chat.
-
-| Escrito | Disparadores | Permiso | Muestra |
-|---|---|---|---|
-| `[item]` | `[item]`, `[i]`, `[hand]` | `exyliachatcosmetics.chat.render.item` | Lo que lleva en la mano, con el hover de ítem de siempre |
-| `[inv]` | `[inv]`, `[inventory]` | `…chat.render.inv` | Su inventario, con un recuento en el hover |
-| `[ec]` | `[ec]`, `[enderchest]` | `…chat.render.ec` | Su cofre de ender, con un recuento en el hover |
-
-Cada uno se dibuja como mucho una vez por mensaje: una línea con veinte `[inv]` es una ventana, no
-veinte instantáneas. Los disparadores se comparan sin distinguir mayúsculas y se fijan por tipo en
-`renders.<tipo>.triggers`; `enabled: false` apaga un tipo. Cómo se dibuja cada uno — `format` (`{item}`,
-`{player}`) y el `title` de la ventana (`%player%`) — está en `renders` del `messages.yml` del módulo.
-
-Al clicar se abre una copia de **solo lectura** de lo que tenía el emisor cuando escribió la línea. Es
-un contenedor normal cuyos clics y arrastres se rechazan, no un menú; no hay nada dentro con lo que
-interactuar. `[item]` se abre en una fila con el ítem en el centro, salvo una **caja de shulker** en la
-mano, que se abre sobre su contenido. `[inv]` se abre en un cofre doble dispuesto como la pantalla de
-inventario, con la armadura y las dos manos en la fila de abajo.
-
-Las instantáneas viven `renders.cache-seconds` (por defecto `60`) en una caché acotada. Después de eso
-el clic responde `renders.expired` de `lang/<idioma>/chat/messages.yml`. El clic ejecuta el comando oculto
-`/chatcosmeticsrender <id>`, y el id son ocho caracteres al azar y no un contador, para que nadie abra
-la ventana de otro adivinando un número. Ese comando está registrado para que el clic tenga a qué
-llamar; no hay nada que escribir.
-
-<Callout type="note" title="La instantánea se toma en el hilo del chat">
-El evento de chat es asíncrono y el mensaje tiene que decidirse dentro de él, así que el inventario se
-copia donde está el mensaje — fuera del hilo principal, como hace cualquier plugin de chat que enseña
-ítems. Lo que se copia son pilas de ítems, que son datos planos, y aquí nada le escribe al jugador ni
-al mundo. De lo que Paper protege fuera del hilo es de mutar el mundo y las entidades, y esto no hace
-ninguna de las dos.
-</Callout>
-
-Una mano vacía no produce nada: el disparador se queda como texto y al emisor se le dice por qué, en
-vez de dejarle leer `[item]` en su propio mensaje sin explicación.
-
-## Mensajes privados, ignorados y social spy
-
-`/msg` (`/tell`, `/w`, `/whisper`), `/reply` (`/r`), `/ignore <jugador>`, `/ignoreall` (`/msgtoggle`,
-`/togglemsg`) y `/spymsg` (`/socialspy`).
-
-Un susurro son dos líneas, de los bloques `sender` y `receiver` de `msg.yml`. Cada una se dibuja con su
-propio lector como viewer y con la otra persona como objetivo de los placeholders, para que un hover
-que habla de "él" hable de la persona correcta en las dos pantallas. Ver
-[Formatos](/docs/exyliachatcosmetics/formatos).
-
-`/ignore` alterna a un jugador; `/ignoreall` cierra el buzón a todo el mundo. Los dos se guardan por
-jugador. Un susurro a un buzón cerrado o que te ignora se lo dice al emisor, en vez de fingir que se
-entregó. `exyliachatcosmetics.chat.bypass.ignore` atraviesa los dos, y a quien tenga
-`exyliachatcosmetics.chat.staff` no se le puede ignorar en absoluto.
-
-`PrivateMessageEvent` se lanza antes de que un susurro llegue a alguien de este servidor, y cancelarlo
-no entrega nada.
-
-`/spymsg` alterna leer los susurros de todo el mundo, dibujados con `staff.spy` del `messages.yml` del módulo. Un espía nunca lee
-sus propios susurros ni aquellos de los que es destinatario; esos ya los tendría.
-
-`/reply` responde a quien te susurró por última vez o a quien susurraste por última vez — las dos
-partes lo recuerdan, así que `/r` funciona antes de que hayas escrito nada.
-
-Con `cross-server` encendido, un susurro a alguien que no está en este servidor se construye aquí, se
-publica y se muestra allí. El otro lado solo comprueba el buzón cerrado y la lista de ignorados. Si no
-está en ningún servidor, al emisor se le dice que está desconectado.
-
-## Moderación
-
-| Comando | Excepción |
+<Details title="Claves de chat/config.yml">
+| Sección | Claves |
 |---|---|
-| `/mutechat` | `exyliachatcosmetics.chat.bypass.mute` |
-| `/clearchat` | `exyliachatcosmetics.chat.bypass.clearchat` |
-| `/broadcast` (`/bc`) | — |
+| `listener-priority` | Dónde toma el módulo el evento de chat: de `LOWEST` a `HIGHEST`. Por defecto `HIGHEST` |
+| `commands` | Un true/false por comando: `msg`, `reply`, `ignore`, `ignoreall`, `spymsg`, `mutechat`, `clearchat`, `broadcast`, `channel`. Un comando apagado no se registra, así que otro plugin puede usarlo |
+| `msg` | `sound`, un efecto de ExyliaLib que oye quien recibe un susurro |
+| `grammar`, `emojis`, `links` | `enabled` |
+| `command-replacer` | `enabled`, `format` (`%command%`). Convierte un `/comando` escrito en una sugerencia con clic |
+| `mentions` | `enabled`, `format` (`%player%`), `max`, `cooldown-seconds`, `feedback` |
+| `renders` | `cache-seconds`, y luego `item`, `inventory`, `enderchest`, cada uno con `enabled` y `triggers` |
+| `cross-server` | `enabled` |
+| `console-format` | `{channel}`, `{name}`, `{message}`. Por defecto `[{channel}] {name}: {message}` |
+| `filtered-marker` | Se pone delante de un mensaje bloqueado que el staff aún puede leer. Por defecto `{error}✖ ` |
 
-Los tres se anuncian con una línea que nombra a quien lo hizo, y los tres se propagan entre servidores
-con `cross-server` encendido — un silencio se anuncia una vez, al cambiar, no una vez por servidor.
+`grammar.yml` (`chat/text/grammar.yml`) asocia palabras mal escritas con las correctas: `rules: { dont: "don't" }`, palabras enteras, en cualquier caja. Los enlaces solo son clicables para quien tiene `exyliachatcosmetics.chat.links` (op por defecto); los de los demás pasaron antes por la comprobación `url` del filtro. Cómo se dibujan los renders, el hover de los comandos, la línea del spy y el resto de líneas que envía el módulo están en `lang/<idioma>/chat/messages.yml`, que tiene su propio prefijo a propósito.
 
-`/clearchat` empuja cien líneas en blanco a cada pantalla salvo a las que lo saltan.
-
-<Callout type="note" title="El silencio no se guarda">
-Es una bandera en memoria, que la compuerta lee en cada mensaje. Un reinicio quita el silencio, que es
-lo que espera un dueño que silenció durante una avalancha hace una hora.
-</Callout>
-
-## El anunciador
-
-`lang/<idioma>/chat/announcements.yml` guarda la rotación. Es texto que leen los jugadores, así que se
-traduce con el resto de la carpeta del idioma. Viene apagado.
-
-```yaml title="plugins/ExyliaChatCosmetics/lang/en/chat/announcements.yml"
-enabled: false
-interval-seconds: 300
-random: false
-
-replacements:
-  discord:
-    text: '{info}&ldiscord.exylia.net'
-    hover: '{warning}➥ Click to join'
-    click: 'OPEN_URL:https://discord.exylia.net'
-
-announcements:
-  discord:
-    lines:
-      - ' {letters_black}▎ {letters}join us at {discord}{letters}.'
-    sound: BLOCK_NOTE_BLOCK_PLING
-  cosmetics:
-    lines:
-      - ' {letters_black}▎ {letters}open {highlight}/cc{letters}.'
-    hover: '{warning}➥ Click to open'
-    click: 'RUN_COMMAND:/cc'
-```
-
-| Clave | Significado |
-|---|---|
-| `enabled` | `false` para el reloj |
-| `interval-seconds` | Entre dos anuncios. Cualquier valor por debajo de 5 se sube a 5 |
-| `random` | `true` elige cualquiera, `false` va bajando la lista |
-| `announcements.<id>.lines` | Una línea o una lista. Tokens de paleta, MiniMessage y `%placeholders%` |
-| `announcements.<id>.hover` | Una línea o una lista, mostrada sobre todas las líneas del anuncio |
-| `announcements.<id>.click` | `RUN_COMMAND:`, `SUGGEST_COMMAND:`, `OPEN_URL:` o `COPY:` |
-| `announcements.<id>.sound` | Un nombre de sonido, o fuera para el silencio |
-| `announcements.<id>.permission` | Solo lo leen quienes lo tengan; vacío para todo el mundo |
-| `replacements.<nombre>` | Una pieza con su propio `text`, `hover` y `click` que una línea pega con `{nombre}` |
-
-Un replacement es la forma de que una palabra de una línea lleve su propio hover y su propio clic sin
-que lo lleve el resto de la línea. Hay un solo temporizador asíncrono para todos los anuncios, y
-recargar cambia el archivo y reinicia el reloj desde cero.
-
-Una línea sin ningún `%placeholder%` se construye una vez y se le envía a todos; una línea con uno se
-construye por lector, que es lo único que el anunciador hace por jugador.
-
-`/cca chat announce <id>` envía uno ahora; `/cca chat announce next` envía el que toque y avanza la
-rotación.
-
-Los anuncios son el servidor hablando, así que conservan las versalitas de ExyliaLib — al contrario que
-la línea de chat. Ver [El módulo de chat](/docs/exyliachatcosmetics/chat).
-
-## `lang/<idioma>/chat/messages.yml`
-
-Cada línea que envía el módulo, en secciones: `general`, `whispers`, `ignore`, `staff` (spy, alertas
-del filtro, los resultados de `/cca chat`), `moderation` (silencio, limpieza, broadcast, castigado),
-`channels`, `filter`, `renders` (las líneas y cómo se dibuja y titula cada ítem mostrado), `announcer` y
-`command-replacer` (el hover).
-
-Tiene su propio `prefix`, y `%prefix%` en este archivo se sustituye desde él antes de que la línea
-llegue al motor de texto — así que el prefijo general del plugin, el del `messages.yml` de los
-cosméticos, nunca se aplica aquí.
-
-<Callout type="note" title="Por qué el chat no toma prestado el prefijo de los cosméticos">
-Un plugin de chat habla como el chat. Un servidor que enciende el módulo y esconde los cosméticos no
-debería leer el nombre del plugin de cosméticos delante de un error de susurro, así que los dos
-prefijos están separados a propósito y ninguno puede colarse en el otro.
-</Callout>
-
-## Entre servidores
-
-`cross-server.enabled: true` más Redis en el `database.yml` de ExyliaLib pone al módulo en el canal
-`chat` de la librería. Las líneas de chat de canales marcados `cross-server`, los susurros, el
-interruptor de silencio, `/clearchat` y `/broadcast` viajan todos; todo se dibuja donde se escribió y
-el servidor que lo recibe solo decide quién lo lee. Sin Redis no se publica nada y no llega nada.
-
-La parte de los canales está en [Canales](/docs/exyliachatcosmetics/canales).
-
-## Relacionado
+Otras claves del anunciador: `announcements.<id>.hover` (sobre cada línea), `.sound`, `.permission` (solo lo leen quienes lo tienen) y `replacements.<nombre>` con `text`, `hover`, `click`. Una línea sin `%placeholder%` se construye una vez y se envía a todos.
+</Details>
 
 <Cards>
-  <Card title="El módulo de chat" href="/docs/exyliachatcosmetics/chat">
-    Dónde se sitúa cada una de estas funciones en el pipeline.
-  </Card>
-  <Card title="Formatos" href="/docs/exyliachatcosmetics/formatos">
-    `msg.yml`, y los tokens con los que se construyen las líneas de susurro.
-  </Card>
-  <Card title="El filtro" href="/docs/exyliachatcosmetics/filtro">
-    La otra mitad de `chat/`, con su propio archivo de configuración.
-  </Card>
+  <Card title="El filtro" href="/docs/exyliachatcosmetics/filtro">Bloquea insultos, publicidad y spam antes de que lleguen al chat.</Card>
+  <Card title="Canales" href="/docs/exyliachatcosmetics/canales">Adónde va cada mensaje y quién lo lee.</Card>
+  <Card title="Comandos" href="/docs/exyliachatcosmetics/comandos">Todos los comandos y permisos del chat.</Card>
 </Cards>
-
-Todos los comandos y nodos que se nombran aquí están completos en
-[Comandos](/docs/exyliachatcosmetics/comandos) y
-[Permisos](/docs/exyliachatcosmetics/permisos).

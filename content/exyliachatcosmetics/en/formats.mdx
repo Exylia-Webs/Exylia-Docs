@@ -1,179 +1,100 @@
 ---
 title: "Formats"
-description: "One file per format under chat/formats/: components, hovers, clicks, the token list, and how a format is chosen."
+description: "Change how a chat line looks, add the tag to it, or give a rank its own line with hovers and clicks."
+questions:
+  - "How do I change the chat format?"
+  - "How do I show the tag in the chat line?"
+  - "How do I give VIPs their own chat format?"
+  - "How do I add a hover or a click to the name?"
+  - "Which tokens can I use in a format?"
+  - "Why does a hover cover the wrong part of the line?"
+updated: "1.3.0"
 ---
 
-A format is a whole chat line, described by a file under `chat/formats/`. The file name is the format
-name: `vip.yml` is the format `vip`. Two ship — `default.yml` and `msg.yml` — and both are rewritten
-on the first start if they are missing.
+A format is a whole chat line, described by a file. By editing it you choose what comes before the message, what shows on hover, and what a click does. You can give each rank its own.
 
-## A file is one format, or several
+## Before you start
 
-A file with `components:` at its root is **one** format, named after the file.
+The built-in chat must be on, see [The chat module](/docs/exyliachatcosmetics/chat). Formats live in `plugins/ExyliaChatCosmetics/lang/<language>/chat/formats/`, for example `lang/en/chat/formats/`. Two ship: `default.yml` (the public chat) and `msg.yml` (private messages).
 
-A file without one is read block by block: each top-level block that has a `components:` section
-becomes a format named `file.block`. That is how `msg.yml` produces `msg.sender` and `msg.receiver`.
-A block format never takes part in the weight contest below — it is asked for by name, by the feature
-that needs it.
+<Callout type="warning" title="Do not edit default.yml">
+The plugin replaces `default.yml` when a new version fixes the line, and keeps your old copy as `default.yml.v<number>`. Put your changes in a file of your own, as below.
+</Callout>
 
-```yaml title="plugins/ExyliaChatCosmetics/chat/formats/vip.yml"
-permission: exyliachatcosmetics.chat.format.vip   # empty = everybody
-weight: 10                                        # heaviest qualifying format wins
-per-viewer: false                                 # true renders the line once per reader
-components:
-  '1':
-    text: '{tag}{nick} {letters_black}» '
-    hover:
-      - '{secondary}Player'
-      - ' {letters_black}▎ {letters}Name {letters_black}» {info}{name}'
-    click: 'SUGGEST_COMMAND:/msg {name} '
-  '2':
-    text: '{message}'
-```
-
-| Key | Default | Meaning |
-|---|---|---|
-| `permission` | empty | Who may be given this format. Empty means everybody |
-| `weight` | `0` | When a player qualifies for several, the heaviest wins |
-| `per-viewer` | `false` | Render the line once per reader even when nothing in it asks for it |
-| `components` | — | The pieces of the line, in the order they are written |
-
-The component keys are names, not indices; `'1'`, `'2'` is a convention, not a requirement. A component
-with no `text` is skipped and reported. A format that ends up with no usable component is dropped, and
-if `default` is the one that failed the console says so and messages are sent bare.
-
-## Inside a component
-
-| Key | Holds |
-|---|---|
-| `text` | What is drawn. Palette tokens, `&` codes and MiniMessage all work |
-| `hover` | One line or a list, shown while the mouse is over this piece |
-| `click` | `RUN_COMMAND:/x`, `SUGGEST_COMMAND:/x`, `OPEN_URL:https://x` or `COPY:text` |
-
-A `click` that is not one of those four is reported when the file is read, rather than silently
-dropped on every message afterwards.
-
-Tokens work in all three. A click carries its tokens as plain text, so
-`SUGGEST_COMMAND:/msg {name} ` puts the player's actual name into the chat box rather than the literal
-`{name}`.
-
-## Which format a message wears
+## Steps: make your own line
 
 <Steps>
-  <Step title="The channel's own">
-    If the channel names a `format` and that file loaded, it is used, whoever is talking.
+  <Step title="Copy the default">
+    In `lang/en/chat/formats/`, copy `default.yml` to `vip.yml`.
   </Step>
-  <Step title="The heaviest one the sender qualifies for">
-    Every top-level format whose `permission` the sender holds, or that has none. The highest `weight`
-    wins. Block formats such as `msg.sender` never enter this contest.
+  <Step title="Choose who gets it">
+    At the top of `vip.yml` set `permission: exyliachatcosmetics.chat.format.vip` (leave it out for everybody) and `weight: 10`. A player who qualifies for several formats gets the heaviest one.
   </Step>
-  <Step title="`default`">
-    When none qualified.
+  <Step title="Edit the pieces">
+    Under `components:` each block is one piece of the line, drawn in order of its `priority` (lowest first). Change a `text`, or add a block. To show the tag, add:
+
+    ```yaml
+      tag:
+        priority: 5
+        text: '{tag}'
+    ```
+  </Step>
+  <Step title="Reload">
+    Run `/cca chat reload`, then give the permission to the rank in your permissions plugin.
   </Step>
 </Steps>
 
+The shipped `default.yml` has no tag piece: it draws the rank (`{prefix} `), the name (`{nick}{suffix}`), an arrow, and the message. The tag only appears when your format has `{tag}`.
+
+## Check that it works
+
+As a player with the permission, write a message: the line should use your piece layout. Run `/cca chat line hello` to see your line and, in the console, where each hover and click stops. Remove a piece by setting `enabled: false` on it.
+
+## Add a hover or a click
+
+Each piece takes `hover` (one line or a list) and `click`, which is `RUN_COMMAND:/x`, `SUGGEST_COMMAND:/x`, `OPEN_URL:https://x` or `COPY:text`. A `shift-click` puts text in the chat box. The shipped name piece suggests `/msg {name} `, and the message piece offers a shift-click report that runs `/report`: your server needs a `/report` command, or remove it. Tokens work in all of these.
+
 ## Tokens
 
-Tokens are components, placed into the line directly — no placeholder round-trip, and a tag or a
-coloured name keeps its own colours instead of being flattened into a string.
-
-| Token | Is |
+| Token | Draws |
 |---|---|
-| `{message}` | The styled message body |
+| `{message}` | The styled message |
 | `{name}` | The plain name |
-| `{nick}` | The name in the player's nick colour |
-| `{tag}` | The equipped tag, with its format |
-| `{prefix}` | The rank prefix, in the player's rank colour |
-| `{suffix}` | The rank suffix, in that same colour |
-| `{channel}` | The channel's `name`, parsed, so its own colour survives |
+| `{nick}` | The name in the nick colour |
+| `{tag}` | The equipped tag |
+| `{prefix}` / `{suffix}` | The rank prefix and suffix, in the rank colour |
+| `{channel}` | The channel's name |
 
-Private-message formats get their own set instead: `{message}`, `{sender}`, `{sender_nick}`,
-`{sender_tag}`, `{receiver}`, `{receiver_nick}`, `{receiver_tag}`.
+Private messages use `{message}`, `{sender}`, `{sender_nick}`, `{sender_tag}`, `{receiver}`, `{receiver_nick}` and `{receiver_tag}`. Any `%placeholder%` from ExyliaLib or PlaceholderAPI works too. Colours are ExyliaLib palette tokens, see [Colours](/docs/exylialib/colours).
 
-Braces rather than percent signs, so a token can never collide with a placeholder. A brace pair nobody
-claims — `{primary}`, `{letters_black}` — is left for the text engine, which reads it as a palette
-colour.
+## Make a line depend on the reader
 
-The colour a line was written in carries across a token: the piece before `{nick}` opens a colour, the
-token is drawn under it as a fallback, and the piece after it continues the same sentence. Anything
-that names its own colour, an item's name for one, still wins.
+Placeholders resolve for the sender. Set `per-viewer: true` and each reader gets their own render: `%player_…%` becomes the reader and `%target_…%` stays the sender. A `%rel_…%` placeholder does this by itself. It costs one render per reader instead of one per message, so only use it when needed.
 
-## Placeholders and `per-viewer`
+## Give a channel a fixed format
 
-Any `%placeholder%` ExyliaLib or PlaceholderAPI knows works in `text`, `hover` and `click`. By default
-it resolves for the sender, because the line is about them.
+Set `format: vip` on a channel in `channels.yml` to always use that file, see [Channels](/docs/exyliachatcosmetics/channels).
 
-Turn `per-viewer: true` on and the line is rendered once for each reader: `%player_…%` is then the
-**reader** and `%target_…%` stays the sender. That is the switch for a line that says something about
-whoever is looking at it.
+<Details title="How a format is chosen, and file rules">
+The channel's own `format` wins if that file loaded. Otherwise the heaviest format whose `permission` the sender holds (or that has none). Otherwise `default`. If `default` is missing or broken, the console says so and messages are sent bare.
 
-A `%rel_…%` placeholder makes a format viewer-aware on its own, in `text`, `hover` or `click`, without
-`per-viewer` being set — a relational placeholder has no meaning without a reader.
+A file with `components:` at its root is one format named after the file. A file without it is read block by block and each block with `components:` becomes `file.block`: that is how `msg.yml` gives `msg.sender` and `msg.receiver`, each with a single `line` piece. Block formats are only used when a feature asks for them by name.
 
-<Callout type="warning" title="Per-viewer costs a render per reader">
-A viewer-unaware format is rendered once per message and handed to everybody. A viewer-aware one is
-rendered once per reader. On a busy server that is the difference between one render and a hundred, so
-turn it on only for a format that needs it.
-</Callout>
+| Key | Default | Meaning |
+|---|---|---|
+| `permission` | empty | Who may get this format |
+| `weight` | `0` | Heaviest qualifying wins |
+| `per-viewer` | `false` | One render per reader |
+| `components.<name>` | | One piece. A piece with no `text` is skipped and reported. The name means nothing to the plugin |
+| `priority` | file order | Where the piece sits; lowest first |
+| `enabled` | `true` | `false` removes the piece but keeps it written |
+| `text`, `hover`, `click`, `shift-click` | | What is drawn and what it does |
 
-## Padding falls outside the hover and the click
-
-The blanks a component is padded with are taken off both of its ends before the hover and the click go
-on, and put back afterwards. A gap belongs to neither of the pieces it separates.
-
-Without that, the space in `'{nick} ➞ '` sat inside the hover, and hovering the arrow answered
-"Player" right where the message began. The peeling happens on the rendered piece rather than on the
-written text, so a blank that a placeholder left behind — an empty rank prefix in `'{prefix} {nick}'` —
-falls outside the hover just the same.
-
-This is also why `msg.yml` has a component that is nothing but a space between the heading and the
-message: a deliberate gap that answers to neither.
-
-To check where a hover actually stops, use `/cca chat line [message]`. It renders your own line, sends
-it to you, and writes to the console the same line broken into the stretches that share a hover and a
-click.
-
-## What ships
-
-### `default.yml`
-
-Three components, and it is a worked example of everything above.
-
-| Component | Draws | Hover | Click |
-|---|---|---|---|
-| `'1'` | `{prefix} {nick}{suffix}` | An INFORMATION box: ping through `%player_ping%`, the rank through `{prefix}`, and a line inviting a private message | `SUGGEST_COMMAND:/msg {name} ` |
-| `'2'` | ` ➠ ` | — | — |
-| `'3'` | `{message}` | A WARNING box offering to report the message | `RUN_COMMAND:/report {name} offensive_language` |
-
-The separator is its own component precisely so that neither the name's hover nor the message's report
-click reaches the arrow between them. `weight: 0`, no `permission`: everybody gets it unless a heavier
-format applies.
-
-<Callout type="note" title="The report click assumes a report command">
-`/report` is not shipped by this plugin. If your server has no such command, change or remove the
-click on the third component.
-</Callout>
-
-### `msg.yml`
-
-Two blocks, `sender` and `receiver`, giving the formats `msg.sender` and `msg.receiver`. Each has
-three components: a heading — `[You ➜ them]` on one screen, `[them ➜ You]` on the other — that hovers
-with who the message is with and clicks to `SUGGEST_COMMAND:/reply `, then a bare space, then
-`{message}` hovering "Click to copy it" with `COPY:{message}`.
-
-Each screen is rendered with its own reader as the viewer and the other person as the placeholder
-target, so a hover about "them" is about the right person on both.
-
-## Related
+A `click` that is not one of the four kinds is reported when the file loads. The blanks a piece is padded with are drawn outside its hover and click, so the gap between two pieces answers to neither. A client that hit-tests a few pixels off (a head glyph, an avatar mod) can answer the neighbouring piece: merge the pieces into one and use `shift-click` for the second action. `/cca chat line` shows what each character answers to.
+</Details>
 
 <Cards>
-  <Card title="Channels" href="/docs/exyliachatcosmetics/channels">
-    The `format` key that pins a channel to one of these files.
-  </Card>
-  <Card title="Chat features" href="/docs/exyliachatcosmetics/chat-features">
-    Private messages, which are what `msg.yml` draws.
-  </Card>
+  <Card title="Channels" href="/docs/exyliachatcosmetics/channels">Pin a channel to a format.</Card>
+  <Card title="Chat features" href="/docs/exyliachatcosmetics/chat-features">Private messages, which `msg.yml` draws.</Card>
+  <Card title="Tags" href="/docs/exyliachatcosmetics/tags">What `{tag}` draws.</Card>
 </Cards>
-
-The format permission node is on [Permissions](/docs/exyliachatcosmetics/permissions), and
-`/cca chat line` on [Commands](/docs/exyliachatcosmetics/commands).
