@@ -957,14 +957,17 @@ const CLASSES_NAV: NavGroup[] = [
     ],
   },
   {
-    label: { en: "Configuring", es: "Configurar" },
+    label: { en: "Guides", es: "Guías" },
     pages: [
       page("classes", "classes", "clases"),
       page("abilities", "abilities", "habilidades"),
       page("passives", "passives", "pasivas"),
       page("weapons", "weapons", "armas"),
-      page("energy", "energy", "energia"),
     ],
+  },
+  {
+    label: { en: "How it works", es: "Cómo funciona" },
+    pages: [page("energy", "energy", "energia")],
   },
   {
     label: { en: "Reference", es: "Referencia" },
@@ -974,6 +977,12 @@ const CLASSES_NAV: NavGroup[] = [
       page("placeholders", "placeholders", "placeholders"),
       page("configuration", "configuration", "configuracion"),
       page("api", "api", "api"),
+    ],
+  },
+  {
+    label: { en: "Help", es: "Ayuda" },
+    pages: [
+      page("troubleshooting", "troubleshooting", "problemas-comunes"),
       page("faq", "faq", "faq"),
     ],
   },
