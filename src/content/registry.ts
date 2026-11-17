@@ -450,6 +450,12 @@ const CHATCOSMETICS_NAV: NavGroup[] = [
       page("configuration", "configuration", "configuracion"),
       page("integrations", "integrations", "integraciones"),
       page("api", "api", "api"),
+    ],
+  },
+  {
+    label: { en: "Help", es: "Ayuda" },
+    pages: [
+      page("troubleshooting", "troubleshooting", "problemas-comunes"),
       page("faq", "faq", "faq"),
     ],
   },
