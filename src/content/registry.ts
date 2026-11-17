@@ -2464,8 +2464,8 @@ export const plugins: Plugin[] = [
     name: "ExyliaCrates",
     tagline: { en: "Crates opened with keys, animated over the block", es: "Cajas que se abren con llaves, animadas sobre el bloque" },
     summary: {
-      en: "Crates built and edited in game and placed on any block, opened with key items or a key balance shared across a network, priced in any mix of keys and money, with weighted rewards whose rarity follows their real odds, a guarantee after so many openings, eleven opening animations everybody nearby watches, bulk openings with per-rank limits, per-crate and per-feature permissions, a history and server-wide announcements.",
-      es: "Cajas creadas y editadas dentro del juego y colocadas en cualquier bloque, que se abren con ítems de llave o con un saldo de llaves compartido en toda la red, con un precio de cualquier mezcla de llaves y dinero, recompensas con peso cuya rareza sigue a sus probabilidades reales, una garantía tras tantas aperturas, once animaciones de apertura que ven todos los que están cerca, aperturas múltiples con límites por rango, permisos por caja y por función, un historial y anuncios a todo el servidor.",
+      en: "Crates built and edited in game and placed on any block, opened with key items or a key balance shared across a network, priced in any mix of keys and money, with weighted rewards whose rarity follows their real odds, a guarantee after so many openings, twelve opening animations everybody nearby watches, bulk openings with per-rank limits, per-crate and per-feature permissions, a history and server-wide announcements.",
+      es: "Cajas creadas y editadas dentro del juego y colocadas en cualquier bloque, que se abren con ítems de llave o con un saldo de llaves compartido en toda la red, con un precio de cualquier mezcla de llaves y dinero, recompensas con peso cuya rareza sigue a sus probabilidades reales, una garantía tras tantas aperturas, doce animaciones de apertura que ven todos los que están cerca, aperturas múltiples con límites por rango, permisos por caja y por función, un historial y anuncios a todo el servidor.",
     },
     version: "1.1.0",
     status: "stable",
