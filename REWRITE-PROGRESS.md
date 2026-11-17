@@ -32,7 +32,7 @@ Follow WRITING.md. ExyliaFFA is the model. One row per plugin; mark done after r
 | `exyliamarket` | `ExyliaMarket` | todo |
 | `exyliamines` | `ExyliaMines` | todo |
 | `exyliamobs` | `ExyliaMobs` | done |
-| `exyliaplayervaults` | `ExyliaPlayerVaults` | todo |
+| `exyliaplayervaults` | `ExyliaPlayerVaults` | done (purchases, staff, network, configuration, faq on old text) |
 | `exyliapractice` | `ExyliaPracticeCore` | todo |
 | `exyliapracticebot` | `ExyliaPracticeBotV3` | todo |
 | `exyliaprotections` | `ExyliaProtections` | todo |
