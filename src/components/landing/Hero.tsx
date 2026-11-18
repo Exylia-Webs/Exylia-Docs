@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { loadIndex, prepare, rank, type Prepared } from "@/components/Search";
 import { dict } from "@/content/dictionary";
+import { Words } from "@/components/fx/Words";
 import { documentedPlugins, pageCount, plugins, type Lang } from "@/content/registry";
 
 export const TOTAL_PAGES = documentedPlugins.reduce((n, plugin) => n + pageCount(plugin), 0);
@@ -14,11 +15,12 @@ export function Hero({ lang }: { lang: Lang }) {
   const l = dict.landing;
   return (
     <section className="mx-auto max-w-content px-6 pb-16 pt-36 sm:pb-24 sm:pt-44">
-      <h1 className="font-display text-[clamp(2.9rem,9.2vw,8.75rem)] font-semibold leading-[0.9] tracking-[-0.055em] text-white">
-        {l.title1[lang].replace("{n}", String(plugins.length))}
-        <br />
-        <span className="text-white/30">{l.title2[lang]}</span>
-      </h1>
+      <Words
+        as="h1"
+        text={l.heroTitle[lang].replace("{n}", String(plugins.length))}
+        className="font-display text-[clamp(2.9rem,9.2vw,8.75rem)] font-semibold leading-[0.92] tracking-[-0.055em] text-white"
+        accent="text-[1.08em] text-white/80"
+      />
       <div className="mt-10 grid gap-8 sm:mt-14 md:grid-cols-[1fr_minmax(0,34rem)] md:items-end">
         <p className="max-w-md text-[15.5px] leading-relaxed text-white/45">{l.lead[lang]}</p>
         <HeroSearch lang={lang} />

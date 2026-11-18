@@ -71,6 +71,8 @@ export const dict = {
     continue: { en: "Continue: {title}", es: "Continuar: {title}" },
     allRead: { en: "You have read it all", es: "Lo has leído todo" },
     chapter: { en: "Chapter", es: "Capítulo" },
+    stepsTitle: { en: "Start in *three steps*", es: "Empieza en *tres pasos*" },
+    stepsLead: { en: "From the jar to the first match, in this order.", es: "Del jar a la primera partida, en este orden." },
     quick: { en: "Straight to the reference", es: "Directo a la referencia" },
     news: { en: "New in v{v}", es: "Novedades en v{v}" },
     updatedIn: { en: "Updated in v{v}", es: "Actualizada en v{v}" },
@@ -105,6 +107,11 @@ export const dict = {
     kicker: { en: "Official documentation", es: "Documentación oficial" },
     title1: { en: "{n} plugins.", es: "{n} plugins." },
     title2: { en: "One way to read them.", es: "Una sola forma de leerlos." },
+    /** `*word*` is the accent word, set in the italic serif (fx/Words.tsx). */
+    heroTitle: { en: "{n} plugins.\nOne way to *read* them.", es: "{n} plugins.\nUna sola forma de *leerlos*." },
+    catalogHeading: { en: "Every plugin, *by use*", es: "Cada plugin, *por uso*" },
+    structureChip: { en: "Structure", es: "Estructura" },
+    structureHeading: { en: "Read one, *know* them all", es: "Lees uno, *conoces* todos" },
     line1: { en: "Every plugin,", es: "Cada plugin," },
     line2: { en: "explained the way it was", es: "explicado como fue" },
     /** Accent words drawn by hand (fx/Ink.tsx); each must exist in ink-paths.ts. */

@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { morphTo } from "@/lib/banner-morph";
 import { groupByCategory, pageCount, plugins, type Lang, type Plugin } from "@/content/registry";
 import { dict } from "@/content/dictionary";
+import { Words } from "@/components/fx/Words";
 import { TINTS } from "@/content/tints";
 import { PluginBanner } from "@/components/PluginBanner";
 
@@ -53,6 +54,18 @@ export function Catalog({ lang }: { lang: Lang }) {
 
   return (
     <section id="plugins" className="mx-auto max-w-content scroll-mt-24 px-6 pb-24 sm:pb-32">
+      <span className="chip-n">
+        <b>01</b>
+        {l.catalogKicker[lang]}
+      </span>
+      <div className="mb-10 mt-6 grid gap-6 md:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] md:items-end">
+        <Words
+          text={l.catalogHeading[lang]}
+          className="font-display text-[clamp(2.2rem,4.6vw,3.9rem)] font-semibold leading-[0.98] tracking-[-0.045em] text-white"
+          accent="text-[1.08em]"
+        />
+        <p className="max-w-md text-[15.5px] leading-relaxed text-white/45 md:justify-self-end">{l.catalogLead[lang]}</p>
+      </div>
       <div className="flex flex-col gap-4 border-t hair pt-6">
         <label className="flex h-11 flex-1 items-center gap-3 rounded-full border border-white/[0.08] px-4 transition-colors duration-150 focus-within:border-white/30 sm:w-80">
           <svg className="h-3.5 w-3.5 shrink-0 text-white/30" viewBox="0 0 16 16" fill="none" aria-hidden>

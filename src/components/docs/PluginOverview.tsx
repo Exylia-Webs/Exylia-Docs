@@ -10,7 +10,8 @@ import { PluginBanner } from "@/components/PluginBanner";
 import { SITE } from "@/content/registry";
 import { ReadTick, useReadPages } from "./Reading";
 import { AskPlugin } from "./AskPlugin";
-import { useLayoutEffect } from "react";
+import { useLayoutEffect, useRef } from "react";
+import { Words, useSeen } from "@/components/fx/Words";
 import { arrived, BANNER_MORPH } from "@/lib/banner-morph";
 
 const EASE = [0.16, 1, 0.3, 1] as const;
@@ -36,6 +37,9 @@ export function PluginOverview({
   const quick = flat.filter((p) => QUICK.includes(p.id));
   const f = dict.docs.facts;
   useLayoutEffect(arrived, []);
+  const stepsRef = useRef<HTMLOListElement>(null);
+  useSeen(stepsRef);
+  const steps = sections[0]?.pages.slice(0, 3) ?? [];
 
   const facts = [
     { label: f.version[lang], value: `v${plugin.version}` },
@@ -150,6 +154,40 @@ export function PluginOverview({
           ))}
         </m.dl>
       </header>
+
+      {steps.length === 3 && (
+        <section className="mb-16">
+          <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
+            <Words
+              text={dict.docs.stepsTitle[lang]}
+              className="font-display text-[clamp(1.8rem,3.6vw,2.6rem)] font-semibold leading-[1] tracking-[-0.04em] text-white"
+              accent="text-[1.08em]"
+            />
+            <p className="text-[14px] text-white/40">{dict.docs.stepsLead[lang]}</p>
+          </div>
+          <ol ref={stepsRef} className="steps mt-7 grid gap-3 md:grid-cols-3">
+            {steps.map((page, i) => (
+              <li key={page.slug} style={{ ["--i" as string]: i }}>
+                <Link
+                  href={`/${lang}/docs/${page.plugin}/${page.slug}`}
+                  className="group flex h-full flex-col rounded-2xl border border-white/[0.08] bg-white/[0.02] p-5 transition-colors duration-300 hover:border-[rgb(var(--accent)/0.45)] hover:bg-[rgb(var(--accent)/0.05)]"
+                >
+                  <span className="flex items-center gap-3">
+                    <span className="step-n grid h-7 w-7 shrink-0 place-items-center rounded-full border border-white/15 text-[12.5px] font-medium tabular-nums text-white/50">
+                      {i + 1}
+                    </span>
+                    <span className="step-bar h-px flex-1 overflow-hidden bg-white/[0.08]">
+                      <span className="block h-full bg-[rgb(var(--accent))]" />
+                    </span>
+                  </span>
+                  <span className="mt-6 block text-[16px] font-medium tracking-[-0.01em] text-white">{page.title}</span>
+                  {page.description && <span className="mt-1.5 line-clamp-2 block text-[13.5px] leading-relaxed text-white/45">{page.description}</span>}
+                </Link>
+              </li>
+            ))}
+          </ol>
+        </section>
+      )}
 
       {flat.some((p) => p.fresh) && (
         <section className="mb-16 rounded-2xl border border-[rgb(var(--accent)/0.2)] bg-[rgb(var(--accent)/0.04)] p-5 sm:p-6">

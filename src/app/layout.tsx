@@ -1,10 +1,11 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, Instrument_Serif } from "next/font/google";
 import { CookieConsent } from "@exylia-webs/ui";
 import { DEFAULT_LANG, SITE } from "@/content/registry";
 import { MotionProvider } from "@/components/motion/MotionProvider";
 
 const geist = Geist({ subsets: ["latin"], variable: "--font-geist", display: "swap" });
+const serif = Instrument_Serif({ subsets: ["latin"], weight: "400", style: ["normal", "italic"], variable: "--font-serif", display: "swap" });
 const geistMono = Geist_Mono({ subsets: ["latin"], variable: "--font-geist-mono", display: "swap" });
 
 export const metadata: Metadata = {
@@ -37,7 +38,7 @@ export const viewport: Viewport = {
  */
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang={DEFAULT_LANG} suppressHydrationWarning className={`${geist.variable} ${geistMono.variable}`}>
+    <html lang={DEFAULT_LANG} suppressHydrationWarning className={`${geist.variable} ${geistMono.variable} ${serif.variable}`}>
       <body className="font-sans antialiased">
         <MotionProvider>{children}</MotionProvider>
         {/* The shared banner, restyled for the docs in globals.css (.consent). Its policy link is the hub's. */}
