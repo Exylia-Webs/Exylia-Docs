@@ -38,7 +38,7 @@ export default async function DocsLayout({
       </div>
 
       <div className="relative z-[1]">
-        <Footer lang={lang} />
+        <Footer lang={lang} tinted />
       </div>
       <AssistantLauncher lang={lang} plugin={entry.id} pluginName={entry.name} />
     </div>

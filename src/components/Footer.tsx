@@ -2,11 +2,12 @@ import { CookieSettingsButton, EXYLIA_APPS } from "@exylia-webs/ui";
 import { SITE, type Lang } from "@/content/registry";
 import { dict } from "@/content/dictionary";
 import { Logo } from "./Logo";
+import { ParticleWord } from "./fx/ParticleWord";
 
 const HUB_LEGAL = "https://hub.exylia.net";
 const link = "text-[13.5px] text-white/45 transition-colors hover:text-white";
 
-export function Footer({ lang }: { lang: Lang }) {
+export function Footer({ lang, tinted = false }: { lang: Lang; tinted?: boolean }) {
   const f = dict.footer;
   const main = [
     { href: SITE.discord, label: f.support[lang], hint: f.supportHint[lang] },
@@ -80,6 +81,10 @@ export function Footer({ lang }: { lang: Lang }) {
           </div>
           <p className="text-[12.5px] text-white/25">{f.madeWith[lang]}</p>
         </div>
+      </div>
+      {/* The name in a few thousand particles: they gather when it comes into view and part around the cursor. */}
+      <div className="mx-auto max-w-docs overflow-hidden px-2">
+        <ParticleWord word="Exylia" tinted={tinted} className="h-[clamp(7rem,22vw,22rem)]" />
       </div>
     </footer>
   );
