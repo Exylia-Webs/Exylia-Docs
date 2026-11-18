@@ -1,6 +1,7 @@
 ---
 title: "Playing a round"
-description: "How a round starts, the stake and its currency, the options a game asks for, the room and the guide, AGAIN and CHANGE BET, and every way a round ends."
+updated: "1.0.0"
+description: "How a round starts, the stake and its currency, the options a game asks for, the screen of a game, playing again, and every way a round ends."
 ---
 
 ## Starting a round
@@ -13,14 +14,13 @@ There are three ways in, and they all lead to the same flow:
 | `/<game> [stake] [option]` | Starts that game: `/mines 500 5`, `/coinflip 50 heads`. For the nine shared-table games it opens the table screen, see below. |
 | `casino:play <game>` | A menu action, the same as typing `/<game>` alone. For a server's own menus and NPCs. |
 
-Whatever is left out is asked. This applies to solo games; at a shared table the stake is the chips on the felt (see [Shared tables](#shared-tables)):
+A solo game typed with no stake (`/mines`, its card on `/casino`) opens its own screen, where the player picks a chip and the option and presses **PLAY** (see [On the screen](#on-the-screen)). When a stake is typed, whatever is left out is asked in dialogs. At a shared table the stake is the chips on the felt (see [Shared tables](#shared-tables)):
 
 1. **The currency**, only when the player may bet in more than one and typed no amount. A choice dialog
    lists them.
 2. **The stake**, in an amount dialog that states the minimum. A stake typed in the command is used as it
    is.
-3. **The game's option**, when the game has one: the mines on the board, the bet on the wheel, the side of
-   the coin. Some games ask with a dialog, others with a screen of their own. See
+3. **The game's option**, when the game has one: the mines on the board, the side of the coin. See
    [Games](/docs/exyliacasino/games).
 
 A stake typed in the command uses the server's default currency when the player may bet in it, and the
@@ -47,57 +47,61 @@ Roulette, Live Roulette, Sic Bo, Baccarat, Blackjack, Wheel of Fortune, Keno, Ho
 
 Every check runs **before** anything is charged.
 
-## At the table
+## On the screen
 
-The stake is held by ExyliaLib's escrow, the player is claimed so every other plugin sees them busy, and
-the round starts where they stand:
+Every game is played on a screen. The stake is held by ExyliaLib's escrow and the player is claimed, so every
+other plugin sees them busy. While a round is up the player cannot be hurt, does not get hungry, cannot drop,
+pick up, break or place anything, and cannot move items in their inventory.
 
-- **The room.** A closed dark room is drawn round them, only for them, and other players are hidden from
-  them meanwhile. It is styled by `booth` in `config.yml`.
-- **The table.** The board is drawn in front of their eyes, on felt with a neon frame and casino bulbs
-  chasing round it, with the game's name and a line of figures over it: the stake and the RTP.
-- **The guide.** A turn of the head away, how the game is played on their left and what it pays on their
-  right, never over the board. Switched off with `guide.enabled: false`.
-- **Held still.** With `arena.freeze` on, they cannot walk off their table.
+The ten solo games (Mines, Tower, Hi-Lo, Double or Nothing, Coinflip, Limbo, Plinko, Slots, Scratch Card and
+Video Poker) share one layout:
 
-The crosshair plays the game: what can be clicked lights up under it with a soft sound, and a left or right
-click presses it. While a round is up the player cannot be hurt, does not get hungry, cannot drop, pick up,
-break or place anything, and cannot move items in their inventory.
+| Part | What it does |
+|---|---|
+| **Chip rack** | The chips of `wager.chips`, as stakes. The last chip, **CUSTOM**, takes an amount typed in a dialog: left-click uses the amount, right-click changes it. Chips outside `wager.minimum` and `wager.maximum` are refused when played. |
+| **MONEY / ITEM** | Double or Nothing can be staked with an item instead of money, see `item-stakes`. |
+| **Option stepper** | `‹` and `»` change the game's option before the round: the mines, the side of the coin, the risk. Locked while a round runs. |
+| **PLAY** | Starts the round with the chip and option shown. |
+| **AUTO** | In Coinflip, Limbo and Slots, plays round after round at the same stake until a loss or win limit is reached or the player stops it. |
+| **LIVE WINS** | The latest big wins on the server. |
+| **BALANCE, LAST RESULTS** | The player's balance and their last results at that game. |
+| **LEAVE** | Leaves the game, see [How a round ends](#how-a-round-ends). |
+
+The nine shared-table games use the table screen described in [Tables](/docs/exyliacasino/tables) instead.
 
 Commands are blocked during a round, except the game's own command (so `/mines leave` works) and those
 listed in `arena.allowed-commands` (`msg`, `r`, `tell` by default). A blocked command answers "Leave the
 game with /mines leave first."
 
+<Callout type="info" title="The 3D form is gone">
+The room, the guide panels and the board drawn in front of the player belonged to the 3D form. Every game is
+now on a screen, so `booth`, `guide`, `screen` and `arena.freeze` no longer change how a game looks or holds
+the player. See [Configuration](/docs/exyliacasino/configuration).
+</Callout>
+
 ## The result
 
-The verdict lands on a plaque over the table: **YOU WON** with the prize and the multiplier, **EVEN** when
-the stake comes back, **YOU LOST** with the stake. A win flashes the bulbs, rains gold nuggets over the
-board and opens a burst of stars only the winner sees; a loss puffs smoke. The same result goes to chat.
+The verdict appears on the screen in place: how much was won and its multiplier, that the stake came back, or
+that it was lost. The same result goes to chat.
 
 A round's multiplier is of the stake: ×2 pays back twice the stake, ×1 gives it back, ×0 loses it. A double
 or a split in blackjack puts in a second stake, held by the escrow like the first, and the result pays both
 hands.
 
-## AGAIN, CHANGE BET and LEAVE
+## Playing again
 
-When a money round ends, after `again.delay` the buttons come up under the finished board:
-
-| Button | What it does |
-|---|---|
-| **AGAIN** | Plays again at the same stake and the same option, without leaving the table. |
-| **CHANGE BET** | Asks the option again before playing: shown only in games that ask for one (Mines, Tower, Roulette, Live Roulette, Coinflip, Plinko, Horse Race). |
-| **LEAVE** | Takes the room down and gives the player their view back. |
-
-Games whose board has a play button of its own (SPIN, DROP, CASH OUT) lend it to AGAIN. The buttons wait
-`again.timeout` for an answer. With `again.enabled: false` the player is sent away when a round ends.
-Double or Nothing, staked with an item, never offers AGAIN.
+When a money round ends, after `again.delay` the screen offers the next round: **PLAY** plays again at the
+chip shown, and the chip rack and the option stepper work again, so a player can change the bet or the option
+first. The screen waits `again.timeout` for an answer. With `again.enabled: false` the player is sent away when
+a round ends. **AUTO** waits `again.delay` between rounds, half of it in turbo.
 
 ## How a round ends
 
 | What happens | What it costs |
 |---|---|
 | The round plays out | Paid as the result says. |
-| `/<game> leave`, quitting, dying, a teleport not made by a plugin, changing world | The round is forfeited and the stake lost. A round not yet started is refunded. |
+| **LEAVE**, closing the screen, `/<game> leave`, dying, a teleport not made by a plugin, changing world | Closing the screen or pressing LEAVE in a round whose stake would be lost asks first. Leaving forfeits the stake, except where the game keeps what is already decided (Plinko's dropped balls, Double or Nothing after a win). A round not yet started is refunded. |
+| Quitting the server | The safest move is played for the player and settled, never a refund, so quitting never dodges a loss. Mines, Tower and Hi-Lo cash out what was earned (forfeit if nothing yet); a game with nothing to choose plays out. Paid now or on their next join. |
 | Left untouched for the game's `idle` time | A warning shows 15 seconds before. Then it depends on the game, see below. Any click restarts the clock. |
 | The server stops | Settled as it stands, never forfeited: a result already decided is paid, a cash-out game is cashed out, blackjack and video poker are played out, and a bet not placed yet is refunded. |
 
@@ -109,12 +113,11 @@ they are left to finish, and a game switched off only refuses new rounds.
 | Game | What happens |
 |---|---|
 | Mines, Tower, Hi-Lo, Double or Nothing | Cashed out, if anything was earned; otherwise the stake is forfeited. |
-| Roulette (solo spin), Slots, Scratch Card, Limbo (not rolled yet), Plinko (nothing dropped yet) | The round plays itself out: it spins, rolls, scratches or drops for the player. |
+| Slots, Scratch Card, Limbo (not rolled yet), Plinko (nothing dropped yet) | The round plays itself out: it spins, rolls, scratches or drops for the player. |
 | Plinko with balls already dropped | Walking away keeps what was decided. |
-| Live Roulette | The wait is long (twice a full cycle plus 30 seconds). Leaving before the spin your bet plays gives the stake back; after it starts, the result stands. |
 | Every other solo game | Treated as leaving: the round under way is forfeited. |
 
-The shared-table games (Sic Bo, Baccarat, Blackjack, Wheel, Keno, Horse Race, Crash) have no round of their own, so
-this clock does not apply: they follow the table's countdowns.
+The shared-table games have no round of their own, so this clock does not apply: they follow the table's
+countdowns.
 
 Slots and the Wheel also spin on their own after `auto-spin`, well before that.
