@@ -66,9 +66,11 @@ export const SITE = {
   name: "Exylia Docs",
   url: "https://docs.exylia.net",
   discord: "https://discord.exylia.net",
-  hub: "https://exylia.net",
+  hub: "https://hub.exylia.net",
   /** Every resource on BuiltByBit, where the licences are actually sold. */
-  store: "https://link.exylia.net/@services",
+  store: "https://builtbybit.com/creators/diground.202077/",
+  /** Free plugins. */
+  modrinth: "https://modrinth.com/user/ExyliaServices",
   description: {
     en: "Official documentation for Exylia's Minecraft plugins: installation guides, configuration reference, commands, permissions, placeholders and API.",
     es: "Documentación oficial de los plugins de Exylia: guías de instalación, configuración, comandos, permisos, placeholders y API.",

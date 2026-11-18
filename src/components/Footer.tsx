@@ -9,9 +9,10 @@ const link = "text-[13.5px] text-white/45 transition-colors hover:text-white";
 export function Footer({ lang }: { lang: Lang }) {
   const f = dict.footer;
   const main = [
-    { href: SITE.discord, label: "Discord" },
-    { href: SITE.store, label: f.store[lang] },
-    { href: SITE.hub, label: "exylia.net" },
+    { href: SITE.discord, label: f.support[lang], hint: f.supportHint[lang] },
+    { href: SITE.store, label: f.store[lang], hint: f.storeHint[lang] },
+    { href: SITE.modrinth, label: "Modrinth", hint: f.modrinthHint[lang] },
+    { href: SITE.hub, label: "Exylia Hub", hint: f.hubHint[lang] },
   ];
 
   return (
@@ -22,20 +23,24 @@ export function Footer({ lang }: { lang: Lang }) {
             <Logo className="h-7" />
             <p className="mt-4 max-w-md text-[14px] leading-relaxed text-white/40">{f.blurb[lang]}</p>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <ul className="grid grid-cols-2 gap-x-10 gap-y-5 sm:grid-cols-4 lg:gap-x-12">
             {main.map((l) => (
-              <a
-                key={l.label}
-                href={l.href}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex h-10 items-center gap-2 rounded-full border border-white/10 px-4 text-[13.5px] text-white/70 transition-colors hover:border-white/25 hover:text-white"
-              >
-                {l.label}
-                <span className="text-white/30">↗</span>
-              </a>
+              <li key={l.href}>
+                <a href={l.href} target="_blank" rel="noopener noreferrer" className="group block">
+                  <span className="flex items-center gap-1.5 text-[14px] font-medium text-white/80 transition-colors group-hover:text-white">
+                    {l.label}
+                    <span
+                      aria-hidden
+                      className="text-[12px] text-white/25 transition-[color,transform] group-hover:-translate-y-px group-hover:translate-x-px group-hover:text-white/70"
+                    >
+                      ↗
+                    </span>
+                  </span>
+                  <span className="mt-1 block text-[12.5px] text-white/35">{l.hint}</span>
+                </a>
+              </li>
             ))}
-          </div>
+          </ul>
         </div>
 
         <div className="mt-12 flex items-baseline justify-between gap-4">
