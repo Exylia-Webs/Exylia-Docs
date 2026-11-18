@@ -1,6 +1,6 @@
 "use client";
 
-import { useLayoutEffect, useRef, type ElementType, type RefObject } from "react";
+import { useLayoutEffect, useRef, type ElementType, type ReactNode, type RefObject } from "react";
 
 /** Marks the element `data-armed` before paint and `data-in` once it scrolls into view; CSS does the rest. */
 export function useSeen(ref: RefObject<HTMLElement | null>) {
@@ -47,6 +47,22 @@ export function Words({ text, as: Tag = "h2", className = "", accent = "" }: { t
           ),
         );
       })}
+    </Tag>
+  );
+}
+
+/** A list whose children rise in one after another when it scrolls into view (.stagger, children set --i). */
+export function Stagger({
+  as: Tag = "ul",
+  className = "",
+  children,
+  ...rest
+}: { as?: ElementType; className?: string; children: ReactNode } & React.HTMLAttributes<HTMLElement>) {
+  const ref = useRef<HTMLElement>(null);
+  useSeen(ref);
+  return (
+    <Tag ref={ref} className={`stagger ${className}`} {...rest}>
+      {children}
     </Tag>
   );
 }

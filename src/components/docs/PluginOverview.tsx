@@ -12,7 +12,7 @@ import { ReadTick, useReadPages } from "./Reading";
 import { AskPlugin } from "./AskPlugin";
 import { useLayoutEffect, useRef } from "react";
 import { Words, useSeen } from "@/components/fx/Words";
-import { Aurora } from "@/components/fx/Aurora";
+import { DotField } from "@/components/fx/DotField";
 import { arrived, BANNER_MORPH } from "@/lib/banner-morph";
 
 const EASE = [0.16, 1, 0.3, 1] as const;
@@ -52,7 +52,7 @@ export function PluginOverview({
   return (
     <div className="pb-6">
       <header className="relative pb-12">
-        <Aurora tinted className="-z-10 !-inset-x-16 !-top-24 !bottom-0" />
+        <DotField tinted className="-z-10" />
         <div className="relative mb-10" style={{ viewTransitionName: BANNER_MORPH }}>
           <PluginBanner
             plugin={plugin}

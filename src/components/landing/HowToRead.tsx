@@ -1,5 +1,5 @@
 import { dict } from "@/content/dictionary";
-import { Words } from "@/components/fx/Words";
+import { Stagger, Words } from "@/components/fx/Words";
 import type { Lang } from "@/content/registry";
 
 /** The four parts every plugin's docs share, said once. */
@@ -19,15 +19,15 @@ export function HowToRead({ lang }: { lang: Lang }) {
         />
         <p className="max-w-md text-[15.5px] leading-relaxed text-white/45 md:justify-self-end">{l.structureLead[lang]}</p>
       </div>
-      <ol className="mt-12 grid gap-px overflow-hidden rounded-2xl border hair bg-white/[0.06] sm:grid-cols-2 lg:grid-cols-4">
+      <Stagger as="ol" className="mt-12 grid gap-px overflow-hidden rounded-2xl border hair bg-white/[0.06] sm:grid-cols-2 lg:grid-cols-4">
         {l.structureSteps.map((step, i) => (
-          <li key={i} className="bg-[#060608] p-6">
+          <li key={i} style={{ ["--i" as string]: i * 1.6 }} className="bg-[#060608] p-6">
             <span className="text-[12px] tabular-nums text-white/30">0{i + 1}</span>
             <p className="mt-8 text-[17px] font-medium tracking-[-0.02em] text-white">{step.title[lang]}</p>
             <p className="mt-2 text-[14px] leading-relaxed text-white/45">{step.body[lang]}</p>
           </li>
         ))}
-      </ol>
+      </Stagger>
     </section>
   );
 }

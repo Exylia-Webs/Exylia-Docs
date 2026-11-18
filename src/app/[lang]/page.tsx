@@ -1,6 +1,6 @@
 import { Nav } from "@/components/Nav";
 import { Footer } from "@/components/Footer";
-import { Aurora } from "@/components/fx/Aurora";
+import { DotField } from "@/components/fx/DotField";
 import { Hero } from "@/components/landing/Hero";
 import { Catalog } from "@/components/landing/Catalog";
 import { HowToRead } from "@/components/landing/HowToRead";
@@ -16,7 +16,7 @@ export default async function LandingPage({ params }: { params: Promise<{ lang: 
   return (
     <>
       <div aria-hidden className="tint-wash" />
-      <Aurora className="!absolute !bottom-auto h-[115vh]" />
+      <DotField />
       <Nav lang={lang} />
       <div className="relative z-[1]">
         <main>

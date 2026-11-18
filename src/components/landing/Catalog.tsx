@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { morphTo } from "@/lib/banner-morph";
 import { groupByCategory, pageCount, plugins, type Lang, type Plugin } from "@/content/registry";
 import { dict } from "@/content/dictionary";
-import { Words } from "@/components/fx/Words";
+import { Stagger, Words } from "@/components/fx/Words";
 import { TINTS } from "@/content/tints";
 import { PluginBanner } from "@/components/PluginBanner";
 
@@ -106,16 +106,20 @@ export function Catalog({ lang }: { lang: Lang }) {
         </p>
       )}
 
-      <ul
+      <Stagger
         onPointerLeave={() => tint(null)}
         className="mt-10 grid grid-cols-1 gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3 [@media(hover:hover)]:[&:hover>li]:opacity-40 [&>li:hover]:!opacity-100"
       >
         {shown.map((plugin, i) => (
-          <li key={plugin.id} className="min-w-0 transition-opacity duration-200">
+          <li
+            key={plugin.id}
+            style={{ ["--i" as string]: i % LIMIT }}
+            className="min-w-0 transition-opacity duration-200"
+          >
             <Card plugin={plugin} lang={lang} priority={i < 3} />
           </li>
         ))}
-      </ul>
+      </Stagger>
 
       {!narrowed && matches.length > LIMIT && (
         <div className="mt-12 flex justify-center">
@@ -131,6 +135,21 @@ export function Catalog({ lang }: { lang: Lang }) {
   );
 }
 
+/** The banner tilts a few degrees toward the cursor, with a light under it (.lean). */
+function lean(e: React.PointerEvent<HTMLElement>) {
+  if (e.pointerType !== "mouse") return;
+  const el = e.currentTarget, r = el.getBoundingClientRect();
+  const x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height;
+  el.style.setProperty("--mx", `${x * 100}%`);
+  el.style.setProperty("--my", `${y * 100}%`);
+  el.style.setProperty("--rx", `${(0.5 - y) * 7}deg`);
+  el.style.setProperty("--ry", `${(x - 0.5) * 9}deg`);
+}
+function unlean(e: React.PointerEvent<HTMLElement>) {
+  e.currentTarget.style.removeProperty("--rx");
+  e.currentTarget.style.removeProperty("--ry");
+}
+
 function Card({ plugin, lang, priority }: { plugin: Plugin; lang: Lang; priority: boolean }) {
   const l = dict.landing;
   const router = useRouter();
@@ -138,7 +157,7 @@ function Card({ plugin, lang, priority }: { plugin: Plugin; lang: Lang; priority
   const href = `/${lang}/docs/${plugin.id}/`;
   const body = (
     <>
-      <span data-banner className="block overflow-hidden rounded-xl">
+      <span data-banner onPointerMove={lean} onPointerLeave={unlean} className="lean relative block overflow-hidden rounded-xl">
         <PluginBanner
           plugin={plugin}
           priority={priority}

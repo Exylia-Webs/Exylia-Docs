@@ -17,8 +17,12 @@ export function Footer({ lang, tinted = false }: { lang: Lang; tinted?: boolean 
   ];
 
   return (
-    <footer className="mt-24 border-t hair">
-      <div className="mx-auto max-w-docs px-6 py-14">
+    <footer className="mt-24">
+      {/* The name in a few thousand particles: they gather when it comes into view and part around the cursor. */}
+      <div className="mx-auto max-w-docs overflow-hidden px-2">
+        <ParticleWord word="Exylia" tinted={tinted} className="h-[clamp(7rem,22vw,22rem)]" />
+      </div>
+      <div className="mx-auto max-w-docs border-t hair px-6 py-14">
         <div className="flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <Logo className="h-7" />
@@ -81,10 +85,6 @@ export function Footer({ lang, tinted = false }: { lang: Lang; tinted?: boolean 
           </div>
           <p className="text-[12.5px] text-white/25">{f.madeWith[lang]}</p>
         </div>
-      </div>
-      {/* The name in a few thousand particles: they gather when it comes into view and part around the cursor. */}
-      <div className="mx-auto max-w-docs overflow-hidden px-2">
-        <ParticleWord word="Exylia" tinted={tinted} className="h-[clamp(7rem,22vw,22rem)]" />
       </div>
     </footer>
   );
