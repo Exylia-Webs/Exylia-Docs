@@ -43,3 +43,39 @@ test("docs pages compile, link to real pages and find their data", async () => {
   }
   assert.deepEqual(problems, []);
 });
+
+/**
+ * WRITING.md rules a page must meet: 3–6 `questions` and an `updated` version in the frontmatter, and the
+ * commands/permissions/placeholders pages drawn from data.json. `content/.writing-baseline.txt` lists the
+ * older pages that predate the rules; a new page (or a new plugin) is never added there.
+ * `WRITING_BASELINE=write pnpm test` rewrites the list after old pages are fixed.
+ */
+const REFERENCE: Record<string, string> = {
+  commands: "Commands", comandos: "Commands", permissions: "Permissions", permisos: "Permissions", placeholders: "Placeholders",
+};
+
+test("docs pages follow WRITING.md", async () => {
+  const fs = await import("node:fs");
+  const file = "content/.writing-baseline.txt";
+  const baseline = new Set(fs.existsSync(file) ? fs.readFileSync(file, "utf8").split("\n").filter(Boolean) : []);
+  const broken: string[] = [];
+  for (const { lang, plugin, slug } of getAllDocParams()) {
+    const doc = readDoc(plugin, lang, slug);
+    if (!doc) continue;
+    const q = doc.questions.length;
+    const component = REFERENCE[slug];
+    const why = [
+      (q < 3 || q > 6) && `${q} questions (needs 3–6)`,
+      !doc.updated && "no updated",
+      component && !doc.body.includes(`<${component}`) && `no <${component} />`,
+    ].filter(Boolean);
+    if (why.length) broken.push(`${plugin}/${lang}/${slug}: ${why.join(", ")}`);
+  }
+  if (process.env.WRITING_BASELINE === "write") {
+    fs.writeFileSync(file, broken.map((b) => b.split(":")[0]).sort().join("\n") + "\n");
+    return;
+  }
+  const isNew = broken.filter((b) => !baseline.has(b.split(":")[0]));
+  const target = only ? isNew.filter((b) => only.includes(b.split("/")[0])) : isNew;
+  assert.deepEqual(target, [], "pages that break WRITING.md (see the frontmatter and reference rules there)");
+});

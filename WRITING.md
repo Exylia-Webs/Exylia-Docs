@@ -156,9 +156,24 @@ source wins. Never invent a feature; if unsure, leave it out and say so in your 
 ## Check before committing
 
 ```bash
-DOCS_PLUGIN=exyliaffa pnpm test   # pages exist, compile, links resolve, data rows exist
+DOCS_PLUGIN=exyliaffa pnpm test   # pages exist, compile, links resolve, data rows exist, rules below
 pnpm typecheck                    # only if you changed code
 ```
+
+The test also fails a page that has fewer than 3 or more than 6 `questions`, has no `updated`, or is a
+`commands`/`permissions`/`placeholders` page that does not draw its `<Commands />`/`<Permissions />`/
+`<Placeholders />`. Older pages that predate these rules are listed in `content/.writing-baseline.txt`.
+Never add a page to that list: fix the page. After fixing old pages, `WRITING_BASELINE=write pnpm test`
+shrinks it.
+
+## A new plugin
+
+1. Registry entry in `src/content/registry.ts` (id, version, tagline, `*_NAV` in the sidebar shape above).
+2. `content/<plugin>/data.json` from `plugin.yml`, the command classes and the PlaceholderAPI expansion.
+3. Every page in en and es, written with this file: guides on the guide template, reference pages drawing
+   `data.json`, ExyliaLib topics linked, never copied.
+4. A row in `DOCS-STATUS.md` with the commit the docs were checked against.
+5. `DOCS_PLUGIN=<plugin> pnpm test` passes with the plugin absent from the baseline.
 
 ## Working in chunks (agents)
 
