@@ -344,7 +344,7 @@ export function docsTools(lang: Lang): AssistantTool[] {
 export function docsKnowledge(lang: Lang, currentPlugin?: string): string {
   const current = currentPlugin ? getPlugin(currentPlugin) : undefined;
   const catalogue = documentedPlugins.map((p) => `- ${p.name} (\`${p.id}\`, ${p.category[DEFAULT_LANG]}, v${p.version}, MC ${p.minecraft}): ${p.tagline[DEFAULT_LANG]}`).join("\n");
-  return `Exylia makes Minecraft server plugins (Java; Spigot, Paper and Folia). Every Exylia plugin builds on ExyliaLib (\`exylialib\`), the shared library. Licences are sold on BuiltByBit (${SITE.store}); some plugins are free on GitHub. ${SITE.name} (${SITE.url}) is the official documentation, in English and Spanish: per plugin, installation, configuration, commands, permissions, placeholders and the developer API.
+  return `Exylia makes Minecraft server plugins (Java; Spigot, Paper and Folia). Every Exylia plugin builds on ExyliaLib (\`exylialib\`), the shared library. Licences are sold on BuiltByBit (${SITE.store}); free plugins are published on Modrinth (${SITE.modrinth}). ${SITE.name} (${SITE.url}) is the official documentation, in English and Spanish: per plugin, installation, configuration, commands, permissions, placeholders and the developer API.
 
 ## Plugins with published docs
 ${catalogue}
