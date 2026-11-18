@@ -11,8 +11,7 @@ import { SITE } from "@/content/registry";
 import { ReadTick, useReadPages } from "./Reading";
 import { AskPlugin } from "./AskPlugin";
 import { useLayoutEffect, useRef } from "react";
-import { Stagger, Words, useSeen } from "@/components/fx/Words";
-import { CountUp } from "@/components/fx/CountUp";
+import { Words, useSeen } from "@/components/fx/Words";
 import { lean, unlean } from "@/components/fx/lean";
 import { DotField } from "@/components/fx/DotField";
 import { arrived, BANNER_MORPH } from "@/lib/banner-morph";
@@ -48,7 +47,6 @@ export function PluginOverview({
     { label: f.version[lang], value: `v${plugin.version}` },
     { label: f.minecraft[lang], value: plugin.minecraft },
     { label: f.category[lang], value: plugin.category[lang] },
-    { label: f.pages[lang], value: <CountUp to={pageCount} /> },
   ];
 
   return (
@@ -146,16 +144,14 @@ export function PluginOverview({
 
         <AskPlugin name={plugin.name} lang={lang} />
 
-        <Stagger as="dl" glow className="mt-10 grid grid-cols-2 gap-px overflow-hidden rounded-2xl border hair sm:grid-cols-4">
-          {facts.map((fact, i) => (
-            <div key={fact.label} style={{ ["--i" as string]: i }} className="bg-[#08070a] px-4 py-3.5">
-              <dt className="text-[12.5px] text-white/28">
-                {fact.label}
-              </dt>
-              <dd className="mt-1.5 font-display text-[15px] font-medium text-white">{fact.value}</dd>
+        <dl className="mt-8 flex flex-wrap gap-x-6 gap-y-1.5 text-[13px]">
+          {facts.map((fact) => (
+            <div key={fact.label} className="flex gap-1.5">
+              <dt className="text-white/35">{fact.label}</dt>
+              <dd className="text-white/80">{fact.value}</dd>
             </div>
           ))}
-        </Stagger>
+        </dl>
       </header>
 
       {steps.length === 3 && (

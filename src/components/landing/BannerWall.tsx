@@ -13,9 +13,10 @@ const ROWS = 4;
  * plane straightens as it scrolls up into view and leans a little toward the cursor; a banner under
  * the cursor stops its row and tints the page. Full width: it is the page's own floor, not a card.
  */
-export function BannerWall({ lang }: { lang: Lang }) {
+export function BannerWall({ lang, ids }: { lang: Lang; ids: string[] }) {
   const ref = useRef<HTMLDivElement>(null);
-  const rows = Array.from({ length: ROWS }, (_, r) => plugins.filter((_, i) => i % ROWS === r));
+  const shown = plugins.filter((p) => ids.includes(p.id));
+  const rows = Array.from({ length: ROWS }, (_, r) => shown.filter((_, i) => i % ROWS === r));
 
   useEffect(() => {
     const el = ref.current!;
