@@ -6,7 +6,8 @@ import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { loadIndex, prepare, rank, type Prepared } from "@/components/Search";
 import { dict } from "@/content/dictionary";
 import { Words } from "@/components/fx/Words";
-import { documentedPlugins, pageCount, plugins, type Lang } from "@/content/registry";
+import { CountUp } from "@/components/fx/CountUp";
+import { documentedPlugins, groupByCategory, LANGS, pageCount, plugins, type Lang } from "@/content/registry";
 
 export const TOTAL_PAGES = documentedPlugins.reduce((n, plugin) => n + pageCount(plugin), 0);
 
@@ -25,6 +26,21 @@ export function Hero({ lang }: { lang: Lang }) {
         <p className="max-w-md text-[15.5px] leading-relaxed text-white/45">{l.lead[lang]}</p>
         <HeroSearch lang={lang} />
       </div>
+      <dl className="hero-stats mt-14 grid grid-cols-2 gap-px overflow-hidden rounded-2xl border hair bg-white/[0.06] sm:grid-cols-4">
+        {[
+          [plugins.length, l.statPlugins],
+          [TOTAL_PAGES, l.statPages],
+          [groupByCategory().length, l.statCategories],
+          [LANGS.length, l.statLangs],
+        ].map(([n, label], i) => (
+          <div key={i} style={{ ["--i" as string]: i }} className="bg-[#060608]/90 px-5 py-5 backdrop-blur-sm">
+            <dd className="font-display text-[clamp(1.9rem,3.4vw,2.8rem)] font-semibold leading-none tracking-[-0.04em] text-white">
+              <CountUp to={n as number} />
+            </dd>
+            <dt className="mt-2 text-[13px] text-white/40">{(label as { [k in Lang]: string })[lang]}</dt>
+          </div>
+        ))}
+      </dl>
     </section>
   );
 }

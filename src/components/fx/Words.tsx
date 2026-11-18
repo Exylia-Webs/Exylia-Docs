@@ -56,12 +56,21 @@ export function Stagger({
   as: Tag = "ul",
   className = "",
   children,
+  glow = false,
   ...rest
-}: { as?: ElementType; className?: string; children: ReactNode } & React.HTMLAttributes<HTMLElement>) {
+}: { as?: ElementType; className?: string; children: ReactNode; glow?: boolean } & React.HTMLAttributes<HTMLElement>) {
   const ref = useRef<HTMLElement>(null);
   useSeen(ref);
+  // `glow`: the hairlines between the children light up around the cursor (.glow-grid).
+  const move = glow
+    ? (e: React.PointerEvent<HTMLElement>) => {
+        const r = e.currentTarget.getBoundingClientRect();
+        e.currentTarget.style.setProperty("--gx", `${e.clientX - r.left}px`);
+        e.currentTarget.style.setProperty("--gy", `${e.clientY - r.top}px`);
+      }
+    : undefined;
   return (
-    <Tag ref={ref} className={`stagger ${className}`} {...rest}>
+    <Tag ref={ref} className={`stagger ${glow ? "glow-grid" : ""} ${className}`} onPointerMove={move} {...rest}>
       {children}
     </Tag>
   );

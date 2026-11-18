@@ -111,6 +111,7 @@ export const dict = {
     heroTitle: { en: "{n} plugins.\nOne way to *read* them.", es: "{n} plugins.\nUna sola forma de *leerlos*." },
     catalogHeading: { en: "Every plugin, *by use*", es: "Cada plugin, *por uso*" },
     structureChip: { en: "Structure", es: "Estructura" },
+    statCategories: { en: "Categories", es: "Categorías" },
     structureHeading: { en: "Read one, *know* them all", es: "Lees uno, *conoces* todos" },
     line1: { en: "Every plugin,", es: "Cada plugin," },
     line2: { en: "explained the way it was", es: "explicado como fue" },

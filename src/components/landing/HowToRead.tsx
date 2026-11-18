@@ -19,11 +19,13 @@ export function HowToRead({ lang }: { lang: Lang }) {
         />
         <p className="max-w-md text-[15.5px] leading-relaxed text-white/45 md:justify-self-end">{l.structureLead[lang]}</p>
       </div>
-      <Stagger as="ol" className="mt-12 grid gap-px overflow-hidden rounded-2xl border hair bg-white/[0.06] sm:grid-cols-2 lg:grid-cols-4">
+      <Stagger as="ol" glow className="mt-12 grid gap-px overflow-hidden rounded-2xl border hair sm:grid-cols-2 lg:grid-cols-4">
         {l.structureSteps.map((step, i) => (
-          <li key={i} style={{ ["--i" as string]: i * 1.6 }} className="bg-[#060608] p-6">
-            <span className="text-[12px] tabular-nums text-white/30">0{i + 1}</span>
-            <p className="mt-8 text-[17px] font-medium tracking-[-0.02em] text-white">{step.title[lang]}</p>
+          <li key={i} style={{ ["--i" as string]: i * 1.6 }} className="group relative bg-[#060608] p-6 transition-colors duration-300 hover:bg-[#0a0a0d] sm:p-7">
+            <span className="block font-serif text-[clamp(3.5rem,5vw,4.75rem)] italic leading-none text-white/[0.12] transition-[color,transform] duration-500 group-hover:-translate-y-1 group-hover:text-white">
+              0{i + 1}
+            </span>
+            <p className="mt-10 text-[17px] font-medium tracking-[-0.02em] text-white">{step.title[lang]}</p>
             <p className="mt-2 text-[14px] leading-relaxed text-white/45">{step.body[lang]}</p>
           </li>
         ))}

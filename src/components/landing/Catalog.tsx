@@ -18,7 +18,7 @@ function haystack(plugin: Plugin, lang: Lang): string {
 }
 
 /** The page wears the colour of the plugin under the cursor (see .tint-wash). */
-function tint(id: string | null) {
+export function tint(id: string | null) {
   const root = document.documentElement;
   if (id && TINTS[id]) {
     root.style.setProperty("--accent", TINTS[id]);
@@ -113,7 +113,7 @@ export function Catalog({ lang }: { lang: Lang }) {
         {shown.map((plugin, i) => (
           <li
             key={plugin.id}
-            style={{ ["--i" as string]: i % LIMIT }}
+            style={{ ["--i" as string]: i % LIMIT, ["--c" as string]: TINTS[plugin.id] ?? "255 255 255" }}
             className="min-w-0 transition-opacity duration-200"
           >
             <Card plugin={plugin} lang={lang} priority={i < 3} />
@@ -157,7 +157,7 @@ function Card({ plugin, lang, priority }: { plugin: Plugin; lang: Lang; priority
   const href = `/${lang}/docs/${plugin.id}/`;
   const body = (
     <>
-      <span data-banner onPointerMove={lean} onPointerLeave={unlean} className="lean relative block overflow-hidden rounded-xl">
+      <span data-banner onPointerMove={lean} onPointerLeave={unlean} className="lean relative block overflow-hidden rounded-xl transition-[transform,box-shadow] duration-300 group-hover:shadow-[0_34px_80px_-28px_rgb(var(--c)/0.75),0_0_0_1px_rgb(var(--c)/0.35)]">
         <PluginBanner
           plugin={plugin}
           priority={priority}
