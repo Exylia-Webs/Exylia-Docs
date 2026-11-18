@@ -9,6 +9,7 @@ import { dict } from "@/content/dictionary";
 import { Stagger, Words } from "@/components/fx/Words";
 import { TINTS } from "@/content/tints";
 import { PluginBanner } from "@/components/PluginBanner";
+import { lean, unlean } from "@/components/fx/lean";
 
 /** Everything a filter can match on, built once per language. */
 function haystack(plugin: Plugin, lang: Lang): string {
@@ -133,21 +134,6 @@ export function Catalog({ lang }: { lang: Lang }) {
       )}
     </section>
   );
-}
-
-/** The banner tilts a few degrees toward the cursor, with a light under it (.lean). */
-function lean(e: React.PointerEvent<HTMLElement>) {
-  if (e.pointerType !== "mouse") return;
-  const el = e.currentTarget, r = el.getBoundingClientRect();
-  const x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height;
-  el.style.setProperty("--mx", `${x * 100}%`);
-  el.style.setProperty("--my", `${y * 100}%`);
-  el.style.setProperty("--rx", `${(0.5 - y) * 7}deg`);
-  el.style.setProperty("--ry", `${(x - 0.5) * 9}deg`);
-}
-function unlean(e: React.PointerEvent<HTMLElement>) {
-  e.currentTarget.style.removeProperty("--rx");
-  e.currentTarget.style.removeProperty("--ry");
 }
 
 function Card({ plugin, lang, priority }: { plugin: Plugin; lang: Lang; priority: boolean }) {

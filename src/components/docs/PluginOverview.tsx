@@ -11,7 +11,9 @@ import { SITE } from "@/content/registry";
 import { ReadTick, useReadPages } from "./Reading";
 import { AskPlugin } from "./AskPlugin";
 import { useLayoutEffect, useRef } from "react";
-import { Words, useSeen } from "@/components/fx/Words";
+import { Stagger, Words, useSeen } from "@/components/fx/Words";
+import { CountUp } from "@/components/fx/CountUp";
+import { lean, unlean } from "@/components/fx/lean";
 import { DotField } from "@/components/fx/DotField";
 import { arrived, BANNER_MORPH } from "@/lib/banner-morph";
 
@@ -46,30 +48,34 @@ export function PluginOverview({
     { label: f.version[lang], value: `v${plugin.version}` },
     { label: f.minecraft[lang], value: plugin.minecraft },
     { label: f.category[lang], value: plugin.category[lang] },
-    { label: f.pages[lang], value: String(pageCount) },
+    { label: f.pages[lang], value: <CountUp to={pageCount} /> },
   ];
 
   return (
     <div className="pb-6">
       <header className="relative pb-12">
         <DotField tinted className="-z-10" />
-        <div className="relative mb-10" style={{ viewTransitionName: BANNER_MORPH }}>
-          <PluginBanner
-            plugin={plugin}
-            priority
-            rounded="rounded-xl"
-            className="relative aspect-[2/1] w-full shadow-[0_40px_120px_-50px_rgba(0,0,0,0.9)] sm:aspect-[3/1]"
-          />
+        <div className="relative mb-10">
+          {/* Ambient light: the banner itself, blurred, glowing out from behind it. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={plugin.banner} alt="" aria-hidden className="ambient pointer-events-none absolute inset-0 -z-[1] h-full w-full object-cover" />
+          <div style={{ viewTransitionName: BANNER_MORPH }}>
+            <span onPointerMove={lean} onPointerLeave={unlean} className="lean group relative block rounded-xl">
+              <PluginBanner
+                plugin={plugin}
+                priority
+                rounded="rounded-xl"
+                className="relative aspect-[2/1] w-full shadow-[0_40px_120px_-50px_rgba(0,0,0,0.9)] sm:aspect-[3/1]"
+              />
+            </span>
+          </div>
         </div>
 
-        <m.h1
-          initial={false}
-          animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-          transition={{ duration: 0.8, delay: 0.06, ease: EASE }}
+        <Words
+          as="h1"
+          text={plugin.name}
           className="font-display text-[clamp(2.3rem,5.4vw,3.6rem)] font-medium leading-[1.02] tracking-tight2 text-white"
-        >
-          {plugin.name}
-        </m.h1>
+        />
 
         <m.p
           initial={false}
@@ -140,21 +146,16 @@ export function PluginOverview({
 
         <AskPlugin name={plugin.name} lang={lang} />
 
-        <m.dl
-          initial={false}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.8, delay: 0.34 }}
-          className="mt-10 grid grid-cols-2 gap-px border-l border-t hair sm:grid-cols-4"
-        >
-          {facts.map((fact) => (
-            <div key={fact.label} className="border-b border-r hair px-4 py-3.5">
+        <Stagger as="dl" glow className="mt-10 grid grid-cols-2 gap-px overflow-hidden rounded-2xl border hair sm:grid-cols-4">
+          {facts.map((fact, i) => (
+            <div key={fact.label} style={{ ["--i" as string]: i }} className="bg-[#08070a] px-4 py-3.5">
               <dt className="text-[12.5px] text-white/28">
                 {fact.label}
               </dt>
               <dd className="mt-1.5 font-display text-[15px] font-medium text-white">{fact.value}</dd>
             </div>
           ))}
-        </m.dl>
+        </Stagger>
       </header>
 
       {steps.length === 3 && (
