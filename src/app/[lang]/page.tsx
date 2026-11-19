@@ -1,6 +1,6 @@
 import { Nav } from "@/components/Nav";
 import { Footer } from "@/components/Footer";
-import { DotField } from "@/components/fx/DotField";
+import { DotField } from "@exylia-webs/ui/site";
 import { Hero } from "@/components/landing/Hero";
 import { BannerWall } from "@/components/landing/BannerWall";
 import { Catalog } from "@/components/landing/Catalog";

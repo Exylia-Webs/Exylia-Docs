@@ -4,8 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { dict } from "@/content/dictionary";
 import { DEFAULT_LANG, LANGS, type Lang } from "@/content/registry";
-import { DotField } from "./fx/DotField";
-import { ParticleWord } from "@exylia-webs/ui/site";
+import { DotField, ParticleWord } from "@exylia-webs/ui/site";
 
 /** The static 404 is one file for every path, so it picks its language from the URL (or the browser) once it runs. */
 export function NotFoundBody() {

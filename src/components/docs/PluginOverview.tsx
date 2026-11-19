@@ -13,7 +13,7 @@ import { AskPlugin } from "./AskPlugin";
 import { useLayoutEffect, useRef } from "react";
 import { Words, useSeen } from "@/components/fx/Words";
 import { lean, unlean } from "@/components/fx/lean";
-import { DotField } from "@/components/fx/DotField";
+import { DotField } from "@exylia-webs/ui/site";
 import { arrived, BANNER_MORPH } from "@/lib/banner-morph";
 
 const EASE = [0.16, 1, 0.3, 1] as const;
