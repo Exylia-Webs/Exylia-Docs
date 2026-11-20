@@ -29,6 +29,7 @@ export const TINTS: Record<string, string> = {
   exyliamarket: "234 137 83",
   exyliaspawners: "159 83 234",
   exyliajobs: "234 139 83",
+  exyliaclicker: "234 160 83",
   exyliascreens: "234 137 83",
   exyliawarzone: "234 175 83",
   exyliadisplays: "234 143 83",

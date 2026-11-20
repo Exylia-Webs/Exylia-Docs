@@ -2112,6 +2112,56 @@ const SPAWNERS_NAV: NavGroup[] = [
   },
 ];
 
+const CLICKER_NAV: NavGroup[] = [
+  {
+    label: { en: "Getting started", es: "Empezar" },
+    pages: [
+      page("introduction", "introduction", "introduction"),
+      page("installation", "installation", "installation"),
+      page("first-steps", "first-steps", "first-steps"),
+    ],
+  },
+  {
+    label: { en: "Gameplay", es: "Jugabilidad" },
+    pages: [
+      page("farming", "farming", "farming"),
+      page("upgrades-tools-zones", "upgrades-tools-zones", "upgrades-tools-zones"),
+      page("rebirth-and-eras", "rebirth-and-eras", "rebirth-and-eras"),
+      page("helpers", "helpers", "helpers"),
+      page("enchants", "enchants", "enchants"),
+      page("index-and-variants", "index-and-variants", "index-and-variants"),
+      page("quests-and-story", "quests-and-story", "quests-and-story"),
+      page("rewards", "rewards", "rewards"),
+      page("tops-and-visitors", "tops-and-visitors", "tops-and-visitors"),
+      page("shop-and-passes", "shop-and-passes", "shop-and-passes"),
+    ],
+  },
+  {
+    label: { en: "Admin", es: "Administración" },
+    pages: [
+      page("admin-panel", "admin-panel", "admin-panel"),
+      page("balancing", "balancing", "balancing"),
+      page("theme-files", "theme-files", "theme-files"),
+    ],
+  },
+  {
+    label: { en: "Reference", es: "Referencia" },
+    pages: [
+      page("commands", "commands", "commands"),
+      page("permissions", "permissions", "permissions"),
+      page("placeholders", "placeholders", "placeholders"),
+      page("configuration", "configuration", "configuration"),
+    ],
+  },
+  {
+    label: { en: "Help", es: "Ayuda" },
+    pages: [
+      page("troubleshooting", "troubleshooting", "troubleshooting"),
+      page("faq", "faq", "faq"),
+    ],
+  },
+];
+
 const JOBS_NAV: NavGroup[] = [
   {
     label: { en: "Getting started", es: "Empezar" },
@@ -2928,6 +2978,27 @@ export const plugins: Plugin[] = [
       { en: "Folia", es: "Folia" },
     ],
     nav: JOBS_NAV,
+  },
+  {
+    id: "exyliaclicker",
+    name: "ExyliaClicker",
+    tagline: { en: "An endless clicker farm with a Minecraft soul", es: "Una granja clicker sin fin con alma de Minecraft" },
+    summary: {
+      en: "Players harvest their own farm, sell the crops, upgrade, rebirth through eras, hire helpers, enchant their tools and fill an index. Built on ExyliaLib and fully translated into 7 languages.",
+      es: "Los jugadores cosechan su propia granja, venden lo recolectado, mejoran, renacen a través de eras, contratan ayudantes, encantan sus herramientas y llenan un índice. Construido sobre ExyliaLib y traducido por completo a 7 idiomas.",
+    },
+    version: "1.0.0",
+    status: "soon",
+    category: { en: "Gamemode", es: "Modo de juego" },
+    minecraft: "1.21.1+ · Folia 1.21.4+",
+    banner: "https://s3.exylia.net/exylia-plugins/public/static/images/plugins/clicker/ExyliaClickerBanner.webp",
+    tags: [
+      { en: "Clicker", es: "Clicker" },
+      { en: "Farming", es: "Granja" },
+      { en: "Rebirth", es: "Renacimiento" },
+      { en: "Folia", es: "Folia" },
+    ],
+    nav: CLICKER_NAV,
   },
   {
     id: "exyliaenchants",
