@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Instrument_Serif } from "next/font/google";
-import { CookieConsent } from "@exylia-webs/ui";
+import { AccentStyle, CookieConsent, SERVICE_ACCENTS } from "@exylia-webs/ui";
 import { DEFAULT_LANG, SITE } from "@/content/registry";
 import { MotionProvider } from "@/components/motion/MotionProvider";
 
@@ -40,6 +40,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang={DEFAULT_LANG} suppressHydrationWarning className={`${geist.variable} ${geistMono.variable} ${serif.variable}`}>
       <body className="font-sans antialiased">
+        <AccentStyle color={SERVICE_ACCENTS.docs.fill} />
         <MotionProvider>{children}</MotionProvider>
         {/* The shared banner, restyled for the docs in globals.css (.consent). Its policy link is the hub's. */}
         <div className="consent">

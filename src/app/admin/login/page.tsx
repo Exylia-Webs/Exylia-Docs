@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { AppFrame, LoginButton, LoginPanel } from "@exylia-webs/ui";
-import { LOCALES } from "@/i18n/request";
+import { LoginButton, LoginPanel } from "@exylia-webs/ui";
+import { DocsAuthFrame } from "@/components/landing/site/auth-frame";
+import { SITE } from "@/content/registry";
 import { currentAdmin } from "@/lib/admin-auth";
 import { adminText } from "@/lib/admin-i18n";
 import { safeAdminRedirect } from "@/lib/admin-rules";
@@ -18,17 +19,16 @@ export default async function AdminLoginPage({ searchParams }: { searchParams: P
   const params = await searchParams;
   const target = safeAdminRedirect(params.redirect);
   if (await currentAdmin()) redirect(target);
-  const { a } = await adminText();
+  const { a, lang } = await adminText();
   const t = a.login;
+  const lines = lang === "es" ? ["Cada plugin,", "*documentado*."] : ["Every plugin,", "*documented*."];
   return (
-    <AppFrame product="docs" locales={LOCALES}>
-      <div className="flex justify-center py-10">
-        <LoginPanel eyebrow={t.eyebrow} title={t.title} description={t.description} error={params.error} errors={t.errors} legal={false}>
-          <LoginButton href={`/api/admin/auth/discord/?redirect=${encodeURIComponent(target)}`} provider="discord">
-            {t.discord}
-          </LoginButton>
-        </LoginPanel>
-      </div>
-    </AppFrame>
+    <DocsAuthFrame lines={lines} lead={SITE.description[lang]}>
+      <LoginPanel eyebrow={t.eyebrow} title={t.title} description={t.description} error={params.error} errors={t.errors} legal={false}>
+        <LoginButton href={`/api/admin/auth/discord/?redirect=${encodeURIComponent(target)}`} provider="discord">
+          {t.discord}
+        </LoginButton>
+      </LoginPanel>
+    </DocsAuthFrame>
   );
 }

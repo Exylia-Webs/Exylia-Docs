@@ -25,7 +25,7 @@ export default async function DocsLayout({
   if (!entry || entry.nav.length === 0) notFound();
 
   return (
-    <div style={{ "--accent": TINTS[entry.id] ?? "124 92 255" } as React.CSSProperties}>
+    <div style={{ "--tint": TINTS[entry.id] ?? "123 198 230" } as React.CSSProperties}>
       <ScrollProgress />
       <Nav lang={lang} />
 
