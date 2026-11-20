@@ -14,7 +14,7 @@ export function DocsAuthFrame({ lines, lead, children }: { lines: string[]; lead
       lines={lines}
       lead={lead}
       accent={SERVICE_ACCENTS.docs}
-      stage={(reduced) => <Stage frag={FRAG} spots={10} reduced={reduced} pin={4} lite shots={SHOTS} />}
+      stage={(reduced) => <Stage frag={FRAG} spots={10} reduced={reduced} pin={4} lite shots={SHOTS} poster="/scene/auth" />}
     >
       {children}
     </AuthFrame>

@@ -204,7 +204,7 @@ export function DocsLanding({ lang }: { lang: Lang }) {
     <div className="xs relative min-h-screen overflow-x-clip bg-[var(--bg)] text-[var(--ink)] [font-family:var(--xs-sans)]">
       <style>{xsCss + siteAccentCss(SERVICE_ACCENTS.docs)}</style>
       <a href="#room-1" className="xs-btn solid fixed left-4 top-3 z-[60] -translate-y-24 focus-visible:translate-y-0">{c.skip}</a>
-      <div className="fixed inset-0 z-0"><Stage frag={FRAG} spots={10} reduced={reduced} shots={SHOTS} /></div>
+      <div className="fixed inset-0 z-0"><Stage frag={FRAG} spots={10} reduced={reduced} shots={SHOTS} poster="/scene/landing" /></div>
       <div aria-hidden="true" className="xs-grainbox pointer-events-none fixed inset-0 z-[1] overflow-hidden">
         <div className="xs-grain absolute -inset-[20%] bg-[url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22160%22 height=%22160%22><filter id=%22n%22><feTurbulence type=%22fractalNoise%22 baseFrequency=%22.9%22 numOctaves=%222%22 stitchTiles=%22stitch%22/></filter><rect width=%22100%25%22 height=%22100%25%22 filter=%22url(%23n)%22/></svg>')]" />
       </div>
