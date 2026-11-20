@@ -188,7 +188,7 @@ export function DocsLanding({ lang }: { lang: Lang }) {
     );
     const cls = "xs-card flex h-full flex-col p-3 pb-4";
     return documented
-      ? <Link href={`/${lang}/docs/${p.id}/`} data-card data-on={hs === i ? "1" : undefined} {...hover(setHs, i)} className={cls}>{body}</Link>
+      ? <Link href={`/${lang}/docs/${p.id}/`} data-card {...hover(setHs, i)} className={cls}>{body}</Link>
       : <a href={p.purchase ?? p.download ?? SITE.store} target="_blank" rel="noopener noreferrer" data-card {...hover(setHs, i)} className={`${cls} opacity-70`}>{body}</a>;
   };
 
