@@ -1,4 +1,4 @@
-import { themeScript } from "@exylia-webs/ui/site";
+import { ThemeScript } from "@exylia-webs/ui/site";
 import { DocsLanding } from "@/components/landing/site/landing";
 import { xsFonts } from "@/components/landing/site/fonts";
 import { LANGS, toLang } from "@/content/registry";
@@ -11,7 +11,7 @@ export default async function LandingPage({ params }: { params: Promise<{ lang: 
   const lang = toLang((await params).lang);
   return (
     <div className={xsFonts} suppressHydrationWarning>
-      <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+      <ThemeScript />
       <DocsLanding lang={lang} />
     </div>
   );
