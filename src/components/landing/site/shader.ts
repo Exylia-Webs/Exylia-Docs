@@ -47,6 +47,7 @@ float gHover;   // hover weight of the closest piece, for the sky glow
 vec3 gAlb;      // albedo of the closest piece, printed matter included
 float gSpec;    // how glossy it is
 float gPix;     // world size of one pixel at the hit, so the printed lines stay smooth
+float gMat;     // material of the set at the last map() call
 
 mat2 rot(float a){ float c = cos(a), s = sin(a); return mat2(c, -s, s, c); }
 float h11(float n){ return fract(sin(n * 127.1) * 43758.5453); }
@@ -283,43 +284,12 @@ vec2 setPart(vec3 p){
   vec2 k = cases(p);
   return k.x < r.x ? k : r;
 }
-float set(vec3 p){ return setPart(p).x; }
 
 vec2 map(vec3 p){
   float s = sculpt(p);
-  float w = set(p);
-  return s < w ? vec2(s, 1.) : vec2(w, 0.);
-}
-
-vec3 normal(vec3 p){
-  // tetrahedron taps in a loop: one map() copy instead of six
-  vec3 n = vec3(0.);
-  for (int i = ZERO; i < 4; i++) {
-    vec3 e = .5773 * (2. * vec3(float(((i + 3) >> 1) & 1), float((i >> 1) & 1), float(i & 1)) - 1.);
-    n += e * map(p + .0015 * e).x;
-  }
-  return normalize(n);
-}
-
-float shadow(vec3 ro, vec3 rd){
-  float r = 1., t = .03;
-  for (int i = ZERO; i < 40; i++) {
-    float h = sculpt(ro + rd * t);
-    r = min(r, 6. * h / t);
-    t += clamp(h, .03, .35);
-    if (r < .002 || t > 7.) break;
-  }
-  return clamp(r, 0., 1.);
-}
-
-float ao(vec3 p, vec3 n){
-  float o = 0., w = 1.;
-  for (int i = ZERO + 1; i < 6; i++) {
-    float h = .05 + .13 * float(i);
-    o += (h - map(p + n * h).x) * w;
-    w *= .7;
-  }
-  return clamp(1. - 1.6 * o, 0., 1.);
+  vec2 w = setPart(p);
+  gMat = w.y;
+  return s < w.x ? vec2(s, 1.) : vec2(w.x, 0.);
 }
 
 float hash(vec2 p){ return fract(sin(dot(p, vec2(41.3, 289.1))) * 43758.5453); }
@@ -363,26 +333,45 @@ void main(){
   vec3 rd = normalize(uv.x * rt + uv.y * up + 2.5 * fw);
   vec3 Ld = lightDir();
 
-  float t = 0.;
-  vec2 h = vec2(0.);
-  for (int i = ZERO; i < 140; i++) {
-    if (float(i) >= uSteps) break;
-    h = map(ro + rd * t);
-    if (h.x < .0012 * t || t > 32.) break;
-    t += h.x * .9;
+  // Windows compilers inline map() once per call site, at seconds each, so the frame has one: this
+  // loop runs in phases, the march, four normal taps, five occlusion taps, and last one more look
+  // at the hit for its materials. The shadow ray only needs the piece, so it has its own loop.
+  float t = 0., hy = 0., o = 0., r = 1., ts = .03;
+  vec3 n = vec3(0.), lp = lampPos();
+  int ph = 0, k = 0;
+  for (int i = ZERO; i < 150; i++) {
+    if (ph == 0 && float(k) >= min(uSteps, 140.)) { ph = 1; k = 0; }
+    vec3 p = ro + rd * t, q = p;
+    vec3 e = .5773 * (2. * vec3(float(((k + 3) >> 1) & 1), float((k >> 1) & 1), float(k & 1)) - 1.);
+    if (ph == 1) q += .0015 * e;
+    else if (ph == 2) q += n * (.05 + .13 * float(k));
+    vec2 d = map(q);
+    if (ph == 0) {
+      hy = d.y;
+      if (d.x < .0012 * t || t > 32.) { ph = 1; k = 0; }
+      else { t += d.x * .9; k++; }
+    } else if (ph == 1) {
+      n += e * d.x;
+      if (++k == 4) { n = normalize(n); ph = 2; k = 1; }
+    } else if (ph == 2) {
+      o += (.05 + .13 * float(k) - d.x) * pow(.7, float(k - 1));
+      // the size of a pixel at the hit, for the printed lines of that last look
+      if (++k == 6) { ph = 3; gPix = t * 1.5 / (uRes.y * 2.5); }
+    } else break;
   }
   vec3 p = ro + rd * t;
-  // one more look at the hit, now that the size of a pixel there is known, for the printed lines
-  gPix = t * 1.5 / (uRes.y * 2.5);
-  map(p);
-  float hv = gHover, spc = gSpec;
+  float hv = gHover, spc = gSpec, mat = gMat;
   vec3 palb = gAlb;
-  vec3 lp = lampPos();
   vec3 L = normalize(mix(Ld, normalize(lp - p), uTheme));
+  for (int i = ZERO; i < 40; i++) {
+    float d = sculpt(p + n * .01 + L * ts);
+    r = min(r, 6. * d / ts);
+    ts += clamp(d, .03, .35);
+    if (r < .002 || ts > 7.) break;
+  }
+  o = clamp(1. - 1.6 * o, 0., 1.);
+  float sh = clamp(r, 0., 1.);
   float lamp = lampAt(p);
-  vec3 n = normal(p);
-  float sh = shadow(p + n * .01, L);
-  float o = ao(p, n);
   // what reaches a point: sun through the panes by day, the sky-blue lamp and the case lamps by night
   vec3 sun = vec3(1., .91, .78) * panes(p, L);
   vec3 night = vec3(.66, .86, 1.) * lamp * .8 + SKY * caseAt(p) * .5;
@@ -392,8 +381,8 @@ void main(){
   float dif = max(dot(n, L), 0.);
   vec3 H = normalize(L - rd);
 
-  if (h.y < .5) {
-    float m = setPart(p).y;
+  if (hy < .5) {
+    float m = mat;
     vec3 alb;
     float gloss = 0.;
     if (m < .5) {
