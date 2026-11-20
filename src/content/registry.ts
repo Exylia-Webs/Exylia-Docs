@@ -2159,6 +2159,53 @@ const JOBS_NAV: NavGroup[] = [
   },
 ];
 
+const ENCHANTS_NAV: NavGroup[] = [
+  {
+    label: { en: "Getting started", es: "Empezar" },
+    pages: [
+      page("introduction", "introduction", "introduccion"),
+      page("installation", "installation", "instalacion"),
+      page("first-steps", "first-steps", "primeros-pasos"),
+    ],
+  },
+  {
+    label: { en: "Guides", es: "Guías" },
+    pages: [
+      page("obtaining", "obtaining", "obtener-encantamientos"),
+      page("books", "books-and-applying", "libros-y-aplicar"),
+      page("enchanter", "the-enchanter", "el-encantador"),
+      page("power-budget", "power-budget", "presupuesto-de-poder"),
+      page("presets-and-rules", "presets-and-rules", "presets-y-reglas"),
+      page("custom-enchants", "custom-enchants", "encantamientos-propios"),
+      page("set-bonuses", "set-bonuses", "bonus-de-conjunto"),
+      page("balance", "balance-tools", "herramientas-de-balance"),
+      page("import", "import", "importar"),
+      page("player-settings", "player-settings", "ajustes-de-jugador"),
+      page("integrations", "integrations", "integraciones"),
+    ],
+  },
+  {
+    label: { en: "How it works", es: "Cómo funciona" },
+    pages: [page("rarities", "rarities", "rarezas")],
+  },
+  {
+    label: { en: "Reference", es: "Referencia" },
+    pages: [
+      page("commands", "commands", "comandos"),
+      page("permissions", "permissions", "permisos"),
+      page("placeholders", "placeholders", "placeholders"),
+      page("configuration", "configuration", "configuracion"),
+    ],
+  },
+  {
+    label: { en: "Help", es: "Ayuda" },
+    pages: [
+      page("troubleshooting", "troubleshooting", "problemas-comunes"),
+      page("faq", "faq", "faq"),
+    ],
+  },
+];
+
 const SCREENS_NAV: NavGroup[] = [
   {
     label: { en: "Getting started", es: "Empezar" },
@@ -2881,6 +2928,27 @@ export const plugins: Plugin[] = [
       { en: "Folia", es: "Folia" },
     ],
     nav: JOBS_NAV,
+  },
+  {
+    id: "exyliaenchants",
+    name: "ExyliaEnchants",
+    tagline: { en: "188 native custom enchantments with a power budget", es: "188 encantamientos personalizados nativos con presupuesto de poder" },
+    summary: {
+      en: "188 real enchantments registered before the worlds load, so the enchanting table, librarians, loot, anvil and grindstone treat them as their own. Each has a rarity, abilities written as data, a power budget per item, curses, armour set bonuses by element, an enchanter with books and support items, rules by world, region and mode, a catalogue with previews, a live tuner and training dummy, and importers from AdvancedEnchantments, EcoEnchants and ExcellentEnchants. No resource pack.",
+      es: "188 encantamientos reales registrados antes de que carguen los mundos, así que la mesa de encantamientos, los aldeanos, el botín, el yunque y la piedra de afilar los tratan como propios. Cada uno tiene una rareza, habilidades escritas como datos, un presupuesto de poder por objeto, maldiciones, bonus de conjunto de armadura por elemento, un encantador con libros y objetos de apoyo, reglas por mundo, región y modo, un catálogo con vistas previas, un ajustador en vivo y un muñeco de entrenamiento, e importadores desde AdvancedEnchantments, EcoEnchants y ExcellentEnchants. Sin resource pack.",
+    },
+    version: "1.1.0",
+    status: "beta",
+    category: { en: "Survival", es: "Survival" },
+    minecraft: "1.21.4+",
+    banner: "https://s3.exylia.net/exylia-plugins/public/static/images/plugins/enchants/ExyliaEnchantsBanner.webp",
+    tags: [
+      { en: "Enchants", es: "Encantamientos" },
+      { en: "Balance", es: "Balance" },
+      { en: "Importers", es: "Importadores" },
+      { en: "Folia", es: "Folia" },
+    ],
+    nav: ENCHANTS_NAV,
   },
   {
     id: "exyliascreens",
