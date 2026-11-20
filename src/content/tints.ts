@@ -14,7 +14,6 @@ export const TINTS: Record<string, string> = {
   exyliaclans: "234 141 83",
   exyliaclasses: "135 83 234",
   exyliaevents: "234 83 180",
-  exyliasurvivalcore: "234 145 83",
   exyliamines: "234 146 83",
   exyliaprotections: "83 131 234",
   exyliaspecials: "234 151 83",

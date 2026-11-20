@@ -1,12 +1,11 @@
 ---
 title: "Comparte baúles entre servidores"
-description: "Baúles entre servidores: la base de datos compartida, un bloqueo por baúl, escrituras que nunca pisan una fila más nueva, Redis, qué evita duplicar objetos y la migración desde ExyliaSurvivalCore."
+description: "Baúles entre servidores: la base de datos compartida, un bloqueo por baúl, escrituras que nunca pisan una fila más nueva, Redis, y qué evita duplicar objetos."
 questions:
   - "¿Cómo comparto baúles entre servidores?"
   - "¿Necesito Redis?"
   - "¿Pueden duplicarse objetos entre servidores?"
   - "¿Qué pasa si dos servidores escriben el mismo baúl?"
-  - "¿Mis jugadores conservan los baúles de ExyliaSurvivalCore?"
 updated: "1.12.0"
 ---
 
@@ -116,80 +115,12 @@ staff no puede cerrar un baúl a distancia: se le dice que está en uso hasta qu
 
 | Tabla | Guarda |
 |---|---|
-| `sc_vaults` | Una fila por jugador y baúl: el contenido, cuántas ranuras se usan, cuándo y con qué `version` se escribió. La fila se crea la primera vez que se escribe un baúl. |
+| `sc_vaults` | Una fila por jugador y baúl: el contenido, cuántas ranuras se usan, cuándo y con qué `version` se escribió. La fila se crea la primera vez que se escribe un baúl. Las filas de versiones anteriores, sin las columnas `used` y `version`, también se leen y se completan en su siguiente escritura. |
 | `playervaults_looks` | Nombres e iconos. |
 | `playervaults_buyers` | Cuántos baúles compró cada jugador. |
 | `playervaults_history` | Copias anteriores de cada baúl. |
 | `exylia_row_locks` | Los bloqueos de ExyliaLib, compartidos con todos los plugins de la base de datos. |
 | `exylia_pending_rewards` | La cola de ExyliaLib de stacks que se deben a jugadores, entregados al volver a entrar. |
-
-## Si vienes de ExyliaSurvivalCore
-
-ExyliaPlayerVaults es el módulo `vaults` de ExyliaSurvivalCore, como plugin propio. Guarda los baúles en la
-**misma tabla, `sc_vaults`, con las mismas columnas**, y los bloquea con la misma clave `vaults`, así que
-pasarse consiste en abrir la misma base de datos. Las filas escritas por versiones antiguas, de antes de las
-columnas `used` y `version`, también se leen y se completan en su siguiente escritura.
-
-<Steps>
-  <Step title="Actualiza ExyliaSurvivalCore">
-    Instala la versión de ExyliaSurvivalCore sin el módulo `vaults`, en todos los servidores, a la vez que
-    ExyliaPlayerVaults. Dos plugins respondiendo a `/pv` sobre una misma base de datos es justo lo que este
-    plugin existe para evitar.
-  </Step>
-  <Step title="Apúntalo a la misma base de datos">
-    Dale a `plugins/ExyliaPlayerVaults/database.yml` los mismos datos de conexión que a
-    `plugins/ExyliaSurvivalCore/database.yml`. En una base de datos compartida MySQL, MariaDB, PostgreSQL o
-    MongoDB, todos los baúles están ahí desde el primer arranque.
-  </Step>
-  <Step title="Pasa los ajustes">
-    Escribe tus valores antiguos en el nuevo `config.yml` y concede los permisos nuevos; las tablas de abajo
-    los relacionan.
-  </Step>
-</Steps>
-
-<Callout type="danger" title="Con H2, no se copia nada por ti">
-El plugin no copia el `database.yml` de ExyliaSurvivalCore ni su archivo H2. Con la base de datos H2 por
-defecto, ExyliaPlayerVaults abre un archivo nuevo en su propia carpeta y todos los baúles parecen vacíos —
-siguen en el archivo de ExyliaSurvivalCore, intactos. Para traerlos, para el servidor, haz copia de
-seguridad de las dos carpetas y copia el archivo H2 de ExyliaSurvivalCore (la ruta de `h2.file` en su
-`database.yml`, `database/h2` por defecto) a la misma ruta dentro de `plugins/ExyliaPlayerVaults/` antes de
-que ExyliaPlayerVaults haya escrito baúles propios.
-</Callout>
-
-### Ajustes
-
-No se lee nada de la carpeta `modules/vaults/` de ExyliaSurvivalCore: ni `config.yml`, ni `messages.yml`, ni
-el menú.
-
-| ExyliaSurvivalCore | ExyliaPlayerVaults |
-|---|---|
-| `settings.default-vaults` | `vaults.default-amount` |
-| `settings.max-vaults` | `vaults.max-amount` |
-| `settings.rows` | `vaults.default-rows`, y ahora `exyliaplayervaults.rows.<1-6>` por rango |
-| `title`, `admin-title` en `modules/vaults/messages.yml` (`settings.title` en versiones antiguas) | `title`, `admin-title` en `lang/<code>/messages.yml`; `%name%` es el nombre del baúl |
-| `settings.blocked-materials` | `vaults.blocked-materials`, que ahora también mira dentro de cajas de shulker y bolsas |
-| `sounds.opened`, `sounds.closed` | `sounds.opened`, `sounds.closed` |
-
-Un baúl que encogía le devolvía al dueño sus stacks sobrantes. Ahora por defecto los guarda fuera de la
-vista; `vaults.hidden-slots: return` los devuelve como antes.
-
-### Permisos
-
-Los nodos antiguos **no** se vuelven a declarar. Concede los nuevos:
-
-| ExyliaSurvivalCore | ExyliaPlayerVaults |
-|---|---|
-| `exyliasurvivalcore.vaults` | `exyliaplayervaults.use` (todos por defecto) |
-| `exyliasurvivalcore.vaults.amount.<number>` | `exyliaplayervaults.amount.<number>` |
-| `exyliasurvivalcore.vaults.admin` | `exyliaplayervaults.admin`, o los nodos `admin.*` sueltos |
-
-### Comandos, menús y acciones
-
-`/vault`, `/pv` y `/vaults` siguen funcionando. `/vaultadmin` ya no existe: el staff usa `/pvadmin`, donde
-`view` ahora es de solo lectura y `edit` abre un baúl para cambiarlo. La lista de baúles es un archivo nuevo,
-`lang/<code>/menus/user/vaults.yml`; el antiguo `modules/vaults/menus/vaults.yml` no se lee. Los botones que
-en otros sitios usen `survivalcore:vault_open <number>` o `survivalcore:vaults_open` hay que reescribirlos: la
-lista se abre con `/pv`, y un baúl con `exyliaplayervaults:open <owner-uuid> <number>`.
 
 <Cards>
   <Card title="Instalación: la base de datos" href="/docs/exyliaplayervaults/instalacion#la-base-de-datos">Apunta todos los servidores a la misma base de datos.</Card>

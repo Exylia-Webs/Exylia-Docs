@@ -46,6 +46,5 @@ Follow WRITING.md. ExyliaFFA is the model. One row per plugin; mark done after r
 | `exyliaspawners` | `ExyliaSpawners` | done |
 | `exyliawarzone` | `ExyliaWarzone` | done |
 | `exyliastaff` | `ExyliaStaff` | done |
-| `exyliasurvivalcore` | `ExyliaSurvivalCore` | done |
 | `exyliatabletop` | `ExyliaTabletop` | done |
 | `exyliatotemtrainer` | `ExyliaTotemTrainer` | done |
