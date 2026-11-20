@@ -37,6 +37,7 @@ export const TINTS: Record<string, string> = {
   exyliaplayervaults: "234 147 83",
   exyliakillcam: "83 140 234",
   exylialobby: "234 173 83",
+  exylialink: "130 140 234",
   exyliasandbox: "83 234 211",
   exylialib: "234 136 83",
   exyliapracticebot: "83 148 234",

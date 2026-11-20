@@ -1,0 +1,81 @@
+---
+title: "API"
+description: "ExyliaLinkApi: read who a player is on Discord, ask for a login approval in Discord, and give boosters perks."
+questions:
+  - "How do I get a player's Discord id from my plugin?"
+  - "How do I depend on ExyliaLink?"
+  - "How do I ask a player to confirm a login in Discord?"
+  - "What can ApprovalDecision be?"
+  - "How do I give perks to Discord boosters?"
+  - "Does the API work on Velocity and BungeeCord?"
+updated: "1.2.0"
+---
+
+ExyliaLink has a small API for other plugins on the same server or proxy: who a player is on Discord, and a second factor answered in Discord. It works on Paper, Spigot, Folia, Velocity and BungeeCord.
+
+## Get the API
+
+```java
+ExyliaLinkApi link = ExyliaLinkApi.get();   // net.exylia.link.api; null while ExyliaLink is not enabled
+if (link != null) {
+    link.discordId(player.getUniqueId()).ifPresent(id -> { /* ... */ });
+}
+```
+
+On Bukkit platforms it is also registered in the `ServicesManager`.
+
+To use it, add ExyliaLink as a soft dependency and compile against `net.exylia:ExyliaLink-api:<version>`. The artifact comes from your local Maven repository, published by running `./gradlew :common:publishToMavenLocal` in the ExyliaLink source. At runtime the classes are in ExyliaLink's own jar. The source is on [GitHub](https://github.com/Exylia-Plugins/ExyliaLink).
+
+## Reading a player
+
+| Method | Returns |
+|---|---|
+| `isLinked(UUID)` | Whether the player has a linked Discord account. |
+| `discordId(UUID)` | The Discord id as text, when linked. |
+| `discordName(UUID)` | The Discord username, when linked and known. |
+| `isBoosting(UUID)` | Whether the linked account boosts a Discord server of the network, as the Link bot last saw it. |
+| `isConnected()` | Whether this server is connected to Exylia Link right now. |
+
+Answers come from memory, so they are safe to call from any thread. They cover players online on this server or proxy; anyone else reads as not linked.
+
+## Login approvals
+
+A second factor answered in Discord, for login or staff plugins. The linked account gets a DM from the Link bot with **Yes, it was me** and **No, block it**.
+
+```java
+link.requestLoginApproval(uuid, name, address, "Survival").thenAccept(decision -> {
+    if (decision == ApprovalDecision.APPROVED) {
+        // let them in
+    } else if (decision.fallback()) {
+        // NOT_LINKED, UNAVAILABLE, UNDELIVERABLE: ask another way
+    } else {
+        // DENIED, EXPIRED, CANCELLED: refuse
+    }
+});
+```
+
+- `address` is the player's address as the server sees it, or `null`. Link stores and shows it masked, never whole.
+- The last argument is a short label shown on the card, such as the server's name, or `null`.
+- The future completes within about two minutes and never fails: every outcome is an `ApprovalDecision`, and only `APPROVED` means yes.
+- A new request for the same player cancels their pending one, and a player who leaves has theirs cancelled. `cancelLoginApproval(uuid)` does it by hand.
+
+| ApprovalDecision | Meaning |
+|---|---|
+| `APPROVED` | The account owner pressed Yes. |
+| `DENIED` | They pressed No. Refuse the login, and consider locking the account for a while. |
+| `EXPIRED` | Nobody answered in time. |
+| `CANCELLED` | Cancelled here: a newer request, the player left, or `cancelLoginApproval`. |
+| `UNDELIVERABLE` | The bot could not send the DM (DMs closed, bot blocked). |
+| `NOT_LINKED` | The player has no linked Discord account. |
+| `UNAVAILABLE` | Link is not reachable right now. |
+
+`decision.fallback()` is true for `NOT_LINKED`, `UNAVAILABLE` and `UNDELIVERABLE`, the cases where asking another way makes sense.
+
+## Boost perks
+
+Do not write code for booster perks. Create a Link reward rule with the **Boost active** trigger on the dashboard (a LuckPerms group, a rank, a kit), and it is reverted when the boost ends. See [Rewards](/docs/exylialink/rewards). Use `isBoosting` or `%exylialink_boosting%` only to show the state.
+
+<Cards>
+  <Card title="Placeholders" href="/docs/exylialink/placeholders">The same data for scoreboards and chat.</Card>
+  <Card title="Rewards" href="/docs/exylialink/rewards">Boost active and other triggers.</Card>
+</Cards>

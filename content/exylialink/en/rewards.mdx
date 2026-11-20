@@ -1,0 +1,61 @@
+---
+title: "Rewards"
+description: "How the rewards you set up on Exylia Link become console commands, and how ExyliaLink avoids running one twice."
+questions:
+  - "How does ExyliaLink give rewards?"
+  - "What does {player} mean in a reward command?"
+  - "What is grants.log?"
+  - "What happens if the player is offline when a reward arrives?"
+  - "How do I give a perk to Discord boosters?"
+updated: "1.2.0"
+---
+
+Reward rules are written on [link.exylia.net](https://link.exylia.net). ExyliaLink does the in-game part: it receives each grant, runs its commands as the console, and tells Link it was done.
+
+## Before you start
+
+- The server or proxy is [connected](/docs/exylialink/first-steps).
+- Rules are made on the dashboard; there is nothing to configure in the plugin.
+- A rule's target is game servers or the proxy. See [Proxies and game servers](/docs/exylialink/proxies-and-servers).
+
+## How a grant runs
+
+<Steps>
+  <Step title="The grant arrives">
+    Link sends the player, a grant id and a list of commands, from 1 to 20 of them (each at most 1,000 characters). A leading slash is ignored.
+  </Step>
+  <Step title="Duplicates are skipped">
+    ExyliaLink looks the grant id up in `grants.log`. If it is already there, it tells Link it was delivered without running anything.
+  </Step>
+  <Step title="Commands run as console">
+    The commands run in order, on the main thread (Folia's global region on Folia). `{player}` is replaced with the player's current name. On a proxy they are the proxy console's commands, such as LuckPerms Velocity's.
+  </Step>
+  <Step title="It is recorded">
+    The grant id is written to `grants.log` and flushed to disk, then Link is told it was delivered.
+  </Step>
+</Steps>
+
+If a command is unknown or fails, a warning is logged and the others still run. The grant still counts as run.
+
+## When the player is offline
+
+A grant can require the player to be online. If they are not on that server, ExyliaLink refuses it with `player_offline`, runs nothing, and Link sends it again on their next join. A grant past its expiry is refused as expired and not run.
+
+## Boost perks
+
+Link knows whether a linked member boosts a Discord server of your network. Give boosters a perk with a reward rule using the **Boost active** trigger on the dashboard (a LuckPerms group, a rank, a kit), which is reverted when the boost ends. No plugin code is needed. Other plugins can read `%exylialink_boosting%`, see [Placeholders](/docs/exylialink/placeholders).
+
+## Check that it works
+
+Create a rule on the dashboard with a harmless command such as `say {player} was rewarded`, trigger it for an online player, and watch the console. `/linkadmin status` shows **Rewards in progress** while one is being handled.
+
+<Details title="grants.log">
+
+`plugins/ExyliaLink/grants.log` holds one line per executed grant id. It is compacted when the plugin starts and once a day, and lines older than 90 days are dropped. A line torn by a crash is ignored. Each install keeps its own file, and Link only resends a grant to the install it was sent to, so one file per install is enough. Do not edit it by hand: deleting a line lets that grant run again if Link resends it.
+
+</Details>
+
+<Cards>
+  <Card title="Proxies and game servers" href="/docs/exylialink/proxies-and-servers">Where rewards run.</Card>
+  <Card title="API" href="/docs/exylialink/api">Read link and boost status from your own plugin.</Card>
+</Cards>

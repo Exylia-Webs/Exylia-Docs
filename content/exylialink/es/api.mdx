@@ -1,0 +1,81 @@
+---
+title: "API"
+description: "ExyliaLinkApi: lee quién es un jugador en Discord, pide una aprobación de inicio de sesión en Discord y da ventajas a los boosters."
+questions:
+  - "¿Cómo obtengo el id de Discord de un jugador desde mi plugin?"
+  - "¿Cómo dependo de ExyliaLink?"
+  - "¿Cómo pido a un jugador que confirme un inicio de sesión en Discord?"
+  - "¿Qué valores puede tener ApprovalDecision?"
+  - "¿Cómo doy ventajas a los boosters de Discord?"
+  - "¿La API funciona en Velocity y BungeeCord?"
+updated: "1.2.0"
+---
+
+ExyliaLink tiene una API pequeña para otros plugins del mismo servidor o proxy: quién es un jugador en Discord y un segundo factor que se responde en Discord. Funciona en Paper, Spigot, Folia, Velocity y BungeeCord.
+
+## Obtener la API
+
+```java
+ExyliaLinkApi link = ExyliaLinkApi.get();   // net.exylia.link.api; null mientras ExyliaLink no está activo
+if (link != null) {
+    link.discordId(player.getUniqueId()).ifPresent(id -> { /* ... */ });
+}
+```
+
+En las plataformas Bukkit también está registrada en el `ServicesManager`.
+
+Para usarla, añade ExyliaLink como dependencia opcional (soft dependency) y compila contra `net.exylia:ExyliaLink-api:<versión>`. El artefacto sale de tu repositorio Maven local: se publica ejecutando `./gradlew :common:publishToMavenLocal` en el código de ExyliaLink. En ejecución, las clases están en el propio jar de ExyliaLink. El código está en [GitHub](https://github.com/Exylia-Plugins/ExyliaLink).
+
+## Leer a un jugador
+
+| Método | Devuelve |
+|---|---|
+| `isLinked(UUID)` | Si el jugador tiene una cuenta de Discord vinculada. |
+| `discordId(UUID)` | El id de Discord como texto, si está vinculado. |
+| `discordName(UUID)` | El nombre de usuario de Discord, si está vinculado y se conoce. |
+| `isBoosting(UUID)` | Si la cuenta vinculada hace boost a un servidor de Discord de la red, según lo último que vio el bot de Link. |
+| `isConnected()` | Si este servidor está conectado a Exylia Link ahora mismo. |
+
+Las respuestas salen de memoria, así que se pueden llamar desde cualquier hilo. Cubren a los jugadores conectados en este servidor o proxy; cualquier otro se lee como no vinculado.
+
+## Aprobaciones de inicio de sesión
+
+Un segundo factor que se responde en Discord, para plugins de login o de staff. La cuenta vinculada recibe un MD del bot de Link con **Yes, it was me** y **No, block it**.
+
+```java
+link.requestLoginApproval(uuid, name, address, "Survival").thenAccept(decision -> {
+    if (decision == ApprovalDecision.APPROVED) {
+        // déjale entrar
+    } else if (decision.fallback()) {
+        // NOT_LINKED, UNAVAILABLE, UNDELIVERABLE: pídelo de otra forma
+    } else {
+        // DENIED, EXPIRED, CANCELLED: recházalo
+    }
+});
+```
+
+- `address` es la dirección del jugador tal como la ve el servidor, o `null`. Link la guarda y la muestra enmascarada, nunca entera.
+- El último argumento es una etiqueta corta que aparece en la tarjeta, como el nombre del servidor, o `null`.
+- El futuro se completa en unos dos minutos y nunca falla: cada resultado es un `ApprovalDecision`, y solo `APPROVED` significa que sí.
+- Una petición nueva para el mismo jugador cancela la pendiente, y si el jugador se va se cancela la suya. `cancelLoginApproval(uuid)` lo hace a mano.
+
+| ApprovalDecision | Significado |
+|---|---|
+| `APPROVED` | El dueño de la cuenta pulsó Sí. |
+| `DENIED` | Pulsó No. Rechaza el acceso y plantéate bloquear la cuenta un tiempo. |
+| `EXPIRED` | Nadie respondió a tiempo. |
+| `CANCELLED` | Cancelada desde aquí: una petición más nueva, el jugador se fue o `cancelLoginApproval`. |
+| `UNDELIVERABLE` | El bot no pudo enviar el MD (MD cerrados, bot bloqueado). |
+| `NOT_LINKED` | El jugador no tiene cuenta de Discord vinculada. |
+| `UNAVAILABLE` | Link no está disponible ahora mismo. |
+
+`decision.fallback()` es true para `NOT_LINKED`, `UNAVAILABLE` y `UNDELIVERABLE`: los casos en que tiene sentido pedirlo de otra forma.
+
+## Ventajas para boosters
+
+No escribas código para las ventajas de boosters. Crea en el panel una regla de recompensa de Link con el disparador **Boost active** (un grupo de LuckPerms, un rango, un kit) y se revierte cuando termina el boost. Mira [Recompensas](/docs/exylialink/rewards). Usa `isBoosting` o `%exylialink_boosting%` solo para mostrar el estado.
+
+<Cards>
+  <Card title="Placeholders" href="/docs/exylialink/placeholders">Los mismos datos para scoreboards y chat.</Card>
+  <Card title="Recompensas" href="/docs/exylialink/rewards">Boost active y otros disparadores.</Card>
+</Cards>

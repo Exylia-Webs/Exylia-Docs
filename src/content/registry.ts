@@ -1054,6 +1054,46 @@ const PRACTICE_NAV: NavGroup[] = [
   },
 ];
 
+const LINK_NAV: NavGroup[] = [
+  {
+    label: { en: "Getting started", es: "Empezar" },
+    pages: [
+      page("introduction", "introduction", "introduccion"),
+      page("installation", "installation", "instalacion"),
+      page("first-steps", "first-steps", "primeros-pasos"),
+    ],
+  },
+  {
+    label: { en: "Guides", es: "Guías" },
+    pages: [
+      page("link-accounts", "link-accounts", "vincular-cuentas"),
+      page("proxies-and-servers", "proxies-and-servers", "proxies-y-servidores"),
+      page("requirements", "requirements", "requisitos"),
+      page("rewards", "rewards", "recompensas"),
+      page("import-discordsrv", "import-discordsrv", "importar-discordsrv"),
+      page("updates", "updates", "actualizaciones"),
+      page("translations", "translations", "traducciones"),
+    ],
+  },
+  {
+    label: { en: "Reference", es: "Referencia" },
+    pages: [
+      page("commands", "commands", "comandos"),
+      page("permissions", "permissions", "permisos"),
+      page("placeholders", "placeholders", "placeholders"),
+      page("configuration", "configuration", "configuracion"),
+      page("api", "api", "api"),
+    ],
+  },
+  {
+    label: { en: "Help", es: "Ayuda" },
+    pages: [
+      page("troubleshooting", "troubleshooting", "problemas-comunes"),
+      page("faq", "faq", "faq"),
+    ],
+  },
+];
+
 const SANDBOX_NAV: NavGroup[] = [
   {
     label: { en: "Getting started", es: "Empezar" },
@@ -3038,6 +3078,29 @@ export const plugins: Plugin[] = [
       { en: "Folia", es: "Folia" },
     ],
     nav: LOBBY_NAV,
+  },
+  {
+    id: "exylialink",
+    name: "ExyliaLink",
+    tagline: { en: "Discord accounts linked across your network", es: "Cuentas de Discord vinculadas en toda tu red" },
+    summary: {
+      en: "The Minecraft side of Exylia Link: players link their account to Discord for the whole network, the plugin reports who is online and in which LuckPerms groups, requires a linked account for chosen groups, runs the rewards Link grants, imports DiscordSRV links and answers login approvals in Discord. One jar for Paper, Spigot, Folia, Velocity and BungeeCord that updates itself. Free and open source.",
+      es: "La parte de Minecraft de Exylia Link: los jugadores vinculan su cuenta con Discord para toda la red, el plugin informa de quién está conectado y en qué grupos de LuckPerms, exige una cuenta vinculada a los grupos que elijas, ejecuta las recompensas que concede Link, importa los vínculos de DiscordSRV y responde a las aprobaciones de inicio de sesión en Discord. Un solo jar para Paper, Spigot, Folia, Velocity y BungeeCord que se actualiza solo. Gratis y de código abierto.",
+    },
+    version: "1.2.0",
+    status: "stable",
+    category: { en: "Utility", es: "Utilidad" },
+    minecraft: "1.17+ · Velocity 3 · BungeeCord",
+    banner: "https://s3.exylia.net/exylia-plugins/public/static/images/plugins/link/ExyliaLinkBanner.webp",
+    download: "https://github.com/Exylia-Plugins/ExyliaLink/releases",
+    tags: [
+      { en: "Discord", es: "Discord" },
+      { en: "Network", es: "Red" },
+      { en: "Proxy", es: "Proxy" },
+      { en: "Folia", es: "Folia" },
+    ],
+    nav: LINK_NAV,
+    standalone: true,
   },
   {
     id: "exyliasandbox",
