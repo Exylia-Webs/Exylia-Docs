@@ -56,7 +56,7 @@ export function Callout({
   title?: string;
   children: ReactNode;
 }) {
-  const style = CALLOUT[type];
+  const style = CALLOUT[type] ?? CALLOUT.note; // unknown types (e.g. "info") read as a note instead of breaking the build
   return (
     <div
       className="not-prose my-6 flex gap-3.5 rounded-xl border p-4 pr-5"
