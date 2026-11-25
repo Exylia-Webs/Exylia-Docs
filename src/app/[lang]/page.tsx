@@ -1,6 +1,6 @@
 import { ThemeScript } from "@exylia-webs/ui/site";
 import { DocsLanding } from "@/components/landing/site/landing";
-import { xsFonts } from "@/components/landing/site/fonts";
+import { xsFonts } from "@exylia-webs/ui/site";
 import { LANGS, toLang } from "@/content/registry";
 
 export function generateStaticParams() {

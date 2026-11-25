@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { LoginButton, LoginPanel } from "@exylia-webs/ui";
-import { DocsAuthFrame } from "@/components/landing/site/auth-frame";
+import { AuthFrame } from "@exylia-webs/ui/site";
 import { SITE } from "@/content/registry";
 import { currentAdmin } from "@/lib/admin-auth";
 import { adminText } from "@/lib/admin-i18n";
@@ -23,12 +23,12 @@ export default async function AdminLoginPage({ searchParams }: { searchParams: P
   const t = a.login;
   const lines = lang === "es" ? ["Cada plugin,", "*documentado*."] : ["Every plugin,", "*documented*."];
   return (
-    <DocsAuthFrame lines={lines} lead={SITE.description[lang]}>
+    <AuthFrame product="Docs" service="docs" lines={lines} lead={SITE.description[lang]}>
       <LoginPanel eyebrow={t.eyebrow} title={t.title} description={t.description} error={params.error} errors={t.errors} legal={false}>
         <LoginButton href={`/api/admin/auth/discord/?redirect=${encodeURIComponent(target)}`} provider="discord">
           {t.discord}
         </LoginButton>
       </LoginPanel>
-    </DocsAuthFrame>
+    </AuthFrame>
   );
 }
