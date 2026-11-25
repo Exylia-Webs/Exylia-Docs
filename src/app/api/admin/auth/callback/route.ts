@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { adminCookie, ADMIN_SESSION_TTL_MS, completeLogin, cookieOptions, createAdminSession, publicUrl, readState, stateCookie } from "@/lib/admin-auth";
-import { safeAdminRedirect } from "@/lib/admin-rules";
+import { safeAdminRedirect } from "@exylia-webs/ui/admin/policy";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +18,7 @@ export async function GET(request: Request) {
     try {
       const user = await completeLogin(stored, url.searchParams.get("state"), url.searchParams.get("code"));
       token = await createAdminSession(user);
-      target = new URL(token ? safeAdminRedirect(stored?.redirectTo) : "/admin/login/?error=denied", base);
+      target = new URL(token ? safeAdminRedirect(stored?.redirectTo, "/admin/") : "/admin/login/?error=denied", base);
     } catch (error) {
       console.warn("admin login failed", error instanceof Error ? error.message : error);
     }

@@ -8,7 +8,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { SITE } from "@/content/registry";
-import { isSuperAdmin } from "@/lib/admin-rules";
+import { isSuperAdmin, parseIds } from "@exylia-webs/ui/admin/policy";
 import { prisma } from "@/lib/db";
 
 export const ADMIN_SESSION_TTL_MS = 7 * 24 * 60 * 60_000;
@@ -27,7 +27,7 @@ export const stateCookie = () => named("docs_admin_oauth");
 export const cookieOptions = (maxAgeMs: number) => ({ httpOnly: true, secure: secure(), sameSite: "lax" as const, path: "/", maxAge: Math.floor(maxAgeMs / 1000) });
 
 export const discordConfigured = () => Boolean(process.env.DISCORD_CLIENT_ID?.trim() && process.env.DISCORD_CLIENT_SECRET?.trim());
-const allowed = (discordId: string) => isSuperAdmin(discordId, process.env.SUPER_ADMIN_DISCORD_IDS);
+const allowed = (discordId: string) => isSuperAdmin({ discordId }, parseIds(process.env.SUPER_ADMIN_DISCORD_IDS));
 /** With the trailing slash every docs path has, so Discord's redirect lands without a hop. */
 export const redirectUri = () => `${publicUrl()}/api/admin/auth/callback/`;
 
