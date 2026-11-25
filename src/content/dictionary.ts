@@ -283,15 +283,6 @@ export const dict = {
     legal: { en: "Legal", es: "Legal" },
     privacy: { en: "Privacy", es: "Privacidad" },
   },
-  notFound: {
-    kicker: { en: "Error 404", es: "Error 404" },
-    title: { en: "This page does not exist", es: "Esta página no existe" },
-    body: {
-      en: "The documentation may have moved, or may not be published yet.",
-      es: "Puede que la documentación se haya movido, o que aún no esté publicada.",
-    },
-    back: { en: "Back to the start", es: "Volver al inicio" },
-  },
   redirect: {
     detecting: { en: "Detecting your language…", es: "Detectando tu idioma…" },
     manual: { en: "Continue in English", es: "Continuar en español" },
