@@ -43,7 +43,7 @@ export const adminDict = {
   },
   auditList: {
     actions: {
-      "settings.ai": { en: "Changed the AI settings", es: "Cambió los ajustes de IA" },
+      settings: { ai: { en: "Changed the AI settings", es: "Cambió los ajustes de IA" } },
     },
     targets: {
       ai: { en: "AI", es: "IA" },
