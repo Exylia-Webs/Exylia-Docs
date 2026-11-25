@@ -1,6 +1,7 @@
 "use client";
 
 import { AnimatePresence, m } from "motion/react"; // domain animation (layoutId indicators, springs) the library helpers do not express; shares ThemeProvider's LazyMotion
+import { SearchInput } from "@exylia-webs/ui";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
@@ -153,22 +154,15 @@ export function SearchDialog({
             role="dialog"
             aria-modal
           >
-            <div className="flex items-center gap-3 border-b border-line px-4">
-              <svg className="h-4 w-4 shrink-0 text-ink-3" viewBox="0 0 16 16" fill="none">
-                <circle cx="7.2" cy="7.2" r="4.4" stroke="currentColor" strokeWidth="1.5" />
-                <path d="M10.6 10.6L13.5 13.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-              </svg>
-              <input
+            <div className="border-b border-line p-3">
+              <SearchInput
                 ref={inputRef}
                 value={query}
-                onChange={(e) => setQuery(e.target.value)}
+                onChange={setQuery}
+                debounceMs={0}
                 onKeyDown={onKeyDown}
                 placeholder={dict.search.placeholder[lang]}
-                className="h-14 w-full bg-transparent text-base text-ink sm:text-ui-lg placeholder:text-ink-3 focus:outline-none"
               />
-              <kbd className="hidden shrink-0 rounded border border-line px-1.5 py-0.5 font-mono text-ui-xs text-ink-3 sm:block">
-                ESC
-              </kbd>
             </div>
 
             <div className="max-h-[52vh] overflow-y-auto scroll-thin p-2">
