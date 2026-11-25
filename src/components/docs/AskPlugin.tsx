@@ -1,6 +1,6 @@
 "use client";
 
-import { m } from "framer-motion";
+import { m } from "motion/react"; // domain animation (layoutId indicators, springs) the library helpers do not express; shares ThemeProvider's LazyMotion
 import { useState } from "react";
 import { askAssistant, useAssistantStatus } from "@/components/assistant/AssistantLauncher";
 import { dict } from "@/content/dictionary";
@@ -49,7 +49,7 @@ export function AskPlugin({ name, lang }: { name: string; lang: Lang }) {
         <button
           type="submit"
           disabled={!text.trim()}
-          className="inline-flex h-9 shrink-0 items-center gap-2 rounded-full bg-ink px-4 text-ui-sm font-medium text-canvas transition-opacity disabled:opacity-40"
+          className="inline-flex h-9 shrink-0 items-center gap-2 rounded-full bg-ink px-4 text-ui-sm font-medium text-bg transition-opacity disabled:opacity-40"
         >
           {t.askSend[lang]}
           <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" aria-hidden>

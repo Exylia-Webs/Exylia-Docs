@@ -3,11 +3,12 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useReducedMotion, useScroll } from "framer-motion";
+import { useReducedMotion, useScroll } from "motion/react"; // domain animation (layoutId indicators, springs) the library helpers do not express; shares ThemeProvider's LazyMotion
 import {
-  ChapterHead, Count, Lines, Rise, Room, Stage, ThemeToggle, display, live, mono, pad,
+  ChapterHead, Count, Lines, Rise, Room, Stage, display, live, mono, pad,
   siteAccentCss, SERVICE_ACCENTS, useCenterPick, xsCss,
 } from "@exylia-webs/ui/site";
+import { ThemeToggle } from "@exylia-webs/ui";
 import { dict } from "@/content/dictionary";
 import { SITE, documentedPlugins, groupByCategory, pageCount, plugins, LANGS, type Lang, type Plugin } from "@/content/registry";
 import { loadIndex, prepare, rank, SearchDialog, useSearchHotkey, type Prepared } from "@/components/Search";
@@ -230,7 +231,7 @@ export function DocsLanding({ lang }: { lang: Lang }) {
               <span className="max-sm:hidden">{c.searchHint}</span><span className="text-[var(--ink3)] max-sm:hidden">⌘K</span>
             </button>
             <LangSwitch lang={lang} />
-            <ThemeToggle es={lang === "es"} />
+            <ThemeToggle />
           </div>
         </div>
         <div className="h-px bg-[var(--line)]"><div ref={bar} className="h-px origin-left scale-x-0 bg-[var(--amb)]" /></div>

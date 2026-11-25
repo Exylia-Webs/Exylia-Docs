@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { m } from "framer-motion";
+import { m } from "motion/react"; // domain animation (layoutId indicators, springs) the library helpers do not express; shares ThemeProvider's LazyMotion
 import { useState } from "react";
 import { dict } from "@/content/dictionary";
 import type { Lang } from "@/content/registry";
@@ -53,7 +53,7 @@ export function DocHeader({
           </span>
         )}
         {updated && (
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-accent/10 px-2.5 py-0.5 text-ui-sm text-[color-mix(in_srgb,var(--accent)_50%,#fff)]">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-accent/10 px-2.5 py-0.5 text-ui-sm text-accent-ink">
             <span className="h-1.5 w-1.5 rounded-full bg-accent" />
             {t.updatedIn[lang].replace("{v}", updated)}
           </span>

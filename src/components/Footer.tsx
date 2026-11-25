@@ -1,3 +1,4 @@
+import { EXYLIA_APPS } from "@exylia-webs/ui";
 import { LandingBrand, LandingFooter } from "@exylia-webs/ui/site";
 import { SITE, type Lang } from "@/content/registry";
 import { dict } from "@/content/dictionary";
@@ -19,6 +20,11 @@ export function Footer({ lang }: { lang: Lang; tinted?: boolean }) {
         { href: `${HUB_LEGAL}/${lang}/legal`, label: f.legal[lang] },
         { href: `${HUB_LEGAL}/${lang}/legal/privacy`, label: f.privacy[lang] },
       ]}
+      services={{
+        title: f.services[lang],
+        items: Object.values(EXYLIA_APPS).map((a) => ({ name: a.name.replace("Exylia ", ""), href: a.url, image: a.image })),
+        all: { href: SITE.hub, label: f.allServices[lang] },
+      }}
       legal={f.madeWith[lang]}
     />
   );

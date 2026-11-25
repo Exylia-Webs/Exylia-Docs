@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { m } from "framer-motion";
+import { m } from "motion/react"; // domain animation (layoutId indicators, springs) the library helpers do not express; shares ThemeProvider's LazyMotion
 import type { NavSection } from "@/lib/docs";
 import type { Lang, Plugin } from "@/content/registry";
 import { dict } from "@/content/dictionary";
@@ -91,7 +91,7 @@ export function PluginOverview({
         >
             <Link
               href={resume ? `/${lang}/docs/${resume.plugin}/${resume.slug}` : firstHref}
-              className="group inline-flex h-11 max-w-[80vw] items-center gap-2.5 rounded-full bg-ink px-5 text-ui-base font-medium text-canvas transition-colors hover:bg-ink"
+              className="group inline-flex h-11 max-w-[80vw] items-center gap-2.5 rounded-full bg-ink px-5 text-ui-base font-medium text-bg transition-colors hover:bg-ink"
             >
               <span className="truncate">{resume && done > 0 ? dict.docs.continue[lang].replace("{title}", resume.title) : dict.docs.start[lang]}</span>
               <svg className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" viewBox="0 0 16 16" fill="none">

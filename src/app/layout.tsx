@@ -5,7 +5,6 @@ import { rootViewport } from "@exylia-webs/ui/app";
 import { rootFontVariables } from "@exylia-webs/ui/fonts";
 import "./globals.css";
 import { DEFAULT_LANG, SITE } from "@/content/registry";
-import { MotionProvider } from "@/components/motion/MotionProvider";
 
 const serif = Instrument_Serif({ subsets: ["latin"], weight: "400", style: ["normal", "italic"], variable: "--font-serif", display: "swap" });
 
@@ -39,7 +38,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="font-sans antialiased">
         <AccentStyle color={SERVICE_ACCENTS.docs.fill} />
         <ThemeProvider>
-          <MotionProvider>{children}</MotionProvider>
+          {children}
         </ThemeProvider>
       </body>
     </html>

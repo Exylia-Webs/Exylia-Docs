@@ -26,7 +26,7 @@ export function NotFoundBody() {
         <p className="mt-4 max-w-md text-ui-lg leading-relaxed text-ink-3">{t.body[lang]}</p>
         <Link
           href={`/${lang}/`}
-          className="mt-9 inline-flex h-11 items-center rounded-full bg-ink px-5 text-ui-base font-medium text-black transition-transform hover:scale-[1.03] active:scale-[0.98]"
+          className="mt-9 inline-flex h-11 items-center rounded-full bg-ink px-5 text-ui-base font-medium text-bg transition-transform hover:scale-[1.03] active:scale-[0.98]"
         >
           {t.back[lang]}
         </Link>

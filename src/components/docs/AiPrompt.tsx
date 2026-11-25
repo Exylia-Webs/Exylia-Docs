@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { AnimatePresence, m } from "framer-motion";
+import { AnimatePresence, m } from "motion/react"; // domain animation (layoutId indicators, springs) the library helpers do not express; shares ThemeProvider's LazyMotion
 import { promptText, type PromptId } from "@/content/aiPrompts";
 import { dict } from "@/content/dictionary";
 import type { Lang } from "@/content/registry";

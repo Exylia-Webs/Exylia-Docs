@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
-import { m } from "framer-motion";
+import { m } from "motion/react"; // domain animation (layoutId indicators, springs) the library helpers do not express; shares ThemeProvider's LazyMotion
 import { detectLang } from "@/lib/lang";
 import { dict } from "@/content/dictionary";
 import { LANGS } from "@/content/registry";

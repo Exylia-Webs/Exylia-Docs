@@ -1,6 +1,6 @@
 "use client";
 
-import { m, useMotionValue, useSpring } from "framer-motion";
+import { m, useMotionValue, useSpring } from "motion/react"; // domain animation (layoutId indicators, springs) the library helpers do not express; shares ThemeProvider's LazyMotion
 import { useEffect, useState } from "react";
 import type { Heading } from "@/lib/docs";
 import { dict } from "@/content/dictionary";
