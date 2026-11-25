@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { Button } from "@exylia-webs/ui";
 import { AnimatePresence, m } from "motion/react"; // domain animation (layoutId indicators, springs) the library helpers do not express; shares ThemeProvider's LazyMotion
 import { promptText, type PromptId } from "@/content/aiPrompts";
 import { dict } from "@/content/dictionary";
@@ -168,10 +169,7 @@ export function AiPrompt({ id, lang = "en" }: { id: PromptId; lang?: Lang }) {
       </div>
 
       <div className="flex items-center justify-end border-t border-accent/15 px-6 py-3">
-        <button
-          onClick={() => setOpen((v) => !v)}
-          className="flex items-center gap-1.5 text-ui-sm text-ink-3 transition-colors duration-300 hover:text-ink"
-        >
+        <Button variant="ghost" size="xs" onClick={() => setOpen((v) => !v)}>
           {open ? dict.ai.hide[lang] : dict.ai.show[lang]}
           <svg
             className={`h-3 w-3 transition-transform duration-300 ${open ? "rotate-180" : ""}`}
@@ -180,7 +178,7 @@ export function AiPrompt({ id, lang = "en" }: { id: PromptId; lang?: Lang }) {
           >
             <path d="M4 6.5l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
-        </button>
+        </Button>
       </div>
 
       <AnimatePresence initial={false}>

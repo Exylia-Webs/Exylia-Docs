@@ -1,6 +1,7 @@
 "use client";
 
 import { m } from "motion/react"; // domain animation (layoutId indicators, springs) the library helpers do not express; shares ThemeProvider's LazyMotion
+import { Button } from "@exylia-webs/ui";
 import { useState } from "react";
 import { askAssistant, useAssistantStatus } from "@/components/assistant/AssistantLauncher";
 import { dict } from "@/content/dictionary";
@@ -46,30 +47,21 @@ export function AskPlugin({ name, lang }: { name: string; lang: Lang }) {
           aria-label={t.askTitle[lang].replace("{plugin}", name)}
           className="min-w-0 flex-1 bg-transparent text-base text-ink placeholder:text-ink-3 focus:outline-none sm:text-ui-base"
         />
-        <button
-          type="submit"
-          disabled={!text.trim()}
-          className="inline-flex h-9 shrink-0 items-center gap-2 rounded-full bg-ink px-4 text-ui-sm font-medium text-bg transition-opacity disabled:opacity-40"
-        >
+        <Button type="submit" variant="ink" size="sm" disabled={!text.trim()} className="shrink-0">
           {t.askSend[lang]}
           <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" aria-hidden>
             <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
-        </button>
+        </Button>
       </form>
 
       <div className="relative mt-3 flex flex-wrap gap-2">
         {t.forPlugin[lang].map((s) => {
           const q = s.replace("{plugin}", name);
           return (
-            <button
-              key={q}
-              type="button"
-              onClick={() => send(q)}
-              className="rounded-full border border-line px-3 py-1.5 text-ui-sm text-ink-3 transition-colors hover:border-line-2 hover:text-ink"
-            >
+            <Button key={q} variant="secondary" size="xs" onClick={() => send(q)}>
               {q}
-            </button>
+            </Button>
           );
         })}
       </div>
