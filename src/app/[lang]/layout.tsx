@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
-// The docs' stylesheet (Tailwind 3), loaded by the public pages only: the admin panel has its own.
-import "../globals.css";
+import { NextIntlClientProvider } from "next-intl";
+import { CookieConsent } from "@exylia-webs/ui";
+import { uiMessages } from "@exylia-webs/ui/messages";
 import { ogImageFor } from "@/lib/og";
 import { notFound } from "next/navigation";
 import { DEFAULT_LANG, LANGS, SITE, toLang, type Lang } from "@/content/registry";
@@ -40,9 +41,11 @@ export default async function LangLayout({
   if (!LANGS.includes(lang as Lang)) notFound();
 
   return (
-    <>
+    <NextIntlClientProvider locale={lang} messages={{ ui: uiMessages[lang as Lang] }} timeZone="UTC">
       <HtmlLang lang={lang as Lang} />
       {children}
-    </>
+      {/* The cookie statement is the hub's (the docs collect nothing beyond it). */}
+      <CookieConsent gaId={process.env.NEXT_PUBLIC_GA_ID} clarityId={process.env.NEXT_PUBLIC_CLARITY_ID} />
+    </NextIntlClientProvider>
   );
 }

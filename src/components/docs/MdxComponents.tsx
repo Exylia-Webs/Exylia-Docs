@@ -14,8 +14,8 @@ import { dataTable, type DataKind } from "@/lib/plugin-data";
 
 const CALLOUT = {
   note: {
-    accent: "rgb(var(--accent) / 0.55)",
-    tint: "rgb(var(--accent) / 0.05)",
+    accent: "color-mix(in oklab, var(--accent) 55%, transparent)",
+    tint: "color-mix(in oklab, var(--accent) 5%, transparent)",
     label: "Nota",
     icon: (
       <path d="M8 5.2v.1M8 7.4v3.4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
@@ -71,9 +71,9 @@ export function Callout({
         <circle cx="8" cy="8" r="6.4" stroke="currentColor" strokeWidth="1.2" opacity="0.5" />
         {style.icon}
       </svg>
-      <div className="min-w-0 text-[14.5px] leading-relaxed text-white/58">
+      <div className="min-w-0 text-ui-base leading-relaxed text-ink-2">
         <span
-          className="mb-1 block text-[12.5px]"
+          className="mb-1 block text-ui-sm"
           style={{ color: style.accent }}
         >
           {title ?? style.label}
@@ -102,21 +102,21 @@ export function Card({
   // Cards are written in MDX with language-less hrefs; MdxLink prefixes them.
   const body = (
     <>
-      <span className="pointer-events-none absolute right-0 top-0 h-0 w-0 border-r-2 border-t-2 border-[rgb(var(--accent)/0)] transition-all duration-300 group-hover:h-4 group-hover:w-4 group-hover:border-[rgb(var(--accent)/0.5)]" />
-      <span className="flex items-center gap-2 font-display text-[15px] font-medium text-white">
+      <span className="pointer-events-none absolute right-0 top-0 h-0 w-0 border-r-2 border-t-2 border-accent/0 transition-all duration-300 group-hover:h-4 group-hover:w-4 group-hover:border-accent/50" />
+      <span className="flex items-center gap-2 font-display text-ui-lg font-medium text-ink">
         {title}
         {href && (
-          <svg className="h-3 w-3 text-white/25 transition-all duration-300 group-hover:translate-x-0.5 group-hover:text-white" viewBox="0 0 16 16" fill="none">
+          <svg className="h-3 w-3 text-ink-3 transition-all duration-300 group-hover:translate-x-0.5 group-hover:text-ink" viewBox="0 0 16 16" fill="none">
             <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         )}
       </span>
-      {children && <span className="mt-2 block text-[13.5px] leading-relaxed text-white/45">{children}</span>}
+      {children && <span className="mt-2 block text-ui-sm leading-relaxed text-ink-3">{children}</span>}
     </>
   );
 
   const className =
-    "group relative block border-b border-r hair px-5 py-5 transition-colors duration-300 hover:bg-white/[0.02]";
+    "group relative block border-b border-r hair px-5 py-5 transition-colors duration-300 hover:bg-hover";
 
   return href ? (
     <Link href={href} className={className}>
@@ -140,9 +140,9 @@ export function Steps({ children }: { children: ReactNode }) {
 export function Step({ title, children }: { title: string; children: ReactNode }) {
   return (
     <div className="relative pb-6 pl-7 last:pb-0 [counter-increment:step]">
-      <span className="absolute -left-[13px] top-0 flex h-6 w-6 items-center justify-center rounded-full border border-white/12 bg-ink-950 text-[11.5px] font-medium tabular-nums text-white/70 before:content-[counter(step)]" />
-      <h4 className="!mt-0 font-display text-[15px] font-medium leading-6 tracking-tightish text-white">{title}</h4>
-      <div className="prose-docs mt-1.5 text-[14.5px]">{children}</div>
+      <span className="absolute -left-[13px] top-0 flex h-6 w-6 items-center justify-center rounded-full border border-line bg-canvas text-ui-xs font-medium tabular-nums text-ink-2 before:content-[counter(step)]" />
+      <h4 className="!mt-0 font-display text-ui-lg font-medium leading-6 tracking-tightish text-ink">{title}</h4>
+      <div className="prose-docs mt-1.5 text-ui-base">{children}</div>
     </div>
   );
 }
@@ -151,7 +151,7 @@ export function Step({ title, children }: { title: string; children: ReactNode }
 
 export function Badge({ children }: { children: ReactNode }) {
   return (
-    <span className="not-prose inline-flex items-center rounded-full border border-white/12 bg-white/[0.03] px-2.5 py-0.5 text-[12.5px] text-white/55">
+    <span className="not-prose inline-flex items-center rounded-full border border-line bg-hover px-2.5 py-0.5 text-ui-sm text-ink-2">
       {children}
     </span>
   );
@@ -172,15 +172,15 @@ export function Field({
   return (
     <div className="not-prose border-b hair py-4 last:border-b-0">
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <code className="font-mono text-[13px] text-white/85">{name}</code>
-        {type && <span className="text-[12.5px] text-white/30">{type}</span>}
+        <code className="font-mono text-ui-sm text-ink">{name}</code>
+        {type && <span className="text-ui-sm text-ink-3">{type}</span>}
         {defaultValue !== undefined && (
-          <span className="font-mono text-[11px] text-white/30">
-            por defecto <span className="text-white/55">{defaultValue}</span>
+          <span className="font-mono text-ui-xs text-ink-3">
+            por defecto <span className="text-ink-2">{defaultValue}</span>
           </span>
         )}
       </div>
-      <div className="prose-docs mt-1.5 text-[14px]">{children}</div>
+      <div className="prose-docs mt-1.5 text-ui-base">{children}</div>
     </div>
   );
 }
@@ -188,9 +188,9 @@ export function Field({
 /** Technical detail most readers skip: folded, but in the HTML so search and crawlers still read it. */
 export function Details({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <details className="group/d not-prose my-6 rounded-xl border hair bg-white/[0.015]">
-      <summary className="flex cursor-pointer list-none items-center gap-2.5 px-4 py-3 text-[14px] text-white/70 transition-colors hover:text-white [&::-webkit-details-marker]:hidden">
-        <svg className="h-3 w-3 shrink-0 text-white/35 transition-transform group-open/d:rotate-90" viewBox="0 0 16 16" fill="none">
+    <details className="group/d not-prose my-6 rounded-xl border hair bg-hover">
+      <summary className="flex cursor-pointer list-none items-center gap-2.5 px-4 py-3 text-ui-base text-ink-2 transition-colors hover:text-ink [&::-webkit-details-marker]:hidden">
+        <svg className="h-3 w-3 shrink-0 text-ink-3 transition-transform group-open/d:rotate-90" viewBox="0 0 16 16" fill="none">
           <path d="M6 3l5 5-5 5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
         {title}
@@ -283,7 +283,7 @@ export function createMdxComponents(lang: Lang, plugin: string) {
     },
     /** `<Since v="1.5.0" />` after a heading or a key: the version that brought it. */
     Since: ({ v }: { v: string }) => (
-      <span className="not-prose ml-2 inline-block rounded-full bg-[rgb(var(--accent)/0.1)] px-2 py-px align-middle text-[11.5px] font-normal tracking-normal text-[color-mix(in_srgb,rgb(var(--accent))_50%,#fff)]">
+      <span className="not-prose ml-2 inline-block rounded-full bg-accent/10 px-2 py-px align-middle text-ui-xs font-normal tracking-normal text-[color-mix(in_srgb,var(--accent)_50%,#fff)]">
         {dict.docs.since[lang].replace("{v}", v)}
       </span>
     ),

@@ -40,7 +40,7 @@ export function CodeBlock({
   return (
     <div className="group/code relative">
       {label && (
-        <span className="pointer-events-none absolute right-3.5 top-3 text-[12.5px] text-white/20 transition-opacity duration-300 group-hover/code:opacity-0">
+        <span className="pointer-events-none absolute right-3.5 top-3 text-ui-sm text-ink-3 transition-opacity duration-300 group-hover/code:opacity-0">
           {label}
         </span>
       )}
@@ -51,7 +51,7 @@ export function CodeBlock({
       <button
         onClick={copy}
         aria-label={dict.docs.copy[lang]}
-        className="absolute right-2.5 top-2.5 flex h-7 w-7 items-center justify-center rounded-md border border-white/10 bg-ink-900/80 text-white/40 opacity-0 backdrop-blur transition-all duration-300 hover:border-white/25 hover:text-white group-hover/code:opacity-100"
+        className="absolute right-2.5 top-2.5 flex h-7 w-7 items-center justify-center rounded-md border border-line bg-paper/80 text-ink-3 opacity-0 backdrop-blur transition-all duration-300 hover:border-line-2 hover:text-ink group-hover/code:opacity-100"
       >
         <AnimatePresence mode="wait" initial={false}>
           {copied ? (
@@ -61,7 +61,7 @@ export function CodeBlock({
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.5, opacity: 0 }}
               transition={{ duration: 0.18 }}
-              className="h-3.5 w-3.5 text-accent"
+              className="h-3.5 w-3.5 text-accent-ink"
               viewBox="0 0 16 16"
               fill="none"
             >

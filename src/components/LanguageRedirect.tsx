@@ -20,7 +20,7 @@ export function LanguageRedirect() {
       <div className="pointer-events-none absolute inset-0 bg-grid bg-grid-fade" />
 
       <m.span
-        className="relative h-8 w-px bg-gradient-to-b from-[rgb(var(--accent))] to-transparent"
+        className="relative h-8 w-px bg-gradient-to-b from-accent to-transparent"
         animate={{ scaleY: [0.3, 1, 0.3], opacity: [0.3, 1, 0.3] }}
         transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
         style={{ transformOrigin: "top" }}
@@ -35,7 +35,7 @@ export function LanguageRedirect() {
             <a
               key={code}
               href={`/${code}`}
-              className="inline-flex h-10 items-center rounded-full border border-white/15 px-4 text-[13.5px] text-white/80"
+              className="inline-flex h-10 items-center rounded-full border border-line-2 px-4 text-ui-sm text-ink"
             >
               {dict.redirect.manual[code]}
             </a>
@@ -48,7 +48,7 @@ export function LanguageRedirect() {
           <Link
             key={code}
             href={`/${code}`}
-            className="font-mono text-[11px] uppercase tracking-[0.16em] text-white/30 transition-colors hover:text-white"
+            className="font-mono text-ui-xs uppercase tracking-[0.16em] text-ink-3 transition-colors hover:text-ink"
           >
             {code}
           </Link>

@@ -46,10 +46,10 @@ export function AiPrompt({ id, lang = "en" }: { id: PromptId; lang?: Lang }) {
     <m.div
       initial={false}
       animate={{
-        borderColor: ready ? "rgb(var(--accent) / 0.5)" : "rgb(var(--accent) / 0.22)",
+        borderColor: ready ? "color-mix(in oklab, var(--accent) 50%, transparent)" : "color-mix(in oklab, var(--accent) 22%, transparent)",
       }}
       transition={{ duration: 0.4 }}
-      className="not-prose relative my-8 overflow-hidden rounded-2xl border bg-[linear-gradient(160deg,rgb(var(--accent)/0.10),rgb(var(--accent)/0.02)_55%,transparent)]"
+      className="not-prose relative my-8 overflow-hidden rounded-2xl border bg-[linear-gradient(160deg,color-mix(in_oklab,var(--accent)_10%,transparent),color-mix(in_oklab,var(--accent)_2%,transparent)_55%,transparent)]"
     >
       <AnimatePresence>
         {ready && (
@@ -58,13 +58,13 @@ export function AiPrompt({ id, lang = "en" }: { id: PromptId; lang?: Lang }) {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.5 }}
-            className="pointer-events-none absolute inset-x-0 top-0 h-px bg-[linear-gradient(90deg,transparent,rgb(var(--accent)),transparent)]"
+            className="pointer-events-none absolute inset-x-0 top-0 h-px bg-[linear-gradient(90deg,transparent,var(--accent),transparent)]"
           />
         )}
       </AnimatePresence>
 
       <div className="p-6">
-        <span className="flex items-center gap-2 text-[12.5px] text-[rgb(var(--accent))]">
+        <span className="flex items-center gap-2 text-ui-sm text-accent-ink">
           <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none">
             <Sparkle
               className="animate-pulse [animation-duration:3.2s]"
@@ -81,10 +81,10 @@ export function AiPrompt({ id, lang = "en" }: { id: PromptId; lang?: Lang }) {
           </svg>
           {dict.ai.kicker[lang]}
         </span>
-        <h3 className="mt-2 font-display text-[19px] font-medium tracking-tightish text-white">
+        <h3 className="mt-2 font-display text-ui-xl font-medium tracking-tightish text-ink">
           {dict.ai.title[lang]}
         </h3>
-        <p className="mt-1.5 max-w-xl text-[14px] leading-relaxed text-white/45">
+        <p className="mt-1.5 max-w-xl text-ui-base leading-relaxed text-ink-3">
           {dict.ai.lead[lang]}
         </p>
 
@@ -99,7 +99,7 @@ export function AiPrompt({ id, lang = "en" }: { id: PromptId; lang?: Lang }) {
           rows={3}
           spellCheck={false}
           placeholder={dict.ai.placeholder[lang]}
-          className="mt-5 block max-h-64 w-full resize-none rounded-xl border border-white/10 bg-ink-950/50 px-4 py-3.5 text-[14px] leading-relaxed text-white/85 outline-none transition-all duration-300 placeholder:text-white/22 focus:border-[rgb(var(--accent)/0.55)] focus:bg-ink-950/70 focus:shadow-[0_0_0_4px_rgb(var(--accent)/0.10)]"
+          className="mt-5 block max-h-64 w-full resize-none rounded-xl border border-line bg-canvas/50 px-4 py-3.5 text-ui-base leading-relaxed text-ink outline-none transition-all duration-300 placeholder:text-ink-3 focus:border-accent/55 focus:bg-canvas/70 focus:shadow-[0_0_0_4px_color-mix(in_oklab,var(--accent)_10%,transparent)]"
         />
 
         <div className="mt-4 flex flex-wrap items-center justify-between gap-4">
@@ -110,14 +110,14 @@ export function AiPrompt({ id, lang = "en" }: { id: PromptId; lang?: Lang }) {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -4 }}
               transition={{ duration: 0.2 }}
-              className={`flex items-center gap-2 font-mono text-[11px] ${
-                ready ? "text-[rgb(var(--accent))]" : "text-white/30"
+              className={`flex items-center gap-2 font-mono text-ui-xs ${
+                ready ? "text-accent-ink" : "text-ink-3"
               }`}
             >
               <m.span
                 animate={ready ? { scale: [1, 1.5, 1] } : { scale: 1 }}
                 transition={{ duration: 0.5 }}
-                className={`h-1.5 w-1.5 rounded-full ${ready ? "bg-[rgb(var(--accent))]" : "bg-white/20"}`}
+                className={`h-1.5 w-1.5 rounded-full ${ready ? "bg-accent" : "bg-sunk"}`}
               />
               {ready
                 ? `${dict.ai.ready[lang]} · ${lines.toLocaleString(locale)} ${dict.ai.lines[lang]}`
@@ -129,7 +129,7 @@ export function AiPrompt({ id, lang = "en" }: { id: PromptId; lang?: Lang }) {
             onClick={copy}
             whileTap={{ scale: 0.97 }}
             animate={{ opacity: ready ? 1 : 0.45 }}
-            className="group relative inline-flex shrink-0 items-center justify-center gap-2.5 overflow-hidden rounded-xl border border-[rgb(var(--accent)/0.4)] bg-[rgb(var(--accent)/0.12)] px-5 py-3 font-display text-[14.5px] font-medium text-white transition-colors duration-300 hover:border-[rgb(var(--accent)/0.7)] hover:bg-[rgb(var(--accent)/0.2)]"
+            className="group relative inline-flex shrink-0 items-center justify-center gap-2.5 overflow-hidden rounded-xl border border-accent/40 bg-accent/12 px-5 py-3 font-display text-ui-base font-medium text-ink transition-colors duration-300 hover:border-accent/70 hover:bg-accent/20"
           >
             <AnimatePresence mode="wait" initial={false}>
               {copied ? (
@@ -141,7 +141,7 @@ export function AiPrompt({ id, lang = "en" }: { id: PromptId; lang?: Lang }) {
                   transition={{ duration: 0.18 }}
                   className="flex items-center gap-2.5"
                 >
-                  <svg className="h-4 w-4 text-[rgb(var(--accent))]" viewBox="0 0 16 16" fill="none">
+                  <svg className="h-4 w-4 text-accent-ink" viewBox="0 0 16 16" fill="none">
                     <path d="M3.5 8.5l3 3 6-7" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                   {dict.ai.copied[lang]}
@@ -155,7 +155,7 @@ export function AiPrompt({ id, lang = "en" }: { id: PromptId; lang?: Lang }) {
                   transition={{ duration: 0.18 }}
                   className="flex items-center gap-2.5"
                 >
-                  <svg className="h-4 w-4 text-white/60" viewBox="0 0 16 16" fill="none">
+                  <svg className="h-4 w-4 text-ink-2" viewBox="0 0 16 16" fill="none">
                     <rect x="5.5" y="5.5" width="7.5" height="7.5" rx="1.6" stroke="currentColor" strokeWidth="1.4" />
                     <path d="M10.5 3.6A1.6 1.6 0 009 2.5H4.6A2.1 2.1 0 002.5 4.6V9c0 .7.45 1.3 1.1 1.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
                   </svg>
@@ -167,10 +167,10 @@ export function AiPrompt({ id, lang = "en" }: { id: PromptId; lang?: Lang }) {
         </div>
       </div>
 
-      <div className="flex items-center justify-end border-t border-[rgb(var(--accent)/0.15)] px-6 py-3">
+      <div className="flex items-center justify-end border-t border-accent/15 px-6 py-3">
         <button
           onClick={() => setOpen((v) => !v)}
-          className="flex items-center gap-1.5 text-[12.5px] text-white/35 transition-colors duration-300 hover:text-white"
+          className="flex items-center gap-1.5 text-ui-sm text-ink-3 transition-colors duration-300 hover:text-ink"
         >
           {open ? dict.ai.hide[lang] : dict.ai.show[lang]}
           <svg
@@ -190,9 +190,9 @@ export function AiPrompt({ id, lang = "en" }: { id: PromptId; lang?: Lang }) {
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
-            className="overflow-hidden border-t border-[rgb(var(--accent)/0.15)]"
+            className="overflow-hidden border-t border-accent/15"
           >
-            <pre className="max-h-[26rem] overflow-auto bg-ink-950/60 px-6 py-5 font-mono text-[12px] leading-relaxed text-white/45">
+            <pre className="max-h-[26rem] overflow-auto bg-canvas/60 px-6 py-5 font-mono text-ui-sm leading-relaxed text-ink-3">
               {text}
             </pre>
           </m.div>

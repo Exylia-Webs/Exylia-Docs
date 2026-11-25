@@ -60,10 +60,10 @@ export function Toc({ headings, minutes, lang }: { headings: Heading[]; minutes:
     <aside className="sticky top-[124px] hidden max-h-[calc(100vh-9.75rem)] w-[220px] shrink-0 overflow-y-auto scroll-thin pb-16 xl:block 2xl:w-[260px]">
       <p className="eyebrow mb-4">{t.onThisPage[lang]}</p>
       <div className="relative">
-        <span className="absolute bottom-0 left-0 top-0 w-px bg-white/[0.07]" />
+        <span className="absolute bottom-0 left-0 top-0 w-px bg-sunk" />
         <m.span
           style={{ scaleY: fill }}
-          className="absolute bottom-0 left-0 top-0 w-px origin-top bg-[rgb(var(--accent))]"
+          className="absolute bottom-0 left-0 top-0 w-px origin-top bg-accent"
         />
         <ul className="flex flex-col">
           {headings.map((h) => {
@@ -73,15 +73,15 @@ export function Toc({ headings, minutes, lang }: { headings: Heading[]; minutes:
                 {isActive && (
                   <m.span
                     layoutId="toc-active"
-                    className="absolute -left-[2.5px] top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full bg-[rgb(var(--accent))] shadow-[0_0_10px_2px_rgb(var(--accent)/0.6)]"
+                    className="absolute -left-[2.5px] top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full bg-accent shadow-[0_0_10px_2px_color-mix(in_oklab,var(--accent)_60%,transparent)]"
                     transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
                   />
                 )}
                 <a
                   href={`#${h.id}`}
-                  className={`block py-[5px] pr-2 text-[12.5px] leading-snug transition-colors duration-200 ${
+                  className={`block py-[5px] pr-2 text-ui-sm leading-snug transition-colors duration-200 ${
                     h.level === 3 ? "pl-7" : "pl-4"
-                  } ${isActive ? "text-white" : "text-white/35 hover:text-white/70"}`}
+                  } ${isActive ? "text-ink" : "text-ink-3 hover:text-ink-2"}`}
                 >
                   {h.text}
                 </a>
@@ -91,9 +91,9 @@ export function Toc({ headings, minutes, lang }: { headings: Heading[]; minutes:
         </ul>
       </div>
 
-      <div className="mt-6 flex items-center justify-between border-t border-white/[0.06] pt-4 text-[12.5px] text-white/30">
+      <div className="mt-6 flex items-center justify-between border-t border-line pt-4 text-ui-sm text-ink-3">
         <span>{left > 0 ? t.minutesLeft[lang].replace("{n}", String(left)) : t.done[lang]}</span>
-        <a href="#top" onClick={(e) => (e.preventDefault(), scrollTo({ top: 0, behavior: "smooth" }))} className="transition-colors hover:text-white">
+        <a href="#top" onClick={(e) => (e.preventDefault(), scrollTo({ top: 0, behavior: "smooth" }))} className="transition-colors hover:text-ink">
           {t.toTop[lang]} ↑
         </a>
       </div>

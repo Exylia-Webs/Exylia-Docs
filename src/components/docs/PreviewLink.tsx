@@ -56,16 +56,16 @@ export function PreviewLink({ href, preview, children }: { href: string; preview
           onPointerEnter={() => clearTimeout(timer.current)}
           onPointerLeave={hide}
           style={{ left: at.left, top: at.top, width: WIDTH, transform: at.above ? "translateY(-100%)" : undefined }}
-          className="not-prose fixed z-50 block rounded-xl border border-white/10 bg-[#0d0d11] p-4 shadow-[0_24px_60px_-20px_rgba(0,0,0,0.9)]"
+          className="not-prose fixed z-50 block rounded-xl border border-line bg-[#0d0d11] p-4 shadow-[0_24px_60px_-20px_rgba(0,0,0,0.9)]"
         >
-          <span className="block text-[12px] text-white/40">
+          <span className="block text-ui-sm text-ink-3">
             {preview.plugin} · {preview.group}
           </span>
-          <span className="mt-1 block text-[15px] font-medium leading-snug text-white">
+          <span className="mt-1 block text-ui-lg font-medium leading-snug text-ink">
             {preview.title}
-            {preview.section && <span className="text-[rgb(var(--accent))]"> › {preview.section}</span>}
+            {preview.section && <span className="text-accent-ink"> › {preview.section}</span>}
           </span>
-          {preview.description && <span className="mt-1.5 block text-[13px] leading-relaxed text-white/50">{preview.description}</span>}
+          {preview.description && <span className="mt-1.5 block text-ui-sm leading-relaxed text-ink-3">{preview.description}</span>}
         </span>
       )}
     </>

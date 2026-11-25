@@ -101,8 +101,8 @@ export function LiveTable({ children, lang }: { children: ReactNode; lang: Lang 
     <div ref={ref} className="live-table">
       {rows.length >= FILTER_FROM && (
         <div className="not-prose mb-1 flex items-center gap-3">
-          <label className="flex h-9 flex-1 items-center gap-2.5 rounded-lg border border-white/[0.08] px-3 transition-colors focus-within:border-[rgb(var(--accent)/0.5)] sm:max-w-xs">
-            <svg className="h-3.5 w-3.5 shrink-0 text-white/30" viewBox="0 0 16 16" fill="none" aria-hidden>
+          <label className="flex h-9 flex-1 items-center gap-2.5 rounded-lg border border-line px-3 transition-colors focus-within:border-accent/50 sm:max-w-xs">
+            <svg className="h-3.5 w-3.5 shrink-0 text-ink-3" viewBox="0 0 16 16" fill="none" aria-hidden>
               <circle cx="7.2" cy="7.2" r="4.4" stroke="currentColor" strokeWidth="1.5" />
               <path d="M10.6 10.6L13.5 13.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
             </svg>
@@ -112,16 +112,16 @@ export function LiveTable({ children, lang }: { children: ReactNode; lang: Lang 
               onKeyDown={(e) => e.key === "Escape" && setQuery("")}
               placeholder={t.filterRows[lang]}
               aria-label={t.filterRows[lang]}
-              className="w-full bg-transparent text-base text-white placeholder:text-white/30 focus:outline-none sm:text-[13.5px]"
+              className="w-full bg-transparent text-base text-ink placeholder:text-ink-3 focus:outline-none sm:text-ui-sm"
             />
           </label>
-          <span className="text-[12.5px] tabular-nums text-white/35">
+          <span className="text-ui-sm tabular-nums text-ink-3">
             {query ? t.rowsShown[lang].replace("{n}", String(shown)).replace("{total}", String(rows.length)) : t.rowsTotal[lang].replace("{n}", String(rows.length))}
           </span>
         </div>
       )}
       <div className="table-wrap">{children}</div>
-      {query && shown === 0 && <p className="not-prose py-4 text-[13.5px] text-white/40">{t.noRows[lang]}</p>}
+      {query && shown === 0 && <p className="not-prose py-4 text-ui-sm text-ink-3">{t.noRows[lang]}</p>}
     </div>
   );
 }

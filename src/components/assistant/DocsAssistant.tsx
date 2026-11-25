@@ -5,9 +5,7 @@
  * Exylia app), read-only, with the docs' copy. The turn runs on `/api/assistant/` (`runAssistant` +
  * `assistantStream` from @exylia-webs/ui/assistant) behind a Turnstile check.
  *
- * The public docs are Tailwind 3 and do not load the design system's stylesheet, so the panel
- * brings its own (`./assistant.css`, Tailwind 4, scoped to `.exy-ds` by scripts/postcss-tailwind.cjs)
- * and its sheet portals into that element. next-intl is given only here, with the `ui` strings.
+ * Its sheet portals into the wrapper below. next-intl is given only here, with the `ui` strings.
  */
 import { AssistantPanel, type AssistantBody } from "@exylia-webs/ui/assistant/panel";
 import { uiMessages } from "@exylia-webs/ui/messages";
@@ -15,7 +13,6 @@ import { NextIntlClientProvider } from "next-intl";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { dict } from "@/content/dictionary";
 import type { Lang } from "@/content/registry";
-import "./assistant.css";
 
 declare global {
   interface Window {
@@ -141,7 +138,7 @@ export default function DocsAssistant({ lang, plugin, pluginName, turnstileSiteK
   const suggestions = pluginName ? t.forPlugin[lang].map((s) => s.replace("{plugin}", pluginName)) : [...t.general[lang]];
 
   return (
-    <div ref={setScope} className="exy-ds dark contents">
+    <div ref={setScope} className="contents">
       <NextIntlClientProvider locale={lang} messages={messages} timeZone="UTC">
         <AssistantPanel endpoint="/api/assistant/" request={request} storageKey={`exylia-docs-assistant:${lang}`} suggestions={suggestions} container={scope}>
           {/* Turnstile draws here only when Cloudflare needs the visitor to click. */}

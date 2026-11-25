@@ -40,21 +40,21 @@ export function DocHeader({
         initial={false}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, ease: EASE }}
-        className="flex flex-wrap items-center gap-x-3 gap-y-2 text-[12.5px]"
+        className="flex flex-wrap items-center gap-x-3 gap-y-2 text-ui-sm"
       >
-        <Link href={`/${lang}/docs/${plugin.id}`} className="text-white/40 transition-colors hover:text-white">
+        <Link href={`/${lang}/docs/${plugin.id}`} className="text-ink-3 transition-colors hover:text-ink">
           {plugin.name}
         </Link>
-        <span className="text-white/15">/</span>
-        <span className="text-[rgb(var(--accent))]">{group}</span>
+        <span className="text-ink-3">/</span>
+        <span className="text-accent-ink">{group}</span>
         {badge && (
-          <span className="rounded-full border border-[rgb(var(--accent)/0.25)] px-2 py-0.5 text-[9.5px] tracking-[0.14em] text-accent">
+          <span className="rounded-full border border-accent/25 px-2 py-0.5 text-ui-xs tracking-[0.14em] text-accent-ink">
             {badge}
           </span>
         )}
         {updated && (
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-[rgb(var(--accent)/0.1)] px-2.5 py-0.5 text-[12px] text-[color-mix(in_srgb,rgb(var(--accent))_50%,#fff)]">
-            <span className="h-1.5 w-1.5 rounded-full bg-[rgb(var(--accent))]" />
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-accent/10 px-2.5 py-0.5 text-ui-sm text-[color-mix(in_srgb,var(--accent)_50%,#fff)]">
+            <span className="h-1.5 w-1.5 rounded-full bg-accent" />
             {t.updatedIn[lang].replace("{v}", updated)}
           </span>
         )}
@@ -64,7 +64,7 @@ export function DocHeader({
         initial={false}
         animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
         transition={{ duration: 0.75, delay: 0.06, ease: EASE }}
-        className="mt-5 font-display text-[clamp(2rem,4.4vw,2.9rem)] font-medium leading-[1.05] tracking-tight2 text-white"
+        className="mt-5 font-display text-[clamp(2rem,4.4vw,2.9rem)] font-medium leading-[1.05] tracking-tight2 text-ink"
       >
         {title}
       </m.h1>
@@ -74,7 +74,7 @@ export function DocHeader({
           initial={false}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.7, delay: 0.16, ease: EASE }}
-          className="mt-4 max-w-2xl text-[16px] leading-relaxed text-white/45"
+          className="mt-4 max-w-2xl text-ui-lg leading-relaxed text-ink-3"
         >
           {description}
         </m.p>
@@ -84,12 +84,12 @@ export function DocHeader({
         initial={false}
         animate={{ opacity: 1 }}
         transition={{ duration: 0.7, delay: 0.24 }}
-        className="mt-7 flex flex-wrap items-center gap-x-5 gap-y-3 text-[12.5px] text-white/35"
+        className="mt-7 flex flex-wrap items-center gap-x-5 gap-y-3 text-ui-sm text-ink-3"
       >
         <span className="flex items-center gap-2">
-          <span className="relative h-1 w-16 overflow-hidden rounded-full bg-white/[0.08]">
+          <span className="relative h-1 w-16 overflow-hidden rounded-full bg-sunk">
             <span
-              className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-[rgb(var(--accent))] to-white"
+              className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-accent to-white"
               style={{ width: `${(index / total) * 100}%` }}
             />
           </span>
@@ -103,7 +103,7 @@ export function DocHeader({
         initial={false}
         animate={{ scaleX: 1 }}
         transition={{ duration: 0.9, delay: 0.22, ease: EASE }}
-        className="mt-7 block h-px w-full origin-left bg-gradient-to-r from-[rgb(var(--accent)/0.5)] via-white/[0.08] to-transparent"
+        className="mt-7 block h-px w-full origin-left bg-gradient-to-r from-accent/50 via-white/[0.08] to-transparent"
       />
     </header>
   );
@@ -127,7 +127,7 @@ function CopyPage({ markdown, lang }: { markdown: string; lang: Lang }) {
         setTimeout(() => setCopied(false), 1600);
       }}
       className={`ml-auto inline-flex h-7 items-center gap-1.5 rounded-full border px-3 transition-colors ${
-        copied ? "border-[#8fffc1]/30 text-[#8fffc1]" : "border-white/10 text-white/45 hover:border-white/25 hover:text-white"
+        copied ? "border-[#8fffc1]/30 text-[#8fffc1]" : "border-line text-ink-3 hover:border-line-2 hover:text-ink"
       }`}
     >
       <svg className="h-3 w-3" viewBox="0 0 16 16" fill="none" aria-hidden>

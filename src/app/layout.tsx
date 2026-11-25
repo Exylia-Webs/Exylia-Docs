@@ -1,12 +1,13 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono, Instrument_Serif } from "next/font/google";
-import { AccentStyle, CookieConsent, SERVICE_ACCENTS } from "@exylia-webs/ui";
+import { Instrument_Serif } from "next/font/google";
+import { AccentStyle, SERVICE_ACCENTS, ThemeProvider } from "@exylia-webs/ui";
+import { rootViewport } from "@exylia-webs/ui/app";
+import { rootFontVariables } from "@exylia-webs/ui/fonts";
+import "./globals.css";
 import { DEFAULT_LANG, SITE } from "@/content/registry";
 import { MotionProvider } from "@/components/motion/MotionProvider";
 
-const geist = Geist({ subsets: ["latin"], variable: "--font-geist", display: "swap" });
 const serif = Instrument_Serif({ subsets: ["latin"], weight: "400", style: ["normal", "italic"], variable: "--font-serif", display: "swap" });
-const geistMono = Geist_Mono({ subsets: ["latin"], variable: "--font-geist-mono", display: "swap" });
 
 export const metadata: Metadata = {
   title: {
@@ -22,11 +23,7 @@ export const metadata: Metadata = {
   },
 };
 
-export const viewport: Viewport = {
-  themeColor: "#050507",
-  width: "device-width",
-  initialScale: 1,
-};
+export const viewport: Viewport = rootViewport;
 
 /**
  * The root document.
@@ -38,14 +35,12 @@ export const viewport: Viewport = {
  */
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang={DEFAULT_LANG} suppressHydrationWarning className={`${geist.variable} ${geistMono.variable} ${serif.variable}`}>
+    <html lang={DEFAULT_LANG} suppressHydrationWarning className={`${rootFontVariables} ${serif.variable}`}>
       <body className="font-sans antialiased">
         <AccentStyle color={SERVICE_ACCENTS.docs.fill} />
-        <MotionProvider>{children}</MotionProvider>
-        {/* The shared banner, restyled for the docs in globals.css (.consent). Its policy link is the hub's. */}
-        <div className="consent">
-          <CookieConsent gaId={process.env.NEXT_PUBLIC_GA_ID} clarityId={process.env.NEXT_PUBLIC_CLARITY_ID} />
-        </div>
+        <ThemeProvider>
+          <MotionProvider>{children}</MotionProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

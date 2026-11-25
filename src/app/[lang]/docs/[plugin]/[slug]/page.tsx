@@ -95,13 +95,13 @@ export default async function DocPage({ params }: { params: Params }) {
           <ReadMarker plugin={entry.id} id={doc.id} />
           <Pager previous={previous} next={next} lang={lang} />
 
-          <p className="mt-10 text-[13px] text-white/30">
+          <p className="mt-10 text-ui-sm text-ink-3">
             {dict.docs.missing[lang]}{" "}
             <a
               href={SITE.discord}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-white/45 underline decoration-white/15 underline-offset-4 transition-colors hover:text-white"
+              className="text-ink-3 underline decoration-white/15 underline-offset-4 transition-colors hover:text-ink"
             >
               {dict.docs.missingLink[lang]}
             </a>

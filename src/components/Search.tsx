@@ -139,7 +139,7 @@ export function SearchDialog({
           transition={{ duration: 0.2 }}
         >
           <div
-            className="absolute inset-0 bg-ink-950/75 backdrop-blur-sm"
+            className="absolute inset-0 bg-canvas/75 backdrop-blur-sm"
             onClick={onClose}
             aria-hidden
           />
@@ -149,12 +149,12 @@ export function SearchDialog({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -10, scale: 0.98 }}
             transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
-            className="relative w-full max-w-xl overflow-hidden rounded-2xl border border-white/10 bg-ink-900/92 shadow-2xl shadow-black/60 backdrop-blur-2xl"
+            className="relative w-full max-w-xl overflow-hidden rounded-2xl border border-line bg-paper/92 shadow-2xl shadow-black/60 backdrop-blur-2xl"
             role="dialog"
             aria-modal
           >
-            <div className="flex items-center gap-3 border-b border-white/[0.07] px-4">
-              <svg className="h-4 w-4 shrink-0 text-white/30" viewBox="0 0 16 16" fill="none">
+            <div className="flex items-center gap-3 border-b border-line px-4">
+              <svg className="h-4 w-4 shrink-0 text-ink-3" viewBox="0 0 16 16" fill="none">
                 <circle cx="7.2" cy="7.2" r="4.4" stroke="currentColor" strokeWidth="1.5" />
                 <path d="M10.6 10.6L13.5 13.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
               </svg>
@@ -164,28 +164,28 @@ export function SearchDialog({
                 onChange={(e) => setQuery(e.target.value)}
                 onKeyDown={onKeyDown}
                 placeholder={dict.search.placeholder[lang]}
-                className="h-14 w-full bg-transparent text-base text-white sm:text-[15px] placeholder:text-white/25 focus:outline-none"
+                className="h-14 w-full bg-transparent text-base text-ink sm:text-ui-lg placeholder:text-ink-3 focus:outline-none"
               />
-              <kbd className="hidden shrink-0 rounded border border-white/10 px-1.5 py-0.5 font-mono text-[10px] text-white/30 sm:block">
+              <kbd className="hidden shrink-0 rounded border border-line px-1.5 py-0.5 font-mono text-ui-xs text-ink-3 sm:block">
                 ESC
               </kbd>
             </div>
 
             <div className="max-h-[52vh] overflow-y-auto scroll-thin p-2">
               {query && !entries && (
-                <p className="px-3 py-8 text-center font-mono text-[11px] uppercase tracking-[0.18em] text-white/25 animate-pulse">
+                <p className="px-3 py-8 text-center font-mono text-ui-xs uppercase tracking-[0.18em] text-ink-3 animate-pulse">
                   {dict.search.loading[lang]}
                 </p>
               )}
 
               {query && entries && hits.length === 0 && (
-                <p className="px-3 py-8 text-center text-[13.5px] text-white/35">
-                  {dict.search.noResults[lang]} <span className="text-white/70">{query}</span>
+                <p className="px-3 py-8 text-center text-ui-sm text-ink-3">
+                  {dict.search.noResults[lang]} <span className="text-ink-2">{query}</span>
                 </p>
               )}
 
               {!query && (
-                <p className="px-3 py-8 text-center font-mono text-[11px] uppercase tracking-[0.18em] text-white/25">
+                <p className="px-3 py-8 text-center font-mono text-ui-xs uppercase tracking-[0.18em] text-ink-3">
                   {dict.search.empty[lang]}
                 </p>
               )}
@@ -197,30 +197,30 @@ export function SearchDialog({
                   onClick={onClose}
                   onMouseEnter={() => setCursor(i)}
                   className={`relative block rounded-lg px-3 py-2.5 transition-colors ${
-                    i === cursor ? "bg-white/[0.055]" : "hover:bg-white/[0.03]"
+                    i === cursor ? "bg-sunk" : "hover:bg-hover"
                   }`}
                 >
                   {i === cursor && (
                     <m.span
                       layoutId="search-cursor"
-                      className="absolute left-0 top-1/2 h-5 w-px -translate-y-1/2 bg-[rgb(var(--accent))]"
+                      className="absolute left-0 top-1/2 h-5 w-px -translate-y-1/2 bg-accent"
                       transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
                     />
                   )}
                   <div className="flex items-center gap-2">
-                    <span className="font-display text-[14.5px] font-medium text-white">{hit.title}</span>
-                    <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-white/25">
+                    <span className="font-display text-ui-base font-medium text-ink">{hit.title}</span>
+                    <span className="font-mono text-ui-xs uppercase tracking-[0.14em] text-ink-3">
                       {hit.pluginName} · {hit.group}
                     </span>
                   </div>
                   {hit.description && (
-                    <p className="mt-0.5 line-clamp-1 text-[13px] text-white/40">{hit.description}</p>
+                    <p className="mt-0.5 line-clamp-1 text-ui-sm text-ink-3">{hit.description}</p>
                   )}
                 </Link>
               ))}
             </div>
 
-            <div className="flex items-center gap-4 border-t border-white/[0.07] px-4 py-2.5 font-mono text-[10px] uppercase tracking-[0.14em] text-white/25">
+            <div className="flex items-center gap-4 border-t border-line px-4 py-2.5 font-mono text-ui-xs uppercase tracking-[0.14em] text-ink-3">
               <span>↑↓ {dict.search.navigate[lang]}</span>
               <span>↵ {dict.search.open[lang]}</span>
               <span className="ml-auto">

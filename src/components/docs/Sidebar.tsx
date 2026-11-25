@@ -29,21 +29,21 @@ function PluginSwitcher({ current, lang }: { current: Plugin; lang: Lang }) {
     <div className="relative" onClick={(e) => e.stopPropagation()}>
       <button
         onClick={() => setOpen((o) => !o)}
-        className="group flex w-full items-center gap-3 rounded-lg border border-white/[0.07] bg-white/[0.015] p-2 text-left transition-colors hover:border-white/15 hover:bg-white/[0.03]"
+        className="group flex w-full items-center gap-3 rounded-lg border border-line bg-hover p-2 text-left transition-colors hover:border-line-2 hover:bg-hover"
       >
         <PluginBanner plugin={current} rounded="rounded-md" className="h-9 w-[72px] shrink-0" />
         <span className="min-w-0 flex-1">
-          <span className="block truncate font-display text-[13.5px] font-medium text-white">
+          <span className="block truncate font-display text-ui-sm font-medium text-ink">
             {current.name}
           </span>
-          <span className="block text-[12.5px] text-white/30">
+          <span className="block text-ui-sm text-ink-3">
             v{current.version}
           </span>
         </span>
         <m.svg
           animate={{ rotate: open ? 180 : 0 }}
           transition={{ duration: 0.3, ease: EASE }}
-          className="mr-1 h-3 w-3 shrink-0 text-white/30"
+          className="mr-1 h-3 w-3 shrink-0 text-ink-3"
           viewBox="0 0 16 16"
           fill="none"
         >
@@ -58,7 +58,7 @@ function PluginSwitcher({ current, lang }: { current: Plugin; lang: Lang }) {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -6, scale: 0.98 }}
             transition={{ duration: 0.22, ease: EASE }}
-            className="absolute left-0 right-0 top-full z-30 mt-2 max-h-[62vh] overflow-y-auto scroll-thin rounded-lg border border-white/10 bg-ink-900/95 p-1.5 backdrop-blur-xl"
+            className="absolute left-0 right-0 top-full z-30 mt-2 max-h-[62vh] overflow-y-auto scroll-thin rounded-lg border border-line bg-paper/95 p-1.5 backdrop-blur-xl"
           >
             {groups.map((group) => (
               <div key={group.key} className="mb-1 last:mb-0">
@@ -75,21 +75,21 @@ function PluginSwitcher({ current, lang }: { current: Plugin; lang: Lang }) {
                       />
                       <span className="min-w-0 flex-1">
                         <span
-                          className={`block truncate text-[12.5px] ${
-                            active ? "text-white" : ready ? "text-white/70" : "text-white/30"
+                          className={`block truncate text-ui-sm ${
+                            active ? "text-ink" : ready ? "text-ink-2" : "text-ink-3"
                           }`}
                         >
                           {p.name}
                         </span>
-                        <span className="block truncate font-mono text-[9.5px] tracking-wide text-white/25">
+                        <span className="block truncate font-mono text-ui-xs tracking-wide text-ink-3">
                           {ready ? `v${p.version}` : dict.docs.soon[lang]}
                         </span>
                       </span>
-                      {active && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[rgb(var(--accent))]" />}
+                      {active && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />}
                     </>
                   );
                   const shell = `flex items-center gap-2.5 rounded-md p-1.5 transition-colors ${
-                    active ? "bg-white/[0.05]" : "hover:bg-white/[0.04]"
+                    active ? "bg-sunk" : "hover:bg-hover"
                   }`;
                   return ready ? (
                     <Link key={p.id} href={`/${lang}/docs/${p.id}`} onClick={() => setOpen(false)} className={shell}>
@@ -138,7 +138,7 @@ function NavTree({
             {(() => {
               const done = section.pages.filter((p) => read.includes(p.id)).length;
               return done > 0 ? (
-                <span className={`tabular-nums tracking-normal ${done === section.pages.length ? "text-[#8fffc1]/60" : "text-white/25"}`}>
+                <span className={`tabular-nums tracking-normal ${done === section.pages.length ? "text-[#8fffc1]/60" : "text-ink-3"}`}>
                   {done}/{section.pages.length}
                 </span>
               ) : null;
@@ -153,22 +153,22 @@ function NavTree({
                   {active && (
                     <m.span
                       layoutId="sidebar-active"
-                      className="absolute -left-px top-0 h-full w-[2px] bg-[rgb(var(--accent))]"
+                      className="absolute -left-px top-0 h-full w-[2px] bg-accent"
                       transition={{ duration: 0.32, ease: EASE }}
                     />
                   )}
                   <Link
                     href={href}
                     onClick={onNavigate}
-                    className={`group flex items-center justify-between gap-2 py-[7px] pl-3 pr-2 text-[13.5px] transition-colors duration-200 ${
-                      active ? "rounded-r-md bg-[rgb(var(--accent)/0.1)] text-white" : "text-white/42 hover:text-white/80"
+                    className={`group flex items-center justify-between gap-2 py-[7px] pl-3 pr-2 text-ui-sm transition-colors duration-200 ${
+                      active ? "rounded-r-md bg-accent/10 text-ink" : "text-ink-3 hover:text-ink"
                     }`}
                   >
                     <span className="truncate">{page.title}</span>
-                    {page.fresh && !page.badge && <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-full bg-[rgb(var(--accent))]" />}
+                    {page.fresh && !page.badge && <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />}
                     {read.includes(page.id) && !page.badge && !page.fresh && <ReadTick />}
                     {page.badge && (
-                      <span className="shrink-0 rounded border border-[rgb(var(--accent)/0.25)] px-1.5 py-px text-[11px] font-medium text-accent">
+                      <span className="shrink-0 rounded border border-accent/25 px-1.5 py-px text-ui-xs font-medium text-accent-ink">
                         {page.badge}
                       </span>
                     )}
@@ -228,14 +228,14 @@ export function MobileNav({
 
   return (
     <>
-      <div className="sticky top-[93px] z-40 -mx-6 mb-8 border-b border-white/[0.06] bg-ink-950/85 px-6 py-3 backdrop-blur-xl lg:hidden">
-        <button onClick={() => setOpen(true)} className="flex w-full min-w-0 items-center gap-2.5 text-left text-white/60">
+      <div className="sticky top-[93px] z-40 -mx-6 mb-8 border-b border-line bg-canvas/85 px-6 py-3 backdrop-blur-xl lg:hidden">
+        <button onClick={() => setOpen(true)} className="flex w-full min-w-0 items-center gap-2.5 text-left text-ink-2">
           <svg className="h-3.5 w-3.5 shrink-0" viewBox="0 0 16 16" fill="none">
             <path d="M2.5 4h11M2.5 8h11M2.5 12h7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
           </svg>
-          <span className="shrink-0 text-[12.5px]">{plugin.name}</span>
-          <span className="shrink-0 text-white/20">/</span>
-          <span className="min-w-0 truncate text-[13px] text-white/80">{title}</span>
+          <span className="shrink-0 text-ui-sm">{plugin.name}</span>
+          <span className="shrink-0 text-ink-3">/</span>
+          <span className="min-w-0 truncate text-ui-sm text-ink">{title}</span>
         </button>
       </div>
 
@@ -247,13 +247,13 @@ export function MobileNav({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           >
-            <div className="absolute inset-0 bg-ink-950/80 backdrop-blur-sm" onClick={() => setOpen(false)} />
+            <div className="absolute inset-0 bg-canvas/80 backdrop-blur-sm" onClick={() => setOpen(false)} />
             <m.div
               initial={{ x: "-100%" }}
               animate={{ x: 0 }}
               exit={{ x: "-100%" }}
               transition={{ duration: 0.35, ease: EASE }}
-              className="absolute inset-y-0 left-0 w-[86%] max-w-[320px] overflow-y-auto scroll-thin border-r border-white/[0.07] bg-ink-900/95 p-6 pt-8 backdrop-blur-2xl"
+              className="absolute inset-y-0 left-0 w-[86%] max-w-[320px] overflow-y-auto scroll-thin border-r border-line bg-paper/95 p-6 pt-8 backdrop-blur-2xl"
             >
               <PluginSwitcher current={plugin} lang={lang} />
               <div className="mt-8">
