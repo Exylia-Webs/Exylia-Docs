@@ -1,6 +1,7 @@
 import { uiMessages } from "@exylia-webs/ui/messages";
 import { getRequestConfig } from "next-intl/server";
 import { cookies, headers } from "next/headers";
+import { adminDict, adminStrings } from "@/content/admin";
 import { LANGS, type Lang } from "@/content/registry";
 
 /**
@@ -30,5 +31,5 @@ export default getRequestConfig(async () => {
   const chosen = (await cookies()).get("NEXT_LOCALE")?.value;
   const locale = isLang(chosen) ? chosen : negotiate((await headers()).get("accept-language"));
   // UTC like every date the panel prints (months and days are UTC).
-  return { locale, timeZone: "UTC", messages: { ui: uiMessages[locale] } };
+  return { locale, timeZone: "UTC", messages: { ui: uiMessages[locale], admin: adminStrings(adminDict, locale) } };
 });

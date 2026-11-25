@@ -1,13 +1,11 @@
 import type { Metadata } from "next";
 import { getFormatter } from "next-intl/server";
-import { StatusBadge } from "@exylia-webs/ui";
-import { AdminOverview } from "@exylia-webs/ui/admin";
+import { aiStatus, AdminOverview, SettingsStatus } from "@exylia-webs/ui/admin";
 import { fill } from "@/content/admin";
 import { requireAdmin } from "@/lib/admin-auth";
 import { adminText } from "@/lib/admin-i18n";
 import { monthOf } from "@/lib/assistant/guard";
 import { platform } from "@/lib/platform";
-import { aiStatus, tone } from "./settings/parts";
 import { monthTotals } from "./usage-rows";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -33,7 +31,7 @@ export default async function AdminOverviewPage() {
       description={
         <span className="flex flex-wrap items-center gap-2">
           {fill(t.description, { month })}
-          <StatusBadge tone={tone(status)}>{fill(a.settings.ai.status[status], { model: `${ai.provider}:${ai.model}` })}</StatusBadge>
+          <SettingsStatus status={status}>{fill(a.settings.ai.status[status], { model: `${ai.provider}:${ai.model}` })}</SettingsStatus>
         </span>
       }
       facts={[
