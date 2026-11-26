@@ -167,7 +167,7 @@ export function SearchDialog({
 
             <div className="max-h-[52vh] overflow-y-auto scroll-thin p-2">
               {query && !entries && (
-                <p className="px-3 py-8 text-center font-mono text-ui-xs uppercase tracking-[0.18em] text-ink-3 animate-pulse">
+                <p className="px-3 py-8 text-center text-ui-sm text-ink-3 animate-pulse">
                   {dict.search.loading[lang]}
                 </p>
               )}
@@ -179,7 +179,7 @@ export function SearchDialog({
               )}
 
               {!query && (
-                <p className="px-3 py-8 text-center font-mono text-ui-xs uppercase tracking-[0.18em] text-ink-3">
+                <p className="px-3 py-8 text-center text-ui-sm text-ink-3">
                   {dict.search.empty[lang]}
                 </p>
               )}
@@ -203,7 +203,7 @@ export function SearchDialog({
                   )}
                   <div className="flex items-center gap-2">
                     <span className="font-display text-ui-base font-medium text-ink">{hit.title}</span>
-                    <span className="font-mono text-ui-xs uppercase tracking-[0.14em] text-ink-3">
+                    <span className="text-ui-xs font-bold text-ink-3">
                       {hit.pluginName} · {hit.group}
                     </span>
                   </div>
@@ -214,7 +214,7 @@ export function SearchDialog({
               ))}
             </div>
 
-            <div className="flex items-center gap-4 border-t border-line px-4 py-2.5 font-mono text-ui-xs uppercase tracking-[0.14em] text-ink-3">
+            <div className="flex items-center gap-4 border-t border-line px-4 py-2.5 text-ui-xs text-ink-3">
               <span>↑↓ {dict.search.navigate[lang]}</span>
               <span>↵ {dict.search.open[lang]}</span>
               <span className="ml-auto">

@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { getTranslations } from "next-intl/server";
-import { AppFrame, buttonClass, Glyph, ICONS, UserMenu } from "@exylia-webs/ui";
+import { AppFrame, UserMenu } from "@exylia-webs/ui";
 import { adminNav } from "@exylia-webs/ui/admin";
 import { LOCALES } from "@/i18n/request";
 import { requireAdmin } from "@/lib/admin-auth";
@@ -28,17 +28,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       product="docs"
       locales={LOCALES}
       nav={{ sections, collapsed: jar.get(RAIL_COOKIE)?.value === "1", railCookie: RAIL_COOKIE, folded: jar.get(FOLD_COOKIE)?.value !== "0", foldCookie: FOLD_COOKIE }}
-      end={
-        <>
-          <a href="/" aria-label={a.back} className={buttonClass("secondary", "sm")}>
-            <Glyph d={ICONS.arrowLeft} className="h-4 w-4" />
-            <span data-frame-label="" className="max-lg:sr-only">
-              {a.back}
-            </span>
-          </a>
-          <UserMenu user={admin} locales={LOCALES} logoutAction="/api/admin/auth/logout/" />
-        </>
-      }
+      back={{ href: "/", label: a.back, reload: true }}
+      end={<UserMenu user={admin} locales={LOCALES} logoutAction="/api/admin/auth/logout/" />}
     >
       {children}
     </AppFrame>

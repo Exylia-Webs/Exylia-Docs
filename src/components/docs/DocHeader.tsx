@@ -48,7 +48,7 @@ export function DocHeader({
         <span className="text-ink-3">/</span>
         <span className="text-accent-ink">{group}</span>
         {badge && (
-          <span className="rounded-full border border-accent/25 px-2 py-0.5 text-ui-xs tracking-[0.14em] text-accent-ink">
+          <span className="rounded-full border border-accent/25 px-2 py-0.5 text-ui-xs text-accent-ink">
             {badge}
           </span>
         )}
@@ -64,7 +64,7 @@ export function DocHeader({
         initial={false}
         animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
         transition={{ duration: 0.75, delay: 0.06, ease: EASE }}
-        className="mt-5 font-display text-[clamp(2rem,4.4vw,2.9rem)] font-medium leading-[1.05] tracking-tight2 text-ink"
+        className="mt-5 font-display text-[clamp(2rem,4.4vw,2.9rem)] font-bold leading-[1.05] tracking-tight2 text-ink"
       >
         {title}
       </m.h1>

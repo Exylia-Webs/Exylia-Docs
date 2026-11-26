@@ -51,7 +51,7 @@ export function Pager({ previous, next, lang }: { previous: DocMeta | null; next
                 <Arrow />
               </span>
             </span>
-            <span className="mt-4 block font-display text-[clamp(1.25rem,2.4vw,1.6rem)] font-medium tracking-tight text-ink">{next.title}</span>
+            <span className="mt-4 block font-display text-[clamp(1.25rem,2.4vw,1.6rem)] font-bold tracking-tight text-ink">{next.title}</span>
             {next.description && <span className="mt-1.5 block max-w-lg text-ui-sm leading-relaxed text-ink-3">{next.description}</span>}
           </Link>
         )}

@@ -81,7 +81,7 @@ function PluginSwitcher({ current, lang }: { current: Plugin; lang: Lang }) {
                         >
                           {p.name}
                         </span>
-                        <span className="block truncate font-mono text-ui-xs tracking-wide text-ink-3">
+                        <span className="block truncate text-ui-xs text-ink-3">
                           {ready ? `v${p.version}` : dict.docs.soon[lang]}
                         </span>
                       </span>
