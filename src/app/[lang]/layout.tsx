@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { NextIntlClientProvider } from "next-intl";
-import { CookieConsent } from "@exylia-webs/ui";
+import { AppHueStyle, CookieConsent } from "@exylia-webs/ui";
 import { uiMessages } from "@exylia-webs/ui/messages";
 import { ogImageFor } from "@/lib/og";
 import { notFound } from "next/navigation";
@@ -42,6 +42,7 @@ export default async function LangLayout({
 
   return (
     <NextIntlClientProvider locale={lang} messages={{ ui: uiMessages[lang as Lang] }} timeZone="UTC">
+      <AppHueStyle product="docs" />
       <HtmlLang lang={lang as Lang} />
       {children}
       {/* The cookie statement is the hub's (the docs collect nothing beyond it). */}

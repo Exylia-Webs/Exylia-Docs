@@ -1,6 +1,4 @@
-import { XsThemeBridge } from "@/components/landing/site/XsThemeBridge";
-import { DocsLanding } from "@/components/landing/site/landing";
-import { xsFonts } from "@exylia-webs/ui/site";
+import { DocsLanding } from "@/components/landing/DocsLanding";
 import { LANGS, toLang } from "@/content/registry";
 
 export function generateStaticParams() {
@@ -9,10 +7,5 @@ export function generateStaticParams() {
 
 export default async function LandingPage({ params }: { params: Promise<{ lang: string }> }) {
   const lang = toLang((await params).lang);
-  return (
-    <div className={xsFonts} suppressHydrationWarning>
-      <XsThemeBridge />
-      <DocsLanding lang={lang} />
-    </div>
-  );
+  return <DocsLanding lang={lang} />;
 }
