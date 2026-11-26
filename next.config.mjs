@@ -10,6 +10,8 @@ const nextConfig = {
   trailingSlash: true,
   // The design system ships TypeScript source.
   transpilePackages: ["@exylia-webs/ui"],
+  // `next dev` blocks its scripts for hosts other than localhost; list the LAN address to review from another machine.
+  allowedDevOrigins: (process.env.ALLOWED_DEV_ORIGINS ?? "").split(",").map((o) => o.trim()).filter(Boolean),
   // Pull only the modules a page imports from the barrel (CookieConsent), not the whole design system.
   experimental: { optimizePackageImports: ["@exylia-webs/ui"] },
 
