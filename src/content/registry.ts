@@ -2126,6 +2126,7 @@ const CLICKER_NAV: NavGroup[] = [
     pages: [
       page("farming", "farming", "farming"),
       page("upgrades-tools-zones", "upgrades-tools-zones", "upgrades-tools-zones"),
+      page("layouts", "layouts", "disenos-de-mapa"),
       page("rebirth-and-eras", "rebirth-and-eras", "rebirth-and-eras"),
       page("helpers", "helpers", "helpers"),
       page("enchants", "enchants", "enchants"),
